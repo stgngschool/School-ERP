@@ -91,7 +91,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const latestNotice = notices.length > 0 ? notices[notices.length - 1] : null;
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-slate-50 text-slate-800 font-sans">
+    <div className="flex h-screen w-full max-w-full overflow-hidden bg-slate-50 text-slate-800 font-sans">
       {/* 1. Desktop Sidebar */}
       <aside className="hidden md:flex md:w-64 flex-col border-r border-slate-200 bg-white p-5 shrink-0 select-none">
         {/* Institutional Branding */}
@@ -432,14 +432,14 @@ export default function AppLayout({ children }: AppLayoutProps) {
         )}
 
         {/* Dynamic Viewport */}
-        <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto">
+        <main className="flex-1 p-3 sm:p-4 md:p-6 lg:p-8 overflow-y-auto overflow-x-hidden min-w-0 max-w-full">
           {children}
         </main>
       </div>
 
       {/* 5. FLOATING EXPERT ROLE SWITCHER PANEL */}
       {showRolePanel ? (
-        <div className="fixed bottom-4 right-4 z-30 bg-white border border-slate-200 rounded-2xl p-4 shadow-xl max-w-xs flex flex-col gap-2.5">
+        <div className="fixed bottom-3 left-3 right-3 sm:left-auto sm:right-4 z-30 bg-white border border-slate-200 rounded-2xl p-3.5 shadow-2xl sm:max-w-xs flex flex-col gap-2.5">
           <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
             <div className="flex items-center gap-1.5">
               <ArrowRightLeft className="h-4 w-4 text-indigo-600" />
