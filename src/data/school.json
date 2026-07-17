@@ -1,0 +1,49 @@
+{
+  "name": "St. GNG School",
+  "address": "Salarpur, Rasulgarh, Varanasi - 221007",
+  "phone": "9452824318",
+  "email": "stgng2005@gmail.com",
+  "upiId": "8423926608@upi",
+  "upiMerchantName": "St. GNG School",
+  "enableTransport": false,
+  "enableLateFee": false,
+  "lateFeeGraceDays": 10,
+  "lateFeeAmount": 50,
+  "lateFeeType": "FLAT",
+  "exams": [
+    "Unit-1",
+    "Half Yearly",
+    "Unit-2",
+    "Annual"
+  ],
+  "examConfig": {
+    "Unit-1": {
+      "isSplit": false,
+      "maxMarks": 20
+    },
+    "Half Yearly": {
+      "isSplit": true,
+      "maxMarks": 100,
+      "components": [
+        { "name": "Written Exam", "max": 80 },
+        { "name": "Note Book", "max": 5 },
+        { "name": "Sub. Enrich.", "max": 5 },
+        { "name": "Pr. Act.", "max": 10 }
+      ]
+    },
+    "Unit-2": {
+      "isSplit": false,
+      "maxMarks": 20
+    },
+    "Annual": {
+      "isSplit": true,
+      "maxMarks": 100,
+      "components": [
+        { "name": "Written Exam", "max": 80 },
+        { "name": "Note Book", "max": 5 },
+        { "name": "Sub. Enrich.", "max": 5 },
+        { "name": "Pr. Act.", "max": 10 }
+      ]
+    }
+  }
+}

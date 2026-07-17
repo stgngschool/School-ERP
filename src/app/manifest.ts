@@ -1,0 +1,28 @@
+import type { MetadataRoute } from 'next';
+
+export default function manifest(): MetadataRoute.Manifest {
+  return {
+    name: 'St. GNG School - Finance OS',
+    short_name: 'St. GNG School',
+    description: 'School Management & Finance OS Portal for Admins, Accountants, Teachers, and Parents',
+    start_url: '/',
+    display: 'standalone',
+    background_color: '#ffffff',
+    theme_color: '#4f46e5',
+    orientation: 'portrait-primary',
+    icons: [
+      {
+        src: '/logo.png',
+        sizes: '192x192',
+        type: 'image/png',
+        purpose: 'maskable',
+      },
+      {
+        src: '/logo.png',
+        sizes: '512x512',
+        type: 'image/png',
+        purpose: 'maskable',
+      },
+    ],
+  };
+}

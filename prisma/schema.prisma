@@ -1,0 +1,364 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  ADMIN
+  ACCOUNTANT
+  TEACHER
+  PARENT
+}
+
+enum UserStatus {
+  ACTIVE
+  BLOCKED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  LEAVE
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum EntryType {
+  CHARGE
+  PAYMENT
+  DISCOUNT
+  FINE
+  REVERSAL
+}
+
+enum PaymentMethod {
+  CASH
+  UPI
+  BANK_TRANSFER
+  CHEQUE
+  ONLINE
+}
+
+model User {
+  id                String             @id @default(uuid())
+  username          String             @unique
+  email             String             @unique
+  passwordHash      String
+  role              Role
+  status            UserStatus         @default(ACTIVE)
+  name              String
+  phone             String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  // Profiles
+  teacherProfile    TeacherProfile?
+  parentProfile     ParentProfile?
+  accountantProfile AccountantProfile?
+
+  // Auditing & Creation logs
+  auditLogs         AuditLog[]
+  createdReceipts   Receipt[]          @relation("ReceiptCreator")
+  createdLedger     LedgerEntry[]      @relation("LedgerCreator")
+  createdNotices    Notice[]           @relation("NoticeCreator")
+}
+
+model TeacherProfile {
+  id          String       @id @default(uuid())
+  userId      String       @unique
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  employeeId  String       @unique
+  classes     Class[]      @relation("ClassTeacher")
+  homeworks   Homework[]
+  leaveApprovals LeaveRequest[]
+}
+
+model ParentProfile {
+  id          String       @id @default(uuid())
+  userId      String       @unique
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  familyCode  String       @unique // FAM-YYYY-XXXX
+  address     String?
+  students    Student[]
+  receipts    Receipt[]
+}
+
+model AccountantProfile {
+  id          String       @id @default(uuid())
+  userId      String       @unique
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  employeeId  String       @unique
+}
+
+model Class {
+  id             String         @id @default(uuid())
+  name           String         // e.g. "Class 10"
+  section        String         // e.g. "A"
+  classTeacherId String?
+  classTeacher   TeacherProfile? @relation("ClassTeacher", fields: [classTeacherId], references: [id])
+  students       Student[]
+  homeworks      Homework[]
+  status         String         @default("ACTIVE") // "ACTIVE" or "ARCHIVED"
+
+  @@unique([name, section])
+}
+
+model Student {
+  id              String          @id @default(uuid())
+  name            String
+  admissionNumber String          @unique
+  rollNumber      String?
+  dob             DateTime?
+  aadhaar         String?
+  disability      String?
+  fatherName      String?
+  motherName      String?
+  fatherMobile    String?
+  motherMobile    String?
+  fatherAadhaar   String?
+  category        String?
+  religion        String?
+  motherTongue    String?
+  nationality     String?
+  admissionDate   DateTime?
+  boardRegNo      String?
+  prevSchoolName  String?
+  prevClassPassed String?
+  tcNumber        String?
+  parentOccupation String?
+  familyIncome    String?
+  emergencyName   String?
+  emergencyPhone  String?
+  motherAadhaar   String?
+  transportMode   String?
+  busRoute        String?
+  busStop         String?
+  parentProfileId String
+  parentProfile   ParentProfile   @relation(fields: [parentProfileId], references: [id])
+  classId         String
+  class           Class           @relation(fields: [classId], references: [id])
+  status          String          @default("ACTIVE") // "ACTIVE", "LEFT"
+  isRte           Boolean         @default(false)
+  
+  attendance      Attendance[]
+  leaveRequests   LeaveRequest[]
+  ledgerEntries   LedgerEntry[]
+  receipts        Receipt[]
+  feeAssignments  FeeAssignment[]
+  transportStopId String?
+  transportStop   TransportStop?  @relation(fields: [transportStopId], references: [id], onDelete: SetNull)
+  concessionId    String?
+  concession      Concession?     @relation(fields: [concessionId], references: [id], onDelete: SetNull)
+  photoUrl        String?
+  marks           Mark[]
+}
+
+model Attendance {
+  id        String           @id @default(uuid())
+  studentId String
+  student   Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  date      DateTime         // Date only (no time)
+  status    AttendanceStatus
+  markedBy  String           // Teacher user ID
+  createdAt DateTime         @default(now())
+
+  @@unique([studentId, date])
+}
+
+model Homework {
+  id          String         @id @default(uuid())
+  classId     String
+  class       Class          @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subject     String
+  title       String
+  description String
+  fileUrl     String?        // Supabase Public Storage URL for attachments
+  dueDate     DateTime
+  teacherId   String
+  teacher     TeacherProfile @relation(fields: [teacherId], references: [id])
+  createdAt   DateTime       @default(now())
+}
+
+model LeaveRequest {
+  id          String       @id @default(uuid())
+  studentId   String
+  student     Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  startDate   DateTime
+  endDate     DateTime
+  reason      String
+  fileUrl     String?      // Supabase Private Storage URL (medical certificates/documents)
+  status      LeaveStatus  @default(PENDING)
+  teacherId   String?      // Assigned teacher for approval
+  teacher     TeacherProfile? @relation(fields: [teacherId], references: [id])
+  remarks     String?
+  createdAt   DateTime     @default(now())
+}
+
+model Notice {
+  id          String       @id @default(uuid())
+  title       String
+  content     String
+  target      String       @default("ALL") // "ALL", "TEACHERS", "PARENTS"
+  fileUrl     String?      // Supabase Public Storage URL
+  createdById String
+  createdBy   User         @relation("NoticeCreator", fields: [createdById], references: [id])
+  createdAt   DateTime     @default(now())
+}
+
+// --- Ledger & Financial Modules ---
+
+model FeeHead {
+  id             String             @id @default(uuid())
+  name           String             @unique
+  description    String?
+  frequency      String             @default("monthly") // 'one_time', 'annual', 'monthly', 'exam', 'ad_hoc'
+  status         String             @default("ACTIVE") // "ACTIVE" or "ARCHIVED"
+  createdAt      DateTime           @default(now())
+  structureItems FeeStructureItem[]
+  ledgerEntries  LedgerEntry[]
+}
+
+model TransportStop {
+  id        String    @id @default(uuid())
+  name      String    @unique
+  amount    Int       // In Paisa (Integer)
+  createdAt DateTime  @default(now())
+  students  Student[]
+}
+
+model Concession {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  percentage  Int       // e.g. 20 for 20% discount
+  feeHeadName String    // e.g. "Tuition Fee"
+  createdAt   DateTime  @default(now())
+  students    Student[]
+}
+
+model FeeStructure {
+  id          String             @id @default(uuid())
+  name        String
+  frequency   String             // 'monthly', 'quarterly', 'half-yearly', 'annual'
+  className   String?            // Associated class name (e.g. '10', '9', '8', or 'All')
+  createdAt   DateTime           @default(now())
+  items       FeeStructureItem[]
+  assignments FeeAssignment[]
+}
+
+model FeeStructureItem {
+  id             String       @id @default(uuid())
+  feeStructureId String
+  feeStructure   FeeStructure @relation(fields: [feeStructureId], references: [id], onDelete: Cascade)
+  feeHeadId      String
+  feeHead        FeeHead      @relation(fields: [feeHeadId], references: [id])
+  amount         Int          // In Paisa (Integer)
+}
+
+model FeeAssignment {
+  id             String       @id @default(uuid())
+  studentId      String
+  student        Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  feeStructureId String
+  feeStructure   FeeStructure @relation(fields: [feeStructureId], references: [id])
+  academicYear   String       // e.g., '2026-2027'
+  createdAt      DateTime     @default(now())
+
+  @@unique([studentId, feeStructureId, academicYear])
+}
+
+model LedgerEntry {
+  id           String        @id @default(uuid())
+  studentId    String
+  student      Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  feeHeadId    String?
+  feeHead      FeeHead?      @relation(fields: [feeHeadId], references: [id])
+  entryType    EntryType
+  amount       Int           // Positive for dues/charges, Negative for payments/reversals/discounts
+  referenceId  String?       // Links to receipt ID
+  description  String
+  createdById  String
+  createdBy    User          @relation("LedgerCreator", fields: [createdById], references: [id])
+  createdAt    DateTime      @default(now())
+  receiptItems ReceiptItem[]
+}
+
+model Receipt {
+  id                   String         @id @default(uuid())
+  studentId            String?
+  student              Student?       @relation(fields: [studentId], references: [id])
+  parentProfileId      String?
+  parentProfile        ParentProfile? @relation(fields: [parentProfileId], references: [id], onDelete: SetNull)
+  receiptNumber        String         @unique // REC-YYYY-XXXX
+  paymentMethod        PaymentMethod
+  transactionReference String?
+  amountPaid           Int            // In Paisa
+  status               String         @default("ACTIVE") // "ACTIVE", "REVERSED"
+  remarks              String?
+  createdById          String
+  createdBy            User           @relation("ReceiptCreator", fields: [createdById], references: [id])
+  createdAt            DateTime       @default(now())
+  items                ReceiptItem[]
+}
+
+model ReceiptItem {
+  id            String      @id @default(uuid())
+  receiptId     String
+  receipt       Receipt     @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  ledgerEntryId String
+  ledgerEntry   LedgerEntry @relation(fields: [ledgerEntryId], references: [id])
+  amount        Int         // Amount applied to this specific charge
+
+  @@unique([receiptId, ledgerEntryId])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  action     String
+  entityType String
+  entityId   String
+  oldValues  String?  // JSON string
+  newValues  String?  // JSON string
+  createdAt  DateTime @default(now())
+}
+
+model CalendarEvent {
+  id          String   @id @default(uuid())
+  title       String
+  day         Int
+  month       Int      @default(1) // 1-12
+  year        Int      @default(2026)
+  weekday     String   // e.g. "Mon", "Tue"
+  ticketsSold String?  // e.g. "561 / 650"
+  pct         String?  // e.g. "86%"
+  createdAt   DateTime @default(now())
+}
+
+model Mark {
+  id                String   @id @default(uuid())
+  studentId         String
+  student           Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subject           String   // e.g. "Mathematics", "Science", etc.
+  examName          String   // e.g. "Quarterly", "Half Yearly", "Annual"
+  marksObtained     Float
+  maxMarks          Float
+  writtenExam       Float?   // e.g. out of 80
+  notebook          Float?   // e.g. out of 5
+  subjectEnrichment Float?   // e.g. out of 5
+  practical         Float?   // e.g. out of 10
+  breakdown         Json?    // e.g. {"Written": 75, "Notebook": 5}
+  remarks           String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([studentId, subject, examName])
+}
