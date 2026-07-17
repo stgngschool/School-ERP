@@ -1554,25 +1554,25 @@ export default function AdminDashboard() {
                     </p>
                   </div>
                   
-                  <div className="flex flex-wrap items-center gap-6 md:gap-8">
-                    <div className="space-y-1 border-r border-slate-800 pr-6">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full md:w-auto pt-2 md:pt-0">
+                    <div className="space-y-1 sm:border-r border-slate-800 sm:pr-4">
                       <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider block">Cash Tally</span>
                       <span className="text-sm font-black text-emerald-450">₹{todayCash.toLocaleString("en-IN")}</span>
                     </div>
                     
-                    <div className="space-y-1 border-r border-slate-800 pr-6">
+                    <div className="space-y-1 sm:border-r border-slate-800 sm:pr-4">
                       <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider block">UPI QR Scan</span>
                       <span className="text-sm font-black text-indigo-405 font-bold">₹{todayUpi.toLocaleString("en-IN")}</span>
                     </div>
 
-                    <div className="space-y-1 border-r border-slate-800 pr-6">
+                    <div className="space-y-1 sm:border-r border-slate-800 sm:pr-4">
                       <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider block">Bank / Cheque</span>
                       <span className="text-sm font-black text-slate-300">₹{todayBank.toLocaleString("en-IN")}</span>
                     </div>
 
-                    <div className="space-y-1 bg-slate-800/40 p-3 rounded-2xl border border-slate-800/80">
+                    <div className="space-y-1 bg-slate-800/40 p-2.5 rounded-2xl border border-slate-800/80">
                       <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider block leading-none mb-1">Total Today</span>
-                      <span className="text-base font-black text-white block">₹{todayTotal.toLocaleString("en-IN")}</span>
+                      <span className="text-sm font-black text-white block">₹{todayTotal.toLocaleString("en-IN")}</span>
                     </div>
                   </div>
                 </div>
