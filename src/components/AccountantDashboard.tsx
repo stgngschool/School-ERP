@@ -630,7 +630,7 @@ export default function AccountantDashboard() {
                 </div>
 
                 {/* Quick Info Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-lg mx-auto pt-4 text-left">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg mx-auto pt-4 text-left">
                   <div className="p-4 bg-slate-50 border border-slate-200/60 rounded-xl flex gap-3">
                     <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600 h-fit border border-indigo-100/50">
                       <Users className="h-4 w-4" />
@@ -669,7 +669,7 @@ export default function AccountantDashboard() {
                 <div className="space-y-6">
                 
                 {/* 1. Header Student Panel Card */}
-                <div className="bg-slate-900 rounded-2xl p-5 text-white shadow-lg relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="bg-slate-900 rounded-2xl p-5 text-white shadow-lg relative overflow-hidden flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                   {/* Background decoration */}
                   <div className="absolute right-0 top-0 h-40 w-40 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
                   
@@ -708,7 +708,7 @@ export default function AccountantDashboard() {
                       )}
                     </div>
 
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-1 text-slate-300 text-[10px] font-semibold">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-1 text-slate-300 text-[10px] font-semibold">
                       <p>Admission No: <span className="font-bold text-white">{selectedStudentObj?.admissionNo}</span></p>
                       <p>Parent Name: <span className="font-bold text-white">{selectedStudentObj?.parentName}</span></p>
                       <p>Parent Phone: <span className="font-bold text-white">{selectedStudentObj?.parentPhone}</span></p>
@@ -720,7 +720,7 @@ export default function AccountantDashboard() {
                     </div>
                   </div>
 
-                  <div className="text-left md:text-right space-y-1 shrink-0 bg-slate-800/40 p-3.5 rounded-xl border border-slate-700/30">
+                  <div className="text-left lg:text-right space-y-1 shrink-0 bg-slate-800/40 p-3.5 rounded-xl border border-slate-700/30">
                     <span className="text-[8px] font-black uppercase text-slate-400 block tracking-wider">Total Outstanding Dues</span>
                     <h3 className="text-xl font-black text-rose-400 tracking-tight">
                       Rs. {selectedStudentDues.reduce((sum, item) => sum + item.amount, 0).toLocaleString("en-IN")}
@@ -1239,7 +1239,7 @@ export default function AccountantDashboard() {
               </div>
             )}
 
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-200 pb-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
               <div>
                 <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider">
                   Dues & Defaulters Report
@@ -1250,14 +1250,14 @@ export default function AccountantDashboard() {
               </div>
               <button 
                 onClick={() => alert(`Exporting XLS report...`)}
-                className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl py-2 px-3 text-[10px] font-bold text-slate-600 self-start md:self-auto cursor-pointer transition-all"
+                className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl py-2 px-3 text-[10px] font-bold text-slate-600 self-start sm:self-auto cursor-pointer transition-all"
               >
                 <FileSpreadsheet className="h-3.5 w-3.5" /> Export XLS
               </button>
             </div>
 
             {/* Filters Row */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <input
                 type="text"
                 placeholder="Search by Student Name or Parent..."
@@ -1349,7 +1349,7 @@ export default function AccountantDashboard() {
                       </div>
 
                       {/* Student Profile Info */}
-                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/50 border border-slate-100/80 rounded-2xl p-5">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/50 border border-slate-100/80 rounded-2xl p-5">
                         <div className="flex items-center gap-4">
                           {std.photoUrl ? (
                             <img src={std.photoUrl} alt={std.name} className="h-16 w-16 rounded-2xl object-cover border border-slate-200 shadow-sm shrink-0" />
@@ -1380,7 +1380,7 @@ export default function AccountantDashboard() {
                             </div>
                           </div>
                         </div>
-                        <div className="md:border-l md:border-slate-200/80 md:pl-6 space-y-1.5 shrink-0">
+                        <div className="sm:border-l sm:border-slate-200/80 sm:pl-6 space-y-1.5 shrink-0">
                           <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
                             <span className="text-slate-400 flex items-center justify-center"><UserCheck className="h-4 w-4" /></span>
                             <span>{std.fatherName || std.parentName}</span>
@@ -1521,7 +1521,7 @@ export default function AccountantDashboard() {
               return (
                 <div className="space-y-4">
                   {/* Top Stats Bar */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                     {[
                       { label: "Total Students", value: students.length, color: "text-slate-800" },
                       { label: "With Outstanding Due", value: filteredDefaulters.length, color: "text-rose-600" },
@@ -1536,7 +1536,7 @@ export default function AccountantDashboard() {
                   </div>
 
                   {/* Student Cards Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {paginatedDefaulters.map((std) => {
                       const allDues    = studentDuesMap.get(std.id) || [];
                       const unpaidDues = unpaidDuesMap.get(std.id) || [];
@@ -1862,7 +1862,7 @@ export default function AccountantDashboard() {
         {currentTab === "ledger" && (
           <div className="space-y-6">
             {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
               <div>
                 <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider">
                   Receipts & Audit Ledger Book
@@ -1873,7 +1873,7 @@ export default function AccountantDashboard() {
               </div>
 
               {/* Sub-tab toggle buttons */}
-              <div className="flex bg-slate-100 p-0.5 rounded-xl self-start md:self-auto select-none shrink-0 border border-slate-200/40">
+              <div className="flex bg-slate-100 p-0.5 rounded-xl self-start sm:self-auto select-none shrink-0 border border-slate-200/40">
                 <button
                   onClick={() => setLedgerSubTab("receipts")}
                   className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${
@@ -1898,7 +1898,7 @@ export default function AccountantDashboard() {
             </div>
 
             {/* Filters Row */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {/* Search Bar */}
               <div className="relative">
                 <input

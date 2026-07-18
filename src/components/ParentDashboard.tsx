@@ -508,7 +508,7 @@ export default function ParentDashboard() {
             return (
               <div className="space-y-6">
                 {/* Aggregate Scorecard Panel */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                   {/* Total Score Card */}
                   <div className="bg-white border border-slate-200/80 p-5 rounded-2xl shadow-sm space-y-2">
                     <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Total Marks</span>

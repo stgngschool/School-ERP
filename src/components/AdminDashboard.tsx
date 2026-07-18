@@ -1539,7 +1539,7 @@ export default function AdminDashboard() {
 
             return (
               <>
-                <div className="bg-slate-900 text-white rounded-3xl p-5 shadow-md flex flex-col md:flex-row justify-between items-center gap-4 relative overflow-hidden border border-slate-800">
+                <div className="bg-slate-900 text-white rounded-3xl p-5 shadow-md flex flex-col lg:flex-row justify-between items-center gap-4 relative overflow-hidden border border-slate-800">
                   <div className="absolute right-0 top-0 h-32 w-32 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
                   
                   <div className="space-y-1">
@@ -1554,7 +1554,7 @@ export default function AdminDashboard() {
                     </p>
                   </div>
                   
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full md:w-auto pt-2 md:pt-0">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full lg:w-auto pt-2 lg:pt-0">
                     <div className="space-y-1 sm:border-r border-slate-800 sm:pr-4">
                       <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider block">Cash Tally</span>
                       <span className="text-sm font-black text-emerald-450">₹{todayCash.toLocaleString("en-IN")}</span>
@@ -1578,7 +1578,7 @@ export default function AdminDashboard() {
                 </div>
 
                 {/* Metric Cards Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   {/* Total Students Card */}
                   <div className="bg-white border border-slate-200/80 p-5 rounded-3xl shadow-sm hover:border-indigo-300 transition-all">
                     <div className="flex justify-between items-start">
@@ -1774,7 +1774,7 @@ export default function AdminDashboard() {
                       <span className="text-[10px] text-slate-455 font-bold uppercase">Happy Birthday! ­ƒÄé</span>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[190px] overflow-y-auto pr-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[190px] overflow-y-auto pr-1">
                       {upcomingBirthdays.map((s) => (
                         <div key={s.id} className="flex items-center gap-3 p-3 bg-gradient-to-r from-amber-50 to-orange-50/30 border border-amber-100/60 rounded-2xl">
                           <div className="h-10 w-10 bg-amber-100 text-amber-800 rounded-xl flex flex-col items-center justify-center shrink-0 border border-amber-200 select-none">
@@ -1902,7 +1902,7 @@ export default function AdminDashboard() {
                   </div>
 
                   {/* Quick Info Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-lg mx-auto pt-4 text-left">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg mx-auto pt-4 text-left">
                     <div className="p-4 bg-slate-50 border border-slate-200/60 rounded-xl flex gap-3">
                       <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600 h-fit border border-indigo-100/50">
                         <Users className="h-4 w-4" />
@@ -1933,7 +1933,7 @@ export default function AdminDashboard() {
                 <div className="space-y-6">
                   
                   {/* 1. Header Student Panel Card */}
-                  <div className="bg-slate-900 rounded-2xl p-5 text-white shadow-lg relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="bg-slate-900 rounded-2xl p-5 text-white shadow-lg relative overflow-hidden flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                     {/* Background decoration */}
                     <div className="absolute right-0 top-0 h-40 w-40 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
                     
@@ -1963,7 +1963,7 @@ export default function AdminDashboard() {
                         )}
                       </div>
 
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-1 text-slate-300 text-[10px] font-semibold">
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-1 text-slate-300 text-[10px] font-semibold">
                         <p>Admission No: <span className="font-bold text-white">{selectedStudentObj?.admissionNo}</span></p>
                         <p>Parent Name: <span className="font-bold text-white">{selectedStudentObj?.parentName}</span></p>
                         <p>Parent Phone: <span className="font-bold text-white">{selectedStudentObj?.parentPhone}</span></p>
@@ -2489,7 +2489,7 @@ export default function AdminDashboard() {
 
 
               {/* 12-MONTH BULK BILL GENERATOR CARD */}
-              <div className="bg-emerald-50 border border-emerald-200/70 rounded-2xl px-5 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="bg-emerald-50 border border-emerald-200/70 rounded-2xl px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-start gap-3">
                   <div className="w-8 h-8 bg-emerald-600 rounded-xl flex items-center justify-center shrink-0 shadow-md shadow-emerald-600/10">
                     <CheckCircle className="h-4 w-4 text-white" />
@@ -3888,7 +3888,7 @@ export default function AdminDashboard() {
                         <h4 className="text-[10px] font-black uppercase text-indigo-600 tracking-wider border-b border-indigo-50 pb-1.5">
                           1. Personal & Demographics Information
                         </h4>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                           <div className="md:col-span-2">
                             <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Student Name *</label>
                             <input
@@ -3912,7 +3912,7 @@ export default function AdminDashboard() {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                           <div>
                             <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Aadhaar Number</label>
                             <input
@@ -3963,7 +3963,7 @@ export default function AdminDashboard() {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                           <div>
                             <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Mother Tongue</label>
                             <input
@@ -4003,7 +4003,7 @@ export default function AdminDashboard() {
                         <h4 className="text-[10px] font-black uppercase text-indigo-600 tracking-wider border-b border-indigo-50 pb-1.5">
                           2. Academic History & Admissions
                         </h4>
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                           <div>
                             <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Class</label>
                             <select
@@ -4058,7 +4058,7 @@ export default function AdminDashboard() {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-slate-50/50 p-3 rounded-xl border border-slate-100">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 bg-slate-50/50 p-3 rounded-xl border border-slate-100">
                           <div>
                             <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Previous School Name</label>
                             <input
@@ -4168,7 +4168,7 @@ export default function AdminDashboard() {
                           )}
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
                             <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Father's Name *</label>
                             <input
@@ -4194,7 +4194,7 @@ export default function AdminDashboard() {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                           <div>
                             <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Father's Mobile *</label>
                             <input
@@ -4234,7 +4234,7 @@ export default function AdminDashboard() {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                           <div>
                             <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Mother's Aadhaar</label>
                             <input
@@ -4271,7 +4271,7 @@ export default function AdminDashboard() {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                           <div className="md:col-span-1">
                             <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Parent Email</label>
                             <input
@@ -4303,7 +4303,7 @@ export default function AdminDashboard() {
                         <h4 className="text-[10px] font-black uppercase text-indigo-600 tracking-wider border-b border-indigo-50 pb-1.5">
                           4. Safety, Emergency & Transport
                         </h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-50/30 p-3.5 rounded-2xl border border-slate-100/80">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50/30 p-3.5 rounded-2xl border border-slate-100/80">
                           <div>
                             <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Emergency Contact Person</label>
                             <input
@@ -4329,7 +4329,7 @@ export default function AdminDashboard() {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                           <div>
                             <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Mode of Transport</label>
                             <select
@@ -4514,7 +4514,7 @@ export default function AdminDashboard() {
           {activeTab === "idcards" && (
             <div className="space-y-6 animate-fade-in text-left">
               {/* Header */}
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white border border-slate-200/60 p-5 rounded-2xl shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-slate-200/60 p-5 rounded-2xl shadow-sm">
                 <div>
                   <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider">
                     Student ID Cards &amp; Photos Center
@@ -4588,7 +4588,7 @@ export default function AdminDashboard() {
                   <p className="text-xs font-bold text-slate-500">Select a class from the dropdown above to start managing photos and printing ID cards.</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   {students
                     .filter((s) => s.class === idClassFilter)
                     .map((std) => (
@@ -4879,7 +4879,7 @@ export default function AdminDashboard() {
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2">
                   {/* Google Sheets Sync Box */}
                   <div className="border border-slate-100 bg-slate-50/30 rounded-xl p-4.5 space-y-3.5">
                     <div>
@@ -5348,7 +5348,7 @@ export default function AdminDashboard() {
           {activeTab === "ledger" && (
             <div className="space-y-6">
               {/* Header */}
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
                 <div>
                   <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider">
                     Receipts & Audit Ledger Book
@@ -5384,7 +5384,7 @@ export default function AdminDashboard() {
               </div>
 
               {/* Filters Row */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {/* Search Bar */}
                 <div className="relative">
                   <input
@@ -5631,7 +5631,7 @@ export default function AdminDashboard() {
                 </div>
               )}
 
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-200 pb-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
                 <div>
                   <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider">
                     Dues & Defaulters Report
@@ -5649,7 +5649,7 @@ export default function AdminDashboard() {
               </div>
 
               {/* Filters */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <input
                   type="text"
                   placeholder="Search by Student Name or Parent..."
@@ -5736,7 +5736,7 @@ export default function AdminDashboard() {
                         </div>
 
                         {/* Student Profile Info */}
-                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/50 border border-slate-100/80 rounded-2xl p-5">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/50 border border-slate-100/80 rounded-2xl p-5">
                           <div className="flex items-center gap-4">
                             {std.photoUrl ? (
                               <img src={std.photoUrl} alt={std.name} className="h-16 w-16 rounded-2xl object-cover border border-slate-200 shadow-sm shrink-0" />
@@ -5902,7 +5902,7 @@ export default function AdminDashboard() {
                 return (
                   <div className="space-y-4">
                     {/* Top Stats Bar */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                       {[
                         { label: "Total Students", value: students.length, color: "text-slate-800" },
                         { label: "With Outstanding Due", value: filteredDefaulters.length, color: "text-rose-600" },
@@ -5917,7 +5917,7 @@ export default function AdminDashboard() {
                     </div>
 
                     {/* Student Cards Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {paginatedDefaulters.map((std) => {
                         const allDues    = studentDuesMap.get(std.id) || [];
                         const unpaidDues = unpaidDuesMap.get(std.id) || [];

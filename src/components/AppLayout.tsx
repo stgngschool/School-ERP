@@ -149,24 +149,24 @@ export default function AppLayout({ children }: AppLayoutProps) {
     <div className="flex flex-col md:flex-row h-screen w-full max-w-full overflow-hidden bg-slate-50 text-slate-800 font-sans">
 
       {/* ════════════════════════════════════════
-          DESKTOP SIDEBAR (md and above)
+          SIDEBAR (tablet: collapsed icons | desktop: full)
       ════════════════════════════════════════ */}
-      <aside className="hidden md:flex md:w-64 flex-col border-r border-slate-200 bg-white p-5 shrink-0 select-none">
+      <aside className="sidebar-collapsed hidden md:flex md:w-[68px] lg:w-64 flex-col border-r border-slate-200 bg-white p-2.5 lg:p-5 shrink-0 select-none transition-all duration-200">
         {/* Branding */}
-        <div className="flex items-center gap-2.5 pb-6 border-b border-slate-100 mb-6 shrink-0">
-          <img src="/logo.png" alt="St. G.N.G. School Logo" className="h-9 w-9 rounded-full object-contain border border-slate-100 bg-white" />
-          <div>
+        <div className="flex items-center gap-2.5 pb-4 lg:pb-6 border-b border-slate-100 mb-4 lg:mb-6 shrink-0 justify-center lg:justify-start">
+          <img src="/logo.png" alt="St. G.N.G. School Logo" className="h-9 w-9 rounded-full object-contain border border-slate-100 bg-white shrink-0" />
+          <div className="sidebar-brand-text">
             <h1 className="font-extrabold text-xs text-slate-900 leading-tight">St. G.N.G. School</h1>
             <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Varanasi</p>
           </div>
         </div>
 
         {/* User Profile Card */}
-        <div className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-100 rounded-2xl mb-6 shrink-0">
-          <div className={`flex h-8 w-8 items-center justify-center rounded-full ${roleBadgeColor} text-white font-bold text-xs`}>
+        <div className="flex items-center gap-3 p-2 lg:p-3 bg-slate-50 border border-slate-100 rounded-2xl mb-4 lg:mb-6 shrink-0 justify-center lg:justify-start">
+          <div className={`flex h-8 w-8 items-center justify-center rounded-full ${roleBadgeColor} text-white font-bold text-xs shrink-0`}>
             {user?.name?.slice(0, 1) || "U"}
           </div>
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 sidebar-user-info">
             <h4 className="text-xs font-bold text-slate-800 truncate">{user?.name || "System User"}</h4>
             <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{activeRole}</p>
           </div>
@@ -174,7 +174,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
         {/* Navigation */}
         <nav className="flex-1 space-y-1 overflow-y-auto">
-          <span className="px-3 text-[9px] font-black uppercase tracking-wider text-slate-400 block mb-2">Features</span>
+          <span className="sidebar-section-title px-3 text-[9px] font-black uppercase tracking-wider text-slate-400 block mb-2">Features</span>
           {navItems.map((item, idx) => {
             const Icon = item.icon;
             const isActive = activeTab === item.tab;
@@ -182,29 +182,30 @@ export default function AppLayout({ children }: AppLayoutProps) {
               <button
                 key={idx}
                 onClick={() => setActiveTab(item.tab)}
-                className={`w-full flex items-center gap-3 rounded-lg px-3 py-2 text-xs font-bold transition-all ${
+                title={item.name}
+                className={`w-full flex items-center gap-3 rounded-lg px-3 py-2 text-xs font-bold transition-all justify-center lg:justify-start ${
                   isActive
                     ? "bg-indigo-50 text-indigo-700 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
                     : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                 }`}
               >
                 <Icon className={`h-4 w-4 shrink-0 ${isActive ? "text-indigo-600" : "text-slate-400"}`} />
-                {item.name}
+                <span className="sidebar-label">{item.name}</span>
               </button>
             );
           })}
         </nav>
 
         {/* Footer */}
-        <div className="pt-4 border-t border-slate-100 text-[10px] font-semibold text-slate-400 text-center">
+        <div className="sidebar-footer pt-4 border-t border-slate-100 text-[10px] font-semibold text-slate-400 text-center">
           Finance OS v1.0.0
         </div>
       </aside>
 
       {/* ════════════════════════════════════════
-          MOBILE TOP HEADER (below md)
+          MOBILE + TABLET TOP HEADER (below lg)
       ════════════════════════════════════════ */}
-      <header className="md:hidden mobile-page-header shrink-0">
+      <header className="lg:hidden mobile-page-header shrink-0">
         <div className="flex items-center gap-2.5 min-w-0">
           <img src="/logo.png" alt="GNG" className="h-8 w-8 rounded-full object-contain border border-slate-100 bg-white shrink-0" />
           <div className="min-w-0">
@@ -245,7 +246,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
       ════════════════════════════════════════ */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Desktop Header */}
-        <header className="hidden md:flex bg-white border-b border-slate-200 h-16 items-center justify-between px-6 shrink-0 relative z-20 shadow-[0_1px_3px_rgba(0,0,0,0.02)] select-none">
+        <header className="hidden lg:flex bg-white border-b border-slate-200 h-16 items-center justify-between px-6 shrink-0 relative z-20 shadow-[0_1px_3px_rgba(0,0,0,0.02)] select-none">
           <div className="flex items-center gap-6 flex-1 max-w-xl">
             {/* Mega Menu Toggle */}
             <div className="relative" ref={megaMenuRef}>
@@ -257,7 +258,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
               </button>
 
               {megaMenuOpen && (
-                <div className="absolute top-12 left-0 bg-white border border-slate-200 rounded-3xl p-6 shadow-2xl w-[680px] grid grid-cols-3 gap-6 z-50 animate-slide-down">
+                <div className="absolute top-12 left-0 bg-white border border-slate-200 rounded-3xl p-6 shadow-2xl w-[min(680px,calc(100vw-300px))] grid grid-cols-3 gap-6 z-50 animate-slide-down">
                   {/* Col 1: Admission */}
                   <div className="space-y-4">
                     <h5 className="text-xs font-black text-indigo-700 uppercase tracking-wider pb-1.5 border-b border-slate-100 flex items-center gap-2">
@@ -423,15 +424,15 @@ export default function AppLayout({ children }: AppLayoutProps) {
         )}
 
         {/* Main Content */}
-        <main className="flex-1 p-3 sm:p-4 md:p-6 lg:p-8 overflow-y-auto overflow-x-hidden min-w-0 max-w-full touch-scroll-y">
+        <main className="flex-1 p-3 sm:p-4 md:p-5 lg:p-6 xl:p-8 overflow-y-auto overflow-x-hidden min-w-0 max-w-full touch-scroll-y">
           {children}
         </main>
       </div>
 
       {/* ════════════════════════════════════════
-          MOBILE BOTTOM NAVIGATION BAR
+          BOTTOM NAVIGATION BAR (phone + tablet)
       ════════════════════════════════════════ */}
-      <nav className="mobile-bottom-nav md:hidden" role="navigation" aria-label="Main navigation">
+      <nav className="mobile-bottom-nav lg:hidden" role="navigation" aria-label="Main navigation">
         {bottomNavItems.map((item, idx) => {
           const Icon = item.icon;
           const isActive = activeTab === item.tab;
@@ -471,8 +472,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
       ════════════════════════════════════════ */}
       {showMoreSheet && (
         <>
-          <div className="bottom-sheet-overlay md:hidden" onClick={() => setShowMoreSheet(false)} />
-          <div className="bottom-sheet md:hidden">
+          <div className="bottom-sheet-overlay lg:hidden" onClick={() => setShowMoreSheet(false)} />
+          <div className="bottom-sheet lg:hidden">
             <div className="bottom-sheet-handle" />
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-black text-slate-800">All Sections</h3>
@@ -510,8 +511,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
       ════════════════════════════════════════ */}
       {showNoticeSheet && (
         <>
-          <div className="bottom-sheet-overlay md:hidden" onClick={() => setShowNoticeSheet(false)} />
-          <div className="bottom-sheet md:hidden">
+          <div className="bottom-sheet-overlay lg:hidden" onClick={() => setShowNoticeSheet(false)} />
+          <div className="bottom-sheet lg:hidden">
             <div className="bottom-sheet-handle" />
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
@@ -553,8 +554,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
       ════════════════════════════════════════ */}
       {showRoleSwitcher && (
         <>
-          <div className="bottom-sheet-overlay md:hidden" onClick={() => setShowRoleSwitcher(false)} />
-          <div className="bottom-sheet md:hidden">
+          <div className="bottom-sheet-overlay lg:hidden" onClick={() => setShowRoleSwitcher(false)} />
+          <div className="bottom-sheet lg:hidden">
             <div className="bottom-sheet-handle" />
             <div className="flex items-center justify-between mb-1">
               <h3 className="text-sm font-black text-slate-800">Switch Role</h3>
@@ -615,7 +616,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
           DESKTOP: ROLE SWITCHER PANEL (unchanged)
       ════════════════════════════════════════ */}
       {showDesktopRolePanel ? (
-        <div className="hidden md:flex fixed bottom-3 right-4 z-30 bg-white border border-slate-200 rounded-2xl p-3.5 shadow-2xl max-w-xs flex-col gap-2.5">
+        <div className="hidden lg:flex fixed bottom-3 right-4 z-30 bg-white border border-slate-200 rounded-2xl p-3.5 shadow-2xl max-w-xs flex-col gap-2.5">
           <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
             <div className="flex items-center gap-1.5">
               <Shield className="h-4 w-4 text-indigo-600" />
@@ -644,7 +645,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
       ) : (
         <button
           onClick={() => setShowDesktopRolePanel(true)}
-          className="hidden md:flex fixed bottom-4 right-4 z-30 bg-indigo-600 text-white rounded-full p-3 shadow-lg shadow-indigo-500/30 hover:bg-indigo-700 transition-all items-center justify-center cursor-pointer"
+          className="hidden lg:flex fixed bottom-4 right-4 z-30 bg-indigo-600 text-white rounded-full p-3 shadow-lg shadow-indigo-500/30 hover:bg-indigo-700 transition-all items-center justify-center cursor-pointer"
         >
           <Shield className="h-5 w-5" />
         </button>

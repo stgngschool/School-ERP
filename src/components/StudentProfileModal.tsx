@@ -232,7 +232,7 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
 
   return (
     <div className={isInline ? "w-full bg-white border border-slate-200 rounded-3xl shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex flex-col overflow-hidden" : "fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-end sm:items-center justify-center sm:p-4"}>
-      <div className={isInline ? "w-full flex flex-col overflow-hidden" : "bg-white w-full sm:rounded-3xl sm:max-w-5xl sm:h-[85vh] h-[94vh] rounded-t-3xl flex flex-col shadow-2xl overflow-hidden border border-slate-100 modal-fullscreen-mobile pb-[env(safe-area-inset-bottom,0px)]"}>
+      <div className={isInline ? "w-full flex flex-col overflow-hidden" : "bg-white w-full sm:rounded-3xl sm:max-w-2xl lg:max-w-5xl sm:h-[85vh] h-[94vh] rounded-t-3xl flex flex-col shadow-2xl overflow-hidden border border-slate-100 modal-fullscreen-mobile pb-[env(safe-area-inset-bottom,0px)]"}>
         
         {/* Header Section */}
         <div className="bg-gradient-to-r from-slate-900 to-indigo-950 px-4 sm:px-6 py-4 sm:py-5 text-white flex items-center justify-between shrink-0">
@@ -327,7 +327,7 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
                 <div className="space-y-6">
                   
                   {/* Quick Cards Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                     <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex items-center space-x-3">
                       <div className="h-10 w-10 rounded-xl bg-indigo-50 border border-indigo-150 flex items-center justify-center overflow-hidden shrink-0">
                         {data.photoUrl ? (
@@ -384,7 +384,7 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
                   </div>
 
                   {/* Personal & Parent Info Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                     
                     {/* Student Personal Info */}
                     <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
@@ -494,7 +494,7 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
                   </div>
 
                   {/* Previous Schooling & Emergency Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                     {/* Previous Schooling details */}
                     <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
                       <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest border-b pb-2 text-indigo-600 flex items-center space-x-1.5">
@@ -542,7 +542,7 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
                     <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest border-b pb-2 text-indigo-600">
                       Academic, Concessions & Transport Details
                     </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-xs">
                       <div className="space-y-2">
                         <div>
                           <p className="text-slate-400 font-bold">Class Teacher</p>
@@ -694,7 +694,7 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
                     <div className="p-4 space-y-3">
                       {data.receipts && data.receipts.length > 0 ? (
                         data.receipts.map((rec: any) => (
-                          <div key={rec.id} className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                          <div key={rec.id} className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                             <div className="space-y-1">
                               <div className="flex items-center space-x-2">
                                 <span className="font-bold text-slate-800 text-sm">{rec.receiptNumber}</span>
@@ -710,7 +710,7 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
                               )}
                             </div>
                             <div className="flex items-center space-x-4">
-                              <div className="text-left md:text-right">
+                              <div className="text-left sm:text-right">
                                 <p className="text-[10px] text-slate-400 font-bold">Amount Paid</p>
                                 <p className="text-sm font-black text-emerald-600">{formatCurrency(rec.amountPaid)}</p>
                               </div>
@@ -732,7 +732,7 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
                 <div className="space-y-6">
                   
                   {/* Attendance Stats Cards */}
-                  <div className="grid grid-cols-4 gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex items-center space-x-3">
                       <div className="h-10 w-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
                         {attendancePercent}%
@@ -778,6 +778,7 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
                         Attendance Logs
                       </h3>
                     </div>
+                    <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs border-collapse">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-100 font-bold text-slate-400">
@@ -829,6 +830,7 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
                         )}
                       </tbody>
                     </table>
+                    </div>
                   </div>
                 </div>
               )}
@@ -858,7 +860,7 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
                           }
 
                           return (
-                            <div key={leave.id} className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex flex-col md:flex-row md:items-start justify-between gap-3">
+                            <div key={leave.id} className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                               <div className="space-y-1">
                                 <div className="flex items-center space-x-2">
                                   <span className="font-bold text-slate-700 text-xs">
@@ -876,7 +878,7 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
                                   </p>
                                 )}
                               </div>
-                              <div className="text-[10px] text-slate-400 whitespace-nowrap self-end md:self-start">
+                              <div className="text-[10px] text-slate-400 whitespace-nowrap self-end sm:self-start">
                                 Requested on: {new Date(leave.createdAt).toLocaleDateString("en-IN")}
                               </div>
                             </div>
@@ -896,7 +898,7 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
               {activeTab === "marks" && (
                 <div className="space-y-6">
                   {/* Marks overview cards */}
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                     <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Overall Aggregate</p>
                       <h3 className="text-xl font-black text-slate-800 mt-1">
