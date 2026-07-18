@@ -178,6 +178,13 @@ export default function AdminDashboard() {
     refreshData,
   } = useAuth();
 
+  const validTabs = ["dashboard", "collect", "marks", "defaulters", "ledger", "structures", "students", "users", "idcards", "notices", "school", "audit"];
+  React.useEffect(() => {
+    if (!validTabs.includes(activeTab)) {
+      setActiveTab("dashboard");
+    }
+  }, [activeTab]);
+
   // Notice Form State
   const [noticeTitle, setNoticeTitle] = useState("");
   const [noticeContent, setNoticeContent] = useState("");

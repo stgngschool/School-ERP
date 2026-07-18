@@ -254,6 +254,13 @@ export default function ParentDashboard() {
     };
   });
 
+  const validTabs = ["dashboard", "reportcard", "fees", "homework", "attendance", "leave"];
+  React.useEffect(() => {
+    if (!validTabs.includes(activeTab)) {
+      setActiveTab("dashboard");
+    }
+  }, [activeTab]);
+
   const availableExams = schoolInfo?.exams && schoolInfo.exams.length > 0
     ? schoolInfo.exams
     : ["Unit-1", "Half Yearly", "Unit-2", "Annual"];
