@@ -76,23 +76,25 @@ body {
 }
 
 /* ─────────────────────────────────────────
-   BOTTOM NAVIGATION BAR
+   BOTTOM NAVIGATION BAR (Mobile Only)
 ───────────────────────────────────────── */
-.mobile-bottom-nav {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: var(--bottom-nav-height);
-  padding-bottom: var(--safe-bottom);
-  background: rgba(255, 255, 255, 0.95);
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
-  border-top: 1px solid rgba(226, 232, 240, 0.8);
-  display: flex;
-  align-items: stretch;
-  z-index: 50;
-  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.06);
+@media (max-width: 767px) {
+  .mobile-bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: var(--bottom-nav-height);
+    padding-bottom: var(--safe-bottom);
+    background: rgba(255, 255, 255, 0.95);
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid rgba(226, 232, 240, 0.8);
+    display: flex;
+    align-items: stretch;
+    z-index: 50;
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.06);
+  }
 }
 
 .bottom-nav-item {
@@ -255,21 +257,35 @@ body {
 }
 
 /* ─────────────────────────────────────────
-   PAGE HEADER (Mobile)
+   PAGE HEADER (Mobile Only)
 ───────────────────────────────────────── */
-.mobile-page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.95);
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
-  border-bottom: 1px solid rgba(226, 232, 240, 0.7);
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.04);
+@media (max-width: 767px) {
+  .mobile-page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.95);
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(226, 232, 240, 0.7);
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    box-shadow: 0 1px 8px rgba(0, 0, 0, 0.04);
+  }
+}
+
+/* ─────────────────────────────────────────
+   DESKTOP (≥ 768px): STRICTLY HIDE ALL MOBILE UI
+───────────────────────────────────────── */
+@media (min-width: 768px) {
+  .mobile-bottom-nav,
+  .mobile-page-header,
+  .bottom-sheet-overlay,
+  .bottom-sheet {
+    display: none !important;
+  }
 }
 
 /* ─────────────────────────────────────────
