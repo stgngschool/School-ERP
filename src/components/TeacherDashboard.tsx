@@ -36,6 +36,16 @@ export default function TeacherDashboard() {
     activeTab,
     setActiveTab,
   } = useAuth();
+
+  const validTabs = ["attendance", "homework", "leaves", "marks"];
+  const currentTab = validTabs.includes(activeTab) ? activeTab : "attendance";
+
+  React.useEffect(() => {
+    if (!validTabs.includes(activeTab)) {
+      setActiveTab("attendance");
+    }
+  }, [activeTab]);
+
   const [selectedClass, setSelectedClass] = useState("10-A");
   const [studentSearch, setStudentSearch] = useState("");
 
@@ -139,7 +149,7 @@ export default function TeacherDashboard() {
           { tab: "marks", label: "Feed Marks", icon: PlusCircle, color: "bg-amber-50 text-amber-600 border-amber-100", rotate: "hover:-rotate-1" },
         ].map((item) => {
           const Icon = item.icon;
-          const isActive = activeTab === item.tab;
+          const isActive = currentTab === item.tab;
           return (
             <button
               key={item.tab}
@@ -159,7 +169,7 @@ export default function TeacherDashboard() {
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
 
         {/* TAB: Attendance */}
-        {activeTab === "attendance" && (
+        {currentTab === "attendance" && (
           showProfileModal && selectedProfileStudentId ? (
             <StudentProfileModal
               studentId={selectedProfileStudentId}
@@ -240,7 +250,7 @@ export default function TeacherDashboard() {
                               <button
                                 key={s}
                                 onClick={() => handleMarkAttendance(student.id, s)}
-                                className={`py-2 rounded-xl text-xs font-black transition-all press-scale ${
+                                className={`py-3 rounded-xl text-xs font-black transition-all press-scale active:scale-95 touch-manipulation ${
                                   isSelected
                                     ? `${sCfg.color} text-white shadow-sm`
                                     : "bg-white border border-slate-200 text-slate-600"
@@ -338,14 +348,14 @@ export default function TeacherDashboard() {
         )}
 
         {/* TAB: Feed Marks */}
-        {activeTab === "marks" && (
+        {currentTab === "marks" && (
           <div className="p-4">
             <MarksFeedingConsole />
           </div>
         )}
 
         {/* TAB: Homework */}
-        {activeTab === "homework" && (
+        {currentTab === "homework" && (
           <div className="p-4 space-y-6">
             {/* Assignment Form */}
             <div className="space-y-4">
@@ -434,8 +444,8 @@ export default function TeacherDashboard() {
           </div>
         )}
 
-        {/* TAB: Leave Applications */}
-        {activeTab === "leaves" && (
+        {/* TAB: Leave Requests */}
+        {currentTab === "leaves" && (
           <div className="p-4 space-y-4">
             <div>
               <h3 className="text-sm font-black text-slate-800">Leave Requests</h3>

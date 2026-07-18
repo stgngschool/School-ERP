@@ -219,11 +219,20 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
   const { totalCharged, totalPaid, totalDiscount, outstanding } = getFinancialSummary();
   const { percent: attendancePercent, present: attPresent, absent: attAbsent, leave: attLeave, total: attTotal } = getAttendanceSummary();
 
+  React.useEffect(() => {
+    if (isOpen && !isInline) {
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = "";
+      };
+    }
+  }, [isOpen, isInline]);
+
   if (!isInline && !isOpen) return null;
 
   return (
     <div className={isInline ? "w-full bg-white border border-slate-200 rounded-3xl shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex flex-col overflow-hidden" : "fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-end sm:items-center justify-center sm:p-4"}>
-      <div className={isInline ? "w-full flex flex-col overflow-hidden" : "bg-white w-full sm:rounded-3xl sm:max-w-5xl sm:h-[85vh] h-[94vh] rounded-t-3xl flex flex-col shadow-2xl overflow-hidden border border-slate-100 modal-fullscreen-mobile"}>
+      <div className={isInline ? "w-full flex flex-col overflow-hidden" : "bg-white w-full sm:rounded-3xl sm:max-w-5xl sm:h-[85vh] h-[94vh] rounded-t-3xl flex flex-col shadow-2xl overflow-hidden border border-slate-100 modal-fullscreen-mobile pb-[env(safe-area-inset-bottom,0px)]"}>
         
         {/* Header Section */}
         <div className="bg-gradient-to-r from-slate-900 to-indigo-950 px-4 sm:px-6 py-4 sm:py-5 text-white flex items-center justify-between shrink-0">

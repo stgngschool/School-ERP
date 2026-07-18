@@ -1426,7 +1426,7 @@ export default function AdminDashboard() {
   };
 
   return (
-    <div className="space-y-6 font-sans">
+    <div className="space-y-6 font-sans w-full max-w-full overflow-x-hidden">
       {/* 1. Header & Quick Overview */}
       <div className="flex flex-col gap-1 border-b border-slate-200/80 pb-4">
         <h2 className="text-lg sm:text-xl font-black text-slate-800 tracking-tight">Super Admin Dashboard</h2>

@@ -140,6 +140,15 @@ export default function AccountantDashboard() {
     setActiveTab,
     classes,
   } = useAuth();
+
+  const validTabs = ["collect", "defaulters", "structures", "ledger", "marks"];
+  const currentTab = validTabs.includes(activeTab) ? activeTab : "collect";
+
+  React.useEffect(() => {
+    if (!validTabs.includes(activeTab)) {
+      setActiveTab("collect");
+    }
+  }, [activeTab]);
   
   // Payment Form States
   const [selectedStudentId, setSelectedStudentId] = useState("");
@@ -515,12 +524,12 @@ export default function AccountantDashboard() {
       <div className="bg-white border border-slate-200 p-4 sm:p-6 rounded-2xl shadow-sm">
         
         {/* TAB: Feed Student Marks */}
-        {activeTab === "marks" && (
+        {currentTab === "marks" && (
           <MarksFeedingConsole />
         )}
 
         {/* TAB 1: Collect Fee Form */}
-        {activeTab === "collect" && (
+        {currentTab === "collect" && (
           <div>
             {!selectedStudentId ? (
               // SEARCH VIEW (No student selected)
@@ -1220,8 +1229,8 @@ export default function AccountantDashboard() {
           </div>
         )}
 
-        {/* TAB 2: Defaulters List */}
-        {activeTab === "defaulters" && (
+        {/* TAB 2: Defaulter / Outstanding Dues Report */}
+        {currentTab === "defaulters" && (
           <div className="space-y-5">
             {alertSuccessMsg && (
               <div className="flex items-center gap-2 bg-green-50 text-green-700 p-2.5 rounded-xl border border-green-100 text-xs font-semibold animate-fade-in">
@@ -1657,8 +1666,8 @@ export default function AccountantDashboard() {
           </div>
         )}
 
-        {/* TAB 3: Configure Fee heads & structures (New upgrade) */}
-        {activeTab === "structures" && (
+        {/* TAB 3: Fee Structures & Fee Heads Config */}
+        {currentTab === "structures" && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Configure Fee Heads */}
             <div className="space-y-4 border-r border-slate-200/80 pr-0 lg:pr-6">
@@ -1850,7 +1859,7 @@ export default function AccountantDashboard() {
         )}
 
         {/* TAB 4: Ledger Logs */}
-        {activeTab === "ledger" && (
+        {currentTab === "ledger" && (
           <div className="space-y-6">
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-4">

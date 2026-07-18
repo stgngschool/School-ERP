@@ -59,13 +59,9 @@ body {
    FONT SIZE — PREVENT AUTO-ZOOM ON IOS
    (inputs must be ≥16px on mobile Safari)
 ───────────────────────────────────────── */
-input, select, button, textarea {
-  font-size: 16px !important;
-  font-family: inherit;
-}
-@media (min-width: 768px) {
-  input, select, button, textarea {
-    font-size: 12px !important;
+@media (max-width: 767px) {
+  input, select, textarea {
+    font-size: 16px !important;
   }
 }
 

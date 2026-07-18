@@ -272,7 +272,7 @@ export default function ParentDashboard() {
   }
 
   return (
-    <div className="space-y-4 pb-2 font-sans">
+    <div className="space-y-4 pb-2 font-sans w-full max-w-full overflow-x-hidden">
       {/* 1. Header Banner & Sibling Switcher */}
       <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="space-y-1">

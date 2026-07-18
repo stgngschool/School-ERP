@@ -454,7 +454,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
         {/* "More" button if there are extra nav items */}
         {moreNavItems.length > 0 && (
           <button
-            onClick={() => setShowMoreSheet(true)}
+            onClick={() => setShowMoreSheet(!showMoreSheet)}
             className={`bottom-nav-item ${moreNavItems.some(i => i.tab === activeTab) ? "active" : ""}`}
             aria-label="More options"
           >
