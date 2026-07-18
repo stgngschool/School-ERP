@@ -182,6 +182,23 @@ export async function DELETE(request: Request) {
         const studentIds = user.parentProfile.students.map((s) => s.id);
         if (studentIds.length > 0) {
           // Delete student references to prevent constraints failure
+          await tx.receiptItem.deleteMany({
+            where: {
+              OR: [
+                { ledgerEntry: { studentId: { in: studentIds } } },
+                { receipt: { studentId: { in: studentIds } } }
+              ]
+            }
+          });
+          await tx.receipt.deleteMany({
+            where: {
+              OR: [
+                { studentId: { in: studentIds } },
+                { parentProfileId: user.parentProfile.id }
+              ]
+            }
+          });
+          await tx.mark.deleteMany({ where: { studentId: { in: studentIds } } });
           await tx.feeAssignment.deleteMany({ where: { studentId: { in: studentIds } } });
           await tx.attendance.deleteMany({ where: { studentId: { in: studentIds } } });
           await tx.leaveRequest.deleteMany({ where: { studentId: { in: studentIds } } });
@@ -204,6 +221,15 @@ export async function DELETE(request: Request) {
       } else if (user.role === "ACCOUNTANT" && user.accountantProfile) {
         await tx.accountantProfile.delete({ where: { id: user.accountantProfile.id } });
       }
+
+      // Delete user-created entries
+      await tx.receiptItem.deleteMany({
+        where: { receipt: { createdById: userId } }
+      });
+      await tx.receipt.deleteMany({ where: { createdById: userId } });
+      await tx.ledgerEntry.deleteMany({ where: { createdById: userId } });
+      await tx.notice.deleteMany({ where: { createdById: userId } });
+      await tx.auditLog.deleteMany({ where: { userId: userId } });
 
       // Finally delete the user account
       await tx.user.delete({ where: { id: userId } });

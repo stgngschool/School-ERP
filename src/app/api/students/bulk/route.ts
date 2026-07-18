@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { generateYearlyChargesBulk, getAcademicYear } from "@/lib/generateYearlyCharges";
-import { getNextFamilyCode } from "@/lib/family";
+import { getNextFamilyCode, getNextAdmissionNumber } from "@/lib/family";
 
 export async function POST(request: Request) {
   try {
@@ -134,7 +134,7 @@ export async function POST(request: Request) {
         where: { classId: classObj.id },
       });
       const rollNo = String(rollCount + 1).padStart(2, "0");
-      const admissionNo = `ADM-2026-${String(totalStudents + 1).padStart(4, "0")}`;
+      const admissionNo = await getNextAdmissionNumber();
 
       const dobDate = dob ? new Date(dob) : null;
       const admDateObj = admissionDate ? new Date(admissionDate) : null;

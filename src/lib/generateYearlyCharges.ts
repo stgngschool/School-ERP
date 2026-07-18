@@ -134,7 +134,7 @@ export async function generateYearlyCharges(
     for (const charge of charges) {
       const chargeName = charge.description.replace("Assigned: ", "");
       const discountDesc = `RTE Fee Waiver: ${chargeName}`;
-      const concessionDesc = concession && concession.feeHeadName === name
+      const concessionDesc = concession && concession.feeHeadName.trim().toLowerCase() === name.trim().toLowerCase()
         ? `Concession Waiver (${concession.name}): ${chargeName}`
         : "";
 
@@ -328,7 +328,7 @@ export async function generateYearlyChargesBulk(
         const isRte = rteMap.get(student.id) ?? false;
         const concession = concessionMap.get(student.id) ?? null;
 
-        const concessionDesc = concession && concession.feeHeadName === name
+        const concessionDesc = concession && concession.feeHeadName.trim().toLowerCase() === name.trim().toLowerCase()
           ? `Concession Waiver (${concession.name}): ${chargeName}`
           : "";
         const keyConcessionDiscount = concessionDesc ? `${student.id}_${concessionDesc}` : "";

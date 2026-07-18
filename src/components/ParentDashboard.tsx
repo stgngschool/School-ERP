@@ -133,6 +133,14 @@ export default function ParentDashboard() {
     parentStudents.length > 0 ? parentStudents[0].id : ""
   );
 
+  React.useEffect(() => {
+    if (parentStudents.length > 0) {
+      if (!selectedChildId || !parentStudents.some((s) => s.id === selectedChildId)) {
+        setSelectedChildId(parentStudents[0].id);
+      }
+    }
+  }, [parentStudents, selectedChildId]);
+
   const [showFullProfile, setShowFullProfile] = useState(false);
 
   const child = students.find((s) => s.id === selectedChildId) || parentStudents[0];

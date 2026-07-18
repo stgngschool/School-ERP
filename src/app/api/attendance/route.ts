@@ -51,7 +51,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Student not found." }, { status: 404 });
     }
 
-    const dateObj = new Date(date);
+    const dateStr = typeof date === "string" ? date.split("T")[0] : new Date(date).toISOString().split("T")[0];
+    const dateObj = new Date(`${dateStr}T00:00:00.000Z`);
 
     const attendance = await db.attendance.upsert({
       where: {

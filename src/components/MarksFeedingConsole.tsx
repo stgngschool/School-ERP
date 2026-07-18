@@ -200,6 +200,7 @@ export default function MarksFeedingConsole() {
     } else {
       setIsCustomSubjectMode(false);
       setSelectedSubject(val);
+      setCustomSubject("");
     }
   };
 

@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
 import { PaymentMethod, EntryType } from "@prisma/client";
+import { getNextReceiptNumber } from "@/lib/family";
 import fs from "fs";
 import path from "path";
 
@@ -211,10 +212,10 @@ export async function POST(request: Request) {
     }
 
     const totalPayAmountPaisa = items.reduce(
-      (sum: number, item: any) => sum + Math.floor(Number(item.payAmount) * 100),
+      (sum: number, item: any) => sum + Math.round(Number(item.payAmount) * 100),
       0
     );
-    const receiptNo = `REC-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+    const receiptNo = await getNextReceiptNumber();
 
     // Resolve parent profile ID and student ID
     let resolvedParentProfileId = parentProfileId || null;
@@ -266,9 +267,9 @@ export async function POST(request: Request) {
        // 2. Loop through each item and apply payment / discount
       for (const item of items) {
         const { ledgerEntryId, payAmount, discountAmount, fineAmount } = item;
-        const payAmountPaisa = Math.floor(Number(payAmount) * 100);
-        const discountAmountPaisa = Math.floor(Number(discountAmount) * 100);
-        const fineAmountPaisa = Math.floor(Number(fineAmount || 0) * 100);
+        const payAmountPaisa = Math.round(Number(payAmount) * 100);
+        const discountAmountPaisa = Math.round(Number(discountAmount) * 100);
+        const fineAmountPaisa = Math.round(Number(fineAmount || 0) * 100);
 
         // Fetch original charge details
         const charge = await tx.ledgerEntry.findUnique({

@@ -110,6 +110,38 @@ export async function PATCH(request: Request) {
       },
     });
 
+    if (status === "APPROVED" && leave.startDate && leave.endDate) {
+      const current = new Date(leave.startDate);
+      const end = new Date(leave.endDate);
+      const teacherUserId = leave.teacherId || "system";
+
+      while (current <= end) {
+        const dateStr = current.toISOString().split("T")[0];
+        const dateObj = new Date(`${dateStr}T00:00:00.000Z`);
+
+        await db.attendance.upsert({
+          where: {
+            studentId_date: {
+              studentId: leave.studentId,
+              date: dateObj,
+            },
+          },
+          update: {
+            status: "LEAVE",
+            markedBy: teacherUserId,
+          },
+          create: {
+            studentId: leave.studentId,
+            date: dateObj,
+            status: "LEAVE",
+            markedBy: teacherUserId,
+          },
+        });
+
+        current.setDate(current.getDate() + 1);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       leave,
