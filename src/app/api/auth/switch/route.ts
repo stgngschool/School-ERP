@@ -31,16 +31,16 @@ export async function POST(request: Request) {
       role: user.role,
     });
 
-    // Set cookie
+    // Set cookie directly on response object
     const response = NextResponse.json({ success: true, user });
-    const cookieStore = await cookies();
-    cookieStore.set({
+    response.cookies.set({
       name: "auth_token",
       value: token,
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       maxAge: 60 * 60 * 24 * 7,
       path: "/",
+      sameSite: "lax",
     });
 
     return response;
