@@ -222,30 +222,30 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
   if (!isInline && !isOpen) return null;
 
   return (
-    <div className={isInline ? "w-full bg-white border border-slate-200 rounded-3xl shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex flex-col overflow-hidden" : "fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4"}>
-      <div className={isInline ? "w-full flex flex-col overflow-hidden" : "bg-white rounded-3xl w-full max-w-5xl h-[85vh] flex flex-col shadow-2xl overflow-hidden border border-slate-100"}>
+    <div className={isInline ? "w-full bg-white border border-slate-200 rounded-3xl shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex flex-col overflow-hidden" : "fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-end sm:items-center justify-center sm:p-4"}>
+      <div className={isInline ? "w-full flex flex-col overflow-hidden" : "bg-white w-full sm:rounded-3xl sm:max-w-5xl sm:h-[85vh] h-[94vh] rounded-t-3xl flex flex-col shadow-2xl overflow-hidden border border-slate-100 modal-fullscreen-mobile"}>
         
         {/* Header Section */}
-        <div className="bg-gradient-to-r from-slate-900 to-indigo-950 px-6 py-5 text-white flex items-center justify-between shrink-0">
-          <div className="flex items-center space-x-4">
-            <div className="h-14 w-14 rounded-2xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center font-bold text-xl tracking-wider text-indigo-300 uppercase shadow-inner overflow-hidden">
+        <div className="bg-gradient-to-r from-slate-900 to-indigo-950 px-4 sm:px-6 py-4 sm:py-5 text-white flex items-center justify-between shrink-0">
+          <div className="flex items-center space-x-3 sm:space-x-4 min-w-0 flex-1">
+            <div className="h-12 w-12 sm:h-14 sm:w-14 rounded-2xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center font-bold text-lg sm:text-xl tracking-wider text-indigo-300 uppercase shadow-inner overflow-hidden shrink-0">
               {data?.photoUrl ? (
                 <img src={data.photoUrl} alt={data.name} className="h-full w-full object-cover" />
               ) : (
                 data?.name ? data.name.substring(0, 2) : "ST"
               )}
             </div>
-            <div>
-              <div className="flex items-center space-x-2">
-                <h2 className="text-xl font-bold tracking-tight">{data?.name || "Student Profile"}</h2>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base sm:text-xl font-bold tracking-tight truncate">{data?.name || "Student Profile"}</h2>
                 {data?.isRte && (
-                  <span className="bg-amber-500/20 text-amber-300 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border border-amber-500/30">
-                    RTE Student
+                  <span className="bg-amber-500/20 text-amber-300 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border border-amber-500/30 shrink-0">
+                    RTE
                   </span>
                 )}
               </div>
-              <p className="text-xs text-slate-300 mt-0.5">
-                Class {data?.class?.name}-{data?.class?.section} &bull; Roll No: {data?.rollNo || "N/A"} &bull; Adm: {data?.admissionNo || "N/A"}
+              <p className="text-[10px] sm:text-xs text-slate-300 mt-0.5 truncate">
+                Cl {data?.class?.name}-{data?.class?.section} • {data?.rollNo || "N/A"} • {data?.admissionNo || "N/A"}
               </p>
             </div>
           </div>
@@ -285,67 +285,33 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
           </div>
         ) : (
           <>
-            {/* Tabs Selector */}
-            <div className="bg-slate-50 border-b border-slate-200/80 px-6 py-2 flex space-x-1 shrink-0 overflow-x-auto">
-              <button
-                onClick={() => setActiveTab("profile")}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 ${
-                  activeTab === "profile" 
-                    ? "bg-white text-indigo-600 shadow-sm border border-slate-200" 
-                    : "text-slate-500 hover:text-slate-900 hover:bg-slate-100"
-                }`}
-              >
-                <User className="h-3.5 w-3.5" />
-                <span>Profile Info</span>
-              </button>
-              <button
-                onClick={() => setActiveTab("fees")}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 ${
-                  activeTab === "fees" 
-                    ? "bg-white text-indigo-600 shadow-sm border border-slate-200" 
-                    : "text-slate-500 hover:text-slate-900 hover:bg-slate-100"
-                }`}
-              >
-                <CreditCard className="h-3.5 w-3.5" />
-                <span>Fees & Ledger</span>
-              </button>
-              <button
-                onClick={() => setActiveTab("attendance")}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 ${
-                  activeTab === "attendance" 
-                    ? "bg-white text-indigo-600 shadow-sm border border-slate-200" 
-                    : "text-slate-500 hover:text-slate-900 hover:bg-slate-100"
-                }`}
-              >
-                <Calendar className="h-3.5 w-3.5" />
-                <span>Attendance</span>
-              </button>
-              <button
-                onClick={() => setActiveTab("leaves")}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 ${
-                  activeTab === "leaves" 
-                    ? "bg-white text-indigo-600 shadow-sm border border-slate-200" 
-                    : "text-slate-500 hover:text-slate-900 hover:bg-slate-100"
-                }`}
-              >
-                <FileText className="h-3.5 w-3.5" />
-                <span>Leave Requests</span>
-              </button>
-              <button
-                onClick={() => setActiveTab("marks")}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 ${
-                  activeTab === "marks" 
-                    ? "bg-white text-indigo-600 shadow-sm border border-slate-200" 
-                    : "text-slate-500 hover:text-slate-900 hover:bg-slate-100"
-                }`}
-              >
-                <Award className="h-3.5 w-3.5" />
-                <span>Marks & Progress</span>
-              </button>
+            {/* Tabs Selector — Scrollable Pill Tabs */}
+            <div className="bg-slate-50 border-b border-slate-200/80 px-3 sm:px-6 py-2.5 shrink-0">
+              <div className="pill-tabs">
+                {[
+                  { id: "profile", label: "Profile", icon: User },
+                  { id: "fees", label: "Fees", icon: CreditCard },
+                  { id: "attendance", label: "Attendance", icon: Calendar },
+                  { id: "leaves", label: "Leaves", icon: FileText },
+                  { id: "marks", label: "Marks", icon: Award },
+                ].map((tab) => {
+                  const Icon = tab.icon;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id as any)}
+                      className={`pill-tab ${activeTab === tab.id ? "active" : ""}`}
+                    >
+                      <Icon className="h-3.5 w-3.5 shrink-0" />
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Scrollable View Area */}
-            <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50/50 touch-scroll-y">
               
               {/* PROFILE TAB */}
               {activeTab === "profile" && (

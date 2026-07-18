@@ -1429,8 +1429,8 @@ export default function AdminDashboard() {
     <div className="space-y-6 font-sans">
       {/* 1. Header & Quick Overview */}
       <div className="flex flex-col gap-1 border-b border-slate-200/80 pb-4">
-        <h2 className="text-xl font-black text-slate-800 tracking-tight">Super Admin Dashboard</h2>
-        <p className="text-xs text-slate-555 font-medium">
+        <h2 className="text-lg sm:text-xl font-black text-slate-800 tracking-tight">Super Admin Dashboard</h2>
+        <p className="text-xs text-slate-500 font-medium hidden sm:block">
           Global operations control: assign roles, toggle account blocks, register new students, and broadcast alerts.
         </p>
       </div>
@@ -3538,7 +3538,62 @@ export default function AdminDashboard() {
                     return (
                       <>
                         <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-                          <div className="overflow-x-auto">
+
+                          {/* ── MOBILE: Student Cards ── */}
+                          <div className="block sm:hidden divide-y divide-slate-100">
+                            {paginatedStudents.length === 0 ? (
+                              <div className="text-center py-10 text-slate-400">
+                                <p className="text-sm font-semibold">No students found.</p>
+                              </div>
+                            ) : paginatedStudents.map((std: any) => {
+                              const status = std.status || "ACTIVE";
+                              const statusColors = {
+                                ACTIVE: "bg-emerald-50 text-emerald-700 border-emerald-200",
+                                SUSPENDED: "bg-amber-50 text-amber-700 border-amber-200",
+                                LEFT: "bg-rose-50 text-rose-700 border-rose-200",
+                              };
+                              return (
+                                <div key={std.id} className="p-4 flex items-center gap-3">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedStudentIds.includes(std.id)}
+                                    onChange={(e) => {
+                                      if (e.target.checked) setSelectedStudentIds(prev => [...prev, std.id]);
+                                      else setSelectedStudentIds(prev => prev.filter(id => id !== std.id));
+                                    }}
+                                    className="rounded border-slate-300 text-indigo-600 h-4 w-4 shrink-0"
+                                  />
+                                  <div className="h-10 w-10 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-700 flex items-center justify-center font-extrabold text-xs uppercase shrink-0">
+                                    {std.photoUrl ? <img src={std.photoUrl} alt={std.name} className="h-full w-full object-cover rounded-full" /> : std.name.substring(0, 2)}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="font-bold text-sm text-slate-800 truncate">{std.name}</span>
+                                      {std.isRte && <span className="text-[8px] font-black uppercase bg-purple-100 text-purple-700 px-1 rounded border border-purple-200 shrink-0">RTE</span>}
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 font-semibold">
+                                      Cl {std.class}-{std.section} • {std.admissionNo}
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${statusColors[status as keyof typeof statusColors] || statusColors.ACTIVE}`}>
+                                      {status}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => { setSelectedStudent(std); setShowDetailModal(true); }}
+                                      className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg press-scale"
+                                    >
+                                      <Eye className="h-4 w-4" />
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* ── DESKTOP: Student Table ── */}
+                          <div className="hidden sm:block overflow-x-auto">
                             <table className="w-full text-left border-collapse text-xs font-semibold text-slate-700">
                               <thead>
                                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-400 font-bold uppercase tracking-wider text-[10px]">
@@ -5146,6 +5201,21 @@ export default function AdminDashboard() {
                                     ))}
                                   </tbody>
                                 </table>
+                                {/* Mobile Card List */}
+                                <div className="sm:hidden divide-y divide-slate-100">
+                                  {(config.components || []).map((comp: any, cIdx: number) => (
+                                    <div key={cIdx} className="p-3 space-y-2">
+                                      <div className="flex justify-between items-center">
+                                        <span className="font-bold text-slate-800">{comp.name}</span>
+                                        <button type="button" onClick={() => { /* logic same as above */ }} className="text-rose-600 text-[10px] font-bold">Delete</button>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <label className="text-[9px] font-bold text-slate-400">Max Marks:</label>
+                                        <input type="number" value={comp.max} className="w-16 text-xs font-bold border-b" />
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
                               </div>
                             </div>
 

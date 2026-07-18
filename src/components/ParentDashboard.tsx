@@ -264,72 +264,66 @@ export default function ParentDashboard() {
   }
 
   return (
-    <div className="space-y-6 font-sans">
-      {/* 1. Header Banner & Sibling Switcher (Vercel-like Style) */}
-      <div className="bg-white border border-slate-200/85 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+    <div className="space-y-4 pb-2 font-sans">
+      {/* 1. Header Banner & Sibling Switcher */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="space-y-1">
           <span className="text-[9px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-100/50">
             School Parents Portal
           </span>
-          <h2 className="text-xl font-black text-slate-900 tracking-tight mt-2.5">Welcome, Rajesh Gupta</h2>
-          <p className="text-xs text-slate-505 font-medium">
-            Review fees invoicing, class notes worksheets, attendance indicators, and submit leave requests.
+          <h2 className="text-lg font-black text-slate-900 tracking-tight mt-2">Welcome, {user?.name || "Parent"}</h2>
+          <p className="text-xs text-slate-500 font-medium">
+            Fees, assignments, attendance, and leave requests.
           </p>
         </div>
 
-        {/* Sibling Switcher Dropdown */}
-        <div className="flex flex-col gap-1.5 bg-slate-50 border border-slate-200/80 p-3 rounded-xl min-w-[220px]">
-          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-            <Users className="h-3 w-3 text-slate-400" /> Child Dashboard
-          </span>
-          <select
-            value={selectedChildId}
-            onChange={(e) => {
-              setSelectedChildId(e.target.value);
-              setSelectedDueIds([]);
-            }}
-            className="bg-white border border-slate-200 rounded-lg py-1.5 px-3 text-xs font-bold text-slate-800 outline-none focus:border-indigo-600 w-full cursor-pointer transition-all"
-          >
-            {parentStudents.map((childObj) => (
-              <option key={childObj.id} value={childObj.id} className="bg-white text-slate-800">
-                {childObj.name} (Class {childObj.class}-{childObj.section})
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* Sibling Switcher */}
+        {parentStudents.length > 1 && (
+          <div className="flex flex-col gap-1.5 bg-slate-50 border border-slate-200 p-3 rounded-xl w-full sm:min-w-[200px] sm:w-auto">
+            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Child</span>
+            <select
+              value={selectedChildId}
+              onChange={(e) => { setSelectedChildId(e.target.value); setSelectedDueIds([]); }}
+              className="bg-white border border-slate-200 rounded-lg py-2 px-3 font-bold text-slate-800 outline-none focus:border-indigo-600 w-full cursor-pointer"
+            >
+              {parentStudents.map((childObj) => (
+                <option key={childObj.id} value={childObj.id}>
+                  {childObj.name} (Cl {childObj.class}-{childObj.section})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {child && (
-        <div className="bg-white border border-slate-200/80 p-5 rounded-2xl shadow-sm flex items-center gap-4 hover:border-indigo-300 transition-all duration-300">
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex items-center gap-3 hover:border-indigo-300 transition-all duration-300">
           {child.photoUrl ? (
-            <img src={child.photoUrl} alt={child.name} className="h-16 w-16 rounded-xl object-cover border border-slate-200 shadow-sm shrink-0" />
+            <img src={child.photoUrl} alt={child.name} className="h-14 w-14 rounded-xl object-cover border border-slate-200 shadow-sm shrink-0" />
           ) : (
-            <div className="h-16 w-16 rounded-xl bg-indigo-50 border border-indigo-250 text-indigo-750 flex items-center justify-center font-bold text-xl uppercase shadow-inner shrink-0">
+            <div className="h-14 w-14 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xl uppercase shadow-inner shrink-0">
               {child.name ? child.name.substring(0, 2) : "ST"}
             </div>
           )}
-          <div className="flex-1">
-            <h3 className="text-base font-black text-slate-800 tracking-tight uppercase">{child.name}</h3>
-            <p className="text-xs text-slate-400 font-bold mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-              <span>Class {child.class}-{child.section}</span>
-              <span>&bull;</span>
-              <span>Roll No: {child.rollNo || "N/A"}</span>
-              <span>&bull;</span>
-              <span>ADM: {child.admissionNo}</span>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-base font-black text-slate-800 tracking-tight uppercase truncate">{child.name}</h3>
+            <p className="text-xs text-slate-400 font-bold mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+              <span>Cl {child.class}-{child.section}</span>
+              <span className="text-slate-300">•</span>
+              <span>Roll {child.rollNo || "N/A"}</span>
+              <span className="text-slate-300">•</span>
+              <span>{child.admissionNo}</span>
               {child.isRte && (
-                <>
-                  <span>&bull;</span>
-                  <span className="bg-purple-100 text-purple-700 text-[8px] font-black uppercase px-1.5 py-0.5 rounded border border-purple-200">RTE</span>
-                </>
+                <span className="bg-purple-100 text-purple-700 text-[8px] font-black uppercase px-1.5 py-0.5 rounded border border-purple-200">RTE</span>
               )}
             </p>
           </div>
           <button
             type="button"
             onClick={() => setShowFullProfile(true)}
-            className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 rounded-xl text-xs font-black transition-all cursor-pointer shrink-0"
+            className="px-3 py-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 rounded-xl text-xs font-black transition-all cursor-pointer shrink-0 press-scale"
           >
-            View Full Profile
+            Profile
           </button>
         </div>
       )}
@@ -744,7 +738,7 @@ export default function ParentDashboard() {
       {activeTab === "fees" && (
         <div className="space-y-6">
           {/* Outstanding Invoices Billing Desk */}
-          <div className="bg-white border border-slate-200/80 p-6 rounded-2xl shadow-sm space-y-4">
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm space-y-4">
             <div className="flex items-center justify-between border-b border-slate-200/80 pb-3">
               <div className="flex items-center gap-2">
                 <CreditCard className="h-4.5 w-4.5 text-indigo-600 animate-pulse" />
@@ -829,10 +823,10 @@ export default function ParentDashboard() {
                 </button>
               </div>
             </div>
-          </div>
+        </div>
 
           {/* Paid Receipts Ledger Log */}
-          <div className="bg-white border border-slate-200/80 p-6 rounded-2xl shadow-sm space-y-4">
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm space-y-4">
             <div className="flex items-center gap-2 border-b border-slate-200/80 pb-3">
               <FileText className="h-4.5 w-4.5 text-indigo-600" />
               <h3 className="text-xs font-black uppercase tracking-wider text-slate-800">
@@ -876,7 +870,7 @@ export default function ParentDashboard() {
       )}
 
       {activeTab === "homework" && (
-        <div className="bg-white border border-slate-200/80 p-6 rounded-2xl shadow-sm space-y-4">
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm space-y-4">
           <div className="flex items-center gap-2 border-b border-slate-200/80 pb-3">
             <BookOpen className="h-4.5 w-4.5 text-indigo-600" />
             <h3 className="text-xs font-black uppercase tracking-wider text-slate-800">

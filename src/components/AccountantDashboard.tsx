@@ -431,11 +431,11 @@ export default function AccountantDashboard() {
     .reduce((sum, item) => sum + item.amount, 0);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* 1. Header & KPI Cards */}
       <div className="flex flex-col gap-1">
-        <h2 className="text-xl font-black text-slate-800 tracking-tight">Accountant Billing Console</h2>
-        <p className="text-xs text-slate-505 font-medium">
+        <h2 className="text-lg sm:text-xl font-black text-slate-800 tracking-tight">Accountant Billing Console</h2>
+        <p className="text-xs text-slate-500 font-medium hidden sm:block">
           Manage school ledgers, generate receipts, record payments, and track outstanding defaulters.
         </p>
       </div>
@@ -512,7 +512,7 @@ export default function AccountantDashboard() {
       </div>
 
       {/* 3. Panel Body */}
-      <div className="bg-white border border-slate-200/80 p-6 rounded-2xl shadow-sm">
+      <div className="bg-white border border-slate-200 p-4 sm:p-6 rounded-2xl shadow-sm">
         
         {/* TAB: Feed Student Marks */}
         {activeTab === "marks" && (
