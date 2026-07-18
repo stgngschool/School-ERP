@@ -8,11 +8,8 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
-  /* Bottom nav height (mobile + tablet) */
+  /* Bottom nav height (mobile) */
   --bottom-nav-height: 64px;
-  /* Sidebar widths */
-  --sidebar-collapsed: 68px;
-  --sidebar-expanded: 256px;
 }
 
 /* ─────────────────────────────────────────
@@ -50,9 +47,9 @@ body {
 }
 
 /* ─────────────────────────────────────────
-   BODY PADDING FOR BOTTOM NAV (phone + tablet)
+   MOBILE BODY PADDING FOR BOTTOM NAV
 ───────────────────────────────────────── */
-@media (max-width: 1023px) {
+@media (max-width: 767px) {
   body {
     padding-bottom: calc(var(--bottom-nav-height) + var(--safe-bottom));
   }
@@ -62,7 +59,7 @@ body {
    FONT SIZE — PREVENT AUTO-ZOOM ON IOS
    (inputs must be ≥16px on mobile Safari)
 ───────────────────────────────────────── */
-@media (max-width: 1023px) {
+@media (max-width: 767px) {
   input, select, textarea {
     font-size: 16px !important;
   }
@@ -71,7 +68,7 @@ body {
 /* ─────────────────────────────────────────
    CUSTOM SCROLLBAR (Desktop)
 ───────────────────────────────────────── */
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   ::-webkit-scrollbar { width: 4px; height: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
@@ -312,9 +309,9 @@ body {
 }
 
 /* ─────────────────────────────────────────
-   FULL-SCREEN MODAL (Phone + Tablet portrait)
+   FULL-SCREEN MODAL (Mobile)
 ───────────────────────────────────────── */
-@media (max-width: 1023px) {
+@media (max-width: 767px) {
   .modal-fullscreen-mobile {
     position: fixed !important;
     inset: 0 !important;
@@ -327,27 +324,6 @@ body {
     padding-top: var(--safe-top) !important;
     padding-bottom: var(--safe-bottom) !important;
     overflow-y: auto !important;
-  }
-}
-
-/* ─────────────────────────────────────────
-   COLLAPSED SIDEBAR (Tablet: md to lg)
-───────────────────────────────────────── */
-@media (min-width: 768px) and (max-width: 1023px) {
-  .sidebar-collapsed .sidebar-label {
-    display: none;
-  }
-  .sidebar-collapsed .sidebar-section-title {
-    display: none;
-  }
-  .sidebar-collapsed .sidebar-brand-text {
-    display: none;
-  }
-  .sidebar-collapsed .sidebar-user-info {
-    display: none;
-  }
-  .sidebar-collapsed .sidebar-footer {
-    display: none;
   }
 }
 
