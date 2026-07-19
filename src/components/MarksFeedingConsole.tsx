@@ -21,6 +21,11 @@ export default function MarksFeedingConsole() {
   const [maxMarks, setMaxMarks] = useState("100");
   const [studentSearch, setStudentSearch] = useState("");
 
+  // Report Card States
+  const [showReportCardModal, setShowReportCardModal] = useState(false);
+  const [selectedReportCardStudentId, setSelectedReportCardStudentId] = useState("");
+  const [selectedReportCardExam, setSelectedReportCardExam] = useState("All");
+
   // Roster input states
   const [marksRoster, setMarksRoster] = useState<{
     [studentId: string]: {
@@ -352,13 +357,27 @@ export default function MarksFeedingConsole() {
     <div className="space-y-6">
       {/* Configuration Header Panel */}
       <div className="text-left space-y-4">
-        <div>
-          <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider">
-            Configure Academic Marks Roster
-          </h3>
-          <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
-            Select Class, Exam, and Subject to start feeding marks data. Saves/Updates are performed in bulk.
-          </p>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-100 pb-4">
+          <div>
+            <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider">
+              Configure Academic Marks Roster
+            </h3>
+            <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
+              Select Class, Exam, and Subject to start feeding marks data. Saves/Updates are performed in bulk.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (students.length > 0) {
+                setSelectedReportCardStudentId(students[0].id);
+              }
+              setShowReportCardModal(true);
+            }}
+            className="py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black shadow-md shadow-indigo-500/20 flex items-center gap-1.5 transition-all self-start sm:self-auto cursor-pointer"
+          >
+            📄 Generate Report Card / Marksheet
+          </button>
         </div>
 
         {/* Filters Grid */}
@@ -910,6 +929,290 @@ export default function MarksFeedingConsole() {
           </button>
         </div>
       </div>
+
+      {/* 📄 REPORT CARD GENERATION MODAL (CBSE / BOARD DESIGN) */}
+      {showReportCardModal && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4 overflow-y-auto no-print">
+          <div className="bg-white border border-slate-200 rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+            {/* Modal Header */}
+            <div className="bg-slate-900 text-white p-4 flex items-center justify-between gap-4 shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">📄</span>
+                <div>
+                  <h4 className="text-sm font-black tracking-tight">Generate Student Report Card</h4>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Academic Session 2026-27</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowReportCardModal(false)}
+                className="h-8 w-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-all cursor-pointer"
+              >
+                <XButtonIcon />
+              </button>
+            </div>
+
+            {/* Modal Body & Settings Panel */}
+            <div className="flex-1 flex flex-col md:flex-row overflow-hidden min-h-0">
+              {/* Left Controls Sidebar */}
+              <div className="w-full md:w-72 bg-slate-50 border-r border-slate-200/80 p-5 space-y-4 overflow-y-auto select-none shrink-0">
+                <div>
+                  <label className="text-[9px] font-black uppercase text-slate-500 tracking-wider block mb-1">
+                    Select Student
+                  </label>
+                  <select
+                    value={selectedReportCardStudentId}
+                    onChange={(e) => setSelectedReportCardStudentId(e.target.value)}
+                    className="w-full text-xs font-semibold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-white focus:border-indigo-600 shadow-sm"
+                  >
+                    {students.map((std) => (
+                      <option key={std.id} value={std.id}>
+                        {std.name} (Class {std.class}-{std.section})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[9px] font-black uppercase text-slate-500 tracking-wider block mb-1">
+                    Report Exam Scope
+                  </label>
+                  <select
+                    value={selectedReportCardExam}
+                    onChange={(e) => setSelectedReportCardExam(e.target.value)}
+                    className="w-full text-xs font-semibold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-white focus:border-indigo-600 shadow-sm"
+                  >
+                    <option value="All">All Exams Summary (Detailed Report)</option>
+                    {availableExams.map((ex) => (
+                      <option key={ex} value={ex}>
+                        {ex} Only
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="bg-indigo-50/60 border border-indigo-100 p-3.5 rounded-2xl text-[10px] font-semibold text-indigo-950 leading-relaxed">
+                  <p className="font-black text-indigo-700 mb-1">🖨️ A4 Printing Tip</p>
+                  Press the <strong>Print Report Card</strong> button below to open the system dialog. Margin settings should be set to "None" or "Default" with Background Graphics enabled.
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black shadow-md shadow-indigo-500/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                >
+                  🖨️ Print Report Card
+                </button>
+              </div>
+
+              {/* Right Marksheet Live Preview Page (A4 Aspect Ratio Sheet) */}
+              <div className="flex-1 bg-slate-100 p-6 overflow-y-auto min-h-0 flex justify-center">
+                {(() => {
+                  const student = students.find((s) => s.id === selectedReportCardStudentId);
+                  if (!student) {
+                    return (
+                      <p className="text-xs text-slate-400 italic font-semibold self-center">
+                        Select a student to preview their report card.
+                      </p>
+                    );
+                  }
+
+                  // Gather unique subjects this student has marks for
+                  const sMarks: any[] = student.marks || [];
+                  const subjects = Array.from(new Set(sMarks.map((m) => m.subject)));
+
+                  // Compute total obtained and total max marks
+                  let totalObtained = 0;
+                  let totalMax = 0;
+                  let hasAnyMarks = false;
+
+                  const filteredMarks = selectedReportCardExam === "All"
+                    ? sMarks
+                    : sMarks.filter((m) => m.examName.toLowerCase() === selectedReportCardExam.toLowerCase());
+
+                  filteredMarks.forEach((m) => {
+                    totalObtained += m.marksObtained;
+                    totalMax += m.maxMarks;
+                    hasAnyMarks = true;
+                  });
+
+                  const overallPercentage = totalMax > 0 ? Math.round((totalObtained / totalMax) * 100) : 0;
+
+                  const getFinalGrade = (pct: number) => {
+                    if (pct >= 90) return "A1";
+                    if (pct >= 80) return "A2";
+                    if (pct >= 70) return "B1";
+                    if (pct >= 60) return "B2";
+                    if (pct >= 50) return "C1";
+                    if (pct >= 40) return "C2";
+                    if (pct >= 33) return "D";
+                    return "E (Needs Improvement)";
+                  };
+
+                  const getExamScore = (sub: string, exam: string) => {
+                    const match = sMarks.find(
+                      (m) => m.subject.toLowerCase() === sub.toLowerCase() && m.examName.toLowerCase() === exam.toLowerCase()
+                    );
+                    return match ? `${match.marksObtained} / ${match.maxMarks}` : "-";
+                  };
+
+                  return (
+                    <div
+                      id="report-card-print-area"
+                      className="bg-white p-8 w-full max-w-[210mm] border border-slate-350 shadow-lg rounded-none text-slate-800 font-sans print-only-container relative"
+                    >
+                      {/* School Header Banner */}
+                      <div className="text-center space-y-2 border-b-2 border-double border-slate-800 pb-5">
+                        <div className="flex items-center justify-center gap-3">
+                          <span className="text-4xl text-slate-700">🏫</span>
+                          <div className="text-left">
+                            <h2 className="text-xl font-extrabold text-slate-900 tracking-tight">
+                              ST. G.N.G. SENIOR SECONDARY SCHOOL
+                            </h2>
+                            <p className="text-[10px] text-slate-500 font-black tracking-widest uppercase">
+                              Affiliated to CBSE, New Delhi | Code: 2026-ERP
+                            </p>
+                          </div>
+                        </div>
+                        <p className="text-[10px] text-slate-400 font-bold">
+                          Address: Phase-II, Urban Estate, Patiala, Punjab • Email: info@gngschool.edu.in
+                        </p>
+                        <div className="bg-slate-900 text-white py-1 px-4 text-xs font-black tracking-widest uppercase inline-block rounded">
+                          Report Card: Session 2026-27
+                        </div>
+                      </div>
+
+                      {/* Student Profile Info */}
+                      <div className="grid grid-cols-2 gap-4 py-6 text-xs border-b border-slate-200">
+                        <div className="space-y-1.5 text-left font-bold text-slate-700">
+                          <p>Student Name: <span className="text-slate-900 font-black uppercase">{student.name}</span></p>
+                          <p>Father's Name: <span className="text-slate-900 font-extrabold">{student.parentName}</span></p>
+                          <p>Class & Section: <span className="text-slate-900 font-extrabold">{student.class}-{student.section}</span></p>
+                        </div>
+                        <div className="space-y-1.5 text-right font-bold text-slate-700">
+                          <p>Admission No: <span className="text-slate-900 font-extrabold">{student.admissionNo}</span></p>
+                          <p>Roll Number: <span className="text-slate-900 font-extrabold">{student.rollNo || "N/A"}</span></p>
+                          <p>Term / Scope: <span className="text-slate-900 font-extrabold">{selectedReportCardExam === "All" ? "Full Academic Year" : selectedReportCardExam}</span></p>
+                        </div>
+                      </div>
+
+                      {/* Marks Sheet Table */}
+                      <div className="py-6">
+                        <table className="w-full text-left border-collapse border border-slate-800">
+                          <thead>
+                            <tr className="bg-slate-100 border-b border-slate-800 text-[10px] font-black uppercase text-slate-700 tracking-wider text-center">
+                              <th className="py-2.5 px-3 border-r border-slate-800 text-left">Subject</th>
+                              {selectedReportCardExam === "All" ? (
+                                <>
+                                  {availableExams.map((ex) => (
+                                    <th key={ex} className="py-2.5 px-3 border-r border-slate-800">{ex}</th>
+                                  ))}
+                                  <th className="py-2.5 px-3">Subject Grade</th>
+                                </>
+                              ) : (
+                                <>
+                                  <th className="py-2.5 px-3 border-r border-slate-800">Marks Obtained</th>
+                                  <th className="py-2.5 px-3 border-r border-slate-800">Max Marks</th>
+                                  <th className="py-2.5 px-3 border-r border-slate-800">Percentage</th>
+                                  <th className="py-2.5 px-3">Grade</th>
+                                </>
+                              )}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-800 text-xs font-semibold text-slate-900 text-center">
+                            {subjects.length === 0 ? (
+                              <tr>
+                                <td colSpan={10} className="py-6 text-center text-slate-400 font-bold italic">
+                                  No marks records available for this student.
+                                </td>
+                              </tr>
+                            ) : (
+                              subjects.map((sub: any) => {
+                                if (selectedReportCardExam === "All") {
+                                  // Find overall subject grade (average across exams)
+                                  const subMarks = sMarks.filter((m) => m.subject.toLowerCase() === sub.toLowerCase());
+                                  const subObt = subMarks.reduce((a, m) => a + m.marksObtained, 0);
+                                  const subMax = subMarks.reduce((a, m) => a + m.maxMarks, 0);
+                                  const subPct = subMax > 0 ? Math.round((subObt / subMax) * 100) : 0;
+                                  const subGrade = getFinalGrade(subPct);
+
+                                  return (
+                                    <tr key={sub} className="border-b border-slate-300">
+                                      <td className="py-2.5 px-3 border-r border-slate-800 text-left font-black">{sub}</td>
+                                      {availableExams.map((ex) => (
+                                        <td key={ex} className="py-2.5 px-3 border-r border-slate-800 font-bold">
+                                          {getExamScore(sub, ex)}
+                                        </td>
+                                      ))}
+                                      <td className="py-2.5 px-3 font-black text-indigo-700">{subGrade}</td>
+                                    </tr>
+                                  );
+                                } else {
+                                  const match = sMarks.find(
+                                    (m) => m.subject.toLowerCase() === sub.toLowerCase() && m.examName.toLowerCase() === selectedReportCardExam.toLowerCase()
+                                  );
+                                  const pct = match && match.maxMarks > 0 ? Math.round((match.marksObtained / match.maxMarks) * 100) : 0;
+                                  const gr = getFinalGrade(pct);
+
+                                  return (
+                                    <tr key={sub} className="border-b border-slate-300">
+                                      <td className="py-2.5 px-3 border-r border-slate-800 text-left font-black">{sub}</td>
+                                      <td className="py-2.5 px-3 border-r border-slate-800 font-extrabold">{match ? match.marksObtained : "-"}</td>
+                                      <td className="py-2.5 px-3 border-r border-slate-800 font-extrabold">{match ? match.maxMarks : "-"}</td>
+                                      <td className="py-2.5 px-3 border-r border-slate-800 font-extrabold">{match ? `${pct}%` : "-"}</td>
+                                      <td className="py-2.5 px-3 font-black text-indigo-700">{match ? gr : "-"}</td>
+                                    </tr>
+                                  );
+                                }
+                              })
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Summary, Health & Remarks block */}
+                      {hasAnyMarks && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border border-slate-800 p-4 rounded-lg text-xs mt-2">
+                          <div className="space-y-1.5 text-left font-bold text-slate-700">
+                            <p>Grand Total: <span className="text-slate-900 font-black">{totalObtained} / {totalMax}</span></p>
+                            <p>Overall Percentage: <span className="text-slate-900 font-black">{overallPercentage}%</span></p>
+                            <p>Result status: <span className={`font-black uppercase px-2 py-0.5 rounded text-[10px] ${overallPercentage >= 33 ? "bg-green-100 text-green-700" : "bg-rose-100 text-rose-700"}`}>{overallPercentage >= 33 ? "PASSED" : "FAILED / DETAINED"}</span></p>
+                          </div>
+                          <div className="space-y-1.5 text-left font-bold text-slate-700">
+                            <p>Overall Grade: <span className="text-slate-900 font-black">{getFinalGrade(overallPercentage)}</span></p>
+                            <p>Class Teacher Remarks: <span className="text-slate-900 font-extrabold italic">"{overallPercentage >= 90 ? "Outstanding academic achievement!" : overallPercentage >= 70 ? "Good work, keep improving." : "Needs core conceptual focus."}"</span></p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Grading Scale Guide */}
+                      <div className="mt-8 border border-slate-300 p-2.5 rounded text-[8px] font-bold text-slate-500 text-center leading-relaxed">
+                        GRADING SCALE: A1 (91-100) | A2 (81-90) | B1 (71-80) | B2 (61-70) | C1 (51-60) | C2 (41-50) | D (33-40) | E/Needs Improvement (0-32)
+                      </div>
+
+                      {/* Signatures Block */}
+                      <div className="grid grid-cols-3 gap-4 pt-16 text-center text-[10px] font-black text-slate-700">
+                        <div className="border-t border-slate-400 pt-2">CLASS TEACHER</div>
+                        <div className="border-t border-slate-400 pt-2">PARENT'S SIGNATURE</div>
+                        <div className="border-t border-slate-400 pt-2">PRINCIPAL SIGNATURE</div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+// Simple local helper icons
+function XButtonIcon() {
+  return (
+    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+    </svg>
+  );
+}
+
