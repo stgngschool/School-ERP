@@ -126,6 +126,7 @@ export interface MockLedgerEntry {
   amount: number;
   description: string;
   createdAt: string;
+  createdById?: string;
 }
 
 export interface MockReceipt {
@@ -144,6 +145,7 @@ export interface MockReceipt {
   studentIds?: string[];
   collectedBy?: string;
   collectedByRole?: string;
+  createdById?: string;
 }
 
 export interface MockSchoolInfo {

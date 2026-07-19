@@ -21,6 +21,7 @@ export async function GET() {
       amount: l.amount / 100,
       description: l.description,
       createdAt: l.createdAt.toISOString().split("T")[0],
+      createdById: l.createdById,
     }));
 
     const receipts = await db.receipt.findMany({
@@ -80,6 +81,7 @@ export async function GET() {
           : classSections.join(", "),
         collectedBy: r.createdBy?.name || "System",
         collectedByRole: r.createdBy?.role || "ADMIN",
+        createdById: r.createdById,
         details: r.items
           .map((i) => {
             const sName = i.ledgerEntry.student?.name || "Student";
