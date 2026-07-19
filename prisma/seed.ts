@@ -45,7 +45,7 @@ async function main() {
       email: "admin@school.com",
       passwordHash: adminPasswordHash,
       role: Role.ADMIN,
-      name: "Vikram Aditya (Admin)",
+      name: "Shubham (Admin)",
       phone: "+919876543210",
     },
   });

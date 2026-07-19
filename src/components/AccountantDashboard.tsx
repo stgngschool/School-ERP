@@ -201,19 +201,43 @@ export default function AccountantDashboard() {
     return sDues.length > 0;
   });
 
-  // Calculate matches for name, admission number, or Family ID
+  // Calculate matches for name, admission number, parent name, phone, or Family ID
   const suggestions = React.useMemo(() => {
-    if (!searchQuery.trim()) return [];
-    const query = searchQuery.toLowerCase();
-    
+    if (!students || students.length === 0) return [];
+    const query = searchQuery.trim().toLowerCase();
+
+    if (!query) {
+      // Prioritize students with unpaid dues when search query is empty
+      const studentsWithDues = students.filter((s) =>
+        dueItems.some((d) => d.studentId === s.id && d.status === "UNPAID")
+      );
+      return (studentsWithDues.length > 0 ? studentsWithDues : students).slice(0, 8);
+    }
+
     return students.filter((s) => {
+      const name = s.name ? s.name.toLowerCase() : "";
+      const adm = s.admissionNo ? s.admissionNo.toLowerCase() : "";
+      const parent = s.parentName ? s.parentName.toLowerCase() : "";
+      const father = s.fatherName ? s.fatherName.toLowerCase() : "";
+      const phone = s.parentPhone ? s.parentPhone : "";
+      const mobile = s.fatherMobile ? s.fatherMobile : "";
+      const family = s.familyCode ? s.familyCode.toLowerCase() : "";
+      const classSec = `${s.class}-${s.section}`.toLowerCase();
+      const classOnly = `${s.class}`.toLowerCase();
+
       return (
-        s.name.toLowerCase().includes(query) ||
-        s.admissionNo.toLowerCase().includes(query) ||
-        (s.familyCode && s.familyCode.toLowerCase().includes(query))
+        name.includes(query) ||
+        adm.includes(query) ||
+        parent.includes(query) ||
+        father.includes(query) ||
+        phone.includes(query) ||
+        mobile.includes(query) ||
+        family.includes(query) ||
+        classSec.includes(query) ||
+        classOnly === query
       );
     }).slice(0, 10);
-  }, [searchQuery, students]);
+  }, [searchQuery, students, dueItems]);
 
   const handleStudentSelect = (studentId: string) => {
     setSelectedStudentId(studentId);
@@ -579,51 +603,62 @@ export default function AccountantDashboard() {
                   </div>
 
                   {/* Suggestions dropdown inside search view */}
-                  {showSuggestions && suggestions.length > 0 && (
+                  {showSuggestions && (
                     <>
                       <div 
                         className="fixed inset-0 z-10 cursor-default" 
                         onClick={() => setShowSuggestions(false)} 
                       />
                       <div className="absolute z-20 w-full bg-white border border-slate-200/80 rounded-xl mt-2 shadow-xl max-h-72 overflow-y-auto divide-y divide-slate-100 animate-in fade-in duration-200 text-left">
-                        {suggestions.map((s) => {
-                          const studentDueSum = dueItems
-                            .filter((d) => d.studentId === s.id && d.status === "UNPAID")
-                            .reduce((sum, i) => sum + i.amount, 0);
-                          return (
-                            <button
-                              key={s.id}
-                              type="button"
-                              onClick={() => {
-                                handleStudentSelect(s.id);
-                                setSearchQuery(`${s.name} (${s.class}-${s.section})`);
-                                setShowSuggestions(false);
-                              }}
-                              className="w-full px-5 py-3 hover:bg-indigo-50/50 text-xs transition-colors flex justify-between items-center cursor-pointer group"
-                            >
-                              <div>
-                                <div className="font-bold text-slate-800 group-hover:text-indigo-600 transition-colors flex items-center gap-1.5">
-                                  {s.name}
-                                  {s.familyCode && (
-                                    <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 bg-slate-50 text-slate-400 rounded border border-slate-200/60">
-                                      Family: {s.familyCode}
-                                    </span>
-                                  )}
+                        {!searchQuery.trim() && (
+                          <div className="px-4 py-2 bg-slate-50 border-b border-slate-100 text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                            Students Pending Dues (Click to Select)
+                          </div>
+                        )}
+                        {suggestions.length > 0 ? (
+                          suggestions.map((s) => {
+                            const studentDueSum = dueItems
+                              .filter((d) => d.studentId === s.id && d.status === "UNPAID")
+                              .reduce((sum, i) => sum + i.amount, 0);
+                            return (
+                              <button
+                                key={s.id}
+                                type="button"
+                                onClick={() => {
+                                  handleStudentSelect(s.id);
+                                  setSearchQuery(`${s.name} (${s.class}-${s.section})`);
+                                  setShowSuggestions(false);
+                                }}
+                                className="w-full px-5 py-3 hover:bg-indigo-50/50 text-xs transition-colors flex justify-between items-center cursor-pointer group"
+                              >
+                                <div>
+                                  <div className="font-bold text-slate-800 group-hover:text-indigo-600 transition-colors flex items-center gap-1.5">
+                                    {s.name}
+                                    {s.familyCode && (
+                                      <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 bg-slate-50 text-slate-400 rounded border border-slate-200/60">
+                                        Family: {s.familyCode}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-[9px] font-semibold text-slate-400 mt-1">
+                                    Class: {s.class}-{s.section} | Adm: {s.admissionNo} | Parent: {s.parentName || s.fatherName || "N/A"}
+                                  </div>
                                 </div>
-                                <div className="text-[9px] font-semibold text-slate-400 mt-1">
-                                  Class: {s.class}-{s.section} | Adm: {s.admissionNo}
+                                <div className="text-right">
+                                  <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full ${
+                                    studentDueSum > 0 ? "bg-rose-50 text-rose-600 border border-rose-100" : "bg-green-50 text-green-600 border border-green-100"
+                                  }`}>
+                                    Rs. {studentDueSum}
+                                  </span>
                                 </div>
-                              </div>
-                              <div className="text-right">
-                                <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full ${
-                                  studentDueSum > 0 ? "bg-rose-50 text-rose-600 border border-rose-100" : "bg-green-50 text-green-600 border border-green-100"
-                                }`}>
-                                  Rs. {studentDueSum}
-                                </span>
-                              </div>
-                            </button>
-                          );
-                        })}
+                              </button>
+                            );
+                          })
+                        ) : (
+                          <div className="p-6 text-center text-xs font-semibold text-slate-400">
+                            No students found matching "{searchQuery}".
+                          </div>
+                        )}
                       </div>
                     </>
                   )}

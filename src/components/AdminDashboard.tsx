@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import StudentProfileModal from "@/components/StudentProfileModal";
 import MarksFeedingConsole from "@/components/MarksFeedingConsole";
+import AppsIntegrationModal from "@/components/AppsIntegrationModal";
 import {
   Users,
   Bell,
@@ -250,6 +251,9 @@ export default function AdminDashboard() {
   const [selectedIdCardStudentIds, setSelectedIdCardStudentIds] = useState<string[]>([]);
   const [isPrintingIdCards, setIsPrintingIdCards] = useState(false);
   
+  // Apps & Connectors Hub State
+  const [showAppsModal, setShowAppsModal] = useState(false);
+
   // User Security Tab States
   const [userSearch, setUserSearch] = useState("");
   const [userRoleFilter, setUserRoleFilter] = useState("");
@@ -563,17 +567,41 @@ export default function AdminDashboard() {
 
   // Memos for Fee Collection (ported from Accountant Dashboard)
   const suggestions = React.useMemo(() => {
-    if (!searchQuery.trim()) return [];
-    const query = searchQuery.toLowerCase();
-    
+    if (!students || students.length === 0) return [];
+    const query = searchQuery.trim().toLowerCase();
+
+    if (!query) {
+      // Prioritize students with unpaid dues when search query is empty
+      const studentsWithDues = students.filter((s) =>
+        dueItems.some((d) => d.studentId === s.id && d.status === "UNPAID")
+      );
+      return (studentsWithDues.length > 0 ? studentsWithDues : students).slice(0, 8);
+    }
+
     return students.filter((s) => {
+      const name = s.name ? s.name.toLowerCase() : "";
+      const adm = s.admissionNo ? s.admissionNo.toLowerCase() : "";
+      const parent = s.parentName ? s.parentName.toLowerCase() : "";
+      const father = s.fatherName ? s.fatherName.toLowerCase() : "";
+      const phone = s.parentPhone ? s.parentPhone : "";
+      const mobile = s.fatherMobile ? s.fatherMobile : "";
+      const family = s.familyCode ? s.familyCode.toLowerCase() : "";
+      const classSec = `${s.class}-${s.section}`.toLowerCase();
+      const classOnly = `${s.class}`.toLowerCase();
+
       return (
-        s.name.toLowerCase().includes(query) ||
-        s.admissionNo.toLowerCase().includes(query) ||
-        (s.familyCode && s.familyCode.toLowerCase().includes(query))
+        name.includes(query) ||
+        adm.includes(query) ||
+        parent.includes(query) ||
+        father.includes(query) ||
+        phone.includes(query) ||
+        mobile.includes(query) ||
+        family.includes(query) ||
+        classSec.includes(query) ||
+        classOnly === query
       );
     }).slice(0, 10);
-  }, [searchQuery, students]);
+  }, [searchQuery, students, dueItems]);
 
   const selectedStudentObj = students.find((s) => s.id === selectedStudentId);
 
@@ -1778,7 +1806,7 @@ export default function AdminDashboard() {
                   <div className="bg-white border border-slate-200/80 p-6 rounded-3xl shadow-sm space-y-4 lg:col-span-2">
                     <div className="border-b border-slate-100 pb-3 flex justify-between items-center">
                       <h4 className="text-sm font-black text-slate-800 tracking-tight">Upcoming Birthdays This Month</h4>
-                      <span className="text-[10px] text-slate-455 font-bold uppercase">Happy Birthday! ­ƒÄé</span>
+                      <span className="text-[10px] text-slate-455 font-bold uppercase">Happy Birthday! 🎂</span>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[190px] overflow-y-auto pr-1">
@@ -1858,51 +1886,62 @@ export default function AdminDashboard() {
                     </div>
 
                     {/* Suggestions dropdown inside search view */}
-                    {showSuggestions && suggestions.length > 0 && (
+                    {showSuggestions && (
                       <>
                         <div 
                           className="fixed inset-0 z-10 cursor-default" 
                           onClick={() => setShowSuggestions(false)} 
                         />
                         <div className="absolute z-20 w-full bg-white border border-slate-200/80 rounded-xl mt-2 shadow-xl max-h-72 overflow-y-auto divide-y divide-slate-100 animate-in fade-in duration-200 text-left">
-                          {suggestions.map((s) => {
-                            const studentDueSum = dueItems
-                              .filter((d) => d.studentId === s.id && d.status === "UNPAID")
-                              .reduce((sum, i) => sum + i.amount, 0);
-                            return (
-                              <button
-                                key={s.id}
-                                type="button"
-                                onClick={() => {
-                                  handleStudentSelect(s.id);
-                                  setSearchQuery(`${s.name} (${s.class}-${s.section})`);
-                                  setShowSuggestions(false);
-                                }}
-                                className="w-full px-5 py-3 hover:bg-indigo-50/50 text-xs transition-colors flex justify-between items-center cursor-pointer group"
-                              >
-                                <div>
-                                  <div className="font-bold text-slate-800 group-hover:text-indigo-600 transition-colors flex items-center gap-1.5">
-                                    {s.name}
-                                    {s.familyCode && (
-                                      <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 bg-slate-50 text-slate-400 rounded border border-slate-200/60">
-                                        Family: {s.familyCode}
-                                      </span>
-                                    )}
+                          {!searchQuery.trim() && (
+                            <div className="px-4 py-2 bg-slate-50 border-b border-slate-100 text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                              Students Pending Dues (Click to Select)
+                            </div>
+                          )}
+                          {suggestions.length > 0 ? (
+                            suggestions.map((s) => {
+                              const studentDueSum = dueItems
+                                .filter((d) => d.studentId === s.id && d.status === "UNPAID")
+                                .reduce((sum, i) => sum + i.amount, 0);
+                              return (
+                                <button
+                                  key={s.id}
+                                  type="button"
+                                  onClick={() => {
+                                    handleStudentSelect(s.id);
+                                    setSearchQuery(`${s.name} (${s.class}-${s.section})`);
+                                    setShowSuggestions(false);
+                                  }}
+                                  className="w-full px-5 py-3 hover:bg-indigo-50/50 text-xs transition-colors flex justify-between items-center cursor-pointer group"
+                                >
+                                  <div>
+                                    <div className="font-bold text-slate-800 group-hover:text-indigo-600 transition-colors flex items-center gap-1.5">
+                                      {s.name}
+                                      {s.familyCode && (
+                                        <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 bg-slate-50 text-slate-400 rounded border border-slate-200/60">
+                                          Family: {s.familyCode}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="text-[9px] font-semibold text-slate-400 mt-1">
+                                      Class: {s.class}-{s.section} | Adm: {s.admissionNo} | Parent: {s.parentName || s.fatherName || "N/A"}
+                                    </div>
                                   </div>
-                                  <div className="text-[9px] font-semibold text-slate-400 mt-1">
-                                    Class: {s.class}-{s.section} | Adm: {s.admissionNo}
+                                  <div className="text-right">
+                                    <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full ${
+                                      studentDueSum > 0 ? "bg-rose-50 text-rose-600 border border-rose-100" : "bg-green-50 text-green-600 border border-green-100"
+                                    }`}>
+                                      Rs. {studentDueSum}
+                                    </span>
                                   </div>
-                                </div>
-                                <div className="text-right">
-                                  <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full ${
-                                    studentDueSum > 0 ? "bg-rose-50 text-rose-600 border border-rose-100" : "bg-green-50 text-green-600 border border-green-100"
-                                  }`}>
-                                    Rs. {studentDueSum}
-                                  </span>
-                                </div>
-                              </button>
-                            );
-                          })}
+                                </button>
+                              );
+                            })
+                          ) : (
+                            <div className="p-6 text-center text-xs font-semibold text-slate-400">
+                              No students found matching "{searchQuery}".
+                            </div>
+                          )}
                         </div>
                       </>
                     )}
@@ -2545,7 +2584,7 @@ export default function AdminDashboard() {
                 </div>
                 {billResult && (
                   <div className="text-[10px] font-extrabold text-emerald-800 animate-fade-in self-center bg-white px-2 py-1 rounded border border-emerald-200">
-                    Ô£ô Generated: {billResult.totalGenerated} | Skipped: {billResult.totalSkipped} (Idempotent)
+                    ✓ Generated: {billResult.totalGenerated} | Skipped: {billResult.totalSkipped} (Idempotent)
                   </div>
                 )}
               </div>
@@ -2918,6 +2957,27 @@ export default function AdminDashboard() {
                 </p>
               </div>
 
+              {/* Apps & Integration Hub Banner */}
+              <div className="bg-slate-900 text-white border border-slate-800 p-4 rounded-2xl shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-black shrink-0 shadow-md shadow-indigo-500/20">
+                    <Layers className="h-5 w-5 text-indigo-200" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-white">Apps & Software Connectors Hub</h4>
+                    <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
+                      Connect Google Sheets, Google Drive, WhatsApp, Email Dispatcher, and UPI Gateways with 1-click.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowAppsModal(true)}
+                  className="py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition-all cursor-pointer shrink-0 flex items-center gap-1.5 shadow-md shadow-indigo-500/20"
+                >
+                  Open Connectors Hub
+                </button>
+              </div>
+
               {/* Staff vs Parents Directory Switcher */}
               <div className="flex border-b border-slate-200 gap-2">
                 <button
@@ -2931,7 +2991,7 @@ export default function AdminDashboard() {
                       : "border-transparent text-slate-400 hover:text-slate-600"
                   }`}
                 >
-                  ­ƒÅ½ School Staff Directory
+                  School Staff Directory
                 </button>
                 <button
                   onClick={() => {
@@ -2944,7 +3004,7 @@ export default function AdminDashboard() {
                       : "border-transparent text-slate-400 hover:text-slate-600"
                   }`}
                 >
-                  ­ƒæ¿ÔÇì­ƒæ®ÔÇì­ƒæª Parents & Guardians Directory
+                  Parents & Guardians Directory
                 </button>
               </div>
 
@@ -2961,7 +3021,7 @@ export default function AdminDashboard() {
                     </span>
                   </div>
                   <div className="h-8 w-8 rounded-xl bg-slate-50 flex items-center justify-center text-slate-500 text-xs font-bold border border-slate-100">
-                    ­ƒæÑ
+                    👥
                   </div>
                 </div>
                 <div className="bg-white border border-slate-200/60 p-4 rounded-2xl shadow-sm flex items-center justify-between">
@@ -2975,7 +3035,7 @@ export default function AdminDashboard() {
                     </span>
                   </div>
                   <div className="h-8 w-8 rounded-xl bg-green-50 flex items-center justify-center text-green-600 text-xs font-bold border border-green-100/50">
-                    Ô£ô
+                    ✓
                   </div>
                 </div>
                 <div className="bg-white border border-slate-200/60 p-4 rounded-2xl shadow-sm flex items-center justify-between">
@@ -2989,7 +3049,7 @@ export default function AdminDashboard() {
                     </span>
                   </div>
                   <div className="h-8 w-8 rounded-xl bg-rose-50 flex items-center justify-center text-rose-600 text-xs font-bold border border-rose-100/50">
-                    ­ƒöÆ
+                    🔒
                   </div>
                 </div>
               </div>
@@ -3039,7 +3099,7 @@ export default function AdminDashboard() {
                     }}
                     className="py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition-all shadow-md shadow-indigo-500/10 cursor-pointer w-full sm:w-auto shrink-0 flex items-center justify-center gap-1.5"
                   >
-                    Ô×ò Register Staff Account
+                    + Register Staff Account
                   </button>
                 )}
               </div>
@@ -3137,7 +3197,7 @@ export default function AdminDashboard() {
                                             : "bg-green-50 hover:bg-green-100 text-green-600 border-green-150"
                                         }`}
                                       >
-                                        {isBlocked ? "­ƒöô Unlock" : "­ƒöÆ Lock"}
+                                        {isBlocked ? "🔓 Unlock" : "🔒 Lock"}
                                       </button>
 
                                       {/* 2. Reset Password Modal Trigger */}
@@ -3154,7 +3214,7 @@ export default function AdminDashboard() {
                                         title="Reset User Password"
                                         className="py-1 px-2 text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-150 hover:bg-indigo-100 rounded-lg transition-all cursor-pointer"
                                       >
-                                        ­ƒöæ Reset PW
+                                        🔑 Reset PW
                                       </button>
 
                                       {/* 3. Delete User Trigger */}
@@ -3177,7 +3237,7 @@ export default function AdminDashboard() {
                                         title="Delete User Account"
                                         className="py-1 px-2 text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-150 hover:bg-rose-100 rounded-lg transition-all cursor-pointer"
                                       >
-                                        ­ƒùæ´©Å Delete
+                                        🗑️ Delete
                                       </button>
                                     </div>
                                   </td>
@@ -4781,13 +4841,13 @@ export default function AdminDashboard() {
 
                   {adminProfileSuccess && (
                     <div className="flex items-center gap-2 bg-green-50 text-green-700 p-2.5 rounded-lg border border-green-100 text-[10px] font-bold">
-                      Ô£ô {adminProfileSuccess}
+                      ✓ {adminProfileSuccess}
                     </div>
                   )}
 
                   {adminProfileError && (
                     <div className="flex items-center gap-2 bg-rose-50 text-rose-700 p-2.5 rounded-lg border border-rose-100 text-[10px] font-bold">
-                      ÔÜá´©Å {adminProfileError}
+                      ⚠️ {adminProfileError}
                     </div>
                   )}
 
@@ -5435,7 +5495,7 @@ export default function AdminDashboard() {
                     const filtered = receipts.filter((r) => {
                       const matchesSearch =
                         !ledgerSearch.trim() ||
-                        r.receiptNo.toLowerCase().includes(ledgerSearch.toLowerCase()) ||
+                        r.receiptNo?.toLowerCase().includes(ledgerSearch.toLowerCase()) ||
                         r.studentName?.toLowerCase().includes(ledgerSearch.toLowerCase()) ||
                         r.details?.toLowerCase().includes(ledgerSearch.toLowerCase());
                       const matchesDate = !ledgerDate || r.createdAt === ledgerDate;
@@ -5489,7 +5549,7 @@ export default function AdminDashboard() {
                             const filtered = receipts.filter((r) => {
                               const matchesSearch =
                                 !ledgerSearch.trim() ||
-                                r.receiptNo.toLowerCase().includes(ledgerSearch.toLowerCase()) ||
+                                r.receiptNo?.toLowerCase().includes(ledgerSearch.toLowerCase()) ||
                                 r.studentName?.toLowerCase().includes(ledgerSearch.toLowerCase()) ||
                                 r.details?.toLowerCase().includes(ledgerSearch.toLowerCase());
                               const matchesDate = !ledgerDate || r.createdAt === ledgerDate;
@@ -6072,11 +6132,11 @@ export default function AdminDashboard() {
                   onClick={() => setReceiptPageSize("A5")}
                   className={`py-1 px-3 text-[10px] uppercase font-black tracking-wider rounded-lg border transition-all cursor-pointer ${
                     receiptPageSize === "A5"
-                      ? "bg-indigo-600 border-indigo-600 text-white shadow-sm shadow-indigo-500/15"
+                  ? "bg-indigo-600 border-indigo-600 text-white shadow-sm shadow-indigo-500/15"
                       : "bg-white border-slate-200 hover:bg-slate-50 text-slate-650"
                   }`}
                 >
-                  ­ƒôä A5 Compact
+                  📄 A5 Compact
                 </button>
                 <button
                   type="button"
@@ -6087,7 +6147,7 @@ export default function AdminDashboard() {
                       : "bg-white border-slate-200 hover:bg-slate-50 text-slate-650"
                   }`}
                 >
-                  ­ƒôä A4 Standard
+                  📄 A4 Standard
                 </button>
               </div>
             </div>
@@ -6155,7 +6215,7 @@ export default function AdminDashboard() {
                   <div className={`bg-amber-500/10 border border-amber-300 text-amber-700 font-black uppercase py-1 px-2.5 rounded-lg flex items-center justify-center gap-1.5 shrink-0 select-none ${
                     receiptPageSize === "A5" ? "text-[10px]" : "text-sm py-2"
                   }`}>
-                    ­ƒÅå Ôÿà FULL YEAR ANNUAL CLEARANCE VOUCHER Ôÿà ­ƒÅå
+                    🏆 ★ FULL YEAR ANNUAL CLEARANCE VOUCHER ★ 🏆
                   </div>
                 ) : null;
               })()}
@@ -6843,13 +6903,13 @@ export default function AdminDashboard() {
 
             {resetModalError && (
               <div className="bg-rose-50 text-rose-700 p-2.5 rounded-lg border border-rose-100 text-[10px] font-bold">
-                ÔÜá´©Å {resetModalError}
+                ⚠️ {resetModalError}
               </div>
             )}
 
             {resetModalSuccess && (
               <div className="bg-green-50 text-green-700 p-2.5 rounded-lg border border-green-100 text-[10px] font-bold">
-                Ô£ô {resetModalSuccess}
+                ✓ {resetModalSuccess}
               </div>
             )}
 
@@ -6968,13 +7028,13 @@ export default function AdminDashboard() {
 
             {addStaffError && (
               <div className="bg-rose-50 text-rose-700 p-2.5 rounded-lg border border-rose-100 text-[10px] font-bold">
-                ÔÜá´©Å {addStaffError}
+                ⚠️ {addStaffError}
               </div>
             )}
 
             {addStaffSuccess && (
               <div className="bg-green-50 text-green-700 p-2.5 rounded-lg border border-green-100 text-[10px] font-bold">
-                Ô£ô {addStaffSuccess}
+                ✓ {addStaffSuccess}
               </div>
             )}
 
@@ -7298,6 +7358,9 @@ export default function AdminDashboard() {
           `}} />
         </div>
       )}
+
+      {/* Apps & Integrations Connector Modal */}
+      <AppsIntegrationModal isOpen={showAppsModal} onClose={() => setShowAppsModal(false)} />
     </div>
   );
 }

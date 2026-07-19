@@ -1,0 +1,99 @@
+[
+  {
+    "id": "google_sheets",
+    "name": "Google Sheets",
+    "category": "Spreadsheets & Audits",
+    "description": "Auto-export student directories, class rosters, and live fee ledgers to Google Sheets.",
+    "icon": "sheets",
+    "status": "CONNECTED",
+    "autoSync": true,
+    "lastSynced": "2026-07-19T16:48:25.800Z",
+    "account": "admin@gngschool.edu.in",
+    "target": "Sheet: 1vd4VLR6e8X--bM-MUZhERbsz6xEjfhAfnYa6sH0zvSk",
+    "docUrl": "https://docs.google.com/spreadsheets",
+    "config": {
+      "accountEmail": "admin@gngschool.edu.in",
+      "spreadsheetId": "1vd4VLR6e8X--bM-MUZhERbsz6xEjfhAfnYa6sH0zvSk",
+      "folderId": "",
+      "phone": "+919876543210",
+      "upiId": "gngschool@upi",
+      "botToken": "",
+      "chatId": "",
+      "smtpHost": "smtp.gmail.com"
+    }
+  },
+  {
+    "id": "google_drive",
+    "name": "Google Drive Backup",
+    "category": "Cloud Storage & Security",
+    "description": "Automated daily cloud backups of PostgreSQL database JSON dumps and student documents.",
+    "icon": "drive",
+    "status": "CONNECTED",
+    "autoSync": true,
+    "lastSynced": "2026-07-19T16:41:52.791Z",
+    "account": "school.backup@gmail.com",
+    "target": "GNG_Cloud_Backups_2026",
+    "docUrl": "https://drive.google.com"
+  },
+  {
+    "id": "whatsapp_alerts",
+    "name": "WhatsApp Notifications",
+    "category": "Parent Communication",
+    "description": "Send instant WhatsApp alerts to parents for student absenteeism, fee receipts, and dues.",
+    "icon": "whatsapp",
+    "status": "CONNECTED",
+    "autoSync": true,
+    "lastSynced": "2026-07-19T16:42:01.062Z",
+    "account": "+91 98765 43210 (Official GNG)",
+    "target": "WhatsApp Business API",
+    "config": {}
+  },
+  {
+    "id": "resend_email",
+    "name": "Gmail / Email Dispatcher",
+    "category": "Voucher Delivery",
+    "description": "Automatically email PDF fee receipts, monthly invoices, and progress cards to parents.",
+    "icon": "email",
+    "status": "DISCONNECTED",
+    "autoSync": true,
+    "lastSynced": "2026-07-19T16:39:28.386Z",
+    "account": "accounts@gngschool.edu.in",
+    "target": "SMTP / Resend API"
+  },
+  {
+    "id": "dynamic_upi",
+    "name": "Dynamic UPI QR Payments",
+    "category": "Finance & Fee Collection",
+    "description": "Generate scan-and-pay UPI QR codes for instant online fee collection (PhonePe, GPay, Paytm).",
+    "icon": "upi",
+    "status": "DISCONNECTED",
+    "autoSync": true,
+    "lastSynced": "2026-07-19T16:39:29.163Z",
+    "account": "gngschool@upi",
+    "target": "Razorpay / Paytm Gateway"
+  },
+  {
+    "id": "google_calendar",
+    "name": "Google Calendar",
+    "category": "Events & Time Table",
+    "description": "Sync exam schedules, sports day events, and quarterly holiday calendars to parent phones.",
+    "icon": "calendar",
+    "status": "DISCONNECTED",
+    "autoSync": false,
+    "lastSynced": "2026-07-19T16:39:30.076Z",
+    "account": "calendar@gngschool.edu.in",
+    "target": "Academic Calendar 2026-27"
+  },
+  {
+    "id": "telegram_bot",
+    "name": "Telegram Admin Channel",
+    "category": "Instant Staff Alerts",
+    "description": "Receive daily collection summaries and system health alerts directly in staff Telegram groups.",
+    "icon": "telegram",
+    "status": "DISCONNECTED",
+    "autoSync": true,
+    "lastSynced": "2026-07-19T16:39:30.555Z",
+    "account": "@GNGSchoolAdminBot",
+    "target": "Staff Channel"
+  }
+]

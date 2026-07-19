@@ -1,7 +1,7 @@
-// St. GNG School Finance OS — Service Worker v3
-// Strategy: Network-first for API, Cache-first for static assets
+// St. GNG School Finance OS — Service Worker v4
+// Strategy: Network-first for JS bundles & API, Cache-first only for static media
 
-const CACHE_VERSION = "v3";
+const CACHE_VERSION = "v4";
 const STATIC_CACHE = `gng-static-${CACHE_VERSION}`;
 const API_CACHE = `gng-api-${CACHE_VERSION}`;
 
@@ -19,15 +19,12 @@ self.addEventListener("install", (event) => {
   self.skipWaiting();
 });
 
-// ─── Activate: Clean up old caches ───────────────────────────────────────────
+// ─── Activate: Clean up ALL old caches ───────────────────────────────────────────
 self.addEventListener("activate", (event) => {
-  const currentCaches = [STATIC_CACHE, API_CACHE];
   event.waitUntil(
     caches.keys().then((cacheNames) =>
       Promise.all(
-        cacheNames
-          .filter((name) => !currentCaches.includes(name))
-          .map((name) => caches.delete(name))
+        cacheNames.map((name) => caches.delete(name))
       )
     )
   );
@@ -48,13 +45,21 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // API routes: Network-first, cache fallback (short TTL)
+  // Next.js static bundles & scripts: ALWAYS Network First (never serve stale JS code)
+  if (url.pathname.startsWith("/_next/")) {
+    event.respondWith(
+      fetch(request).catch(() => caches.match(request))
+    );
+    return;
+  }
+
+  // API routes: Network-first
   if (url.pathname.startsWith("/api/")) {
     event.respondWith(networkFirstWithCache(request, API_CACHE, 10));
     return;
   }
 
-  // Navigation requests: Network-first, fallback to cached "/"
+  // Navigation requests: Network-first
   if (request.mode === "navigate") {
     event.respondWith(
       fetch(request).catch(() =>
@@ -64,10 +69,9 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Static assets (images, fonts, scripts): Cache-first
+  // Static media assets (images, fonts): Cache-first
   if (
-    url.pathname.match(/\.(png|jpg|jpeg|svg|gif|webp|ico|woff|woff2|ttf)$/) ||
-    url.pathname.startsWith("/_next/static/")
+    url.pathname.match(/\.(png|jpg|jpeg|svg|gif|webp|ico|woff|woff2|ttf)$/)
   ) {
     event.respondWith(cacheFirstWithFetch(request, STATIC_CACHE));
     return;
@@ -91,11 +95,6 @@ async function networkFirstWithCache(request, cacheName, maxAgeSeconds) {
   } catch {
     const cached = await caches.match(request);
     if (cached) {
-      const dateHeader = cached.headers.get("date");
-      if (dateHeader) {
-        const age = (Date.now() - new Date(dateHeader).getTime()) / 1000;
-        if (age > maxAgeSeconds * 60) return cached; // stale but better than nothing
-      }
       return cached;
     }
     return new Response(JSON.stringify({ error: "Offline" }), {

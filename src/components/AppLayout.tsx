@@ -28,7 +28,9 @@ import {
   User,
   Shield,
   Menu,
+  Layers,
 } from "lucide-react";
+import AppsIntegrationModal from "@/components/AppsIntegrationModal";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -98,6 +100,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const [showNoticeDropdown, setShowNoticeDropdown] = useState(false);
   const [sessionYear, setSessionYear] = useState("2026-27");
   const [showDesktopRolePanel, setShowDesktopRolePanel] = useState(true);
+  const [showAppsModal, setShowAppsModal] = useState(false);
 
   const megaMenuRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
@@ -362,6 +365,16 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
           {/* Right Controls */}
           <div className="flex items-center gap-4">
+            {/* Apps & Integrations Connector Button */}
+            <button
+              onClick={() => setShowAppsModal(true)}
+              title="Apps & Integrations Connector Hub"
+              className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white py-1.5 px-3 rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm shadow-slate-900/10"
+            >
+              <Layers className="h-4 w-4 text-indigo-400" />
+              <span>Apps Hub</span>
+            </button>
+
             <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-100 text-indigo-700 py-1.5 px-3.5 rounded-xl text-xs font-black">
               <Building2 className="h-4 w-4 text-indigo-500" />
               UDISE : 930303
@@ -649,6 +662,9 @@ export default function AppLayout({ children }: AppLayoutProps) {
           <Shield className="h-5 w-5" />
         </button>
       )}
+
+      {/* Apps & Integrations Connector Modal */}
+      <AppsIntegrationModal isOpen={showAppsModal} onClose={() => setShowAppsModal(false)} />
     </div>
   );
 }
