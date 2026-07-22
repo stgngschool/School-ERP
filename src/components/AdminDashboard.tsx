@@ -952,82 +952,94 @@ export default function AdminDashboard() {
     setDiscountsState(newDiscountsState);
   };
 
+  const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
+
   const handleOfflinePayment = async (e?: React.FormEvent) => {
     e?.preventDefault();
+    if (isSubmittingPayment) return;
     const student = students.find((s) => s.id === selectedStudentId);
     if (!student || selectedDueIds.length === 0) return;
 
-    const unpaidItems = dueItems.filter((d) => selectedDueIds.includes(d.id));
-    const items = selectedDueIds.map((dueId) => ({
-      ledgerEntryId: dueId,
-      payAmount: payingState[dueId] ?? 0,
-      discountAmount: discountsState[dueId] ?? 0,
-      studentId: dueItems.find(d => d.id === dueId)?.studentId
-    }));
+    try {
+      setIsSubmittingPayment(true);
+      const unpaidItems = dueItems.filter((d) => selectedDueIds.includes(d.id));
+      const items = selectedDueIds.map((dueId) => ({
+        ledgerEntryId: dueId,
+        payAmount: payingState[dueId] ?? 0,
+        discountAmount: discountsState[dueId] ?? 0,
+        studentId: dueItems.find(d => d.id === dueId)?.studentId
+      }));
 
-    const totalPaid = items.reduce((sum, item) => sum + item.payAmount, 0);
-    const totalDiscount = items.reduce((sum, item) => sum + item.discountAmount, 0);
-    const originalDueSum = unpaidItems.reduce((sum, item) => sum + item.amount, 0);
-    const remainingArrears = originalDueSum - totalPaid - totalDiscount;
+      const totalPaid = items.reduce((sum, item) => sum + item.payAmount, 0);
+      const totalDiscount = items.reduce((sum, item) => sum + item.discountAmount, 0);
+      const originalDueSum = unpaidItems.reduce((sum, item) => sum + item.amount, 0);
+      const remainingArrears = originalDueSum - totalPaid - totalDiscount;
 
-    if (totalPaid <= 0 && totalDiscount <= 0) return;
+      if (totalPaid <= 0 && totalDiscount <= 0) {
+        setIsSubmittingPayment(false);
+        return;
+      }
 
-    // Send null for studentId to trigger unified family checkout
-    const success = await recordItemizedPayment(null, items, payMethod, transactionRef);
-    if (!success) {
-      alert("Payment failed. Please check backend logs or try again.");
-      return;
-    }
+      // Send null for studentId to trigger unified family checkout
+      const success = await recordItemizedPayment(null, items, payMethod, transactionRef);
+      if (!success) {
+        alert("Payment failed. Please check backend logs or try again.");
+        setIsSubmittingPayment(false);
+        return;
+      }
 
-    // Calculate remaining arrears for the family
-    const familyOtherDuesSum = dueItems
-      .filter((d) => siblingStudentIds.includes(d.studentId) && d.status === "UNPAID" && !selectedDueIds.includes(d.id))
-      .reduce((sum, item) => sum + item.amount, 0);
+      // Calculate remaining arrears for the family
+      const familyOtherDuesSum = dueItems
+        .filter((d) => siblingStudentIds.includes(d.studentId) && d.status === "UNPAID" && !selectedDueIds.includes(d.id))
+        .reduce((sum, item) => sum + item.amount, 0);
 
-    const totalRemainingArrears = familyOtherDuesSum + remainingArrears;
-    const isSingleSibling = siblingStudents.length === 1;
+      const totalRemainingArrears = familyOtherDuesSum + remainingArrears;
+      const isSingleSibling = siblingStudents.length === 1;
 
-    // Receipt Details for modal
-    const matchedReceipt = {
-      receiptNo: `REC-2026-${Math.floor(1000 + Math.random() * 9000)}`,
-      studentName: isSingleSibling ? student.name : `Family (Siblings: ${siblingStudents.map(s => s.name).join(", ")})`,
-      classSection: isSingleSibling ? `${student.class}-${student.section}` : "Unified Family",
-      admissionNo: isSingleSibling ? student.admissionNo : student.familyCode || "Multi",
-      amount: totalPaid,
-      method: payMethod,
-      discount: totalDiscount,
-      arrears: totalRemainingArrears,
-      details: items
-        .map((i) => {
+      // Receipt Details for modal
+      const matchedReceipt = {
+        receiptNo: `REC-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+        studentName: isSingleSibling ? student.name : `Family (Siblings: ${siblingStudents.map(s => s.name).join(", ")})`,
+        classSection: isSingleSibling ? `${student.class}-${student.section}` : "Unified Family",
+        admissionNo: isSingleSibling ? student.admissionNo : student.familyCode || "Multi",
+        amount: totalPaid,
+        method: payMethod,
+        discount: totalDiscount,
+        arrears: totalRemainingArrears,
+        details: items
+          .map((i) => {
+            const itemObj = unpaidItems.find((ui) => ui.id === i.ledgerEntryId);
+            const itemDesc = itemObj?.name || "";
+            const child = students.find(s => s.id === itemObj?.studentId);
+            const prefix = child ? `${child.name}: ` : "";
+            return `${prefix}${itemDesc} (Paid: Rs. ${i.payAmount}${i.discountAmount > 0 ? `, Disc: Rs. ${i.discountAmount}` : ""})`;
+          })
+          .join(" + "),
+        items: items.map((i) => {
           const itemObj = unpaidItems.find((ui) => ui.id === i.ledgerEntryId);
           const itemDesc = itemObj?.name || "";
           const child = students.find(s => s.id === itemObj?.studentId);
-          const prefix = child ? `${child.name}: ` : "";
-          return `${prefix}${itemDesc} (Paid: Rs. ${i.payAmount}${i.discountAmount > 0 ? `, Disc: Rs. ${i.discountAmount}` : ""})`;
-        })
-        .join(" + "),
-      items: items.map((i) => {
-        const itemObj = unpaidItems.find((ui) => ui.id === i.ledgerEntryId);
-        const itemDesc = itemObj?.name || "";
-        const child = students.find(s => s.id === itemObj?.studentId);
-        return {
-          name: child ? `${child.name}: ${itemDesc}` : itemDesc,
-          amount: i.payAmount,
-          discount: i.discountAmount
-        };
-      }),
-      createdAt: new Date().toISOString().split("T")[0],
-    };
+          return {
+            name: child ? `${child.name}: ${itemDesc}` : itemDesc,
+            amount: i.payAmount,
+            discount: i.discountAmount
+          };
+        }),
+        createdAt: new Date().toISOString().split("T")[0],
+      };
 
-    setActiveReceipt(matchedReceipt);
-    setSelectedDueIds([]);
-    setDiscountsState({});
-    setPayingState({});
-    setAmountReceived("");
-    setTransactionRef("");
-    setSelectedStudentId("");
-    setSearchQuery("");
-    setShowReceiptModal(true);
+      setActiveReceipt(matchedReceipt);
+      setSelectedDueIds([]);
+      setDiscountsState({});
+      setPayingState({});
+      setAmountReceived("");
+      setTransactionRef("");
+      setSelectedStudentId("");
+      setSearchQuery("");
+      setShowReceiptModal(true);
+    } finally {
+      setIsSubmittingPayment(false);
+    }
   };
 
   const handleAddClass = (e: React.FormEvent) => {
@@ -2238,11 +2250,13 @@ export default function AdminDashboard() {
                                               type="number"
                                               min="0"
                                               max={due.amount}
-                                              value={discountsState[due.id] ?? 0}
+                                              value={discountsState[due.id] === undefined || discountsState[due.id] === 0 ? "" : discountsState[due.id]}
+                                              placeholder="0"
                                               onChange={(e) => {
-                                                const disc = Math.max(0, Math.min(due.amount, Number(e.target.value) || 0));
-                                                setDiscountsState((d) => ({ ...d, [due.id]: disc }));
-                                                setPayingState((p) => ({ ...p, [due.id]: due.amount - disc }));
+                                                const raw = e.target.value.replace(/^0+(?=\d)/, "");
+                                                const disc = Math.max(0, Math.min(due.amount, Number(raw) || 0));
+                                                setDiscountsState((d) => ({ ...d, [due.id]: raw === "" ? 0 : disc }));
+                                                setPayingState((p) => ({ ...p, [due.id]: due.amount - (raw === "" ? 0 : disc) }));
                                               }}
                                               className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:outline-none focus:bg-white focus:border-indigo-500"
                                             />
@@ -2254,11 +2268,14 @@ export default function AdminDashboard() {
                                                 type="number"
                                                 min="0"
                                                 max={due.amount - (discountsState[due.id] ?? 0)}
-                                                value={payingState[due.id] ?? due.amount}
+                                                value={payingState[due.id] === undefined ? due.amount : (payingState[due.id] === 0 && (discountsState[due.id] ?? 0) !== due.amount ? "" : payingState[due.id])}
+                                                placeholder="0"
                                                 onChange={(e) => {
+                                                  const raw = e.target.value.replace(/^0+(?=\d)/, "");
                                                   const disc = discountsState[due.id] ?? 0;
-                                                  const payVal = Math.max(0, Math.min(due.amount - disc, Number(e.target.value) || 0));
-                                                  setPayingState((p) => ({ ...p, [due.id]: payVal }));
+                                                  const maxPay = due.amount - disc;
+                                                  const payVal = Math.max(0, Math.min(maxPay, Number(raw) || 0));
+                                                  setPayingState((p) => ({ ...p, [due.id]: raw === "" ? 0 : payVal }));
                                                 }}
                                                 className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:outline-none focus:bg-white focus:border-indigo-500 pr-10"
                                               />
@@ -2513,10 +2530,17 @@ export default function AdminDashboard() {
 
                           <button
                             type="submit"
-                            disabled={selectedDueIds.length === 0}
-                            className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-indigo-600/10 cursor-pointer flex items-center justify-center gap-1.5"
+                            disabled={selectedDueIds.length === 0 || isSubmittingPayment}
+                            className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-indigo-600/10 cursor-pointer flex items-center justify-center gap-2"
                           >
-                            Generate Receipt & Record (Rs. {selectedDueIds.reduce((sum, id) => sum + (payingState[id] ?? 0), 0).toLocaleString("en-IN")})
+                            {isSubmittingPayment ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin text-white" />
+                                <span>Generating Official Receipt...</span>
+                              </>
+                            ) : (
+                              <span>Generate Receipt & Record (Rs. {selectedDueIds.reduce((sum, id) => sum + (payingState[id] ?? 0), 0).toLocaleString("en-IN")})</span>
+                            )}
                           </button>
                         </form>
                       </div>
@@ -5984,7 +6008,7 @@ export default function AdminDashboard() {
                     </div>
 
                     {/* Student Cards Grid */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {paginatedDefaulters.map((std) => {
                         const allDues    = studentDuesMap.get(std.id) || [];
                         const unpaidDues = unpaidDuesMap.get(std.id) || [];
@@ -6012,17 +6036,17 @@ export default function AdminDashboard() {
                                     </div>
                                   )}
                                   <div>
-                                    <h4 className="text-[13px] font-black text-slate-900 uppercase tracking-tight leading-tight group-hover:text-indigo-600 transition-colors">
+                                    <h4 className="text-[13px] font-black text-slate-900 uppercase tracking-tight leading-tight group-hover:text-indigo-600 transition-colors truncate max-w-[200px]">
                                       {std.name}
                                     </h4>
-                                    <div className="flex items-center gap-2 mt-1 text-[9px] text-slate-400 font-bold flex-wrap">
-                                      <span className="flex items-center gap-0.5"><Users className="h-3 w-3 text-slate-400" /> ADM: {std.admissionNo}</span>
-                                      <span>┬À</span>
-                                      <span className="flex items-center gap-0.5"><FileText className="h-3 w-3 text-slate-400" /> {allDues.length} fee records</span>
+                                    <div className="flex items-center gap-1.5 mt-1 text-[10px] text-slate-500 font-semibold flex-wrap">
+                                      <span className="flex items-center gap-1 whitespace-nowrap"><Users className="h-3 w-3 text-slate-400 shrink-0" /> ADM: {std.admissionNo}</span>
+                                      <span className="text-slate-300">•</span>
+                                      <span className="flex items-center gap-1 whitespace-nowrap"><FileText className="h-3 w-3 text-slate-400 shrink-0" /> {allDues.length} fee records</span>
                                       {std.familyCode && (
                                         <>
-                                          <span>┬À</span>
-                                          <span className="flex items-center gap-0.5"><Home className="h-3 w-3 text-slate-400" /> {std.familyCode}</span>
+                                          <span className="text-slate-300">•</span>
+                                          <span className="flex items-center gap-1 whitespace-nowrap"><Home className="h-3 w-3 text-slate-400 shrink-0" /> {std.familyCode}</span>
                                         </>
                                       )}
                                     </div>
@@ -6047,29 +6071,29 @@ export default function AdminDashboard() {
 
                               {/* Parent Info */}
                               <div className="space-y-1 mb-3">
-                                <div className="flex items-center gap-2 text-[10px] font-semibold text-slate-600">
-                                  <UserCheck className="h-3.5 w-3.5 text-slate-400" />
-                                  <span>{std.fatherName || std.parentName}</span>
+                                <div className="flex items-center gap-2 text-[10px] font-semibold text-slate-600 truncate">
+                                  <UserCheck className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                  <span className="truncate">{std.fatherName || std.parentName}</span>
                                 </div>
-                                <div className="flex items-center gap-2 text-[10px] font-semibold text-slate-500">
-                                  <Phone className="h-3.5 w-3.5 text-slate-400" />
-                                  <span>{std.fatherMobile || std.parentPhone}</span>
+                                <div className="flex items-center gap-2 text-[10px] font-semibold text-slate-500 truncate">
+                                  <Phone className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                  <span className="truncate">{std.fatherMobile || std.parentPhone}</span>
                                 </div>
                               </div>
 
                               {/* Financial Strip */}
                               <div className="grid grid-cols-3 border border-slate-100 rounded-xl overflow-hidden">
-                                <div className="px-3 py-2.5 text-center border-r border-slate-100">
-                                  <span className="text-[7px] font-black uppercase text-slate-400 tracking-widest block">Total Fee</span>
-                                  <span className="text-[11px] font-black text-slate-800 mt-0.5 block">₹{totalFee.toLocaleString("en-IN")}</span>
+                                <div className="px-2 py-2 text-center border-r border-slate-100">
+                                  <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider block">Total Fee</span>
+                                  <span className="text-[11px] font-black text-slate-800 mt-0.5 block whitespace-nowrap">₹{totalFee.toLocaleString("en-IN")}</span>
                                 </div>
-                                <div className="px-3 py-2.5 text-center border-r border-slate-100">
-                                  <span className="text-[7px] font-black uppercase text-emerald-500 tracking-widest block">Paid</span>
-                                  <span className="text-[11px] font-black text-emerald-600 mt-0.5 block">₹{totalPaid.toLocaleString("en-IN")}</span>
+                                <div className="px-2 py-2 text-center border-r border-slate-100">
+                                  <span className="text-[8px] font-black uppercase text-emerald-500 tracking-wider block">Paid</span>
+                                  <span className="text-[11px] font-black text-emerald-600 mt-0.5 block whitespace-nowrap">₹{totalPaid.toLocaleString("en-IN")}</span>
                                 </div>
-                                <div className="px-3 py-2.5 text-center">
-                                  <span className="text-[7px] font-black uppercase text-rose-500 tracking-widest block">Due</span>
-                                  <span className="text-[11px] font-black text-rose-600 mt-0.5 block">₹{totalDue.toLocaleString("en-IN")}</span>
+                                <div className="px-2 py-2 text-center">
+                                  <span className="text-[8px] font-black uppercase text-rose-500 tracking-wider block">Due</span>
+                                  <span className="text-[11px] font-black text-rose-600 mt-0.5 block whitespace-nowrap">₹{totalDue.toLocaleString("en-IN")}</span>
                                 </div>
                               </div>
                             </div>

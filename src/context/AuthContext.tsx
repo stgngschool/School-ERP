@@ -818,7 +818,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (res.ok) {
-        await refreshData();
+        // Run refreshData in background without blocking receipt modal generation
+        refreshData().catch((err) => console.error("Background refresh error:", err));
         return true;
       }
       return false;

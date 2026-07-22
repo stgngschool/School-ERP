@@ -10,14 +10,21 @@ if (!connectionString) {
   throw new Error("Missing DATABASE_URL environment variable.");
 }
 
+const poolConfig = {
+  connectionString,
+  max: 3,
+  idleTimeoutMillis: 10000,
+  connectionTimeoutMillis: 5000,
+};
+
 if (process.env.NODE_ENV === "production") {
-  const pool = new pg.Pool({ connectionString });
+  const pool = new pg.Pool(poolConfig);
   const adapter = new PrismaPg(pool);
   prisma = new PrismaClient({ adapter });
 } else {
   // Prevent multiple instances of Prisma Client from being instantiated during hot-reloads in development
   if (!(global as any).prismaGlobal) {
-    const pool = new pg.Pool({ connectionString });
+    const pool = new pg.Pool(poolConfig);
     const adapter = new PrismaPg(pool);
     (global as any).prismaGlobal = new PrismaClient({ adapter });
   }

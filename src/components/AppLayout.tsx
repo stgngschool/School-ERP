@@ -154,7 +154,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
       {/* ════════════════════════════════════════
           DESKTOP SIDEBAR (md and above)
       ════════════════════════════════════════ */}
-      <aside className="hidden md:flex md:w-64 flex-col border-r border-slate-200 bg-white p-5 shrink-0 select-none">
+      <aside className="hidden md:flex md:w-64 flex-col border-r border-slate-200 bg-white p-5 shrink-0 select-none no-print">
         {/* Branding */}
         <div className="flex items-center gap-2.5 pb-6 border-b border-slate-100 mb-6 shrink-0">
           <img src="/logo.png" alt="St. G.N.G. School Logo" className="h-9 w-9 rounded-full object-contain border border-slate-100 bg-white" />
