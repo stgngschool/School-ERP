@@ -19,13 +19,13 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const result = await login(username, password);
+      const result = await login(username.trim(), password.trim());
 
       if (!result.success) {
-        throw new Error(result.error || "Invalid username/phone or password. Please try again.");
+        throw new Error(result.error || "Invalid credentials. Please try again.");
       }
 
-      window.location.href = "/";
+      window.location.replace("/");
     } catch (err: any) {
       setError(err.message);
       setLoading(false);
@@ -97,10 +97,10 @@ export default function LoginPage() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4 font-sans">
-            {/* Username Input */}
+            {/* Username / Phone / Family Code Input */}
             <div>
               <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">
-                {activeTab === "STAFF" ? "Username" : "Parent Username / Phone Number"}
+                {activeTab === "STAFF" ? "Staff Username / Email" : "Mobile Number / Family Code / Username"}
               </label>
               <div className="relative">
                 <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
@@ -109,7 +109,10 @@ export default function LoginPage() {
                 <input
                   type="text"
                   required
-                  placeholder={activeTab === "STAFF" ? "e.g. admin, accountant, teacher" : "e.g. parent or 9876543210"}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  placeholder={activeTab === "STAFF" ? "e.g. admin, accountant, teacher" : "e.g. 9876543210, FAM-2026-0001, parent"}
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-600/20 focus:bg-white transition-all text-sm font-semibold"
@@ -129,6 +132,9 @@ export default function LoginPage() {
                 <input
                   type={showPassword ? "text" : "password"}
                   required
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}

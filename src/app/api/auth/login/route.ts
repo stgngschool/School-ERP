@@ -18,8 +18,8 @@ export async function POST(request: Request) {
     const cleanPassword = String(password).trim();
     const digitsOnly = cleanInput.replace(/\D/g, "");
 
-    // Query user from database by username, email, or phone
-    const user = await db.user.findFirst({
+    // Query user from database by username, email, phone, familyCode, or admissionNumber
+    let user = await db.user.findFirst({
       where: {
         OR: [
           { username: { equals: cleanInput, mode: "insensitive" } },
@@ -31,9 +31,26 @@ export async function POST(request: Request) {
       },
     });
 
+    // Fallback: Check if input matches Family Code (FAM-XXXX) or Child Admission Number (ADM-XXXX)
+    if (!user) {
+      const parentByCode = await db.parentProfile.findFirst({
+        where: {
+          OR: [
+            { familyCode: { equals: cleanInput, mode: "insensitive" } },
+            { students: { some: { admissionNumber: { equals: cleanInput, mode: "insensitive" } } } },
+          ],
+        },
+        include: { user: true },
+      });
+
+      if (parentByCode && parentByCode.user) {
+        user = parentByCode.user;
+      }
+    }
+
     if (!user) {
       return NextResponse.json(
-        { error: "Invalid credentials. Please check your username/phone and password." },
+        { error: "Invalid credentials. Please check your username, phone, or family code." },
         { status: 401 }
       );
     }
@@ -49,7 +66,7 @@ export async function POST(request: Request) {
     const isMatch = await bcrypt.compare(cleanPassword, user.passwordHash);
     if (!isMatch) {
       return NextResponse.json(
-        { error: "Invalid credentials. Please check your username/phone and password." },
+        { error: "Invalid credentials. Please check your password." },
         { status: 401 }
       );
     }
