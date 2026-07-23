@@ -1583,18 +1583,23 @@ export default function AdminDashboard() {
   };
 
   return (
-    <div className="space-y-6 font-sans w-full max-w-full overflow-x-hidden">
-      {/* 1. Header & Quick Overview (Shown only on Dashboard tab to save vertical screen space) */}
+    <div className="space-y-6 font-sans w-full max-w-full overflow-x-hidden text-left">
+      {/* ─── Header shown only on Dashboard Overview ─── */}
       {activeTab === "dashboard" && (
-        <div className="flex flex-col gap-1 border-b border-slate-200/80 pb-3">
-          <h2 className="text-base sm:text-lg font-black text-slate-800 tracking-tight">Super Admin Dashboard</h2>
-          <p className="text-[11px] text-slate-400 font-medium hidden sm:block">
-            Global operations control: assign roles, toggle account blocks, register new students, and broadcast alerts.
-          </p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200/80 pb-3">
+          <div>
+            <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight">
+              Welcome back, {user?.name || "Admin"} 👋
+            </h2>
+            <p className="text-xs text-slate-400 font-medium mt-0.5">
+              {schoolInfo.name || "School ERP"} • Operations & Finance Control
+            </p>
+          </div>
         </div>
       )}
+
       {activeTab === "dashboard" ? (
-        <div className="space-y-6 animate-fade-in font-sans">
+        <div className="space-y-5 animate-fade-in font-sans">
           {(() => {
             const girlsFirstNames = ["diya", "anya", "ananya", "kiara", "priya", "sneha", "pooja", "neha", "riya", "simran", "kajal", "preeti", "shalini", "deepika", "kiran", "aisha", "jyoti", "meera", "geeta", "rekha", "sunita", "anita", "kavita", "mamta", "babita", "sapna", "poonam", "usha"];
             const studentGenders = students.map(s => {
@@ -1698,110 +1703,171 @@ export default function AdminDashboard() {
 
             return (
               <>
-                <div className="bg-gradient-to-r from-indigo-600 via-indigo-700 to-indigo-800 text-white rounded-3xl p-5 shadow-lg shadow-indigo-600/15 flex flex-col lg:flex-row justify-between items-center gap-4 relative overflow-hidden border border-indigo-500/20">
-                  <div className="absolute right-0 top-0 h-32 w-32 bg-white/10 rounded-full blur-2xl pointer-events-none" />
-                  
+                {/* ─── Executive Daily Revenue Counter Till ─── */}
+                <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl p-4 sm:p-5 shadow-md flex flex-col lg:flex-row justify-between items-center gap-4 relative overflow-hidden border border-slate-800">
                   <div className="space-y-1">
-                    <span className="text-[9px] font-black text-indigo-200 uppercase tracking-widest block">
-                      Today's Counter Till
+                    <span className="text-[9px] font-black text-indigo-300 uppercase tracking-widest block">
+                      Daily Revenue Counter Till
                     </span>
-                    <h3 className="text-sm font-black tracking-tight text-white">
-                      Daily Revenue Collection Tally
+                    <h3 className="text-sm sm:text-base font-black tracking-tight text-white">
+                      Today's Payment Tally ({new Date().toLocaleDateString("en-IN")})
                     </h3>
-                    <p className="text-[9px] text-indigo-100/90 font-semibold">
-                      Match physical cash drawer balance before closing session today ({new Date().toLocaleDateString("en-IN")}).
+                    <p className="text-[10px] text-slate-300 font-medium">
+                      Match cash drawer balance before session closing.
                     </p>
                   </div>
                   
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full lg:w-auto pt-2 lg:pt-0">
-                    <div className="space-y-1 sm:border-r border-indigo-500/30 sm:pr-4">
-                      <span className="text-[8px] font-black text-indigo-200 uppercase tracking-wider block">Cash Tally</span>
-                      <span className="text-sm font-black text-emerald-300">₹{todayCash.toLocaleString("en-IN")}</span>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full lg:w-auto pt-2 lg:pt-0">
+                    <div className="space-y-1 bg-slate-800/80 p-2.5 rounded-xl border border-slate-700">
+                      <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider block">Cash Tally</span>
+                      <span className="text-sm font-black text-emerald-400">₹{(todayCash / 100).toLocaleString("en-IN")}</span>
                     </div>
                     
-                    <div className="space-y-1 sm:border-r border-indigo-500/30 sm:pr-4">
-                      <span className="text-[8px] font-black text-indigo-200 uppercase tracking-wider block">UPI QR Scan</span>
-                      <span className="text-sm font-black text-indigo-100 font-bold">₹{todayUpi.toLocaleString("en-IN")}</span>
+                    <div className="space-y-1 bg-slate-800/80 p-2.5 rounded-xl border border-slate-700">
+                      <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider block">UPI QR Scan</span>
+                      <span className="text-sm font-black text-indigo-300">₹{(todayUpi / 100).toLocaleString("en-IN")}</span>
                     </div>
 
-                    <div className="space-y-1 sm:border-r border-indigo-500/30 sm:pr-4">
-                      <span className="text-[8px] font-black text-indigo-200 uppercase tracking-wider block">Bank / Cheque</span>
-                      <span className="text-sm font-black text-white">₹{todayBank.toLocaleString("en-IN")}</span>
+                    <div className="space-y-1 bg-slate-800/80 p-2.5 rounded-xl border border-slate-700">
+                      <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider block">Bank / Cheque</span>
+                      <span className="text-sm font-black text-white">₹{(todayBank / 100).toLocaleString("en-IN")}</span>
                     </div>
 
-                    <div className="space-y-1 bg-white/10 backdrop-blur-md p-2.5 rounded-2xl border border-white/20">
+                    <div className="space-y-1 bg-indigo-600 p-2.5 rounded-xl border border-indigo-500 shadow-sm">
                       <span className="text-[8px] font-black text-indigo-200 uppercase tracking-wider block leading-none mb-1">Total Today</span>
-                      <span className="text-sm font-black text-white block">₹{todayTotal.toLocaleString("en-IN")}</span>
+                      <span className="text-sm font-black text-white block">₹{(todayTotal / 100).toLocaleString("en-IN")}</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Metric Cards Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* ─── Quick Actions Launcher Hub ─── */}
+                <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs space-y-3">
+                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-700">
+                    Quick Action Shortcuts
+                  </h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+                    <button
+                      onClick={() => setActiveTab("collect")}
+                      className="p-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl text-left transition-all cursor-pointer group"
+                    >
+                      <CreditCard className="h-5 w-5 text-emerald-600 mb-1.5 group-hover:scale-110 transition-transform" />
+                      <p className="text-xs font-extrabold text-emerald-900">Collect Fees</p>
+                      <p className="text-[9px] text-emerald-600 font-medium">Record payment</p>
+                    </button>
+
+                    <button
+                      onClick={() => setActiveTab("students")}
+                      className="p-3 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl text-left transition-all cursor-pointer group"
+                    >
+                      <PlusCircle className="h-5 w-5 text-indigo-600 mb-1.5 group-hover:scale-110 transition-transform" />
+                      <p className="text-xs font-extrabold text-indigo-900">Add Student</p>
+                      <p className="text-[9px] text-indigo-600 font-medium">Register profile</p>
+                    </button>
+
+                    <button
+                      onClick={() => setActiveTab("marks")}
+                      className="p-3 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl text-left transition-all cursor-pointer group"
+                    >
+                      <BookOpen className="h-5 w-5 text-blue-600 mb-1.5 group-hover:scale-110 transition-transform" />
+                      <p className="text-xs font-extrabold text-blue-900">Feed Marks</p>
+                      <p className="text-[9px] text-blue-600 font-medium">Enter scores</p>
+                    </button>
+
+                    <button
+                      onClick={() => setActiveTab("defaulters")}
+                      className="p-3 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl text-left transition-all cursor-pointer group"
+                    >
+                      <AlertTriangle className="h-5 w-5 text-amber-600 mb-1.5 group-hover:scale-110 transition-transform" />
+                      <p className="text-xs font-extrabold text-amber-900">Fee Dues</p>
+                      <p className="text-[9px] text-amber-600 font-medium">View defaulters</p>
+                    </button>
+
+                    <button
+                      onClick={() => setActiveTab("notices")}
+                      className="p-3 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl text-left transition-all cursor-pointer group"
+                    >
+                      <Bell className="h-5 w-5 text-purple-600 mb-1.5 group-hover:scale-110 transition-transform" />
+                      <p className="text-xs font-extrabold text-purple-900">Post Notice</p>
+                      <p className="text-[9px] text-purple-600 font-medium">Broadcast alert</p>
+                    </button>
+
+                    <button
+                      onClick={() => setActiveTab("idcards")}
+                      className="p-3 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-xl text-left transition-all cursor-pointer group"
+                    >
+                      <FileText className="h-5 w-5 text-teal-600 mb-1.5 group-hover:scale-110 transition-transform" />
+                      <p className="text-xs font-extrabold text-teal-900">Print ID Cards</p>
+                      <p className="text-[9px] text-teal-600 font-medium">Student cards</p>
+                    </button>
+                  </div>
+                </div>
+
+                {/* ─── Metric Cards Grid ─── */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   {/* Total Students Card */}
-                  <div className="stripe-card p-5">
+                  <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs">
                     <div className="flex justify-between items-start">
-                      <div className="space-y-1.5">
+                      <div className="space-y-1">
                         <h4 className="text-2xl font-black text-slate-900 tracking-tight">{totalStudents}</h4>
-                        <span className="text-[10px] font-black text-slate-400 block uppercase tracking-wider">Total Students</span>
+                        <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Total Enrolled</span>
                       </div>
-                      <div className="h-10 w-10 bg-indigo-50/80 rounded-2xl flex items-center justify-center text-indigo-600 border border-indigo-100/80 shadow-2xs">
+                      <div className="h-10 w-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 border border-indigo-100 shrink-0">
                         <Users className="h-5 w-5" />
                       </div>
                     </div>
-                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[10px] font-bold text-slate-600">
-                      <span className="text-pink-700 bg-pink-50/90 px-2.5 py-1 rounded-xl border border-pink-100">Girls: {girlsCount}</span>
-                      <span className="text-indigo-700 bg-indigo-50/90 px-2.5 py-1 rounded-xl border border-indigo-100">Boys: {boysCount}</span>
+                    <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold text-slate-500">
+                      <span>Boys: {boysCount}</span>
+                      <span>Girls: {girlsCount}</span>
                     </div>
                   </div>
 
-                  {/* Total Earnings Card */}
-                  <div className="stripe-card p-5">
+                  {/* Revenue Collected Card */}
+                  <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs">
                     <div className="flex justify-between items-start">
-                      <div className="space-y-1.5">
-                        <h4 className="text-2xl font-black text-emerald-600 tracking-tight">₹{totalEarnings.toLocaleString("en-IN")}</h4>
-                        <span className="text-[10px] font-black text-slate-400 block uppercase tracking-wider">Total Earning</span>
+                      <div className="space-y-1">
+                        <h4 className="text-2xl font-black text-emerald-700 tracking-tight">₹{(totalEarnings / 100).toLocaleString("en-IN")}</h4>
+                        <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Total Revenue Collected</span>
                       </div>
-                      <div className="h-10 w-10 bg-emerald-50/80 rounded-2xl flex items-center justify-center text-emerald-600 border border-emerald-100/80 shadow-2xs">
-                        <DollarSign className="h-5 w-5" />
-                      </div>
-                    </div>
-                    <div className="mt-4 pt-3 border-t border-slate-100 text-[10px] font-bold text-slate-500 flex items-center gap-1.5">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 status-dot-pulse" />
-                      <span>Current Session Collections</span>
-                    </div>
-                  </div>
-
-                  {/* Total Dues Card */}
-                  <div className="stripe-card p-5">
-                    <div className="flex justify-between items-start">
-                      <div className="space-y-1.5">
-                        <h4 className="text-2xl font-black text-rose-600 tracking-tight">₹{totalDues.toLocaleString("en-IN")}</h4>
-                        <span className="text-[10px] font-black text-slate-400 block uppercase tracking-wider">Total Dues</span>
-                      </div>
-                      <div className="h-10 w-10 bg-rose-50/80 rounded-2xl flex items-center justify-center text-rose-600 border border-rose-100/80 shadow-2xs">
-                        <AlertTriangle className="h-5 w-5" />
-                      </div>
-                    </div>
-                    <div className="mt-4 pt-3 border-t border-slate-100 text-[10px] font-bold text-rose-600 bg-rose-50/80 border border-rose-100/80 px-2.5 py-1 rounded-xl w-fit">
-                      {dueItems.length} Outstanding Invoices
-                    </div>
-                  </div>
-
-                  {/* Total Sales Card */}
-                  <div className="stripe-card p-5">
-                    <div className="flex justify-between items-start">
-                      <div className="space-y-1.5">
-                        <h4 className="text-2xl font-black text-indigo-700 tracking-tight">₹{totalSales.toLocaleString("en-IN")}</h4>
-                        <span className="text-[10px] font-black text-slate-400 block uppercase tracking-wider">Total Sales</span>
-                      </div>
-                      <div className="h-10 w-10 bg-indigo-50/80 rounded-2xl flex items-center justify-center text-indigo-700 border border-indigo-100/80 shadow-2xs">
+                      <div className="h-10 w-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 border border-emerald-100 shrink-0">
                         <TrendingUp className="h-5 w-5" />
                       </div>
                     </div>
-                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[10px] font-bold text-slate-600">
-                      <span className="text-slate-700 bg-slate-100/80 px-2.5 py-1 rounded-xl border border-slate-200/60">New Adm: {newAdmissionsCount}</span>
-                      <span className="text-slate-700 bg-slate-100/80 px-2.5 py-1 rounded-xl border border-slate-200/60">Old: {oldStudentsCount}</span>
+                    <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold text-slate-500">
+                      <span>This Month: ₹{(monthlyTotal / 100).toLocaleString("en-IN")}</span>
+                    </div>
+                  </div>
+
+                  {/* Pending Dues Card */}
+                  <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs">
+                    <div className="flex justify-between items-start">
+                      <div className="space-y-1">
+                        <h4 className="text-2xl font-black text-amber-600 tracking-tight">₹{(totalDues / 100).toLocaleString("en-IN")}</h4>
+                        <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Pending Fee Dues</span>
+                      </div>
+                      <div className="h-10 w-10 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600 border border-amber-100 shrink-0">
+                        <AlertTriangle className="h-5 w-5" />
+                      </div>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold text-amber-700">
+                      <span>{dueItems.filter(d => d.status === "UNPAID").length} Unpaid Dues</span>
+                      <button onClick={() => setActiveTab("defaulters")} className="underline cursor-pointer">View Report</button>
+                    </div>
+                  </div>
+
+                  {/* Staff & Attendance Card */}
+                  <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs">
+                    <div className="flex justify-between items-start">
+                      <div className="space-y-1">
+                        <h4 className="text-2xl font-black text-slate-900 tracking-tight">{usersList.length} Staff</h4>
+                        <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Attendance Rate: {attendanceRate}%</span>
+                      </div>
+                      <div className="h-10 w-10 bg-teal-50 rounded-xl flex items-center justify-center text-teal-600 border border-teal-100 shrink-0">
+                        <UserCheck className="h-5 w-5" />
+                      </div>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold text-slate-500">
+                      <span>Present Today: {presentCount}</span>
+                      <button onClick={() => setActiveTab("users")} className="underline cursor-pointer">Staff Users</button>
                     </div>
                   </div>
                 </div>

@@ -38,3 +38,13 @@ This document outlines the rules, styling guidelines, database patterns, and saf
 ### B. Aesthetics & Modern Looks
 * Maintain the **premium, glassmorphic layout theme** with clean card designs, micro-hover animations, and vibrant accents.
 * Always present statistics in a clean and grouped manner, using standard badges for statuses (`PAID` vs `UNPAID` or `APPROVED` vs `PENDING`).
+
+---
+
+## 4. Language & Terminology Guidelines
+
+### A. Simple Indian English Across ERP
+* Always use **simple, clean Indian English** for all UI text, labels, headers, buttons, placeholders, and error messages.
+* Use standard terminology commonly used in Indian schools:
+  * **Roll No**, **Admission No** (or Adm No), **Class & Section**, **Marksheet**, **Fee Dues**, **Receipt No**, **Leave Application**, **Homework**, **Pass Rate**, **Top Performer**, **Fee Structure**, **Pending Dues**, **Father's Name**, **Mother's Name**, **Guardian**.
+* Avoid foreign jargon or overly complex phrasing so that teachers, accountants, admins, and parents across India can easily understand every section.

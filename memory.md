@@ -28,6 +28,9 @@ This file serves as the long-term context memory for AI agents working on this p
 * **RTE Students**: Exempted from monthly tuition fee charges.
 * **Sibling Groupings**: Tracked using a unique `familyCode` (e.g. `FAM-1`, `FAM-2`) under the `ParentProfile` model. A single parent is linked to a maximum of 4-5 students in sibling groups.
 
+### C. Language & Terminology
+* **Simple Indian English**: All UI labels, buttons, headers, notifications, and form fields MUST use clean, standard **Indian English** familiar to Indian schools (e.g., *Roll No, Admission No, Marksheet, Class & Section, Fee Dues, Receipt No, Leave Application, Pending Balance, Pass / Fail Status*). Avoid foreign or overly complicated terms.
+
 ---
 
 ## 3. Implementation History (What is Built)

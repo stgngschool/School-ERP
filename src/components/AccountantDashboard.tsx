@@ -567,15 +567,12 @@ export default function AccountantDashboard() {
       </div>
 
       {/* 3. Panel Body */}
-      <div className="bg-white border border-slate-200 p-4 sm:p-6 rounded-2xl shadow-sm">
-        
-        {/* TAB: Feed Student Marks */}
-        {currentTab === "marks" && (
-          <MarksFeedingConsole />
-        )}
-
-        {/* TAB 1: Collect Fee Form */}
-        {currentTab === "collect" && (
+      {currentTab === "marks" ? (
+        <MarksFeedingConsole />
+      ) : (
+        <div className="bg-white border border-slate-200 p-4 sm:p-6 rounded-2xl shadow-sm">
+          {/* TAB 1: Collect Fee Form */}
+          {currentTab === "collect" && (
           <div>
             {!selectedStudentId ? (
               // SEARCH VIEW (No student selected)
@@ -2201,6 +2198,7 @@ export default function AccountantDashboard() {
           </div>
         )}
       </div>
+)}
 
       <StudentProfileModal
         studentId={selectedStudentId}
