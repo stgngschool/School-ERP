@@ -87,7 +87,7 @@ const getNavItems = (activeRole: string) => {
 const BOTTOM_NAV_VISIBLE = 4;
 
 export default function AppLayout({ children }: AppLayoutProps) {
-  const { activeRole, activeTab, setActiveTab, switchRole, user, students, notices } = useAuth();
+  const { activeRole, activeTab, setActiveTab, switchRole, user, students, notices, schoolInfo } = useAuth();
 
   // Mobile states
   const [showMoreSheet, setShowMoreSheet] = useState(false);
@@ -332,13 +332,16 @@ export default function AppLayout({ children }: AppLayoutProps) {
               </div>
               <input
                 type="text"
-                placeholder="Search students..."
+                placeholder="Search students, admission no, family code... (Ctrl+K)"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-1.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:bg-white transition-all text-slate-800"
+                className="w-full pl-9 pr-12 py-1.5 bg-slate-50/80 border border-slate-200/90 rounded-2xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition-all text-slate-800 shadow-inner"
               />
+              <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                <kbd className="hidden sm:inline-block text-[9px] font-extrabold text-slate-400 bg-white border border-slate-200 rounded-md px-1.5 py-0.5 shadow-2xs">Ctrl K</kbd>
+              </div>
               {searchQuery && (
-                <div className="absolute top-11 left-0 right-0 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-60 overflow-y-auto z-50 p-2 space-y-1">
+                <div className="absolute top-11 left-0 right-0 bg-white border border-slate-200/90 rounded-2xl shadow-xl max-h-60 overflow-y-auto z-50 p-2 space-y-1">
                   {students && students.filter(s =>
                     s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                     s.admissionNo.toLowerCase().includes(searchQuery.toLowerCase())
@@ -364,27 +367,27 @@ export default function AppLayout({ children }: AppLayoutProps) {
           </div>
 
           {/* Right Controls */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3.5">
             {/* Apps & Integrations Connector Button */}
             <button
               onClick={() => setShowAppsModal(true)}
               title="Apps & Integrations Connector Hub"
-              className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white py-1.5 px-3 rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm shadow-slate-900/10"
+              className="flex items-center gap-1.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white py-1.5 px-3.5 rounded-xl text-xs font-black transition-all cursor-pointer shadow-md shadow-indigo-600/15"
             >
-              <Layers className="h-4 w-4 text-indigo-400" />
+              <Layers className="h-4 w-4 text-indigo-200" />
               <span>Apps Hub</span>
             </button>
 
-            <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-100 text-indigo-700 py-1.5 px-3.5 rounded-xl text-xs font-black">
-              <Building2 className="h-4 w-4 text-indigo-500" />
-              UDISE : 930303
+            <div className="hidden lg:flex items-center gap-2 bg-indigo-50/80 border border-indigo-100/80 text-indigo-700 py-1.5 px-3 rounded-xl text-xs font-black">
+              <Building2 className="h-3.5 w-3.5 text-indigo-500" />
+              <span>UDISE: {schoolInfo?.udiseCode || "09300302001"}</span>
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse inline-block" />
-              <span className="text-[10px] font-black text-emerald-600 uppercase tracking-wider mr-1">Live Session:</span>
+            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/80 py-1 px-2.5 rounded-xl">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 status-dot-pulse inline-block shrink-0" />
+              <span className="text-[9px] font-black text-emerald-600 uppercase tracking-wider hidden sm:inline-block">Live:</span>
               <select value={sessionYear} onChange={(e) => setSessionYear(e.target.value)}
-                className="bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 py-1.5 px-2.5 rounded-xl outline-none focus:border-indigo-300 transition-all cursor-pointer">
+                className="bg-transparent text-xs font-bold text-slate-700 py-0.5 outline-none cursor-pointer">
                 <option value="2026-27">2026 - 2027</option>
                 <option value="2025-26">2025 - 2026</option>
               </select>

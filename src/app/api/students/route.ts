@@ -1,12 +1,20 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
+import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import { generateYearlyCharges, getAcademicYear } from "@/lib/generateYearlyCharges";
 import { getNextFamilyCode, getNextAdmissionNumber } from "@/lib/family";
+import { getAuthUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const authUser = await getAuthUser(request);
+    if (!authUser) {
+      return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
+    }
+
     const students = await db.student.findMany({
       include: {
         class: true,
@@ -92,6 +100,11 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const authUser = await getAuthUser(request);
+    if (!authUser || (authUser.role !== "ADMIN" && authUser.role !== "ACCOUNTANT")) {
+      return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
+    }
+
     const body = await request.json();
     const {
       name,
@@ -129,6 +142,7 @@ export async function POST(request: Request) {
       familyCode,
       previousDues,
       concessionId,
+      startingFeeMonth,
     } = body;
 
     if (!name || !classVal || !section || !fatherName || !fatherMobile || !address) {
@@ -192,12 +206,14 @@ export async function POST(request: Request) {
       });
 
       const finalEmail = existingUser ? `parent_${Date.now()}@school.com` : email;
+      const secureRandomPassword = crypto.randomBytes(16).toString("hex");
+      const passwordHash = await bcrypt.hash(secureRandomPassword, 10);
 
       const user = await db.user.create({
         data: {
           username: `parent_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
           email: finalEmail,
-          passwordHash: "$2a$10$dummyhash",
+          passwordHash,
           role: "PARENT",
           name: fatherName,
           phone: fatherMobile,
@@ -264,7 +280,7 @@ export async function POST(request: Request) {
     });
 
     if (systemUser) {
-      await generateYearlyCharges(student.id, classVal, systemUser.id, getAcademicYear());
+      await generateYearlyCharges(student.id, classVal, systemUser.id, getAcademicYear(), startingFeeMonth);
       if (previousDues && parseFloat(previousDues) > 0) {
         const prevDuesAmountInPaisa = Math.round(parseFloat(previousDues) * 100);
         await db.ledgerEntry.create({
@@ -300,6 +316,11 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
+    const authUser = await getAuthUser(request);
+    if (!authUser || (authUser.role !== "ADMIN" && authUser.role !== "ACCOUNTANT")) {
+      return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
+    }
+
     const body = await request.json();
     const { studentId, action, data } = body;
 
@@ -393,9 +414,11 @@ export async function PATCH(request: Request) {
         const systemUser = await db.user.findFirst({
           where: { OR: [{ role: "ADMIN" }, { role: "ACCOUNTANT" }] },
         });
-        if (systemUser) {
-          const className = updated.rollNumber ? updated.rollNumber.split("-")[0] : "";
-          await generateYearlyCharges(updated.id, className, systemUser.id, getAcademicYear());
+        const studentClass = await db.class.findUnique({
+          where: { id: updated.classId },
+        });
+        if (systemUser && studentClass) {
+          await generateYearlyCharges(updated.id, studentClass.name, systemUser.id, getAcademicYear());
         }
       }
 
@@ -408,3 +431,4 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Failed to update student: " + error.message }, { status: 500 });
   }
 }
+

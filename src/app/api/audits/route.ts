@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
-import { cookies } from "next/headers";
-import { verifyToken } from "@/lib/auth";
+import { getAuthUser } from "@/lib/auth";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const authUser = await getAuthUser(request);
+    if (!authUser || (authUser.role !== "ADMIN" && authUser.role !== "ACCOUNTANT")) {
+      return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
+    }
+
     const logs = await db.auditLog.findMany({
       include: { user: true },
       orderBy: { createdAt: "desc" },
@@ -31,27 +35,18 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const authUser = await getAuthUser(request);
+    if (!authUser) {
+      return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
+    }
+
     const { action } = await request.json();
 
     if (!action) {
       return NextResponse.json({ error: "Action string is required." }, { status: 400 });
     }
 
-    const cookieStore = await cookies();
-    const token = cookieStore.get("auth_token")?.value;
-    let userId = "";
-
-    if (token) {
-      const decoded = verifyToken(token);
-      if (decoded) {
-        userId = decoded.userId;
-      }
-    }
-
-    if (!userId) {
-      const admin = await db.user.findFirst({ where: { role: "ADMIN" } });
-      userId = admin?.id || "";
-    }
+    const userId = authUser.userId;
 
     const log = await db.auditLog.create({
       data: {
@@ -68,3 +63,4 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Failed to log audit trail" }, { status: 500 });
   }
 }
+

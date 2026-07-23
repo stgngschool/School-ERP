@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
-import { cookies } from "next/headers";
-import { verifyToken } from "@/lib/auth";
+import { getAuthUser } from "@/lib/auth";
 import { AttendanceStatus } from "@prisma/client";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const authUser = await getAuthUser(request);
+    if (!authUser) {
+      return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
+    }
+
     const logs = await db.attendance.findMany({
       orderBy: { date: "desc" },
     });
@@ -26,22 +30,26 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const { studentId, date, status } = await request.json();
+    const authUser = await getAuthUser(request);
+    if (!authUser || (authUser.role !== "ADMIN" && authUser.role !== "TEACHER" && authUser.role !== "ACCOUNTANT")) {
+      return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
+    }
+
+    const { studentId, date, status, overrideLeave } = await request.json();
 
     if (!studentId || !date || !status) {
       return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
     }
 
-    const cookieStore = await cookies();
-    const token = cookieStore.get("auth_token")?.value;
-    let teacherUserId = "system";
-
-    if (token) {
-      const decoded = verifyToken(token);
-      if (decoded) {
-        teacherUserId = decoded.userId;
-      }
+    const validStatuses = Object.values(AttendanceStatus);
+    if (!validStatuses.includes(status as AttendanceStatus)) {
+      return NextResponse.json(
+        { error: `Invalid status. Must be one of: ${validStatuses.join(", ")}` },
+        { status: 400 }
+      );
     }
+
+    const teacherUserId = authUser.userId;
 
     const student = await db.student.findUnique({
       where: { id: studentId },
@@ -53,6 +61,23 @@ export async function POST(request: Request) {
 
     const dateStr = typeof date === "string" ? date.split("T")[0] : new Date(date).toISOString().split("T")[0];
     const dateObj = new Date(`${dateStr}T00:00:00.000Z`);
+
+    // Check if an approved leave already exists for this date
+    const existing = await db.attendance.findUnique({
+      where: {
+        studentId_date: {
+          studentId,
+          date: dateObj,
+        },
+      },
+    });
+
+    if (existing && existing.status === "LEAVE" && status !== "LEAVE" && !overrideLeave) {
+      return NextResponse.json(
+        { error: "Student has an approved leave for this date. Set overrideLeave: true to change status." },
+        { status: 409 }
+      );
+    }
 
     const attendance = await db.attendance.upsert({
       where: {
@@ -87,3 +112,4 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Failed to save attendance record" }, { status: 500 });
   }
 }
+

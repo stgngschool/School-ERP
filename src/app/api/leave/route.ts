@@ -1,10 +1,16 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { uploadFile } from "@/lib/storage";
+import { getAuthUser } from "@/lib/auth";
 import { LeaveStatus } from "@prisma/client";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const authUser = await getAuthUser(request);
+    if (!authUser) {
+      return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
+    }
+
     const leaves = await db.leaveRequest.findMany({
       include: {
         student: {
@@ -39,6 +45,11 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const authUser = await getAuthUser(request);
+    if (!authUser) {
+      return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
+    }
+
     const formData = await request.formData();
     const studentId = formData.get("studentId") as string;
     const startDateStr = formData.get("startDate") as string;
@@ -48,6 +59,17 @@ export async function POST(request: Request) {
 
     if (!studentId || !startDateStr || !endDateStr || !reason) {
       return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
+    }
+
+    const start = new Date(startDateStr);
+    const end = new Date(endDateStr);
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return NextResponse.json({ error: "Invalid start or end date format." }, { status: 400 });
+    }
+
+    if (start > end) {
+      return NextResponse.json({ error: "Start date cannot be after end date." }, { status: 400 });
     }
 
     let fileUrl: string | null = null;
@@ -75,8 +97,8 @@ export async function POST(request: Request) {
     const leave = await db.leaveRequest.create({
       data: {
         studentId,
-        startDate: new Date(startDateStr),
-        endDate: new Date(endDateStr),
+        startDate: start,
+        endDate: end,
         reason,
         fileUrl,
         teacherId,
@@ -96,6 +118,11 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
+    const authUser = await getAuthUser(request);
+    if (!authUser || (authUser.role !== "ADMIN" && authUser.role !== "TEACHER")) {
+      return NextResponse.json({ error: "Only teachers and admins can update leave requests." }, { status: 403 });
+    }
+
     const { id, status, remarks } = await request.json();
 
     if (!id || !status) {
@@ -113,7 +140,7 @@ export async function PATCH(request: Request) {
     if (status === "APPROVED" && leave.startDate && leave.endDate) {
       const current = new Date(leave.startDate);
       const end = new Date(leave.endDate);
-      const teacherUserId = leave.teacherId || "system";
+      const teacherUserId = authUser.userId;
 
       while (current <= end) {
         const dateStr = current.toISOString().split("T")[0];
@@ -151,3 +178,4 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Failed to update leave request status" }, { status: 500 });
   }
 }
+

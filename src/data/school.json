@@ -3,6 +3,7 @@
   "address": "Salarpur, Rasulgarh, Varanasi - 221007",
   "phone": "9452824318",
   "email": "stgng2005@gmail.com",
+  "udiseCode": "09670707502",
   "upiId": "8423926608@upi",
   "upiMerchantName": "St. GNG School",
   "enableTransport": false,
@@ -25,10 +26,22 @@
       "isSplit": true,
       "maxMarks": 100,
       "components": [
-        { "name": "Written Exam", "max": 80 },
-        { "name": "Note Book", "max": 5 },
-        { "name": "Sub. Enrich.", "max": 5 },
-        { "name": "Pr. Act.", "max": 10 }
+        {
+          "name": "Written Exam",
+          "max": 80
+        },
+        {
+          "name": "Note Book",
+          "max": 5
+        },
+        {
+          "name": "Sub. Enrich.",
+          "max": 5
+        },
+        {
+          "name": "Pr. Act.",
+          "max": 10
+        }
       ]
     },
     "Unit-2": {
@@ -39,10 +52,22 @@
       "isSplit": true,
       "maxMarks": 100,
       "components": [
-        { "name": "Written Exam", "max": 80 },
-        { "name": "Note Book", "max": 5 },
-        { "name": "Sub. Enrich.", "max": 5 },
-        { "name": "Pr. Act.", "max": 10 }
+        {
+          "name": "Written Exam",
+          "max": 80
+        },
+        {
+          "name": "Note Book",
+          "max": 5
+        },
+        {
+          "name": "Sub. Enrich.",
+          "max": 5
+        },
+        {
+          "name": "Pr. Act.",
+          "max": 10
+        }
       ]
     }
   }

@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
+import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import { generateYearlyChargesBulk, getAcademicYear } from "@/lib/generateYearlyCharges";
+import { getAuthUser } from "@/lib/auth";
 
 function getMaxSuffixNumber(codes: (string | null | undefined)[]): number {
   let maxNum = 0;
@@ -18,6 +21,11 @@ function getMaxSuffixNumber(codes: (string | null | undefined)[]): number {
 
 export async function POST(request: Request) {
   try {
+    const authUser = await getAuthUser(request);
+    if (!authUser || (authUser.role !== "ADMIN" && authUser.role !== "ACCOUNTANT")) {
+      return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
+    }
+
     const { students } = await request.json();
 
     if (!students || !Array.isArray(students) || students.length === 0) {
@@ -104,12 +112,13 @@ export async function POST(request: Request) {
 
         const existingUserWithEmail = await db.user.findUnique({ where: { email } });
         const finalEmail = existingUserWithEmail ? `parent_${uniqueSuffix}@school.com` : email;
+        const passwordHash = await bcrypt.hash(crypto.randomBytes(16).toString("hex"), 10);
 
         const user = await db.user.create({
           data: {
             username: `user_${uniqueSuffix}`,
             email: finalEmail,
-            passwordHash: "$2a$10$dummyhash",
+            passwordHash,
             role: "PARENT",
             name: String(record.fatherName).trim(),
             phone: cleanMobile,

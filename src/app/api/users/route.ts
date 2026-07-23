@@ -1,9 +1,15 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import bcrypt from "bcryptjs";
+import { getAuthUser } from "@/lib/auth";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const authUser = await getAuthUser(request);
+    if (!authUser || (authUser.role !== "ADMIN" && authUser.role !== "ACCOUNTANT")) {
+      return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
+    }
+
     const users = await db.user.findMany({
       orderBy: { role: "asc" },
     });
@@ -21,8 +27,15 @@ export async function GET() {
     console.error("Fetch users error:", error);
     return NextResponse.json({ error: "Failed to fetch user accounts" }, { status: 500 });
   }
-}export async function PATCH(request: Request) {
+}
+
+export async function PATCH(request: Request) {
   try {
+    const authUser = await getAuthUser(request);
+    if (!authUser || authUser.role !== "ADMIN") {
+      return NextResponse.json({ error: "Only administrators can modify user accounts." }, { status: 403 });
+    }
+
     const body = await request.json();
     const { userId, action, newPassword, name, username, email, phone } = body;
 
@@ -95,6 +108,11 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const authUser = await getAuthUser(request);
+    if (!authUser || authUser.role !== "ADMIN") {
+      return NextResponse.json({ error: "Only administrators can create staff accounts." }, { status: 403 });
+    }
+
     const { name, username, email, password, role, phone, employeeId } = await request.json();
     if (!name || !username || !email || !password || !role) {
       return NextResponse.json({ error: "Name, username, email, password, and role are required." }, { status: 400 });
@@ -151,12 +169,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Failed to register staff: " + error.message }, { status: 500 });
   }
 }
+
 export async function DELETE(request: Request) {
   try {
+    const authUser = await getAuthUser(request);
+    if (!authUser || authUser.role !== "ADMIN") {
+      return NextResponse.json({ error: "Only administrators can delete user accounts." }, { status: 403 });
+    }
+
     const { userId } = await request.json();
 
     if (!userId) {
       return NextResponse.json({ error: "User ID is required." }, { status: 400 });
+    }
+
+    if (userId === authUser.userId) {
+      return NextResponse.json({ error: "You cannot delete your own admin account." }, { status: 400 });
     }
 
     const user = await db.user.findUnique({
@@ -176,7 +204,7 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "User not found." }, { status: 404 });
     }
 
-    // Safely delete user and their associated entities in a transaction
+    // Safely reassign or delete user and their associated entities in a transaction
     await db.$transaction(async (tx) => {
       if (user.role === "PARENT" && user.parentProfile) {
         const studentIds = user.parentProfile.students.map((s) => s.id);
@@ -222,22 +250,39 @@ export async function DELETE(request: Request) {
         await tx.accountantProfile.delete({ where: { id: user.accountantProfile.id } });
       }
 
-      // Delete user-created entries
-      await tx.receiptItem.deleteMany({
-        where: { receipt: { createdById: userId } }
+      // Reassign financial records created by this user to another active admin user to preserve financial history
+      const fallbackAdmin = await tx.user.findFirst({
+        where: { role: "ADMIN", NOT: { id: userId }, status: "ACTIVE" }
       });
-      await tx.receipt.deleteMany({ where: { createdById: userId } });
-      await tx.ledgerEntry.deleteMany({ where: { createdById: userId } });
-      await tx.notice.deleteMany({ where: { createdById: userId } });
+
+      if (fallbackAdmin) {
+        await tx.receipt.updateMany({
+          where: { createdById: userId },
+          data: { createdById: fallbackAdmin.id },
+        });
+        await tx.ledgerEntry.updateMany({
+          where: { createdById: userId },
+          data: { createdById: fallbackAdmin.id },
+        });
+        await tx.notice.updateMany({
+          where: { createdById: userId },
+          data: { createdById: fallbackAdmin.id },
+        });
+      } else {
+        // If no fallback admin exists, soft-delete by blocking account
+        throw new Error("Cannot delete staff user when no alternative Admin exists to preserve audit trails.");
+      }
+
       await tx.auditLog.deleteMany({ where: { userId: userId } });
 
       // Finally delete the user account
       await tx.user.delete({ where: { id: userId } });
     });
 
-    return NextResponse.json({ success: true, message: "User account and all dependencies deleted successfully" });
+    return NextResponse.json({ success: true, message: "User account deleted cleanly while preserving financial records." });
   } catch (error: any) {
-    console.error("Delete user status error:", error);
-    return NextResponse.json({ error: "Failed to delete user and dependencies: " + error.message }, { status: 500 });
+    console.error("Delete user error:", error);
+    return NextResponse.json({ error: "Failed to delete user: " + error.message }, { status: 500 });
   }
 }
+

@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getAuthUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const classes = await db.class.findMany({
       where: { status: "ACTIVE" },
@@ -21,6 +22,11 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const authUser = await getAuthUser(request);
+    if (!authUser || (authUser.role !== "ADMIN" && authUser.role !== "ACCOUNTANT" && authUser.role !== "TEACHER")) {
+      return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
+    }
+
     const { name, section } = await request.json();
     if (!name || !section) {
       return NextResponse.json({ error: "Class name and section are required" }, { status: 400 });
@@ -48,6 +54,11 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    const authUser = await getAuthUser(request);
+    if (!authUser || (authUser.role !== "ADMIN" && authUser.role !== "ACCOUNTANT")) {
+      return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
+    }
+
     const { id } = await request.json();
     if (!id) {
       return NextResponse.json({ error: "Class ID is required" }, { status: 400 });
@@ -64,3 +75,4 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Failed to archive class" }, { status: 500 });
   }
 }
+

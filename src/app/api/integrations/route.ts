@@ -168,8 +168,15 @@ export async function GET() {
   }
 }
 
+import { getAuthUser } from "@/lib/auth";
+
 export async function POST(request: Request) {
   try {
+    const authUser = await getAuthUser(request);
+    if (!authUser || (authUser.role !== "ADMIN" && authUser.role !== "ACCOUNTANT")) {
+      return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
+    }
+
     const body = await request.json();
     const { action, id, config } = body;
 
@@ -313,7 +320,9 @@ export async function POST(request: Request) {
         downloadUrl = `/api/integrations/download?type=sheets`;
       } else if (id === "google_drive") {
         const [users, students, ledgerEntries, receipts] = await Promise.all([
-          db.user.findMany(),
+          db.user.findMany({
+            select: { id: true, username: true, email: true, role: true, status: true, name: true, phone: true, createdAt: true }
+          }),
           db.student.findMany(),
           db.ledgerEntry.findMany(),
           db.receipt.findMany(),

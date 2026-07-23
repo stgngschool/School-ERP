@@ -31,5 +31,15 @@ if (process.env.NODE_ENV === "production") {
   prisma = (global as any).prismaGlobal;
 }
 
+import { initDailyCronJob } from "./cron";
+
+if (typeof window === "undefined") {
+  try {
+    initDailyCronJob();
+  } catch (e) {
+    console.error("[CRON] Failed to initialize daily cron:", e);
+  }
+}
+
 export const db = prisma;
 export default db;

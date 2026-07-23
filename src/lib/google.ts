@@ -1,17 +1,77 @@
 import { google } from "googleapis";
+import { Readable } from "stream";
 import { db as prisma } from "./db";
+
+// Bulletproof Google Service Account private key sanitizer
+function formatPrivateKey(rawKey: string): string {
+  if (!rawKey) return "";
+  let key = rawKey.trim();
+
+  // Strip surrounding quotes if present
+  if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) {
+    key = key.substring(1, key.length - 1);
+  }
+
+  // Replace escaped \n strings with real newlines
+  key = key.replace(/\\n/g, "\n");
+
+  // Remove any carriage return \r
+  key = key.replace(/\r/g, "");
+
+  // Ensure header and footer exist cleanly
+  if (!key.startsWith("-----BEGIN PRIVATE KEY-----")) {
+    const beginIdx = key.indexOf("-----BEGIN PRIVATE KEY-----");
+    if (beginIdx !== -1) {
+      key = key.substring(beginIdx);
+    }
+  }
+
+  if (!key.endsWith("-----END PRIVATE KEY-----")) {
+    const endIdx = key.indexOf("-----END PRIVATE KEY-----");
+    if (endIdx !== -1) {
+      key = key.substring(0, endIdx + "-----END PRIVATE KEY-----".length);
+    }
+  }
+
+  return key.trim();
+}
+
+import fs from "fs";
+import path from "path";
+
+const credsPath = path.join(process.cwd(), "src/data/google-credentials.json");
 
 // Authenticate with Google APIs using Service Account JSON credentials
 function getGoogleAuth(scopes: string[]) {
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const privateKeyRaw = process.env.GOOGLE_PRIVATE_KEY;
+  let email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+  let privateKeyRaw = process.env.GOOGLE_PRIVATE_KEY;
 
-  if (!email || !privateKeyRaw) {
-    throw new Error("Missing Google Service Account credentials in environment variables.");
+  // 1. Check local saved credentials file first if present
+  try {
+    if (fs.existsSync(credsPath)) {
+      const fileData = fs.readFileSync(credsPath, "utf-8");
+      const parsedJson = JSON.parse(fileData);
+      if (parsedJson.client_email) email = parsedJson.client_email;
+      if (parsedJson.private_key) privateKeyRaw = parsedJson.private_key;
+    }
+  } catch (e) {}
+
+  // 2. Support full JSON credential block if provided in env
+  if ((!email || !privateKeyRaw) && process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+    try {
+      const parsedJson = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+      if (parsedJson.client_email) email = parsedJson.client_email;
+      if (parsedJson.private_key) privateKeyRaw = parsedJson.private_key;
+    } catch (e) {
+      console.error("Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON:", e);
+    }
   }
 
-  // Format newlines in private key
-  const privateKey = privateKeyRaw.replace(/\\n/g, "\n");
+  if (!email || !privateKeyRaw) {
+    throw new Error("Missing Google Service Account credentials. Please paste your Google Service Account JSON key below.");
+  }
+
+  const privateKey = formatPrivateKey(privateKeyRaw);
 
   return new google.auth.JWT({
     email,
@@ -20,83 +80,186 @@ function getGoogleAuth(scopes: string[]) {
   });
 }
 
+// Helper to automatically create a missing tab/sheet in Google Spreadsheet
+async function ensureSheetTab(sheets: any, spreadsheetId: string, title: string) {
+  try {
+    const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
+    const sheetExists = spreadsheet.data.sheets?.some(
+      (s: any) => s.properties?.title?.trim().toLowerCase() === title.trim().toLowerCase()
+    );
+
+    if (!sheetExists) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+          requests: [
+            {
+              addSheet: {
+                properties: {
+                  title,
+                },
+              },
+            },
+          ],
+        },
+      });
+    }
+  } catch (err) {
+    console.warn(`Tab check/creation notice for "${title}":`, err);
+  }
+}
+
 /**
- * Synchronize the entire student list from PostgreSQL to a Google Sheet
+ * Synchronize the entire detailed student directory to Google Sheets
  * @param spreadsheetId Google Spreadsheet ID (from URL)
  */
 export async function syncStudentsToSheet(spreadsheetId: string) {
   const auth = getGoogleAuth(["https://www.googleapis.com/auth/spreadsheets"]);
   const sheets = google.sheets({ version: "v4", auth });
 
-  // 1. Fetch students and include class information
+  // 1. Ensure "Student Directory" tab exists
+  await ensureSheetTab(sheets, spreadsheetId, "Student Directory");
+
+  // 2. Fetch students with full relations and ledger records
   const students = await prisma.student.findMany({
     include: {
       class: true,
+      parentProfile: {
+        include: {
+          user: true,
+        },
+      },
+      concession: true,
+      ledgerEntries: true,
     },
-    orderBy: {
-      admissionNumber: "asc",
-    },
+    orderBy: [
+      { class: { name: "asc" } },
+      { class: { section: "asc" } },
+      { admissionNumber: "asc" },
+    ],
   });
 
-  // 2. Define headers and rows
+  // 3. Define comprehensive headers
   const headers = [
-    "ID",
-    "Name",
+    "Student ID",
     "Admission Number",
     "Roll Number",
+    "Full Name",
     "Class",
     "Section",
     "Father's Name",
     "Mother's Name",
-    "Parent Mobile",
+    "Father Mobile",
+    "Mother Mobile",
+    "Parent Email",
+    "Family Code",
+    "Residential Address",
+    "Date of Birth",
+    "Admission Date",
+    "Aadhaar Number",
+    "Category",
+    "Religion",
+    "RTE Waiver",
+    "Concession Category",
+    "Transport Mode",
+    "Bus Route & Stop",
+    "Total Charges (₹)",
+    "Total Payments (₹)",
+    "Total Discounts (₹)",
+    "Outstanding Dues (₹)",
     "Status",
-    "Is RTE",
   ];
 
-  const rows = students.map((std) => [
-    std.id,
-    std.name,
-    std.admissionNumber,
-    std.rollNumber || "-",
-    std.class?.name || "-",
-    std.class?.section || "-",
-    std.fatherName || "-",
-    std.motherName || "-",
-    std.fatherMobile || std.motherMobile || "-",
-    std.status,
-    std.isRte ? "YES" : "NO",
-  ]);
+  const rows = students.map((std) => {
+    let totalChargesPaisa = 0;
+    let totalPaymentsPaisa = 0;
+    let totalDiscountsPaisa = 0;
+
+    for (const entry of std.ledgerEntries) {
+      if (entry.entryType === "CHARGE" || entry.entryType === "FINE") {
+        totalChargesPaisa += entry.amount;
+      } else if (entry.entryType === "PAYMENT") {
+        totalPaymentsPaisa += Math.abs(entry.amount);
+      } else if (entry.entryType === "DISCOUNT") {
+        totalDiscountsPaisa += Math.abs(entry.amount);
+      }
+    }
+
+    const outstandingPaisa = Math.max(0, totalChargesPaisa - totalDiscountsPaisa - totalPaymentsPaisa);
+
+    return [
+      std.id,
+      std.admissionNumber,
+      std.rollNumber || "-",
+      std.name,
+      std.class?.name || "-",
+      std.class?.section || "-",
+      std.fatherName || "-",
+      std.motherName || "-",
+      std.fatherMobile || std.parentProfile?.user?.phone || "-",
+      std.motherMobile || "-",
+      std.parentProfile?.user?.email || "-",
+      std.parentProfile?.familyCode || "-",
+      std.parentProfile?.address || "-",
+      std.dob ? std.dob.toISOString().split("T")[0] : "-",
+      std.admissionDate ? std.admissionDate.toISOString().split("T")[0] : "-",
+      std.aadhaar || "-",
+      std.category || "-",
+      std.religion || "-",
+      std.isRte ? "YES (100% Free)" : "NO",
+      std.concession ? `${std.concession.name} (${std.concession.percentage}%)` : "None",
+      std.transportMode || "Self / Walk",
+      std.busRoute ? `${std.busRoute} - ${std.busStop || ""}` : "-",
+      (totalChargesPaisa / 100).toFixed(2),
+      (totalPaymentsPaisa / 100).toFixed(2),
+      (totalDiscountsPaisa / 100).toFixed(2),
+      (outstandingPaisa / 100).toFixed(2),
+      std.status,
+    ];
+  });
 
   const values = [headers, ...rows];
 
-  // 3. Clear existing content in Sheet1
-  await sheets.spreadsheets.values.clear({
-    spreadsheetId,
-    range: "Sheet1!A1:Z10000",
-  });
-
-  // 4. Write new content
-  await sheets.spreadsheets.values.update({
-    spreadsheetId,
-    range: "Sheet1!A1",
-    valueInputOption: "RAW",
-    requestBody: {
-      values,
-    },
-  });
+  // Try updating "Student Directory" tab, or fallback to Sheet1 if needed
+  try {
+    await sheets.spreadsheets.values.clear({
+      spreadsheetId,
+      range: "'Student Directory'!A1:Z10000",
+    });
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: "'Student Directory'!A1",
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values },
+    });
+  } catch {
+    await sheets.spreadsheets.values.clear({
+      spreadsheetId,
+      range: "Sheet1!A1:Z10000",
+    });
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: "Sheet1!A1",
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values },
+    });
+  }
 
   return { success: true, count: students.length };
 }
 
 /**
- * Synchronize the financial transactions ledger to a Google Sheet
+ * Synchronize all financial transactions to Google Sheets with detailed breakdowns
  * @param spreadsheetId Google Spreadsheet ID
  */
 export async function syncLedgerToSheet(spreadsheetId: string) {
   const auth = getGoogleAuth(["https://www.googleapis.com/auth/spreadsheets"]);
   const sheets = google.sheets({ version: "v4", auth });
 
-  // 1. Fetch all ledger entries
+  // 1. Ensure "Ledger Transactions" tab exists
+  await ensureSheetTab(sheets, spreadsheetId, "Ledger Transactions");
+
+  // Fetch all ledger entries with student, class, feeHead and creator user
   const entries = await prisma.ledgerEntry.findMany({
     include: {
       student: {
@@ -104,55 +267,72 @@ export async function syncLedgerToSheet(spreadsheetId: string) {
           class: true,
         },
       },
+      feeHead: true,
+      createdBy: true,
     },
     orderBy: {
       createdAt: "desc",
     },
   });
 
-  // 2. Define headers and rows
   const headers = [
-    "Entry ID",
+    "Transaction ID",
+    "Date & Time",
     "Student Name",
-    "Admission No",
-    "Class",
+    "Admission Number",
+    "Class & Section",
+    "Fee Head",
+    "Transaction Type",
     "Description",
-    "Entry Type",
-    "Amount (INR)",
-    "Created At",
+    "Amount (₹)",
+    "Reference / Receipt No",
+    "Recorded By User",
   ];
 
   const rows = entries.map((entry) => [
     entry.id,
+    entry.createdAt.toISOString().replace("T", " ").substring(0, 19),
     entry.student?.name || "-",
     entry.student?.admissionNumber || "-",
     entry.student?.class ? `${entry.student.class.name}-${entry.student.class.section}` : "-",
-    entry.description,
+    entry.feeHead?.name || "General",
     entry.entryType,
-    (entry.amount / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 }), // Convert Paisa to Rupees
-    entry.createdAt.toISOString(),
+    entry.description,
+    (entry.amount / 100).toFixed(2),
+    entry.referenceId || "-",
+    entry.createdBy?.name ? `${entry.createdBy.name} (${entry.createdBy.role})` : "System",
   ]);
 
   const values = [headers, ...rows];
 
-  // 3. Clear sheet
-  await sheets.spreadsheets.values.clear({
-    spreadsheetId,
-    range: "Sheet1!A1:Z100000",
-  });
-
-  // 4. Update sheet
-  await sheets.spreadsheets.values.update({
-    spreadsheetId,
-    range: "Sheet1!A1",
-    valueInputOption: "RAW",
-    requestBody: {
-      values,
-    },
-  });
+  try {
+    await sheets.spreadsheets.values.clear({
+      spreadsheetId,
+      range: "'Ledger Transactions'!A1:Z100000",
+    });
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: "'Ledger Transactions'!A1",
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values },
+    });
+  } catch {
+    await sheets.spreadsheets.values.clear({
+      spreadsheetId,
+      range: "Sheet1!A1:Z100000",
+    });
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: "Sheet1!A1",
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values },
+    });
+  }
 
   return { success: true, count: entries.length };
 }
+
+
 
 /**
  * Backup the entire Postgres database as JSON and upload it to a Google Drive Folder
@@ -176,7 +356,19 @@ export async function backupDatabaseToDrive(folderId: string) {
     ledgerEntries,
     receipts,
   ] = await Promise.all([
-    prisma.user.findMany(),
+    prisma.user.findMany({
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        role: true,
+        status: true,
+        name: true,
+        phone: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    }),
     prisma.class.findMany(),
     prisma.student.findMany(),
     prisma.attendance.findMany(),
@@ -220,10 +412,10 @@ export async function backupDatabaseToDrive(folderId: string) {
   const dateString = new Date().toISOString().replace(/T/, "_").replace(/\..+/, "").replace(/:/g, "-");
   const fileName = `SchoolFinanceOS_Backup_${dateString}.json`;
 
-  // 3. Upload to Google Drive
+  // 3. Upload to Google Drive using Readable stream
   const media = {
     mimeType: "application/json",
-    body: backupContent,
+    body: Readable.from([backupContent]),
   };
 
   const response = await drive.files.create({
@@ -233,6 +425,8 @@ export async function backupDatabaseToDrive(folderId: string) {
       mimeType: "application/json",
     },
     media,
+    supportsAllDrives: true,
+    supportsTeamDrives: true,
     fields: "id, name",
   });
 

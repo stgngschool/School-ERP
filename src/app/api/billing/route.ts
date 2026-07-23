@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import db from "@/lib/db";
 export const dynamic = "force-dynamic";
 import { cookies } from "next/headers";
-import { verifyToken } from "@/lib/auth";
+import { verifyToken, getAuthUser } from "@/lib/auth";
 import { PaymentMethod, EntryType } from "@prisma/client";
 import { getNextReceiptNumber } from "@/lib/family";
 import fs from "fs";
@@ -142,7 +142,7 @@ export async function GET() {
         const chargeName = c.description.replace("Assigned: ", "");
         const studentDiscounts = discountsByStudent.get(c.studentId) || [];
         const associatedDiscounts = studentDiscounts
-          .filter((d) => d.description.includes(chargeName))
+          .filter((d) => d.description.endsWith(`: ${chargeName}`) || d.description === `Discount for: ${chargeName}`)
           .reduce((sum, d) => sum + Math.abs(d.amount), 0);
 
 
@@ -191,32 +191,57 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const { studentId, parentProfileId, items, paymentMethod, transactionRef } = await request.json();
+    const authUser = await getAuthUser(request);
+    if (!authUser) {
+      return NextResponse.json({ error: "Unauthorized. Please log in." }, { status: 401 });
+    }
+    const creatorUserId = authUser.userId;
+
+    const body = await request.json();
+    const { action, studentId, parentProfileId, items, paymentMethod, transactionRef, title, amount, headName } = body;
+
+    // Single student custom charge handler
+    if (action === "ADD_CUSTOM_CHARGE") {
+      if (authUser.role !== "ADMIN" && authUser.role !== "ACCOUNTANT") {
+        return NextResponse.json({ error: "Only admins and accountants can add charges." }, { status: 403 });
+      }
+
+      if (!studentId || !title || !amount || parseFloat(amount) <= 0) {
+        return NextResponse.json({ error: "Student ID, title, and valid positive amount are required." }, { status: 400 });
+      }
+
+      const amountInPaisa = Math.round(parseFloat(amount) * 100);
+      let feeHead = await db.feeHead.findFirst({
+        where: { name: headName || "Other Fee" },
+      });
+
+      if (!feeHead) {
+        feeHead = await db.feeHead.create({
+          data: {
+            name: headName || "Other Fee",
+            frequency: "ad_hoc",
+          },
+        });
+      }
+
+      const entry = await db.ledgerEntry.create({
+        data: {
+          studentId,
+          feeHeadId: feeHead.id,
+          entryType: EntryType.CHARGE,
+          amount: amountInPaisa,
+          description: `Assigned: ${title.trim()}`,
+          createdById: creatorUserId,
+        },
+      });
+
+      return NextResponse.json({ success: true, entry });
+    }
 
     if (!items || items.length === 0 || !paymentMethod) {
       return NextResponse.json({ error: "Missing required checkout parameters." }, { status: 400 });
     }
 
-    const cookieStore = await cookies();
-    const token = cookieStore.get("auth_token")?.value;
-    let creatorUserId = "";
-
-    if (token) {
-      const decoded = verifyToken(token);
-      if (decoded) {
-        creatorUserId = decoded.userId;
-      }
-    }
-
-    if (!creatorUserId) {
-      const accountant = await db.user.findFirst({ where: { role: "ACCOUNTANT" } });
-      creatorUserId = accountant?.id || "";
-    }
-
-    const totalPayAmountPaisa = items.reduce(
-      (sum: number, item: any) => sum + Math.round(Number(item.payAmount) * 100),
-      0
-    );
     const receiptNo = await getNextReceiptNumber();
 
     // Resolve parent profile ID and student ID
@@ -253,7 +278,61 @@ export async function POST(request: Request) {
     }
 
     const result = await db.$transaction(async (tx) => {
-      // 1. Create Receipt
+      let actualTotalPayPaisa = 0;
+
+      // 1. Calculate and validate charges/overpayments first
+      const validatedItems: Array<{
+        charge: any;
+        itemStudentId: string;
+        chargeName: string;
+        payAmountPaisa: number;
+        discountAmountPaisa: number;
+        fineAmountPaisa: number;
+      }> = [];
+
+      for (const item of items) {
+        const { ledgerEntryId, payAmount, discountAmount, fineAmount } = item;
+        const requestedPayPaisa = Math.round(Number(payAmount) * 100);
+        const discountAmountPaisa = Math.round(Number(discountAmount) * 100);
+        const fineAmountPaisa = Math.round(Number(fineAmount || 0) * 100);
+
+        const charge = await tx.ledgerEntry.findUnique({
+          where: { id: ledgerEntryId },
+          include: { receiptItems: true },
+        });
+
+        if (!charge) continue;
+
+        const chargeName = charge.description.replace("Assigned: ", "");
+        const itemStudentId = charge.studentId;
+
+        // Calculate existing paid and discounts
+        const existingPaid = charge.receiptItems.reduce((sum, ri) => sum + ri.amount, 0);
+        const discounts = await tx.ledgerEntry.findMany({
+          where: { studentId: itemStudentId, entryType: EntryType.DISCOUNT },
+        });
+        const associatedDiscounts = discounts
+          .filter((d) => d.description.endsWith(`: ${chargeName}`) || d.description === `Discount for: ${chargeName}`)
+          .reduce((sum, d) => sum + Math.abs(d.amount), 0);
+
+        const outstandingPaisa = Math.max(0, charge.amount - associatedDiscounts - existingPaid);
+
+        // Cap payment amount to outstanding balance to prevent overpayment
+        const payAmountPaisa = Math.min(requestedPayPaisa, outstandingPaisa);
+
+        actualTotalPayPaisa += payAmountPaisa + fineAmountPaisa;
+
+        validatedItems.push({
+          charge,
+          itemStudentId,
+          chargeName,
+          payAmountPaisa,
+          discountAmountPaisa,
+          fineAmountPaisa,
+        });
+      }
+
+      // 2. Create Receipt with actual total paid
       const receipt = await tx.receipt.create({
         data: {
           studentId: resolvedStudentId,
@@ -261,27 +340,14 @@ export async function POST(request: Request) {
           receiptNumber: receiptNo,
           paymentMethod: paymentMethod as PaymentMethod,
           transactionReference: transactionRef || null,
-          amountPaid: totalPayAmountPaisa,
+          amountPaid: actualTotalPayPaisa,
           createdById: creatorUserId,
         },
       });
 
-       // 2. Loop through each item and apply payment / discount
-      for (const item of items) {
-        const { ledgerEntryId, payAmount, discountAmount, fineAmount } = item;
-        const payAmountPaisa = Math.round(Number(payAmount) * 100);
-        const discountAmountPaisa = Math.round(Number(discountAmount) * 100);
-        const fineAmountPaisa = Math.round(Number(fineAmount || 0) * 100);
-
-        // Fetch original charge details
-        const charge = await tx.ledgerEntry.findUnique({
-          where: { id: ledgerEntryId },
-        });
-
-        if (!charge) continue;
-
-        const chargeName = charge.description.replace("Assigned: ", "");
-        const itemStudentId = charge.studentId;
+      // 3. Apply items to ledger and receipt
+      for (const vi of validatedItems) {
+        const { charge, itemStudentId, chargeName, payAmountPaisa, discountAmountPaisa, fineAmountPaisa } = vi;
 
         // C. Handle Fine if any
         if (fineAmountPaisa > 0) {
@@ -369,3 +435,4 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Checkout transaction failed" }, { status: 500 });
   }
 }
+

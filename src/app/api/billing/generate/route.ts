@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { generateYearlyChargesBulk, getAcademicYear } from "@/lib/generateYearlyCharges";
+import { getAuthUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,11 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(request: Request) {
   try {
+    const authUser = await getAuthUser(request);
+    if (!authUser || (authUser.role !== "ADMIN" && authUser.role !== "ACCOUNTANT")) {
+      return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
+    }
+
     const body = await request.json().catch(() => ({}));
     const academicYear = body.academicYear || getAcademicYear();
 

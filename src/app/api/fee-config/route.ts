@@ -1,11 +1,17 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
-import { generateYearlyChargesBulk, getAcademicYear } from "@/lib/generateYearlyCharges";
+import { generateYearlyCharges, generateYearlyChargesBulk, getAcademicYear } from "@/lib/generateYearlyCharges";
+import { getAuthUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const authUser = await getAuthUser(request);
+    if (!authUser) {
+      return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
+    }
+
     let heads = await db.feeHead.findMany({ where: { status: "ACTIVE" } });
     if (heads.length === 0) {
       const defaults = [
@@ -62,6 +68,11 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const authUser = await getAuthUser(request);
+    if (!authUser || (authUser.role !== "ADMIN" && authUser.role !== "ACCOUNTANT")) {
+      return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
+    }
+
     const body = await request.json();
     const { action, name, frequency, total } = body;
 
@@ -208,6 +219,75 @@ export async function POST(request: Request) {
       }
 
       return NextResponse.json({ success: true });
+    }
+
+    if (action === "GENERATE_STUDENT_LEDGER") {
+      const { studentId, className, startingFeeMonth, targetFeeHeadName } = body;
+      if (!studentId && !className) {
+        return NextResponse.json({ error: "studentId or className is required." }, { status: 400 });
+      }
+
+      const systemUser = await db.user.findFirst({
+        where: { OR: [{ role: "ADMIN" }, { role: "ACCOUNTANT" }] },
+      });
+
+      if (!systemUser) {
+        return NextResponse.json({ error: "System user not found." }, { status: 404 });
+      }
+
+      if (studentId) {
+        const student = await db.student.findUnique({
+          where: { id: studentId },
+          include: { class: true },
+        });
+        if (!student) {
+          return NextResponse.json({ error: "Student not found." }, { status: 404 });
+        }
+        const res = await generateYearlyCharges(student.id, student.class.name, systemUser.id, getAcademicYear(), startingFeeMonth, targetFeeHeadName);
+        return NextResponse.json({ success: true, generated: res.generated, skipped: res.skipped });
+      } else if (className) {
+        const students = await db.student.findMany({
+          where: { status: "ACTIVE", ...(className !== "All" ? { class: { name: className } } : {}) },
+          include: { class: true },
+        });
+        const res = await generateYearlyChargesBulk(students, systemUser.id, getAcademicYear(), targetFeeHeadName);
+        return NextResponse.json({ success: true, count: students.length, generated: res.generated, skipped: res.skipped });
+      }
+    }
+
+    if (action === "CLEANUP_DUPLICATES") {
+      // Clean up duplicate unpaid CHARGE entries for the same student + fee head + description
+      const allCharges = await db.ledgerEntry.findMany({
+        where: { entryType: "CHARGE" },
+        include: { receiptItems: true },
+        orderBy: { createdAt: "asc" },
+      });
+
+      const seen = new Set<string>();
+      const duplicateIdsToDelete: string[] = [];
+
+      for (const entry of allCharges) {
+        // Build normalized key: studentId_description
+        const normDesc = entry.description.toLowerCase().replace(/[^a-z0-9]/g, "");
+        const key = `${entry.studentId}_${normDesc}`;
+
+        if (seen.has(key)) {
+          // Check if this duplicate entry is unpaid (no receipt items linked)
+          if (entry.receiptItems.length === 0) {
+            duplicateIdsToDelete.push(entry.id);
+          }
+        } else {
+          seen.add(key);
+        }
+      }
+
+      if (duplicateIdsToDelete.length > 0) {
+        await db.ledgerEntry.deleteMany({
+          where: { id: { in: duplicateIdsToDelete } },
+        });
+      }
+
+      return NextResponse.json({ success: true, cleanedCount: duplicateIdsToDelete.length });
     }
 
     return NextResponse.json({ error: "Invalid action type." }, { status: 400 });

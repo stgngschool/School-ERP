@@ -153,6 +153,7 @@ export interface MockSchoolInfo {
   address: string;
   phone: string;
   email: string;
+  udiseCode?: string;
   upiId?: string;
   upiMerchantName?: string;
   enableTransport?: boolean;
@@ -663,12 +664,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const updateSchoolInfo = async (info: MockSchoolInfo) => {
+  const updateSchoolInfo = async (info: Partial<MockSchoolInfo>) => {
     try {
+      const currentRes = await fetch("/api/school");
+      const currentConfig = await currentRes.json();
+      const mergedConfig = { ...currentConfig, ...info };
+
       const res = await fetch("/api/school", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(info),
+        body: JSON.stringify(mergedConfig),
       });
 
       if (res.ok) {

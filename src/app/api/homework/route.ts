@@ -2,10 +2,15 @@ import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { uploadFile, deleteFile } from "@/lib/storage";
 import { cookies } from "next/headers";
-import { verifyToken } from "@/lib/auth";
+import { verifyToken, getAuthUser } from "@/lib/auth";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const authUser = await getAuthUser(request);
+    if (!authUser) {
+      return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
+    }
+
     const homeworks = await db.homework.findMany({
       include: { class: true },
       orderBy: { createdAt: "desc" },
@@ -63,7 +68,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
     }
 
-    const [className, section] = classSection.split("-");
+    const parts = classSection.split("-");
+    const section = parts.pop() || "";
+    const className = parts.join("-");
     
     let classObj = await db.class.findFirst({
       where: { name: className, section: section },

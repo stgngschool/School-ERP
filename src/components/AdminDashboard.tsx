@@ -23,6 +23,8 @@ import {
   CreditCard,
   ArrowRightLeft,
   AlertTriangle,
+  Key,
+  Clock,
   Calendar as CalendarIcon,
   BookOpen,
   Printer,
@@ -236,6 +238,7 @@ export default function AdminDashboard() {
   const [checkedDues, setCheckedDues] = useState<Record<string, boolean>>({});
   const [stdSuccess, setStdSuccess] = useState(false);
   const [stdIsRte, setStdIsRte] = useState(false);
+  const [stdStartingFeeMonth, setStdStartingFeeMonth] = useState("April");
 
   // Student Directory & Modals States
   const [importMode, setImportMode] = useState<"directory" | "single" | "bulk">("directory");
@@ -253,6 +256,71 @@ export default function AdminDashboard() {
   
   // Apps & Connectors Hub State
   const [showAppsModal, setShowAppsModal] = useState(false);
+
+  // Single Student / Class Ledger Generator in Configure Fees
+  const [ledgerGenTarget, setLedgerGenTarget] = useState<"single" | "class" | "all">("single");
+  const [ledgerGenStudentSearch, setLedgerGenStudentSearch] = useState("");
+  const [ledgerGenSelectedStudentId, setLedgerGenSelectedStudentId] = useState("");
+  const [ledgerGenClass, setLedgerGenClass] = useState("All");
+  const [ledgerGenStartMonth, setLedgerGenStartMonth] = useState("April");
+  const [ledgerGenFeeHead, setLedgerGenFeeHead] = useState("ALL");
+  const [ledgerGenLoading, setLedgerGenLoading] = useState(false);
+  const [ledgerGenResult, setLedgerGenResult] = useState<string | null>(null);
+  const [cleanupLoading, setCleanupLoading] = useState(false);
+
+  // Late Fee Rules & Configure Sub-tabs
+  const [feeSubTab, setFeeSubTab] = useState<"matrix" | "late_fine" | "billing_engine">("matrix");
+  const [lateFeeEnabled, setLateFeeEnabled] = useState(false);
+  const [lateFeeGraceDays, setLateFeeGraceDays] = useState(10);
+  const [lateFeeAmount, setLateFeeAmount] = useState(50);
+  const [lateFeeType, setLateFeeType] = useState<"FLAT" | "PER_DAY">("FLAT");
+  const [lateFeeSaving, setLateFeeSaving] = useState(false);
+  const [lateFeeMsg, setLateFeeMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/school")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data) {
+          setLateFeeEnabled(data.enableLateFee ?? false);
+          setLateFeeGraceDays(data.lateFeeGraceDays ?? 10);
+          setLateFeeAmount(data.lateFeeAmount ?? 50);
+          setLateFeeType(data.lateFeeType || "FLAT");
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleSaveLateFeeRules = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLateFeeSaving(true);
+    setLateFeeMsg(null);
+    try {
+      const currentRes = await fetch("/api/school");
+      const currentConfig = await currentRes.json();
+      const updatedConfig = {
+        ...currentConfig,
+        enableLateFee: lateFeeEnabled,
+        lateFeeGraceDays,
+        lateFeeAmount,
+        lateFeeType,
+      };
+
+      const res = await fetch("/api/school", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedConfig),
+      });
+
+      if (!res.ok) throw new Error("Failed to save late fee rules");
+      setLateFeeMsg("✓ Late fee rules saved successfully!");
+    } catch (err: any) {
+      setLateFeeMsg(`Error: ${err.message || "Failed to save"}`);
+    } finally {
+      setLateFeeSaving(false);
+      setTimeout(() => setLateFeeMsg(null), 4000);
+    }
+  };
 
   // User Security Tab States
   const [userSearch, setUserSearch] = useState("");
@@ -295,15 +363,53 @@ export default function AdminDashboard() {
   const [syncingStudents, setSyncingStudents] = useState(false);
   const [syncingLedger, setSyncingLedger] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
+  const [serviceJsonInput, setServiceJsonInput] = useState("");
+  const [savingJsonLoading, setSavingJsonLoading] = useState(false);
+  const [savedClientEmail, setSavedClientEmail] = useState<string | null>(null);
+  const [showJsonBox, setShowJsonBox] = useState(false);
   const [googleStatus, setGoogleStatus] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
-  // Load from localStorage on mount
+  // Load from localStorage and API on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
       setGoogleSpreadsheetId(localStorage.getItem("g_sheet_id") || "");
       setGoogleFolderId(localStorage.getItem("g_drive_folder_id") || "");
     }
+    fetch("/api/google")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.hasCredentials && data.clientEmail) {
+          setSavedClientEmail(data.clientEmail);
+        }
+      })
+      .catch(() => {});
   }, []);
+
+  const handleSaveGoogleCredentials = async () => {
+    if (!serviceJsonInput.trim()) {
+      setGoogleStatus({ type: "error", msg: "Please paste your Google Service Account JSON text first." });
+      return;
+    }
+    setSavingJsonLoading(true);
+    setGoogleStatus(null);
+    try {
+      const res = await fetch("/api/google", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "SAVE_CREDENTIALS", serviceAccountJson: serviceJsonInput.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to save credentials.");
+      setSavedClientEmail(data.clientEmail);
+      setServiceJsonInput("");
+      setShowJsonBox(false);
+      setGoogleStatus({ type: "success", msg: `✓ Service Account credentials active for: ${data.clientEmail}` });
+    } catch (err: any) {
+      setGoogleStatus({ type: "error", msg: err.message || "Failed to save JSON credentials." });
+    } finally {
+      setSavingJsonLoading(false);
+    }
+  };
 
   const handleSpreadsheetIdChange = (val: string) => {
     setGoogleSpreadsheetId(val);
@@ -503,6 +609,7 @@ export default function AdminDashboard() {
   const [schoolAddress, setSchoolAddress] = useState(schoolInfo.address);
   const [schoolPhone, setSchoolPhone] = useState(schoolInfo.phone);
   const [schoolEmail, setSchoolEmail] = useState(schoolInfo.email);
+  const [schoolUdiseCode, setSchoolUdiseCode] = useState(schoolInfo.udiseCode || "09300302001");
   const [schoolUpiId, setSchoolUpiId] = useState(schoolInfo.upiId || "");
   const [schoolUpiMerchantName, setSchoolUpiMerchantName] = useState(schoolInfo.upiMerchantName || "");
   const [schoolSuccess, setSchoolSuccess] = useState(false);
@@ -521,6 +628,7 @@ export default function AdminDashboard() {
       setSchoolAddress(schoolInfo.address);
       setSchoolPhone(schoolInfo.phone);
       setSchoolEmail(schoolInfo.email);
+      setSchoolUdiseCode(schoolInfo.udiseCode || "09300302001");
       setSchoolUpiId(schoolInfo.upiId || "");
       setSchoolUpiMerchantName(schoolInfo.upiMerchantName || "");
       const defaultExams = schoolInfo.exams || ["Unit-1", "Half Yearly", "Unit-2", "Annual"];
@@ -819,6 +927,7 @@ export default function AdminDashboard() {
       busStop: stdBusStop,
       familyCode: stdFamilyIdMode === "existing" ? stdSelectedFamilyCode : undefined,
       isRte: stdIsRte,
+      startingFeeMonth: stdStartingFeeMonth,
     };
 
     addStudent(studentData, initialDues);
@@ -870,6 +979,7 @@ export default function AdminDashboard() {
       address: schoolAddress,
       phone: schoolPhone,
       email: schoolEmail,
+      udiseCode: schoolUdiseCode,
       upiId: schoolUpiId,
       upiMerchantName: schoolUpiMerchantName,
     });
@@ -1474,13 +1584,15 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-6 font-sans w-full max-w-full overflow-x-hidden">
-      {/* 1. Header & Quick Overview */}
-      <div className="flex flex-col gap-1 border-b border-slate-200/80 pb-4">
-        <h2 className="text-lg sm:text-xl font-black text-slate-800 tracking-tight">Super Admin Dashboard</h2>
-        <p className="text-xs text-slate-500 font-medium hidden sm:block">
-          Global operations control: assign roles, toggle account blocks, register new students, and broadcast alerts.
-        </p>
-      </div>
+      {/* 1. Header & Quick Overview (Shown only on Dashboard tab to save vertical screen space) */}
+      {activeTab === "dashboard" && (
+        <div className="flex flex-col gap-1 border-b border-slate-200/80 pb-3">
+          <h2 className="text-base sm:text-lg font-black text-slate-800 tracking-tight">Super Admin Dashboard</h2>
+          <p className="text-[11px] text-slate-400 font-medium hidden sm:block">
+            Global operations control: assign roles, toggle account blocks, register new students, and broadcast alerts.
+          </p>
+        </div>
+      )}
       {activeTab === "dashboard" ? (
         <div className="space-y-6 animate-fade-in font-sans">
           {(() => {
@@ -1586,39 +1698,39 @@ export default function AdminDashboard() {
 
             return (
               <>
-                <div className="bg-slate-900 text-white rounded-3xl p-5 shadow-md flex flex-col lg:flex-row justify-between items-center gap-4 relative overflow-hidden border border-slate-800">
-                  <div className="absolute right-0 top-0 h-32 w-32 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
+                <div className="bg-gradient-to-r from-indigo-600 via-indigo-700 to-indigo-800 text-white rounded-3xl p-5 shadow-lg shadow-indigo-600/15 flex flex-col lg:flex-row justify-between items-center gap-4 relative overflow-hidden border border-indigo-500/20">
+                  <div className="absolute right-0 top-0 h-32 w-32 bg-white/10 rounded-full blur-2xl pointer-events-none" />
                   
                   <div className="space-y-1">
-                    <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest block">
+                    <span className="text-[9px] font-black text-indigo-200 uppercase tracking-widest block">
                       Today's Counter Till
                     </span>
-                    <h3 className="text-sm font-black tracking-tight text-slate-100">
+                    <h3 className="text-sm font-black tracking-tight text-white">
                       Daily Revenue Collection Tally
                     </h3>
-                    <p className="text-[9px] text-slate-400 font-semibold">
+                    <p className="text-[9px] text-indigo-100/90 font-semibold">
                       Match physical cash drawer balance before closing session today ({new Date().toLocaleDateString("en-IN")}).
                     </p>
                   </div>
                   
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full lg:w-auto pt-2 lg:pt-0">
-                    <div className="space-y-1 sm:border-r border-slate-800 sm:pr-4">
-                      <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider block">Cash Tally</span>
-                      <span className="text-sm font-black text-emerald-450">₹{todayCash.toLocaleString("en-IN")}</span>
+                    <div className="space-y-1 sm:border-r border-indigo-500/30 sm:pr-4">
+                      <span className="text-[8px] font-black text-indigo-200 uppercase tracking-wider block">Cash Tally</span>
+                      <span className="text-sm font-black text-emerald-300">₹{todayCash.toLocaleString("en-IN")}</span>
                     </div>
                     
-                    <div className="space-y-1 sm:border-r border-slate-800 sm:pr-4">
-                      <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider block">UPI QR Scan</span>
-                      <span className="text-sm font-black text-indigo-405 font-bold">₹{todayUpi.toLocaleString("en-IN")}</span>
+                    <div className="space-y-1 sm:border-r border-indigo-500/30 sm:pr-4">
+                      <span className="text-[8px] font-black text-indigo-200 uppercase tracking-wider block">UPI QR Scan</span>
+                      <span className="text-sm font-black text-indigo-100 font-bold">₹{todayUpi.toLocaleString("en-IN")}</span>
                     </div>
 
-                    <div className="space-y-1 sm:border-r border-slate-800 sm:pr-4">
-                      <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider block">Bank / Cheque</span>
-                      <span className="text-sm font-black text-slate-300">₹{todayBank.toLocaleString("en-IN")}</span>
+                    <div className="space-y-1 sm:border-r border-indigo-500/30 sm:pr-4">
+                      <span className="text-[8px] font-black text-indigo-200 uppercase tracking-wider block">Bank / Cheque</span>
+                      <span className="text-sm font-black text-white">₹{todayBank.toLocaleString("en-IN")}</span>
                     </div>
 
-                    <div className="space-y-1 bg-slate-800/40 p-2.5 rounded-2xl border border-slate-800/80">
-                      <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider block leading-none mb-1">Total Today</span>
+                    <div className="space-y-1 bg-white/10 backdrop-blur-md p-2.5 rounded-2xl border border-white/20">
+                      <span className="text-[8px] font-black text-indigo-200 uppercase tracking-wider block leading-none mb-1">Total Today</span>
                       <span className="text-sm font-black text-white block">₹{todayTotal.toLocaleString("en-IN")}</span>
                     </div>
                   </div>
@@ -1627,68 +1739,69 @@ export default function AdminDashboard() {
                 {/* Metric Cards Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   {/* Total Students Card */}
-                  <div className="bg-white border border-slate-200/80 p-5 rounded-3xl shadow-sm hover:border-indigo-300 transition-all">
+                  <div className="stripe-card p-5">
                     <div className="flex justify-between items-start">
-                      <div className="space-y-2">
-                        <h4 className="text-2xl font-black text-slate-800 tracking-tight">{totalStudents}</h4>
-                        <span className="text-[10px] font-extrabold text-slate-400 block uppercase tracking-wider">Total Students</span>
+                      <div className="space-y-1.5">
+                        <h4 className="text-2xl font-black text-slate-900 tracking-tight">{totalStudents}</h4>
+                        <span className="text-[10px] font-black text-slate-400 block uppercase tracking-wider">Total Students</span>
                       </div>
-                      <div className="h-10 w-10 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 border border-indigo-100">
+                      <div className="h-10 w-10 bg-indigo-50/80 rounded-2xl flex items-center justify-center text-indigo-600 border border-indigo-100/80 shadow-2xs">
                         <Users className="h-5 w-5" />
                       </div>
                     </div>
-                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[10px] font-bold text-slate-500">
-                      <span className="text-pink-650 bg-pink-50 px-2.5 py-1 rounded-lg">Girls: {girlsCount}</span>
-                      <span className="text-indigo-650 bg-indigo-50 px-2.5 py-1 rounded-lg">Boys: {boysCount}</span>
+                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[10px] font-bold text-slate-600">
+                      <span className="text-pink-700 bg-pink-50/90 px-2.5 py-1 rounded-xl border border-pink-100">Girls: {girlsCount}</span>
+                      <span className="text-indigo-700 bg-indigo-50/90 px-2.5 py-1 rounded-xl border border-indigo-100">Boys: {boysCount}</span>
                     </div>
                   </div>
 
                   {/* Total Earnings Card */}
-                  <div className="bg-white border border-slate-200/80 p-5 rounded-3xl shadow-sm hover:border-indigo-300 transition-all">
+                  <div className="stripe-card p-5">
                     <div className="flex justify-between items-start">
-                      <div className="space-y-2">
+                      <div className="space-y-1.5">
                         <h4 className="text-2xl font-black text-emerald-600 tracking-tight">₹{totalEarnings.toLocaleString("en-IN")}</h4>
-                        <span className="text-[10px] font-extrabold text-slate-400 block uppercase tracking-wider">Total Earning</span>
+                        <span className="text-[10px] font-black text-slate-400 block uppercase tracking-wider">Total Earning</span>
                       </div>
-                      <div className="h-10 w-10 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 border border-emerald-100">
+                      <div className="h-10 w-10 bg-emerald-50/80 rounded-2xl flex items-center justify-center text-emerald-600 border border-emerald-100/80 shadow-2xs">
                         <DollarSign className="h-5 w-5" />
                       </div>
                     </div>
-                    <div className="mt-4 pt-3 border-t border-slate-100 text-[10px] font-bold text-slate-400">
-                      Current Session Collections
+                    <div className="mt-4 pt-3 border-t border-slate-100 text-[10px] font-bold text-slate-500 flex items-center gap-1.5">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 status-dot-pulse" />
+                      <span>Current Session Collections</span>
                     </div>
                   </div>
 
                   {/* Total Dues Card */}
-                  <div className="bg-white border border-slate-200/80 p-5 rounded-3xl shadow-sm hover:border-indigo-300 transition-all">
+                  <div className="stripe-card p-5">
                     <div className="flex justify-between items-start">
-                      <div className="space-y-2">
-                        <h4 className="text-2xl font-black text-rose-500 tracking-tight">₹{totalDues.toLocaleString("en-IN")}</h4>
-                        <span className="text-[10px] font-extrabold text-slate-400 block uppercase tracking-wider">Total Dues</span>
+                      <div className="space-y-1.5">
+                        <h4 className="text-2xl font-black text-rose-600 tracking-tight">₹{totalDues.toLocaleString("en-IN")}</h4>
+                        <span className="text-[10px] font-black text-slate-400 block uppercase tracking-wider">Total Dues</span>
                       </div>
-                      <div className="h-10 w-10 bg-rose-50 rounded-2xl flex items-center justify-center text-rose-500 border border-rose-100">
+                      <div className="h-10 w-10 bg-rose-50/80 rounded-2xl flex items-center justify-center text-rose-600 border border-rose-100/80 shadow-2xs">
                         <AlertTriangle className="h-5 w-5" />
                       </div>
                     </div>
-                    <div className="mt-4 pt-3 border-t border-slate-100 text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-1 rounded-lg w-fit">
+                    <div className="mt-4 pt-3 border-t border-slate-100 text-[10px] font-bold text-rose-600 bg-rose-50/80 border border-rose-100/80 px-2.5 py-1 rounded-xl w-fit">
                       {dueItems.length} Outstanding Invoices
                     </div>
                   </div>
 
                   {/* Total Sales Card */}
-                  <div className="bg-white border border-slate-200/80 p-5 rounded-3xl shadow-sm hover:border-indigo-300 transition-all">
+                  <div className="stripe-card p-5">
                     <div className="flex justify-between items-start">
-                      <div className="space-y-2">
-                        <h4 className="text-2xl font-black text-indigo-750 tracking-tight">₹{totalSales.toLocaleString("en-IN")}</h4>
-                        <span className="text-[10px] font-extrabold text-slate-400 block uppercase tracking-wider">Total Sales</span>
+                      <div className="space-y-1.5">
+                        <h4 className="text-2xl font-black text-indigo-700 tracking-tight">₹{totalSales.toLocaleString("en-IN")}</h4>
+                        <span className="text-[10px] font-black text-slate-400 block uppercase tracking-wider">Total Sales</span>
                       </div>
-                      <div className="h-10 w-10 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-700 border border-indigo-100">
+                      <div className="h-10 w-10 bg-indigo-50/80 rounded-2xl flex items-center justify-center text-indigo-700 border border-indigo-100/80 shadow-2xs">
                         <TrendingUp className="h-5 w-5" />
                       </div>
                     </div>
-                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[10px] font-bold text-slate-500">
-                      <span className="text-slate-500 bg-slate-100 px-2 py-1 rounded-lg">New Adm: {newAdmissionsCount}</span>
-                      <span className="text-slate-500 bg-slate-100 px-2 py-1 rounded-lg">Old: {oldStudentsCount}</span>
+                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[10px] font-bold text-slate-600">
+                      <span className="text-slate-700 bg-slate-100/80 px-2.5 py-1 rounded-xl border border-slate-200/60">New Adm: {newAdmissionsCount}</span>
+                      <span className="text-slate-700 bg-slate-100/80 px-2.5 py-1 rounded-xl border border-slate-200/60">Old: {oldStudentsCount}</span>
                     </div>
                   </div>
                 </div>
@@ -2556,65 +2669,434 @@ export default function AdminDashboard() {
           {/* TAB: Configure Fees */}
           {activeTab === "structures" && (
             <div className="space-y-5 animate-fade-in">
-
-
-              {/* 12-MONTH BULK BILL GENERATOR CARD */}
-              <div className="bg-emerald-50 border border-emerald-200/70 rounded-2xl px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 bg-emerald-600 rounded-xl flex items-center justify-center shrink-0 shadow-md shadow-emerald-600/10">
-                    <CheckCircle className="h-4 w-4 text-white" />
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-black uppercase text-emerald-900 tracking-wider">
-                      Generate 12 Months Bills (Session April - March)
-                    </h4>
-                    <p className="text-[10px] text-emerald-700 font-semibold leading-relaxed mt-0.5">
-                      Generate 12 months of fees (April to March) for all active students at the start of the new academic session.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2.5 shrink-0 self-end md:self-center bg-white p-1.5 border border-emerald-200/60 rounded-xl shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-                  <select
-                    value={billYear}
-                    onChange={(e) => setBillYear(e.target.value)}
-                    className="bg-transparent text-[10px] font-black text-slate-700 border-none outline-none px-2 cursor-pointer"
-                  >
-                    <option value="2026-2027">2026-2027</option>
-                    <option value="2027-2028">2027-2028</option>
-                    <option value="2028-2029">2028-2029</option>
-                  </select>
-                  
+              {/* Configure Fees Sub-Navigation Bar */}
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-2 shadow-xs flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 overflow-x-auto">
                   <button
                     type="button"
-                    disabled={billLoading}
-                    onClick={async () => {
-                      setBillLoading(true);
-                      setBillResult(null);
-                      const result = await generateBills(billYear);
-                      setBillResult(result);
-                      setBillLoading(false);
-                      setTimeout(() => setBillResult(null), 6000);
-                    }}
-                    className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white rounded-lg text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-all shadow-sm"
+                    onClick={() => setFeeSubTab("matrix")}
+                    className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+                      feeSubTab === "matrix" 
+                        ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20" 
+                        : "bg-slate-50 hover:bg-slate-100 text-slate-600"
+                    }`}
                   >
-                    {billLoading ? (
-                      <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-                    ) : (
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-                    )}
-                    Generate 12 Months Bills
+                    <CreditCard className="h-4 w-4" />
+                    <span>📋 Class Fee Structure Matrix</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setFeeSubTab("late_fine")}
+                    className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+                      feeSubTab === "late_fine" 
+                        ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20" 
+                        : "bg-slate-50 hover:bg-slate-100 text-slate-600"
+                    }`}
+                  >
+                    <Clock className="h-4 w-4" />
+                    <span>⏰ Optional Late Fine Rules</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setFeeSubTab("billing_engine")}
+                    className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+                      feeSubTab === "billing_engine" 
+                        ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20" 
+                        : "bg-slate-50 hover:bg-slate-100 text-slate-600"
+                    }`}
+                  >
+                    <CheckCircle className="h-4 w-4" />
+                    <span>⚡ Billing Operations Hub</span>
                   </button>
                 </div>
-                {billResult && (
-                  <div className="text-[10px] font-extrabold text-emerald-800 animate-fade-in self-center bg-white px-2 py-1 rounded border border-emerald-200">
-                    ✓ Generated: {billResult.totalGenerated} | Skipped: {billResult.totalSkipped} (Idempotent)
-                  </div>
-                )}
+
+                <span className="text-[10px] text-slate-400 font-bold px-2 hidden sm:inline">
+                  Enterprise Fee Rules & Batch Management
+                </span>
               </div>
 
-              {/* MAIN GRID */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+              {/* VIEW 1: OPTIONAL LATE FINE RULES PANEL */}
+              {feeSubTab === "late_fine" && (
+                <div className="stripe-card p-6 bg-white border border-slate-200/80 space-y-6 animate-fade-in">
+                  <div className="flex items-center justify-between border-b pb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-amber-500 rounded-2xl flex items-center justify-center text-white shadow-md shadow-amber-500/20">
+                        <Clock className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-black uppercase tracking-wider text-slate-900">
+                          Optional Late Fee & Fine Automation Rules
+                        </h3>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Set automated late fees or keep them completely disabled for local school flexibility.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Enable / Disable Toggle Switch */}
+                    <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-2xl border border-slate-200">
+                      <span className="text-xs font-extrabold text-slate-700">
+                        {lateFeeEnabled ? "Late Fine ENABLED" : "Late Fine DISABLED"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setLateFeeEnabled(!lateFeeEnabled)}
+                        className={`w-12 h-6 rounded-full transition-colors relative cursor-pointer ${
+                          lateFeeEnabled ? "bg-emerald-600" : "bg-slate-300"
+                        }`}
+                      >
+                        <div
+                          className={`w-5 h-5 bg-white rounded-full absolute top-0.5 transition-transform ${
+                            lateFeeEnabled ? "left-6" : "left-0.5"
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+
+                  <form onSubmit={handleSaveLateFeeRules} className="space-y-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                      {/* Grace Period Days */}
+                      <div>
+                        <label className="text-xs font-extrabold text-slate-700 block mb-1.5">
+                          Due Date Grace Period (Day of Month)
+                        </label>
+                        <select
+                          disabled={!lateFeeEnabled}
+                          value={lateFeeGraceDays}
+                          onChange={(e) => setLateFeeGraceDays(Number(e.target.value))}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-indigo-600 disabled:opacity-50 cursor-pointer"
+                        >
+                          {[5, 10, 15, 20, 25].map((d) => (
+                            <option key={d} value={d}>
+                              Due by {d}th of every month
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-[10px] text-slate-400 mt-1">Fees paid after this day are flagged late.</p>
+                      </div>
+
+                      {/* Fine Calculation Type */}
+                      <div>
+                        <label className="text-xs font-extrabold text-slate-700 block mb-1.5">
+                          Fine Calculation Mode
+                        </label>
+                        <select
+                          disabled={!lateFeeEnabled}
+                          value={lateFeeType}
+                          onChange={(e) => setLateFeeType(e.target.value as any)}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-indigo-600 disabled:opacity-50 cursor-pointer"
+                        >
+                          <option value="FLAT">Flat One-Time Fine (e.g. ₹50)</option>
+                          <option value="PER_DAY">Per-Day Rate (e.g. ₹5 per day)</option>
+                        </select>
+                        <p className="text-[10px] text-slate-400 mt-1">Choose flat charge or progressive daily rate.</p>
+                      </div>
+
+                      {/* Fine Amount */}
+                      <div>
+                        <label className="text-xs font-extrabold text-slate-700 block mb-1.5">
+                          Fine Amount (Rs.)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          disabled={!lateFeeEnabled}
+                          value={lateFeeAmount}
+                          onChange={(e) => setLateFeeAmount(Number(e.target.value))}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-indigo-600 disabled:opacity-50"
+                          placeholder="e.g. 50"
+                        />
+                        <p className="text-[10px] text-slate-400 mt-1">Amount applied when fine triggers.</p>
+                      </div>
+                    </div>
+
+                    {lateFeeMsg && (
+                      <div className="p-3 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold animate-fade-in">
+                        {lateFeeMsg}
+                      </div>
+                    )}
+
+                    <div className="flex justify-end pt-2 border-t">
+                      <button
+                        type="submit"
+                        disabled={lateFeeSaving}
+                        className="py-2.5 px-6 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md shadow-indigo-600/20 cursor-pointer transition-all"
+                      >
+                        {lateFeeSaving ? "Saving..." : "Save Late Fee Rules"}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              {/* VIEW 2: BILLING OPERATIONS ENGINE HUB */}
+              {feeSubTab === "billing_engine" && (
+                <div className="stripe-card p-6 bg-gradient-to-r from-indigo-50/90 via-white to-emerald-50/90 border border-indigo-100 shadow-sm space-y-4 animate-fade-in">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-indigo-100/60 pb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-md shadow-indigo-600/20 shrink-0">
+                      <CreditCard className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black uppercase text-slate-900 tracking-wider">
+                        ⚡ Generate / Sync Student Dues Ledger
+                      </h4>
+                      <p className="text-[10px] text-slate-500 font-semibold mt-0.5">
+                        Generate or update monthly fee ledger charges for a single student, a specific class, or all active students.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Duplicate Cleanup Button */}
+                  <button
+                    type="button"
+                    disabled={cleanupLoading}
+                    onClick={async () => {
+                      setCleanupLoading(true);
+                      try {
+                        const res = await fetch("/api/fee-config", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ action: "CLEANUP_DUPLICATES" }),
+                        });
+                        const json = await res.json();
+                        setLedgerGenResult(`✓ Cleaned up ${json.cleanedCount || 0} duplicate unpaid entries.`);
+                        refreshData();
+                      } catch (err) {
+                        setLedgerGenResult("Failed to cleanup duplicates.");
+                      } finally {
+                        setCleanupLoading(false);
+                        setTimeout(() => setLedgerGenResult(null), 5000);
+                      }
+                    }}
+                    className="py-1.5 px-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 cursor-pointer shadow-sm shrink-0 transition-all"
+                  >
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    {cleanupLoading ? "Cleaning..." : "🧹 Clean Up Duplicates"}
+                  </button>
+                </div>
+
+                {/* DYNAMIC 2-ROW CONTROL LAYOUT */}
+                <div className="space-y-4 pt-1">
+                  {/* Row 1: Target & Category Selector */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end relative z-30">
+                    {/* Target Selector */}
+                    <div>
+                      <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">1. Select Target</label>
+                      <div className="flex bg-slate-100/80 p-1 rounded-xl border border-slate-200/80">
+                        <button
+                          type="button"
+                          onClick={() => setLedgerGenTarget("single")}
+                          className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all ${ledgerGenTarget === "single" ? "bg-white text-indigo-700 shadow-2xs" : "text-slate-500"}`}
+                        >
+                          Single Student
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setLedgerGenTarget("class")}
+                          className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all ${ledgerGenTarget === "class" ? "bg-white text-indigo-700 shadow-2xs" : "text-slate-500"}`}
+                        >
+                          Class-wise
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setLedgerGenTarget("all")}
+                          className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all ${ledgerGenTarget === "all" ? "bg-white text-indigo-700 shadow-2xs" : "text-slate-500"}`}
+                        >
+                          All Students
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Target Field Input */}
+                    {ledgerGenTarget === "single" && (
+                      <div className="relative z-50">
+                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">2. Search Student</label>
+                        <input
+                          type="text"
+                          placeholder="Type student name or admission no..."
+                          value={ledgerGenStudentSearch}
+                          onChange={(e) => {
+                            setLedgerGenStudentSearch(e.target.value);
+                            setLedgerGenSelectedStudentId("");
+                          }}
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                        />
+                        {ledgerGenStudentSearch && !ledgerGenSelectedStudentId && (
+                          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200/90 rounded-2xl shadow-2xl max-h-44 overflow-y-auto z-[99999] p-1.5 divide-y divide-slate-100 animate-scale-in">
+                            {students.filter((s: any) => 
+                              s.name.toLowerCase().includes(ledgerGenStudentSearch.toLowerCase()) ||
+                              s.admissionNo.toLowerCase().includes(ledgerGenStudentSearch.toLowerCase())
+                            ).slice(0, 6).map((s: any) => (
+                              <button
+                                key={s.id}
+                                type="button"
+                                onClick={() => {
+                                  setLedgerGenSelectedStudentId(s.id);
+                                  setLedgerGenStudentSearch(`${s.name} (${s.admissionNo} • Cl ${s.class})`);
+                                }}
+                                className="w-full text-left p-2 hover:bg-indigo-50/80 rounded-xl text-xs font-bold text-slate-700 flex items-center justify-between transition-all cursor-pointer"
+                              >
+                                <div>
+                                  <p className="font-extrabold text-slate-800">{s.name}</p>
+                                  <p className="text-[10px] text-slate-400 font-normal">Class: {s.class}</p>
+                                </div>
+                                <span className="text-[10px] text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full font-mono font-bold">
+                                  ADM: {s.admissionNo}
+                                </span>
+                              </button>
+                            ))}
+                            {students.filter((s: any) => 
+                              s.name.toLowerCase().includes(ledgerGenStudentSearch.toLowerCase()) ||
+                              s.admissionNo.toLowerCase().includes(ledgerGenStudentSearch.toLowerCase())
+                            ).length === 0 && (
+                              <div className="p-3 text-[10px] text-slate-400 text-center">No student found matching query.</div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {ledgerGenTarget === "class" && (
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">2. Select Class</label>
+                        <select
+                          value={ledgerGenClass}
+                          onChange={(e) => setLedgerGenClass(e.target.value)}
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
+                        >
+                          <option value="All">All Classes</option>
+                          {["KG", "LKG", "UKG", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th", "11th", "12th"].map(c => (
+                            <option key={c} value={c}>Class {c}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {ledgerGenTarget === "all" && (
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">2. Target Scope</label>
+                        <div className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700">
+                          Entire Active Cohort ({students.length} Students)
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Fee Type Category Selection */}
+                    <div>
+                      <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">3. Fee Category / Type</label>
+                      <select
+                        value={ledgerGenFeeHead}
+                        onChange={(e) => setLedgerGenFeeHead(e.target.value)}
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
+                      >
+                        <option value="ALL">ALL Fee Types (Full Session Dues)</option>
+                        {feeHeads.map((h: any) => (
+                          <option key={h.name} value={h.name}>
+                            {h.name} ({h.frequency === "monthly" ? "Monthly" : h.frequency === "one_time" ? "One-Time" : h.frequency === "annual" ? "Annual" : "Exam"})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Row 2: Dynamic Context Parameter & Action Button */}
+                  {(() => {
+                    const selectedHeadObj = feeHeads.find((h: any) => h.name === ledgerGenFeeHead);
+                    const headFreq = ledgerGenFeeHead === "ALL" ? "monthly" : selectedHeadObj?.frequency || "monthly";
+                    const isMonthlyOrAll = headFreq === "monthly" || ledgerGenFeeHead === "ALL";
+
+                    return (
+                      <div className="bg-slate-50/80 border border-slate-200/80 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 animate-fade-in relative z-10">
+                        {/* Dynamic Parameter Control */}
+                        <div className="flex-1">
+                          {isMonthlyOrAll ? (
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                              <label className="text-xs font-black uppercase text-slate-700 shrink-0">
+                                Fee Applicable From Month:
+                              </label>
+                              <select
+                                value={ledgerGenStartMonth}
+                                onChange={(e) => setLedgerGenStartMonth(e.target.value)}
+                                className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
+                              >
+                                {["April", "May", "June", "July", "August", "September", "October", "November", "December", "January", "February", "March"].map(m => (
+                                  <option key={m} value={m}>{m} (Billing through March)</option>
+                                ))}
+                              </select>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 text-xs font-bold text-indigo-900 bg-indigo-50/80 px-3 py-1.5 rounded-xl border border-indigo-100 w-fit">
+                              <CheckCircle className="h-4 w-4 text-indigo-600 shrink-0" />
+                              <span>
+                                {headFreq === "one_time" && "One-Time Admission / Registration Fee (Fixed Charge)"}
+                                {headFreq === "annual" && "Annual Session Charge (Fixed Annual Fee)"}
+                                {headFreq === "exam" && "Exam Cycle Charges (October, March & May Exams)"}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Action Button */}
+                        <div className="shrink-0">
+                          <button
+                            type="button"
+                            disabled={ledgerGenLoading || (ledgerGenTarget === "single" && !ledgerGenSelectedStudentId)}
+                            onClick={async () => {
+                              setLedgerGenLoading(true);
+                              setLedgerGenResult(null);
+                              try {
+                                const res = await fetch("/api/fee-config", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    action: "GENERATE_STUDENT_LEDGER",
+                                    studentId: ledgerGenTarget === "single" ? ledgerGenSelectedStudentId : undefined,
+                                    className: ledgerGenTarget === "class" ? ledgerGenClass : ledgerGenTarget === "all" ? "All" : undefined,
+                                    startingFeeMonth: ledgerGenStartMonth,
+                                    targetFeeHeadName: ledgerGenFeeHead,
+                                  }),
+                                });
+                                const json = await res.json();
+                                if (!res.ok) throw new Error(json.error || "Generation failed.");
+                                setLedgerGenResult(`✓ Generated: ${json.generated || 0} | Skipped: ${json.skipped || 0}`);
+                                refreshData();
+                              } catch (err: any) {
+                                setLedgerGenResult(`Error: ${err.message || "Failed"}`);
+                              } finally {
+                                setLedgerGenLoading(false);
+                                setTimeout(() => setLedgerGenResult(null), 6000);
+                              }
+                            }}
+                            className="w-full md:w-auto py-2.5 px-6 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer transition-all shadow-md shadow-indigo-600/20"
+                          >
+                            {ledgerGenLoading ? (
+                              <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                            ) : (
+                              <CheckCircle className="h-4 w-4 shrink-0" />
+                            )}
+                            <span>⚡ Generate Dues Ledger</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {ledgerGenResult && (
+                  <div className="text-xs font-extrabold text-indigo-900 bg-indigo-50/90 border border-indigo-200 p-2.5 rounded-xl animate-fade-in flex items-center gap-2">
+                    <span>{ledgerGenResult}</span>
+                  </div>
+                )}
+                </div>
+              )}
+
+              {/* VIEW 3: CLASS FEE STRUCTURE MATRIX */}
+              {feeSubTab === "matrix" && (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start animate-fade-in">
 
                 {/* Left Panel: Matrix */}
                 <div className="lg:col-span-2 bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4">
@@ -2966,6 +3448,7 @@ export default function AdminDashboard() {
 
                 </div>
               </div>
+              )}
             </div>
           )}
 
@@ -3727,7 +4210,7 @@ export default function AdminDashboard() {
                                   paginatedStudents.map((std: any) => {
                                     const status = std.status || "ACTIVE";
                                     return (
-                                      <tr key={std.id} className="hover:bg-slate-50/50 transition-colors">
+                                      <tr key={std.id} className="hover:bg-slate-50/80 transition-colors border-b border-slate-100/80">
                                         <td className="py-3 px-4 w-10">
                                           <input
                                             type="checkbox"
@@ -3747,15 +4230,15 @@ export default function AdminDashboard() {
                                             {std.photoUrl ? (
                                               <img src={std.photoUrl} alt={std.name} className="h-8 w-8 rounded-full object-cover border border-slate-200 shrink-0" />
                                             ) : (
-                                              <div className="h-8 w-8 rounded-full bg-indigo-50 border border-indigo-150 text-indigo-750 flex items-center justify-center font-extrabold text-xs uppercase shrink-0">
+                                              <div className="h-8 w-8 rounded-full bg-indigo-50/90 border border-indigo-100 text-indigo-700 flex items-center justify-center font-extrabold text-xs uppercase shrink-0">
                                                 {std.name.substring(0, 2)}
                                               </div>
                                             )}
                                             <div>
                                               <div className="flex items-center gap-2">
-                                                <div className="font-extrabold text-slate-800">{std.name}</div>
+                                                <div className="font-extrabold text-slate-800 hover:text-indigo-600 transition-colors">{std.name}</div>
                                                 {std.isRte && (
-                                                  <span className="bg-purple-100 text-purple-700 text-[8px] font-black uppercase px-1 rounded border border-purple-200">
+                                                  <span className="bg-purple-50 text-purple-700 text-[8px] font-black uppercase px-1.5 py-0.5 rounded-md border border-purple-200/80">
                                                     RTE
                                                   </span>
                                                 )}
@@ -3763,25 +4246,23 @@ export default function AdminDashboard() {
                                             </div>
                                           </div>
                                         </td>
-                                        <td className="py-3 px-4 font-bold text-slate-500">
+                                        <td className="py-3 px-4 font-bold text-slate-600">
                                           {std.class}-{std.section}
                                         </td>
                                         <td className="py-3 px-4">
-                                          <span className="bg-slate-100 text-slate-700 font-extrabold px-2 py-1 rounded text-[10px] border border-slate-200">
+                                          <span className="bg-slate-100/80 text-slate-700 font-extrabold px-2 py-0.5 rounded-md text-[10px] border border-slate-200/80">
                                             {std.familyCode || "N/A"}
                                           </span>
                                         </td>
                                         <td className="py-3 px-4 font-mono font-bold text-indigo-600">
                                           {std.admissionNo}
                                         </td>
-                                        <td className="py-3 px-4 text-slate-600">{std.parentName || "N/A"}</td>
+                                        <td className="py-3 px-4 text-slate-600 font-medium">{std.parentName || "N/A"}</td>
                                         <td className="py-3 px-4 text-center">
-                                          <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                                            status === "ACTIVE"
-                                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                              : status === "SUSPENDED"
-                                              ? "bg-amber-50 text-amber-700 border border-amber-200"
-                                              : "bg-rose-50 text-rose-700 border border-rose-200"
+                                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                                            status === "ACTIVE" ? "bg-emerald-50 text-emerald-700 border border-emerald-200/80" :
+                                            status === "SUSPENDED" ? "bg-amber-50 text-amber-700 border border-amber-200/80" :
+                                            "bg-rose-50 text-rose-700 border border-rose-200/80"
                                           }`}>
                                             {status}
                                           </span>
@@ -4800,7 +5281,7 @@ export default function AdminDashboard() {
                       />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-3 gap-3">
                       <div>
                         <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Contact Phone</label>
                         <input
@@ -4819,6 +5300,17 @@ export default function AdminDashboard() {
                           value={schoolEmail}
                           onChange={(e) => setSchoolEmail(e.target.value)}
                           className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">School UDISE Code</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. 09300302001"
+                          value={schoolUdiseCode}
+                          onChange={(e) => setSchoolUdiseCode(e.target.value)}
+                          className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 font-mono"
                         />
                       </div>
                     </div>
@@ -4955,7 +5447,7 @@ export default function AdminDashboard() {
                     <Database className="h-4 w-4 text-indigo-600" /> Google Cloud Integration Panel
                   </h3>
                   <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
-                    Connect Google Sheets to export reports and Google Drive to backup your database. Make sure you share the sheet/folder with the Service Account email.
+                    Connect Google Sheets to automatically export live student profiles and financial ledger records. Share your Google Sheet with the Service Account email.
                   </p>
                 </div>
 
@@ -4965,17 +5457,64 @@ export default function AdminDashboard() {
                       ? "bg-green-50 text-green-700 border-green-100" 
                       : "bg-rose-50 text-rose-700 border-rose-100"
                   }`}>
-                    {googleStatus.type === "success" ? <CheckCircle className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
-                    {googleStatus.msg}
+                    {googleStatus.type === "success" ? <CheckCircle className="h-4 w-4 shrink-0" /> : <AlertTriangle className="h-4 w-4 shrink-0" />}
+                    <span>{googleStatus.msg}</span>
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2">
+                {/* Service Account JSON Credentials Customizer Box */}
+                <div className="bg-indigo-50/50 border border-indigo-100/90 rounded-2xl p-4 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <h4 className="text-xs font-black uppercase text-slate-800 tracking-wider flex items-center gap-1.5">
+                        <Key className="h-3.5 w-3.5 text-indigo-600" />
+                        Google Service Account Credentials (JSON)
+                      </h4>
+                      <p className="text-[10px] text-slate-500 font-medium mt-0.5">
+                        {savedClientEmail ? (
+                          <span className="text-emerald-700 font-mono font-bold">✓ Active Bot: {savedClientEmail}</span>
+                        ) : (
+                          "Paste downloaded credentials.json file content from Google Cloud Console."
+                        )}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowJsonBox(!showJsonBox)}
+                      className="text-[10px] font-black uppercase tracking-wider text-indigo-600 hover:text-indigo-700 bg-white border border-indigo-200 px-3 py-1 rounded-xl shadow-2xs cursor-pointer shrink-0 transition-all"
+                    >
+                      {showJsonBox ? "Close" : savedClientEmail ? "🔑 Update JSON Key" : "🔑 Paste JSON Key"}
+                    </button>
+                  </div>
+
+                  {showJsonBox && (
+                    <div className="space-y-2 pt-1 animate-fade-in">
+                      <textarea
+                        rows={5}
+                        placeholder='Paste full downloaded credentials.json text here e.g. { "type": "service_account", "private_key": "...", ... }'
+                        value={serviceJsonInput}
+                        onChange={(e) => setServiceJsonInput(e.target.value)}
+                        className="w-full text-xs font-mono p-3 border border-slate-200 rounded-xl outline-none bg-white focus:border-indigo-600 shadow-inner"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleSaveGoogleCredentials}
+                        disabled={savingJsonLoading}
+                        className="py-1.5 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-all shadow-sm shadow-indigo-600/20"
+                      >
+                        {savingJsonLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
+                        Save Service Account Key
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-2">
                   {/* Google Sheets Sync Box */}
                   <div className="border border-slate-100 bg-slate-50/30 rounded-xl p-4.5 space-y-3.5">
                     <div>
                       <h4 className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">Google Sheets Data Synchronization</h4>
-                      <p className="text-[9px] text-slate-400 font-semibold mt-0.5">Appends ledger entries and student profiles directly to Sheet1.</p>
+                      <p className="text-[9px] text-slate-400 font-semibold mt-0.5">Appends ledger entries and detailed student profiles directly into Google Sheets tabs.</p>
                     </div>
                     
                     <div>
@@ -5008,36 +5547,8 @@ export default function AdminDashboard() {
                       </button>
                     </div>
                   </div>
-
-                  {/* Google Drive Backup Box */}
-                  <div className="border border-slate-100 bg-slate-50/30 rounded-xl p-4.5 space-y-3.5">
-                    <div>
-                      <h4 className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">Google Drive Database Backup</h4>
-                      <p className="text-[9px] text-slate-400 font-semibold mt-0.5">Creates a full JSON database snapshot and uploads it to a folder.</p>
-                    </div>
-
-                    <div>
-                      <label className="text-[8px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Google Drive Folder ID (from URL)</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. 1xYz234567890aBCdEfGhIjKlMnOpQrSt"
-                        value={googleFolderId}
-                        onChange={(e) => handleFolderIdChange(e.target.value)}
-                        className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-white focus:border-indigo-600"
-                      />
-                    </div>
-
-                    <button
-                      onClick={triggerBackupDrive}
-                      disabled={backingUp}
-                      className="w-full flex items-center justify-center gap-1.5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer pt-1"
-                    >
-                      {backingUp ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UploadCloud className="h-3.5 w-3.5" />}
-                      Backup to Google Drive
-                    </button>
-                  </div>
-                  </div>
                 </div>
+              </div>
 
               {/* Dynamic Exam Configuration Panel */}
               <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-sm space-y-4 text-left">
@@ -5302,7 +5813,7 @@ export default function AdminDashboard() {
                                       </div>
                                       <div className="flex items-center gap-2">
                                         <label className="text-[9px] font-bold text-slate-400">Max Marks:</label>
-                                        <input type="number" value={comp.max} className="w-16 text-xs font-bold border-b" />
+                                        <input type="number" value={comp.max} readOnly className="w-16 text-xs font-bold border-b" />
                                       </div>
                                     </div>
                                   ))}

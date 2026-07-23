@@ -66,11 +66,21 @@
     "category": "Finance & Fee Collection",
     "description": "Generate scan-and-pay UPI QR codes for instant online fee collection (PhonePe, GPay, Paytm).",
     "icon": "upi",
-    "status": "DISCONNECTED",
+    "status": "CONNECTED",
     "autoSync": true,
-    "lastSynced": "2026-07-19T16:39:29.163Z",
-    "account": "gngschool@upi",
-    "target": "Razorpay / Paytm Gateway"
+    "lastSynced": "2026-07-22T15:06:31.725Z",
+    "account": "shubham.admin@gngschool.edu.in",
+    "target": "Razorpay / Paytm Gateway",
+    "config": {
+      "accountEmail": "shubham.admin@gngschool.edu.in",
+      "spreadsheetId": "",
+      "folderId": "",
+      "phone": "+919876543210",
+      "upiId": "gngschool@upi",
+      "botToken": "",
+      "chatId": "",
+      "smtpHost": "smtp.gmail.com"
+    }
   },
   {
     "id": "google_calendar",

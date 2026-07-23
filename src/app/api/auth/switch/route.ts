@@ -1,10 +1,24 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import db from "@/lib/db";
-import { signToken } from "@/lib/auth";
+import { signToken, getAuthUser } from "@/lib/auth";
 
 export async function POST(request: Request) {
   try {
+    if (process.env.NODE_ENV === "production") {
+      return NextResponse.json(
+        { error: "Role switching is disabled in production environments." },
+        { status: 403 }
+      );
+    }
+
+    const authUser = await getAuthUser(request);
+    if (!authUser) {
+      return NextResponse.json(
+        { error: "Please log in to switch demo accounts." },
+        { status: 401 }
+      );
+    }
+
     const { role } = await request.json();
 
     if (!role) {
@@ -37,7 +51,7 @@ export async function POST(request: Request) {
       name: "auth_token",
       value: token,
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: false,
       maxAge: 60 * 60 * 24 * 7,
       path: "/",
       sameSite: "lax",
@@ -49,3 +63,4 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+

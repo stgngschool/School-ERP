@@ -35,6 +35,53 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
   const [savingMark, setSavingMark] = useState(false);
   const [markError, setMarkError] = useState<string | null>(null);
 
+  // Custom Charge states
+  const [showAddChargeModal, setShowAddChargeModal] = useState(false);
+  const [chargeTitle, setChargeTitle] = useState("");
+  const [chargeAmount, setChargeAmount] = useState("");
+  const [chargeHeadName, setChargeHeadName] = useState("Other Fee");
+  const [addingCharge, setAddingCharge] = useState(false);
+  const [chargeError, setChargeError] = useState<string | null>(null);
+
+  const handleAddCustomCharge = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chargeTitle || !chargeAmount || parseFloat(chargeAmount) <= 0) return;
+
+    setChargeError(null);
+    setAddingCharge(true);
+    try {
+      const res = await fetch("/api/billing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "ADD_CUSTOM_CHARGE",
+          studentId,
+          title: chargeTitle,
+          amount: chargeAmount,
+          headName: chargeHeadName,
+        }),
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json();
+        throw new Error(errJson.error || "Failed to add custom charge.");
+      }
+
+      const refreshRes = await fetch(`/api/students/${studentId}`);
+      if (refreshRes.ok) {
+        const refreshedData = await refreshRes.json();
+        setData(refreshedData);
+      }
+      setShowAddChargeModal(false);
+      setChargeTitle("");
+      setChargeAmount("");
+    } catch (err: any) {
+      setChargeError(err.message || "Failed to add custom charge.");
+    } finally {
+      setAddingCharge(false);
+    }
+  };
+
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -235,9 +282,9 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
       <div className={isInline ? "w-full flex flex-col overflow-hidden" : "bg-white w-full sm:rounded-3xl sm:max-w-2xl lg:max-w-5xl sm:h-[85vh] h-[94vh] rounded-t-3xl flex flex-col shadow-2xl overflow-hidden border border-slate-100 modal-fullscreen-mobile pb-[env(safe-area-inset-bottom,0px)]"}>
         
         {/* Header Section */}
-        <div className="bg-gradient-to-r from-slate-900 to-indigo-950 px-4 sm:px-6 py-4 sm:py-5 text-white flex items-center justify-between shrink-0">
+        <div className="bg-gradient-to-r from-indigo-600 via-indigo-700 to-indigo-800 px-4 sm:px-6 py-4 sm:py-5 text-white flex items-center justify-between shrink-0 shadow-md">
           <div className="flex items-center space-x-3 sm:space-x-4 min-w-0 flex-1">
-            <div className="h-12 w-12 sm:h-14 sm:w-14 rounded-2xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center font-bold text-lg sm:text-xl tracking-wider text-indigo-300 uppercase shadow-inner overflow-hidden shrink-0">
+            <div className="h-12 w-12 sm:h-14 sm:w-14 rounded-2xl bg-white/15 border border-white/20 flex items-center justify-center font-bold text-lg sm:text-xl tracking-wider text-white uppercase shadow-inner overflow-hidden shrink-0">
               {data?.photoUrl ? (
                 <img src={data.photoUrl} alt={data.name} className="h-full w-full object-cover" />
               ) : (
@@ -248,19 +295,19 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-base sm:text-xl font-bold tracking-tight truncate">{data?.name || "Student Profile"}</h2>
                 {data?.isRte && (
-                  <span className="bg-amber-500/20 text-amber-300 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border border-amber-500/30 shrink-0">
+                  <span className="bg-amber-400/20 text-amber-200 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border border-amber-300/30 shrink-0">
                     RTE
                   </span>
                 )}
               </div>
-              <p className="text-[10px] sm:text-xs text-slate-300 mt-0.5 truncate">
+              <p className="text-[10px] sm:text-xs text-indigo-100 mt-0.5 truncate">
                 Cl {data?.class?.name}-{data?.class?.section} • {data?.rollNo || "N/A"} • {data?.admissionNo || "N/A"}
               </p>
             </div>
           </div>
           <button 
             onClick={onClose}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 transition-all text-xs font-bold text-slate-300 hover:text-white cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 transition-all text-xs font-bold text-white cursor-pointer"
             title={isInline ? "Back to Student Directory" : "Close window"}
           >
             {isInline ? (
@@ -328,7 +375,7 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
                   
                   {/* Quick Cards Grid */}
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex items-center space-x-3">
+                    <div className="stripe-card p-4 flex items-center space-x-3">
                       <div className="h-10 w-10 rounded-xl bg-indigo-50 border border-indigo-150 flex items-center justify-center overflow-hidden shrink-0">
                         {data.photoUrl ? (
                           <img src={data.photoUrl} alt="Student" className="h-full w-full object-cover" />
@@ -352,7 +399,7 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
                         {photoSuccess && <p className="text-[8px] text-emerald-500 font-semibold truncate mt-0.5">Success!</p>}
                       </div>
                     </div>
-                    <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex items-center space-x-3">
+                    <div className="stripe-card p-4 flex items-center space-x-3">
                       <div className="h-10 w-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
                         <CheckCircle2 className="h-5 w-5" />
                       </div>
@@ -630,6 +677,12 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
                       <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest text-indigo-600">
                         Financial Ledger Entries
                       </h3>
+                      <button
+                        onClick={() => setShowAddChargeModal(true)}
+                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-sm shadow-indigo-600/20 flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <span>+ Add Custom Charge / Fine</span>
+                      </button>
                     </div>
                     <table className="w-full text-left text-xs border-collapse">
                       <thead>
@@ -1104,6 +1157,92 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
                   className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all"
                 >
                   {savingMark ? "Saving..." : "Save Entry"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Custom Charge / Fine Modal Overlay */}
+      {showAddChargeModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[10000] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4 border border-slate-100 animate-scale-in">
+            <div className="flex items-center justify-between border-b pb-3">
+              <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">Add Custom Charge / Fine</h3>
+              <button 
+                onClick={() => {
+                  setShowAddChargeModal(false);
+                  setChargeError(null);
+                }} 
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddCustomCharge} className="space-y-4 text-xs">
+              <div>
+                <label className="font-bold text-slate-600 block mb-1">Charge Title / Description</label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. ID Card Replacement, Late Fine, Costume Fee"
+                  value={chargeTitle}
+                  onChange={(e) => setChargeTitle(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-semibold text-slate-800 outline-none focus:border-indigo-600 focus:bg-white transition-all"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-600 block mb-1">Fee Category / Head</label>
+                <select
+                  value={chargeHeadName}
+                  onChange={(e) => setChargeHeadName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-semibold text-slate-800 outline-none focus:border-indigo-600"
+                >
+                  <option value="Other Fee">Other Fee / Fine</option>
+                  <option value="Tuition Fee">Tuition Fee</option>
+                  <option value="Exam Fee">Exam Fee</option>
+                  <option value="Transport Fee">Transport Fee</option>
+                  <option value="Computer Fee">Computer Fee</option>
+                  <option value="Admission Fee">Admission Fee</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-600 block mb-1">Amount (Rs.)</label>
+                <input 
+                  type="number" 
+                  step="1"
+                  min="1"
+                  placeholder="e.g. 150"
+                  value={chargeAmount}
+                  onChange={(e) => setChargeAmount(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold text-slate-800 outline-none focus:border-indigo-600 focus:bg-white transition-all"
+                  required
+                />
+              </div>
+
+              {chargeError && <p className="text-xs text-rose-500 font-semibold">{chargeError}</p>}
+
+              <div className="flex justify-end space-x-2 pt-2 border-t">
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setShowAddChargeModal(false);
+                    setChargeError(null);
+                  }}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold transition-all"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  disabled={addingCharge}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all shadow-md shadow-indigo-600/20"
+                >
+                  {addingCharge ? "Adding..." : "Add to Ledger"}
                 </button>
               </div>
             </form>

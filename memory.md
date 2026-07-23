@@ -50,4 +50,6 @@ This file serves as the long-term context memory for AI agents working on this p
   * **Students**: 260 dynamic students with matching last names.
   * **Parents/Families**: 100+ parent profiles grouped by matching sibling contact phones.
   * **Ledger Billing Records**: ~7,200 entries.
-  * **Receipts**: ~500 payments.
+5. **UI Architecture Documentation**:
+   * Complete UI hierarchy, tab routes, modal state maps, and design system guidelines are documented in [`UI_GUIDE.md`](file:///d:/All%20Project%20of%20AntiGravity/School%20Finance%20OS/UI_GUIDE.md). All AI agents MUST read `UI_GUIDE.md` before making layout or UI component edits.
+

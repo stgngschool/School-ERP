@@ -80,9 +80,12 @@ export async function uploadFile(
  */
 export async function deleteFile(bucketName: string, pathInsideBucket: string): Promise<void> {
   try {
-    await supabaseClient.storage.from(bucketName).remove([pathInsideBucket]);
-  } catch (err) {
-    // Ignore
+    const { error } = await supabaseClient.storage.from(bucketName).remove([pathInsideBucket]);
+    if (error) {
+      console.warn(`Supabase file deletion warning ("${bucketName}/${pathInsideBucket}"):`, error.message);
+    }
+  } catch (err: any) {
+    console.warn(`Supabase file deletion failed for "${bucketName}/${pathInsideBucket}":`, err?.message || err);
   }
 
   try {
@@ -91,7 +94,8 @@ export async function deleteFile(bucketName: string, pathInsideBucket: string): 
     if (fs.existsSync(localFilePath)) {
       fs.unlinkSync(localFilePath);
     }
-  } catch (err) {
-    // Ignore
+  } catch (err: any) {
+    console.warn(`Local file deletion failed for "${bucketName}/${pathInsideBucket}":`, err?.message || err);
   }
 }
+

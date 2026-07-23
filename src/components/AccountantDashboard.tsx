@@ -485,13 +485,15 @@ export default function AccountantDashboard() {
 
   return (
     <div className="space-y-4">
-      {/* 1. Header & KPI Cards */}
-      <div className="flex flex-col gap-1">
-        <h2 className="text-lg sm:text-xl font-black text-slate-800 tracking-tight">Accountant Billing Console</h2>
-        <p className="text-xs text-slate-500 font-medium hidden sm:block">
-          Manage school ledgers, generate receipts, record payments, and track outstanding defaulters.
-        </p>
-      </div>
+      {/* 1. Header & Quick Overview (Shown only on Dashboard tab to save vertical screen space) */}
+      {activeTab === "dashboard" && (
+        <div className="flex flex-col gap-1 border-b border-slate-200/80 pb-3">
+          <h2 className="text-base sm:text-lg font-black text-slate-800 tracking-tight">Accountant Billing Console</h2>
+          <p className="text-[11px] text-slate-400 font-medium hidden sm:block">
+            Manage school ledgers, generate receipts, record payments, and track outstanding defaulters.
+          </p>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white border border-slate-200/80 p-5 rounded-xl shadow-sm">

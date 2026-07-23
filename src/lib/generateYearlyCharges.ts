@@ -11,6 +11,21 @@ const ACADEMIC_MONTHS = [
 const EXAM_MONTHS = ["October", "March", "May"];
 
 /**
+ * Helper to normalize charge description keys so "Auto-Assigned: July Tuition Fee"
+ * and "Assigned: Tuition Fee - July 2026-2027" normalize to the same key "tuition fee_july".
+ */
+export function getNormalizedChargeKey(description: string, feeHeadName: string): string {
+  const descLower = description.toLowerCase();
+  const headLower = feeHeadName.toLowerCase().trim();
+  for (const month of ACADEMIC_MONTHS) {
+    if (descLower.includes(month.toLowerCase())) {
+      return `${headLower}_${month.toLowerCase()}`;
+    }
+  }
+  return descLower.replace(/[^a-z0-9]/g, "");
+}
+
+/**
  * Returns the current academic year string, e.g. "2026-2027"
  */
 export function getAcademicYear(date = new Date()): string {
@@ -32,13 +47,32 @@ export function getAcademicYear(date = new Date()): string {
  * @param createdById - Admin/Accountant user id for audit
  * @param academicYear - e.g. "2026-2027" (defaults to current)
  */
+/**
+ * Generates LedgerEntry CHARGE records for a student for the full academic year.
+ * Skips months that already have a charge (idempotent / safe to call multiple times).
+ *
+ * @param studentId  - The student's DB id
+ * @param className  - Student's class name (e.g. "10", "KG")
+ * @param createdById - Admin/Accountant user id for audit
+ * @param academicYear - e.g. "2026-2027" (defaults to current)
+ * @param startingFeeMonth - Optional starting month (e.g. "July") for mid-session admissions
+ */
 export async function generateYearlyCharges(
   studentId: string,
   className: string,
   createdById: string,
-  academicYear?: string
+  academicYear?: string,
+  startingFeeMonth?: string,
+  targetFeeHeadName?: string
 ): Promise<{ generated: number; skipped: number }> {
   const acYear = academicYear || getAcademicYear();
+
+  // Determine active months based on startingFeeMonth
+  let activeMonths = ACADEMIC_MONTHS;
+  if (startingFeeMonth && ACADEMIC_MONTHS.includes(startingFeeMonth)) {
+    const startIndex = ACADEMIC_MONTHS.indexOf(startingFeeMonth);
+    activeMonths = ACADEMIC_MONTHS.slice(startIndex);
+  }
 
   // Find class-specific structure, fall back to "All"
   const structures = await db.feeStructure.findMany({
@@ -79,6 +113,15 @@ export async function generateYearlyCharges(
     }
   }
 
+  // Filter by target fee head if requested
+  if (targetFeeHeadName && targetFeeHeadName !== "ALL") {
+    for (const [key, head] of Array.from(headMap.entries())) {
+      if (head.name.trim().toLowerCase() !== targetFeeHeadName.trim().toLowerCase()) {
+        headMap.delete(key);
+      }
+    }
+  }
+
   const student = await db.student.findUnique({
     where: { id: studentId },
     select: { isRte: true, concession: true },
@@ -89,10 +132,10 @@ export async function generateYearlyCharges(
   // Fetch all existing entries (charges and discounts) for this student
   const existingEntries = await db.ledgerEntry.findMany({
     where: { studentId },
-    select: { description: true, entryType: true },
+    select: { id: true, description: true, entryType: true, amount: true, receiptItems: true },
   });
-  const existingCharges = new Set(existingEntries.filter(e => e.entryType === EntryType.CHARGE).map((e) => e.description));
-  const existingDiscounts = new Set(existingEntries.filter(e => e.entryType === EntryType.DISCOUNT).map((e) => e.description));
+  const existingChargesMap = new Map(existingEntries.filter(e => e.entryType === EntryType.CHARGE).map(e => [e.description, e]));
+  const existingDiscountsSet = new Set(existingEntries.filter(e => e.entryType === EntryType.DISCOUNT).map((e) => e.description));
 
   let generated = 0;
   let skipped = 0;
@@ -106,7 +149,7 @@ export async function generateYearlyCharges(
     const charges: { description: string; amount: number }[] = [];
 
     if (frequency === "monthly") {
-      for (const month of ACADEMIC_MONTHS) {
+      for (const month of activeMonths) {
         charges.push({
           description: `Assigned: ${name} - ${month} ${acYear}`,
           amount,
@@ -124,10 +167,12 @@ export async function generateYearlyCharges(
       });
     } else if (frequency === "exam") {
       for (const month of EXAM_MONTHS) {
-        charges.push({
-          description: `Assigned: ${name} - Exam (${month} ${acYear})`,
-          amount,
-        });
+        if (activeMonths.includes(month)) {
+          charges.push({
+            description: `Assigned: ${name} - Exam (${month} ${acYear})`,
+            amount,
+          });
+        }
       }
     }
 
@@ -138,9 +183,9 @@ export async function generateYearlyCharges(
         ? `Concession Waiver (${concession.name}): ${chargeName}`
         : "";
 
-      const needCharge = !existingCharges.has(charge.description);
-      const needDiscount = isRte && !existingDiscounts.has(discountDesc);
-      const needConcessionDiscount = !isRte && concessionDesc && !existingDiscounts.has(concessionDesc);
+      const needCharge = !existingChargesMap.has(charge.description);
+      const needDiscount = isRte && !existingDiscountsSet.has(discountDesc);
+      const needConcessionDiscount = !isRte && concessionDesc && !existingDiscountsSet.has(concessionDesc);
 
       if (!needCharge && !needDiscount && !needConcessionDiscount) {
         skipped++;
@@ -200,7 +245,8 @@ export async function generateYearlyCharges(
 export async function generateYearlyChargesBulk(
   students: { id: string; class: { name: string } }[],
   createdById: string,
-  academicYear: string
+  academicYear: string,
+  targetFeeHeadName?: string
 ): Promise<{ generated: number; skipped: number }> {
   // 1. Fetch all structures
   const structures = await db.feeStructure.findMany({
@@ -215,17 +261,25 @@ export async function generateYearlyChargesBulk(
       studentId: { in: students.map((s) => s.id) },
     },
     select: {
+      id: true,
       studentId: true,
       description: true,
       entryType: true,
+      amount: true,
+      receiptItems: true,
     },
   });
 
-  const existingChargesSet = new Set(
-    existingEntries.filter(e => e.entryType === EntryType.CHARGE).map((e) => `${e.studentId}_${e.description}`)
+  const existingChargesMap = new Map(
+    existingEntries.filter(e => e.entryType === EntryType.CHARGE).map((e) => {
+      // Find matching fee head or description name
+      const normKey = `${e.studentId}_${getNormalizedChargeKey(e.description, "")}`;
+      return [normKey, e];
+    })
   );
+  const existingChargesSet = new Set(existingChargesMap.keys());
   const existingDiscountsSet = new Set(
-    existingEntries.filter(e => e.entryType === EntryType.DISCOUNT).map((e) => `${e.studentId}_${e.description}`)
+    existingEntries.filter(e => e.entryType === EntryType.DISCOUNT).map((e) => `${e.studentId}_${getNormalizedChargeKey(e.description, "")}`)
   );
 
   // 3. Fetch isRte details for all these students
@@ -277,10 +331,20 @@ export async function generateYearlyChargesBulk(
       }
     }
 
+    if (targetFeeHeadName && targetFeeHeadName !== "ALL") {
+      for (const [key, head] of Array.from(headMap.entries())) {
+        if (head.name.trim().toLowerCase() !== targetFeeHeadName.trim().toLowerCase()) {
+          headMap.delete(key);
+        }
+      }
+    }
+
     const list = Array.from(headMap.values());
     classHeadMaps.set(className, list);
     return list;
   };
+
+  const toUpdate: { id: string; amount: number }[] = [];
 
   for (const student of students) {
     const headList = getClassHeadMap(student.class.name);
@@ -322,8 +386,11 @@ export async function generateYearlyChargesBulk(
         const chargeName = charge.description.replace("Assigned: ", "");
         const discountDesc = `RTE Fee Waiver: ${chargeName}`;
 
-        const keyCharge = `${student.id}_${charge.description}`;
-        const keyDiscount = `${student.id}_${discountDesc}`;
+        const normChargeKey = getNormalizedChargeKey(charge.description, name);
+        const normDiscountKey = getNormalizedChargeKey(discountDesc, name);
+
+        const keyCharge = `${student.id}_${normChargeKey}`;
+        const keyDiscount = `${student.id}_${normDiscountKey}`;
 
         const isRte = rteMap.get(student.id) ?? false;
         const concession = concessionMap.get(student.id) ?? null;
@@ -331,7 +398,13 @@ export async function generateYearlyChargesBulk(
         const concessionDesc = concession && concession.feeHeadName.trim().toLowerCase() === name.trim().toLowerCase()
           ? `Concession Waiver (${concession.name}): ${chargeName}`
           : "";
-        const keyConcessionDiscount = concessionDesc ? `${student.id}_${concessionDesc}` : "";
+        const keyConcessionDiscount = concessionDesc ? `${student.id}_${getNormalizedChargeKey(concessionDesc, name)}` : "";
+
+        const existingChargeEntry = existingChargesMap.get(keyCharge);
+        if (existingChargeEntry && existingChargeEntry.amount !== charge.amount && existingChargeEntry.receiptItems.length === 0) {
+          // Unpaid existing charge has a different amount (fee structure was updated), queue update
+          toUpdate.push({ id: existingChargeEntry.id, amount: charge.amount });
+        }
 
         const needCharge = !existingChargesSet.has(keyCharge);
         const needDiscount = isRte && !existingDiscountsSet.has(keyDiscount);
@@ -380,11 +453,23 @@ export async function generateYearlyChargesBulk(
     }
   }
 
-  if (toCreate.length > 0) {
-    await db.ledgerEntry.createMany({
-      data: toCreate,
+  // Execute all updates and creations atomically inside a single transaction
+  if (toUpdate.length > 0 || toCreate.length > 0) {
+    await db.$transaction(async (tx) => {
+      for (const updateItem of toUpdate) {
+        await tx.ledgerEntry.update({
+          where: { id: updateItem.id },
+          data: { amount: updateItem.amount },
+        });
+      }
+      if (toCreate.length > 0) {
+        await tx.ledgerEntry.createMany({
+          data: toCreate,
+        });
+      }
     });
   }
 
   return { generated, skipped };
 }
+
