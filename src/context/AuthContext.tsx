@@ -294,6 +294,7 @@ interface AuthContextType {
   concessions: { id: string; name: string; percentage: number; feeHeadName: string }[];
   addConcession: (name: string, percentage: number, feeHeadName: string) => Promise<void>;
   removeConcession: (id: string) => Promise<void>;
+  refreshConcessions: () => Promise<void>;
   login: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   refreshData: () => Promise<void>;

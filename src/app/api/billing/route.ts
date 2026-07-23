@@ -58,9 +58,57 @@ export async function GET() {
       type: l.entryType,
       amount: l.amount / 100,
       description: l.description,
-      createdAt: l.createdAt.toISOString().split("T")[0],
       createdById: l.createdById,
     }));
+
+    const formattedReceipts = receipts.map((r) => {
+      const studentIds = Array.from(new Set(r.items.map((i) => i.ledgerEntry.studentId)));
+      const studentNames = Array.from(
+        new Set(r.items.map((i) => i.ledgerEntry.student?.name).filter(Boolean))
+      );
+      const classSections = Array.from(
+        new Set(
+          r.items
+            .map((i) => {
+              const cls = i.ledgerEntry.student?.class;
+              return cls ? `${cls.name}-${cls.section}` : "";
+            })
+            .filter(Boolean)
+        )
+      );
+
+      return {
+        id: r.id,
+        studentId: r.studentId || (studentIds.length === 1 ? studentIds[0] : null),
+        studentIds,
+        receiptNo: r.receiptNumber,
+        amount: r.amountPaid / 100,
+        paymentMethod: r.paymentMethod,
+        method: r.paymentMethod,
+        transactionRef: r.transactionReference || "",
+        createdAt: r.createdAt.toISOString().split("T")[0],
+        studentName: r.student?.name || studentNames.join(", "),
+        classSection: r.student
+          ? `${r.student.class.name}-${r.student.class.section}`
+          : classSections.join(", "),
+        collectedBy: r.createdBy?.name || "System",
+        collectedByRole: r.createdBy?.role || "ADMIN",
+        createdById: r.createdById,
+        details: r.items
+          .map((i) => {
+            const sName = i.ledgerEntry.student?.name || "Student";
+            const desc = i.ledgerEntry.description
+              .replace("Payment for: Assigned: ", "")
+              .replace("Payment for: ", "");
+            return `${sName}: ${desc} (Rs. ${i.amount / 100})`;
+          })
+          .join(" + "),
+        items: r.items.map((i) => ({
+          name: `${i.ledgerEntry.student?.name || "Student"}: ${i.ledgerEntry.description}`,
+          amount: i.amount / 100,
+        })),
+      };
+    });
 
     // Optimize discount lookup by grouping by studentId
     const discountsByStudent = new Map<string, typeof discounts>();
