@@ -3,7 +3,7 @@ import db from "@/lib/db";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { generateYearlyCharges, getAcademicYear } from "@/lib/generateYearlyCharges";
-import { getNextFamilyCode, getNextAdmissionNumber } from "@/lib/family";
+import { getNextFamilyCode, getNextAdmissionNumber, findMatchingParentProfile } from "@/lib/family";
 import { getAuthUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -171,26 +171,32 @@ export async function POST(request: Request) {
       });
     }
 
-    if (!parent && fatherMobile) {
-      const parentUser = await db.user.findFirst({
-        where: {
-          phone: fatherMobile,
-          role: "PARENT",
+    if (!parent) {
+      const existingProfiles = await db.parentProfile.findMany({
+        include: {
+          user: true,
+          students: { select: { fatherName: true, motherName: true, fatherMobile: true, motherMobile: true } },
         },
       });
 
-      if (parentUser) {
-        parent = await db.parentProfile.findUnique({
-          where: { userId: parentUser.id },
-          include: { user: true },
-        });
+      const matched = findMatchingParentProfile(
+        {
+          fatherMobile: fatherMobile ? String(fatherMobile).trim() : undefined,
+          motherMobile: motherMobile ? String(motherMobile).trim() : undefined,
+          fatherName: fatherName ? String(fatherName).trim() : undefined,
+          motherName: motherName ? String(motherName).trim() : undefined,
+          parentEmail: parentEmail ? String(parentEmail).trim() : undefined,
+          address: address ? String(address).trim() : undefined,
+        },
+        existingProfiles
+      );
 
-        // Update address if it was empty
-        if (parent && !parent.address && address) {
-          parent = await db.parentProfile.update({
+      if (matched) {
+        parent = matched;
+        if (!parent.address && address) {
+          await db.parentProfile.update({
             where: { id: parent.id },
             data: { address },
-            include: { user: true },
           });
         }
       }

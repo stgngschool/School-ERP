@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { generateYearlyChargesBulk, getAcademicYear } from "@/lib/generateYearlyCharges";
 import { getAuthUser } from "@/lib/auth";
+import { findMatchingParentProfile } from "@/lib/family";
 
 function getMaxSuffixNumber(codes: (string | null | undefined)[]): number {
   let maxNum = 0;
@@ -65,21 +66,18 @@ export async function POST(request: Request) {
       classRollMap.set(c.id, c._count.students);
     }
 
-    // 4. Pre-fetch Parent Users and Profiles by Phone
-    const existingParentUsers = await db.user.findMany({
-      where: { role: "PARENT" },
-      include: { parentProfile: true },
+    // 4. Pre-fetch Parent Profiles for Smart Multi-Factor Family Matching
+    const existingProfiles = await db.parentProfile.findMany({
+      include: {
+        user: true,
+        students: { select: { fatherName: true, motherName: true, fatherMobile: true, motherMobile: true } },
+      },
     });
-    const parentMap = new Map<string, any>();
-    for (const u of existingParentUsers) {
-      if (u.phone && u.parentProfile) {
-        parentMap.set(u.phone.trim(), u.parentProfile);
-      }
-    }
+    const activeProfilesList = [...existingProfiles];
 
     // 5. Pre-create any missing classes
     for (const record of students) {
-      if (!record.name || !record.classVal || !record.section || !record.fatherName || !record.fatherMobile) continue;
+      if (!record.name || !record.classVal || !record.section || (!record.fatherName && !record.fatherMobile)) continue;
       const classNameClean = String(record.classVal).trim();
       const sectionClean = String(record.section).trim();
       const classKey = `${classNameClean.toUpperCase()}-${sectionClean.toUpperCase()}`;
@@ -93,12 +91,23 @@ export async function POST(request: Request) {
       }
     }
 
-    // 6. Pre-create any missing parent users and profiles
+    // 6. Pre-create any missing parent users and profiles using Multi-Factor Matching
     for (const record of students) {
-      if (!record.fatherMobile || !record.fatherName) continue;
-      const cleanMobile = String(record.fatherMobile).trim();
+      if (!record.fatherMobile && !record.fatherName) continue;
 
-      if (!parentMap.has(cleanMobile)) {
+      const matchedProfile = findMatchingParentProfile(
+        {
+          fatherMobile: record.fatherMobile ? String(record.fatherMobile).trim() : undefined,
+          motherMobile: record.motherMobile ? String(record.motherMobile).trim() : undefined,
+          fatherName: record.fatherName ? String(record.fatherName).trim() : undefined,
+          motherName: record.motherName ? String(record.motherName).trim() : undefined,
+          parentEmail: record.parentEmail ? String(record.parentEmail).trim() : undefined,
+          address: record.address ? String(record.address).trim() : undefined,
+        },
+        activeProfilesList
+      );
+
+      if (!matchedProfile) {
         maxFamilyNum++;
         let familyCode = `FAM-${year}-${String(maxFamilyNum).padStart(4, "0")}`;
         while (existingFamilyCodesSet.has(familyCode.toUpperCase())) {
@@ -107,6 +116,7 @@ export async function POST(request: Request) {
         }
         existingFamilyCodesSet.add(familyCode.toUpperCase());
 
+        const cleanMobile = record.fatherMobile ? String(record.fatherMobile).trim() : record.motherMobile ? String(record.motherMobile).trim() : "";
         const uniqueSuffix = `${Date.now()}_${Math.floor(Math.random() * 1000000)}_${maxFamilyNum}`;
         const email = record.parentEmail ? String(record.parentEmail).trim() : `parent_${uniqueSuffix}@school.com`;
 
@@ -120,21 +130,24 @@ export async function POST(request: Request) {
             email: finalEmail,
             passwordHash,
             role: "PARENT",
-            name: String(record.fatherName).trim(),
-            phone: cleanMobile,
+            name: String(record.fatherName || record.name).trim(),
+            phone: cleanMobile || null,
           },
         });
 
-        const parentProfile = await db.parentProfile.create({
+        const newProfile = await db.parentProfile.create({
           data: {
             userId: user.id,
             familyCode,
             address: record.address ? String(record.address).trim() : null,
           },
-          include: { user: true },
+          include: {
+            user: true,
+            students: { select: { fatherName: true, motherName: true, fatherMobile: true, motherMobile: true } },
+          },
         });
 
-        parentMap.set(cleanMobile, parentProfile);
+        activeProfilesList.push(newProfile);
       }
     }
 
@@ -177,16 +190,26 @@ export async function POST(request: Request) {
         admissionNo: providedAdmissionNoAlt,
       } = record;
 
-      if (!name || !classVal || !section || !fatherName || !fatherMobile) continue;
+      if (!name || !classVal || !section || (!fatherName && !fatherMobile)) continue;
 
       const classNameClean = String(classVal).trim();
       const sectionClean = String(section).trim();
       const classKey = `${classNameClean.toUpperCase()}-${sectionClean.toUpperCase()}`;
       const classObj = classMap.get(classKey);
-      const cleanMobile = String(fatherMobile).trim();
-      const parent = parentMap.get(cleanMobile);
 
-      if (!classObj || !parent) continue;
+      const parentProfile = findMatchingParentProfile(
+        {
+          fatherMobile: fatherMobile ? String(fatherMobile).trim() : undefined,
+          motherMobile: motherMobile ? String(motherMobile).trim() : undefined,
+          fatherName: fatherName ? String(fatherName).trim() : undefined,
+          motherName: motherName ? String(motherName).trim() : undefined,
+          parentEmail: record.parentEmail ? String(record.parentEmail).trim() : undefined,
+          address: record.address ? String(record.address).trim() : undefined,
+        },
+        activeProfilesList
+      );
+
+      if (!classObj || !parentProfile) continue;
 
       // Unique admission number logic
       let admissionNo = (providedAdmissionNo || providedAdmissionNoAlt || "").toString().trim();
@@ -217,9 +240,9 @@ export async function POST(request: Request) {
         dob: dobDate && !isNaN(dobDate.getTime()) ? dobDate : null,
         aadhaar: aadhaar ? String(aadhaar).trim() : null,
         disability: disability ? String(disability).trim() : null,
-        fatherName: String(fatherName).trim(),
+        fatherName: fatherName ? String(fatherName).trim() : "",
         motherName: motherName ? String(motherName).trim() : null,
-        fatherMobile: cleanMobile,
+        fatherMobile: fatherMobile ? String(fatherMobile).trim() : null,
         motherMobile: motherMobile ? String(motherMobile).trim() : null,
         fatherAadhaar: fatherAadhaar ? String(fatherAadhaar).trim() : null,
         category: category ? String(category).trim() : null,
@@ -240,7 +263,7 @@ export async function POST(request: Request) {
         busRoute: busRoute ? String(busRoute).trim() : null,
         busStop: busStop ? String(busStop).trim() : null,
         isRte: !!isRte,
-        parentProfileId: parent.id,
+        parentProfileId: parentProfile.id,
         classId: classObj.id,
       });
 
