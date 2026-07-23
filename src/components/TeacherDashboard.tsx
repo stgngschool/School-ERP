@@ -49,6 +49,17 @@ export default function TeacherDashboard() {
   const [selectedClass, setSelectedClass] = useState("10-A");
   const [studentSearch, setStudentSearch] = useState("");
 
+  // Auto-select first available class if current class has no students
+  React.useEffect(() => {
+    if (students.length > 0) {
+      const availableClasses = Array.from(new Set(students.map((s) => `${s.class}-${s.section}`)));
+      const hasCurrent = students.some((s) => `${s.class}-${s.section}` === selectedClass);
+      if (!hasCurrent && availableClasses.length > 0) {
+        setSelectedClass(availableClasses[0]);
+      }
+    }
+  }, [students, selectedClass]);
+
   // Homework Form State
   const [hwSubject, setHwSubject] = useState("Mathematics");
   const [hwTitle, setHwTitle] = useState("");
