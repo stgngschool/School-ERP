@@ -10,9 +10,47 @@ import path from "path";
 
 export async function GET() {
   try {
-    const ledger = await db.ledgerEntry.findMany({
-      orderBy: { createdAt: "desc" },
-    });
+    // Execute all database queries concurrently in parallel
+    const [ledger, receipts, charges, discounts] = await Promise.all([
+      db.ledgerEntry.findMany({
+        take: 300,
+        orderBy: { createdAt: "desc" },
+      }),
+      db.receipt.findMany({
+        take: 200,
+        include: {
+          student: {
+            include: {
+              class: true,
+            },
+          },
+          createdBy: true,
+          items: {
+            include: {
+              ledgerEntry: {
+                include: {
+                  student: {
+                    include: {
+                      class: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      }),
+      db.ledgerEntry.findMany({
+        where: { entryType: EntryType.CHARGE },
+        include: {
+          receiptItems: true,
+        },
+      }),
+      db.ledgerEntry.findMany({
+        where: { entryType: EntryType.DISCOUNT },
+      }),
+    ]);
 
     const formattedLedger = ledger.map((l) => ({
       id: l.id,
@@ -23,96 +61,6 @@ export async function GET() {
       createdAt: l.createdAt.toISOString().split("T")[0],
       createdById: l.createdById,
     }));
-
-    const receipts = await db.receipt.findMany({
-      include: {
-        student: {
-          include: {
-            class: true,
-          },
-        },
-        createdBy: true,
-        items: {
-          include: {
-            ledgerEntry: {
-              include: {
-                student: {
-                  include: {
-                    class: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-      orderBy: { createdAt: "desc" },
-    });
-
-    const formattedReceipts = receipts.map((r) => {
-      const studentIds = Array.from(new Set(r.items.map((i) => i.ledgerEntry.studentId)));
-      const studentNames = Array.from(
-        new Set(r.items.map((i) => i.ledgerEntry.student?.name).filter(Boolean))
-      );
-      const classSections = Array.from(
-        new Set(
-          r.items
-            .map((i) => {
-              const cls = i.ledgerEntry.student?.class;
-              return cls ? `${cls.name}-${cls.section}` : "";
-            })
-            .filter(Boolean)
-        )
-      );
-
-      return {
-        id: r.id,
-        studentId: r.studentId || (studentIds.length === 1 ? studentIds[0] : null),
-        studentIds,
-        receiptNo: r.receiptNumber,
-        amount: r.amountPaid / 100,
-        paymentMethod: r.paymentMethod,
-        method: r.paymentMethod,
-        transactionRef: r.transactionReference || "",
-        createdAt: r.createdAt.toISOString().split("T")[0],
-        studentName: r.student?.name || studentNames.join(", "),
-        classSection: r.student
-          ? `${r.student.class.name}-${r.student.class.section}`
-          : classSections.join(", "),
-        collectedBy: r.createdBy?.name || "System",
-        collectedByRole: r.createdBy?.role || "ADMIN",
-        createdById: r.createdById,
-        details: r.items
-          .map((i) => {
-            const sName = i.ledgerEntry.student?.name || "Student";
-            const desc = i.ledgerEntry.description
-              .replace("Payment for: Assigned: ", "")
-              .replace("Payment for: ", "");
-            return `${sName}: ${desc} (Rs. ${i.amount / 100})`;
-          })
-          .join(" + "),
-        items: r.items.map((i) => ({
-          name: `${i.ledgerEntry.student?.name || "Student"}: ${i.ledgerEntry.description}`,
-          amount: i.amount / 100,
-        })),
-      };
-    });
-
-    // Calculate due items dynamically
-    // A charge is unpaid if total charges (plus/minus discounts/charges) exceed total payments applied to it.
-    const charges = await db.ledgerEntry.findMany({
-      where: { entryType: EntryType.CHARGE },
-      include: {
-        // Find all receipt items and discounts linked to this charge
-        receiptItems: true,
-      },
-    });
-
-    // Also get all discount entries. In schema, we can match discount entries by description or links.
-    // For simplicity, we can fetch all DISCOUNT entries and group them.
-    const discounts = await db.ledgerEntry.findMany({
-      where: { entryType: EntryType.DISCOUNT },
-    });
 
     // Optimize discount lookup by grouping by studentId
     const discountsByStudent = new Map<string, typeof discounts>();

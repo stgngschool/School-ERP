@@ -294,7 +294,8 @@ interface AuthContextType {
   concessions: { id: string; name: string; percentage: number; feeHeadName: string }[];
   addConcession: (name: string, percentage: number, feeHeadName: string) => Promise<void>;
   removeConcession: (id: string) => Promise<void>;
-  refreshConcessions: () => Promise<void>;
+  login: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  logout: () => Promise<void>;
   refreshData: () => Promise<void>;
 }
 
@@ -363,10 +364,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     initSession();
   }, []);
 
-  // Fetch all live database records when active user state is loaded
+  // Fetch live database records scoped by user role & needs
   const refreshData = async () => {
     try {
-      // Fire all requests in parallel for fast initial load
+      const isStaff = user?.role === "ADMIN" || user?.role === "ACCOUNTANT";
+
+      // Fire core requests in parallel for fast initial load
+      const corePromises: Promise<Response>[] = [
+        fetch("/api/school"),
+        fetch("/api/students"),
+        fetch("/api/attendance"),
+        fetch("/api/homework"),
+        fetch("/api/leave"),
+        fetch("/api/notice"),
+        fetch("/api/billing"),
+        fetch("/api/fee-config"),
+        fetch("/api/classes"),
+        fetch("/api/events"),
+        fetch("/api/transport"),
+        fetch("/api/concessions"),
+      ];
+
+      // Only fetch staff administrative records if user is staff
+      if (isStaff) {
+        corePromises.push(fetch("/api/users"));
+        corePromises.push(fetch("/api/audits"));
+      }
+
+      const results = await Promise.all(corePromises);
       const [
         schoolRes,
         studentsRes,
@@ -376,57 +401,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         noticeRes,
         billingRes,
         feeRes,
-        auditRes,
-        usersRes,
         classRes,
         eventsRes,
         transportRes,
         concessionsRes,
-      ] = await Promise.all([
-        fetch("/api/school"),
-        fetch("/api/students"),
-        fetch("/api/attendance"),
-        fetch("/api/homework"),
-        fetch("/api/leave"),
-        fetch("/api/notice"),
-        fetch("/api/billing"),
-        fetch("/api/fee-config"),
-        fetch("/api/audits"),
-        fetch("/api/users"),
-        fetch("/api/classes"),
-        fetch("/api/events"),
-        fetch("/api/transport"),
-        fetch("/api/concessions"),
-      ]);
+        usersRes,
+        auditRes,
+      ] = results;
 
-      if (schoolRes.ok) setSchoolInfo(await schoolRes.json());
-      if (studentsRes.ok) setStudents(await studentsRes.json());
-      if (attendanceRes.ok) setAttendances(await attendanceRes.json());
-      if (homeworkRes.ok) setHomeworks(await homeworkRes.json());
-      if (leaveRes.ok) setLeaveRequests(await leaveRes.json());
-      if (noticeRes.ok) setNotices(await noticeRes.json());
-      if (eventsRes.ok) setEventsList(await eventsRes.json());
-      if (billingRes.ok) {
+      if (schoolRes?.ok) setSchoolInfo(await schoolRes.json());
+      if (studentsRes?.ok) setStudents(await studentsRes.json());
+      if (attendanceRes?.ok) setAttendances(await attendanceRes.json());
+      if (homeworkRes?.ok) setHomeworks(await homeworkRes.json());
+      if (leaveRes?.ok) setLeaveRequests(await leaveRes.json());
+      if (noticeRes?.ok) setNotices(await noticeRes.json());
+      if (eventsRes?.ok) setEventsList(await eventsRes.json());
+      if (billingRes?.ok) {
         const billingData = await billingRes.json();
-        setLedgerEntries(billingData.ledgerEntries);
-        setReceipts(billingData.receipts);
-        setDueItems(billingData.dueItems);
+        setLedgerEntries(billingData.ledgerEntries || []);
+        setReceipts(billingData.receipts || []);
+        setDueItems(billingData.dueItems || []);
       }
-      if (feeRes.ok) {
+      if (feeRes?.ok) {
         const feeData = await feeRes.json();
-        setFeeHeads(feeData.feeHeads);
-        setFeeStructures(feeData.feeStructures);
+        setFeeHeads(feeData.feeHeads || []);
+        setFeeStructures(feeData.feeStructures || []);
       }
-      if (auditRes.ok) setAuditLogs(await auditRes.json());
-      if (usersRes.ok) setUsersList(await usersRes.json());
-      if (classRes.ok) setClasses(await classRes.json());
-      if (transportRes.ok) {
+      if (classRes?.ok) setClasses(await classRes.json());
+      if (transportRes?.ok) {
         const transData = await transportRes.json();
         setTransportStops(transData.map((d: any) => ({ ...d, amount: d.amount / 100 })));
       }
-      if (concessionsRes.ok) {
-        setConcessions(await concessionsRes.json());
-      }
+      if (concessionsRes?.ok) setConcessions(await concessionsRes.json());
+      if (usersRes?.ok) setUsersList(await usersRes.json());
+      if (auditRes?.ok) setAuditLogs(await auditRes.json());
     } catch (err) {
       console.error("Data refresh failed:", err);
     }
@@ -546,6 +554,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user]);
 
   // Action methods calling Next.js API routes
+
+  const login = async (usernameVal: string, passwordVal: string) => {
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: usernameVal, password: passwordVal }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        return { success: false, error: data.error || "Invalid username/phone or password." };
+      }
+
+      setUser(data.user);
+      setActiveRole(data.user.role);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || "Login failed. Please try again." };
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+      setUser(null);
+      window.location.href = "/login";
+    } catch (err) {
+      console.error("Logout failed:", err);
+      window.location.href = "/login";
+    }
+  };
 
   const switchRole = async (role: Role) => {
     try {
@@ -1166,6 +1207,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         addConcession,
         removeConcession,
         refreshConcessions,
+        login,
+        logout,
         refreshData,
       }}
     >

@@ -648,7 +648,7 @@ export default function MarksFeedingConsole() {
           <button
             onClick={handleSaveAll}
             disabled={saving || hasValidationError || classStudents.length === 0}
-            className="hidden sm:flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-500/10 disabled:opacity-50 cursor-pointer"
+            className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-500/10 disabled:opacity-50 cursor-pointer"
           >
             <Save className="h-4 w-4" />
             {saving ? "Saving..." : "Save Marks Roster"}

@@ -87,7 +87,7 @@ const getNavItems = (activeRole: string) => {
 const BOTTOM_NAV_VISIBLE = 4;
 
 export default function AppLayout({ children }: AppLayoutProps) {
-  const { activeRole, activeTab, setActiveTab, switchRole, user, students, notices, schoolInfo } = useAuth();
+  const { activeRole, activeTab, setActiveTab, switchRole, user, students, notices, schoolInfo, logout } = useAuth();
 
   // Mobile states
   const [showMoreSheet, setShowMoreSheet] = useState(false);
@@ -99,11 +99,14 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [showNoticeDropdown, setShowNoticeDropdown] = useState(false);
   const [sessionYear, setSessionYear] = useState("2026-27");
-  const [showDesktopRolePanel, setShowDesktopRolePanel] = useState(true);
   const [showAppsModal, setShowAppsModal] = useState(false);
 
   const megaMenuRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
+
+  const handleLogout = async () => {
+    await logout();
+  };
 
   const navItems = getNavItems(activeRole || "");
   const bottomNavItems = navItems.slice(0, BOTTOM_NAV_VISIBLE);
@@ -166,13 +169,20 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
         {/* User Profile Card */}
         <div className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-100 rounded-2xl mb-6 shrink-0">
-          <div className={`flex h-8 w-8 items-center justify-center rounded-full ${roleBadgeColor} text-white font-bold text-xs`}>
+          <div className={`flex h-8 w-8 items-center justify-center rounded-full ${roleBadgeColor} text-white font-bold text-xs shrink-0`}>
             {user?.name?.slice(0, 1) || "U"}
           </div>
           <div className="min-w-0 flex-1">
             <h4 className="text-xs font-bold text-slate-800 truncate">{user?.name || "System User"}</h4>
             <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{activeRole}</p>
           </div>
+          <button
+            onClick={handleLogout}
+            title="Sign Out"
+            className="p-1.5 hover:bg-rose-50 rounded-xl text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
         </div>
 
         {/* Navigation */}
@@ -198,9 +208,16 @@ export default function AppLayout({ children }: AppLayoutProps) {
           })}
         </nav>
 
-        {/* Footer */}
-        <div className="pt-4 border-t border-slate-100 text-[10px] font-semibold text-slate-400 text-center">
-          Finance OS v1.0.0
+        {/* Sidebar Footer */}
+        <div className="pt-3 border-t border-slate-100 space-y-2 shrink-0">
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 rounded-xl text-xs font-bold transition-all cursor-pointer"
+          >
+            <LogOut className="h-4 w-4 text-rose-600" />
+            <span>Logout Account</span>
+          </button>
+          <p className="text-[10px] font-semibold text-slate-400 text-center">Finance OS v1.0.0</p>
         </div>
       </aside>
 
@@ -239,6 +256,16 @@ export default function AppLayout({ children }: AppLayoutProps) {
           >
             <Shield className="h-3.5 w-3.5" />
             {activeRole?.slice(0, 5)}
+          </button>
+
+          {/* Mobile Top Header Logout Button */}
+          <button
+            onClick={handleLogout}
+            title="Logout"
+            className="h-9 px-2.5 flex items-center gap-1 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-black press-scale"
+          >
+            <LogOut className="h-3.5 w-3.5 text-rose-600" />
+            <span>Logout</span>
           </button>
         </div>
       </header>
@@ -426,6 +453,16 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 </div>
               )}
             </div>
+
+            {/* Desktop Top Header Logout Button */}
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-1.5 py-1.5 px-3 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs"
+              title="Logout from system"
+            >
+              <LogOut className="h-4 w-4 text-rose-600" />
+              <span>Logout</span>
+            </button>
           </div>
         </header>
 
@@ -439,7 +476,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
         )}
 
         {/* Main Content */}
-        <main className="flex-1 p-3 sm:p-4 md:p-5 lg:p-6 xl:p-8 overflow-y-auto overflow-x-hidden min-w-0 max-w-full touch-scroll-y">
+        <main className="flex-1 p-3 sm:p-4 md:p-5 lg:p-6 xl:p-8 pb-28 md:pb-8 overflow-y-auto overflow-x-hidden min-w-0 max-w-full touch-scroll-y">
           {children}
         </main>
       </div>
@@ -612,58 +649,25 @@ export default function AppLayout({ children }: AppLayoutProps) {
               ))}
             </div>
 
-            {/* Current User Info */}
+            {/* Current User Info & Logout */}
             <div className="mt-4 p-3 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-3">
-              <div className={`h-9 w-9 rounded-full ${roleBadgeColor} flex items-center justify-center text-white font-black text-sm`}>
+              <div className={`h-9 w-9 rounded-full ${roleBadgeColor} flex items-center justify-center text-white font-black text-sm shrink-0`}>
                 {user?.name?.slice(0, 1) || "U"}
               </div>
-              <div>
-                <p className="text-xs font-bold text-slate-800">{user?.name || "System User"}</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold text-slate-800 truncate">{user?.name || "System User"}</p>
                 <p className="text-[10px] font-semibold text-slate-400">{user?.username}</p>
               </div>
-              <span className={`ml-auto text-[10px] font-black px-2 py-1 rounded-lg text-white ${roleBadgeColor}`}>{activeRole}</span>
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-1 px-3 py-1.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold hover:bg-rose-100 transition-all cursor-pointer shrink-0"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                <span>Logout</span>
+              </button>
             </div>
           </div>
         </>
-      )}
-
-      {/* ════════════════════════════════════════
-          DESKTOP: ROLE SWITCHER PANEL (unchanged)
-      ════════════════════════════════════════ */}
-      {showDesktopRolePanel ? (
-        <div className="hidden md:flex fixed bottom-3 right-4 z-30 bg-white border border-slate-200 rounded-2xl p-3.5 shadow-2xl max-w-xs flex-col gap-2.5">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
-            <div className="flex items-center gap-1.5">
-              <Shield className="h-4 w-4 text-indigo-600" />
-              <h4 className="text-xs font-black text-slate-800 uppercase tracking-wide">Role Switcher</h4>
-            </div>
-            <button onClick={() => setShowDesktopRolePanel(false)} className="text-slate-400 hover:text-slate-600">
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
-          <p className="text-[10px] text-slate-400 font-semibold leading-tight">
-            Click roles below to test the UI for different profiles.
-          </p>
-          <div className="grid grid-cols-2 gap-1.5">
-            {(["PARENT", "TEACHER", "ACCOUNTANT", "ADMIN"] as Role[]).map((r) => (
-              <button key={r} onClick={() => switchRole(r)}
-                className={`py-1.5 px-2 rounded-lg text-[10px] font-bold text-center border transition-all ${
-                  activeRole === r
-                    ? "bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-500/20"
-                    : "bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600"
-                }`}>
-                {r}
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <button
-          onClick={() => setShowDesktopRolePanel(true)}
-          className="hidden md:flex fixed bottom-4 right-4 z-30 bg-indigo-600 text-white rounded-full p-3 shadow-lg shadow-indigo-500/30 hover:bg-indigo-700 transition-all items-center justify-center cursor-pointer"
-        >
-          <Shield className="h-5 w-5" />
-        </button>
       )}
 
       {/* Apps & Integrations Connector Modal */}
