@@ -650,22 +650,22 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
                 <div className="space-y-6">
                   
                   {/* Financial Mini Overview Cards */}
-                  <div className="grid grid-cols-4 gap-4">
-                    <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-sm">
                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Charged</p>
-                      <p className="text-lg font-black text-slate-700 mt-1">{formatCurrency(totalCharged)}</p>
+                      <p className="text-base sm:text-lg font-black text-slate-700 mt-1">{formatCurrency(totalCharged)}</p>
                     </div>
-                    <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+                    <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-sm">
                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Paid</p>
-                      <p className="text-lg font-black text-emerald-600 mt-1">{formatCurrency(totalPaid)}</p>
+                      <p className="text-base sm:text-lg font-black text-emerald-600 mt-1">{formatCurrency(totalPaid)}</p>
                     </div>
-                    <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Concessions / Discounts</p>
-                      <p className="text-lg font-black text-indigo-600 mt-1">{formatCurrency(totalDiscount)}</p>
+                    <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Concessions</p>
+                      <p className="text-base sm:text-lg font-black text-indigo-600 mt-1">{formatCurrency(totalDiscount)}</p>
                     </div>
-                    <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Outstanding Balance</p>
-                      <p className={`text-lg font-black mt-1 ${outstanding > 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                    <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Outstanding</p>
+                      <p className={`text-base sm:text-lg font-black mt-1 ${outstanding > 0 ? "text-rose-600" : "text-emerald-600"}`}>
                         {formatCurrency(outstanding)}
                       </p>
                     </div>
@@ -673,18 +673,19 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
 
                   {/* Ledger History */}
                   <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
-                    <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+                    <div className="p-3.5 sm:p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
                       <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest text-indigo-600">
                         Financial Ledger Entries
                       </h3>
                       <button
                         onClick={() => setShowAddChargeModal(true)}
-                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-sm shadow-indigo-600/20 flex items-center gap-1.5 cursor-pointer"
+                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-sm shadow-indigo-600/20 flex items-center gap-1.5 cursor-pointer shrink-0"
                       >
                         <span>+ Add Custom Charge / Fine</span>
                       </button>
                     </div>
-                    <table className="w-full text-left text-xs border-collapse">
+                    <div className="overflow-x-auto w-full">
+                      <table className="w-full text-left text-xs border-collapse min-w-[550px]">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-100 font-bold text-slate-400">
                           <th className="p-3">Date</th>
@@ -736,6 +737,7 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
                       </tbody>
                     </table>
                   </div>
+                </div>
 
                   {/* Payment Receipts */}
                   <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">

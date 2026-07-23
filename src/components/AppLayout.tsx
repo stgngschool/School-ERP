@@ -91,7 +91,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
   // Mobile states
   const [showMoreSheet, setShowMoreSheet] = useState(false);
-  const [showRoleSwitcher, setShowRoleSwitcher] = useState(false);
   const [showNoticeSheet, setShowNoticeSheet] = useState(false);
 
   // Desktop states
@@ -130,14 +129,12 @@ export default function AppLayout({ children }: AppLayoutProps) {
   // Close sheets on tab change
   useEffect(() => {
     setShowMoreSheet(false);
-    setShowRoleSwitcher(false);
     setShowNoticeSheet(false);
   }, [activeTab]);
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
     setShowMoreSheet(false);
-    setShowRoleSwitcher(false);
   };
 
   const roleColors: Record<string, string> = {
@@ -249,14 +246,11 @@ export default function AppLayout({ children }: AppLayoutProps) {
             )}
           </button>
 
-          {/* Role Switcher FAB trigger */}
-          <button
-            onClick={() => setShowRoleSwitcher(true)}
-            className={`h-9 px-3 flex items-center gap-1.5 rounded-xl text-white text-[10px] font-black press-scale ${roleBadgeColor}`}
-          >
+          {/* Active Role Badge */}
+          <div className={`h-9 px-3 flex items-center gap-1.5 rounded-xl text-white text-[10px] font-black ${roleBadgeColor}`}>
             <Shield className="h-3.5 w-3.5" />
-            {activeRole?.slice(0, 5)}
-          </button>
+            <span>{activeRole}</span>
+          </div>
 
           {/* Mobile Top Header Logout Button */}
           <button
@@ -596,75 +590,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
                   <span className="text-[10px] text-slate-400 font-bold block">{n.createdAt}</span>
                 </div>
               ))}
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* ════════════════════════════════════════
-          MOBILE: ROLE SWITCHER BOTTOM SHEET
-      ════════════════════════════════════════ */}
-      {showRoleSwitcher && (
-        <>
-          <div className="bottom-sheet-overlay md:hidden" onClick={() => setShowRoleSwitcher(false)} />
-          <div className="bottom-sheet md:hidden">
-            <div className="bottom-sheet-handle" />
-            <div className="flex items-center justify-between mb-1">
-              <h3 className="text-sm font-black text-slate-800">Switch Role</h3>
-              <button onClick={() => setShowRoleSwitcher(false)} className="p-1.5 rounded-xl bg-slate-100 text-slate-500">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <p className="text-xs text-slate-400 font-medium mb-4">Tap a role to switch the dashboard view.</p>
-
-            <div className="grid grid-cols-2 gap-3">
-              {([
-                { role: "PARENT" as Role, label: "Parent", desc: "View child's profile", color: "bg-rose-500", light: "bg-rose-50 border-rose-200" },
-                { role: "TEACHER" as Role, label: "Teacher", desc: "Manage attendance & marks", color: "bg-amber-500", light: "bg-amber-50 border-amber-200" },
-                { role: "ACCOUNTANT" as Role, label: "Accountant", desc: "Collect fees & reports", color: "bg-emerald-600", light: "bg-emerald-50 border-emerald-200" },
-                { role: "ADMIN" as Role, label: "Admin", desc: "Full system control", color: "bg-indigo-600", light: "bg-indigo-50 border-indigo-200" },
-              ]).map(({ role, label, desc, color, light }) => (
-                <button
-                  key={role}
-                  onClick={() => { switchRole(role); setShowRoleSwitcher(false); }}
-                  className={`flex flex-col items-center gap-2.5 p-4 rounded-2xl border-2 transition-all press-scale ${
-                    activeRole === role
-                      ? `${color} border-transparent text-white shadow-lg`
-                      : `${light} text-slate-700`
-                  }`}
-                >
-                  <div className={`h-10 w-10 rounded-full flex items-center justify-center ${
-                    activeRole === role ? "bg-white/20" : "bg-white shadow-sm"
-                  }`}>
-                    <Shield className={`h-5 w-5 ${activeRole === role ? "text-white" : "text-slate-500"}`} />
-                  </div>
-                  <div className="text-center">
-                    <p className={`text-sm font-black ${activeRole === role ? "text-white" : "text-slate-800"}`}>{label}</p>
-                    <p className={`text-[10px] font-semibold mt-0.5 ${activeRole === role ? "text-white/70" : "text-slate-400"}`}>{desc}</p>
-                  </div>
-                  {activeRole === role && (
-                    <span className="text-[9px] font-black bg-white/20 text-white px-2 py-0.5 rounded-full uppercase tracking-wide">Active</span>
-                  )}
-                </button>
-              ))}
-            </div>
-
-            {/* Current User Info & Logout */}
-            <div className="mt-4 p-3 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-3">
-              <div className={`h-9 w-9 rounded-full ${roleBadgeColor} flex items-center justify-center text-white font-black text-sm shrink-0`}>
-                {user?.name?.slice(0, 1) || "U"}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-bold text-slate-800 truncate">{user?.name || "System User"}</p>
-                <p className="text-[10px] font-semibold text-slate-400">{user?.username}</p>
-              </div>
-              <button
-                onClick={handleLogout}
-                className="flex items-center gap-1 px-3 py-1.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold hover:bg-rose-100 transition-all cursor-pointer shrink-0"
-              >
-                <LogOut className="h-3.5 w-3.5" />
-                <span>Logout</span>
-              </button>
             </div>
           </div>
         </>

@@ -754,7 +754,7 @@ export default function ParentDashboard() {
         <div className="space-y-6">
           {/* Outstanding Invoices Billing Desk */}
         <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-200/80 pb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 pb-3">
               <div className="flex items-center gap-2">
                 <CreditCard className="h-4.5 w-4.5 text-indigo-600 animate-pulse" />
                 <h3 className="text-xs font-black uppercase tracking-wider text-slate-800">
