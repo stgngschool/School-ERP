@@ -5,6 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import StudentProfileModal from "@/components/StudentProfileModal";
 import MarksFeedingConsole from "@/components/MarksFeedingConsole";
 import AppsIntegrationModal from "@/components/AppsIntegrationModal";
+import AttendanceConsole from "@/components/AttendanceConsole";
 import {
   Users,
   Bell,
@@ -181,7 +182,7 @@ export default function AdminDashboard() {
     refreshData,
   } = useAuth();
 
-  const validTabs = ["dashboard", "collect", "marks", "defaulters", "ledger", "structures", "students", "users", "idcards", "notices", "school", "audit"];
+  const validTabs = ["dashboard", "collect", "attendance", "marks", "defaulters", "ledger", "structures", "students", "users", "idcards", "notices", "school", "audit"];
   React.useEffect(() => {
     if (!validTabs.includes(activeTab)) {
       setActiveTab("dashboard");
@@ -1741,7 +1742,7 @@ export default function AdminDashboard() {
                 </div>
 
                 {/* ─── Quick Actions Launcher Hub ─── */}
-                <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs space-y-3">
+                <div className="bg-white border-y sm:border border-slate-200/90 sm:rounded-2xl p-3 sm:p-4 shadow-xs space-y-3">
                   <h3 className="text-xs font-black uppercase tracking-wider text-slate-700">
                     Quick Action Shortcuts
                   </h3>
@@ -1805,7 +1806,7 @@ export default function AdminDashboard() {
                 {/* ─── Metric Cards Grid ─── */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   {/* Total Students Card */}
-                  <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs">
+                  <div className="bg-white border-y sm:border border-slate-200/90 sm:rounded-2xl p-3 sm:p-4 shadow-xs">
                     <div className="flex justify-between items-start">
                       <div className="space-y-1">
                         <h4 className="text-2xl font-black text-slate-900 tracking-tight">{totalStudents}</h4>
@@ -1822,7 +1823,7 @@ export default function AdminDashboard() {
                   </div>
 
                   {/* Revenue Collected Card */}
-                  <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs">
+                  <div className="bg-white border-y sm:border border-slate-200/90 sm:rounded-2xl p-3 sm:p-4 shadow-xs">
                     <div className="flex justify-between items-start">
                       <div className="space-y-1">
                         <h4 className="text-2xl font-black text-emerald-700 tracking-tight">₹{(totalEarnings / 100).toLocaleString("en-IN")}</h4>
@@ -1838,7 +1839,7 @@ export default function AdminDashboard() {
                   </div>
 
                   {/* Pending Dues Card */}
-                  <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs">
+                  <div className="bg-white border-y sm:border border-slate-200/90 sm:rounded-2xl p-3 sm:p-4 shadow-xs">
                     <div className="flex justify-between items-start">
                       <div className="space-y-1">
                         <h4 className="text-2xl font-black text-amber-600 tracking-tight">₹{(totalDues / 100).toLocaleString("en-IN")}</h4>
@@ -1855,7 +1856,7 @@ export default function AdminDashboard() {
                   </div>
 
                   {/* Staff & Attendance Card */}
-                  <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs">
+                  <div className="bg-white border-y sm:border border-slate-200/90 sm:rounded-2xl p-3 sm:p-4 shadow-xs">
                     <div className="flex justify-between items-start">
                       <div className="space-y-1">
                         <h4 className="text-2xl font-black text-slate-900 tracking-tight">{usersList.length} Staff</h4>
@@ -1875,13 +1876,13 @@ export default function AdminDashboard() {
                 {/* Finance Snapshot & Who Cut Receipt Tracker */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                   {/* Finance Snapshot Card */}
-                  <div className="bg-white border border-slate-200/80 p-6 rounded-3xl shadow-sm space-y-4 lg:col-span-2">
+                  <div className="bg-white border border-slate-200/80 p-3 sm:p-6 sm:rounded-3xl rounded-2xl shadow-sm space-y-4 lg:col-span-2">
                     <div className="border-b border-slate-100 pb-3 flex justify-between items-center">
                       <h4 className="text-sm font-black text-slate-800 tracking-tight">Finance Snapshot</h4>
                       <span className="text-[10px] font-bold text-slate-400">Total collection methods</span>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                       <div className="p-4 bg-emerald-50/50 border border-emerald-100 rounded-2xl space-y-1">
                         <span className="text-[9px] font-black text-emerald-600 block uppercase tracking-wider">Cash in Hand</span>
                         <p className="text-lg font-black text-emerald-700">₹{cashTally.toLocaleString("en-IN")}</p>
@@ -1903,7 +1904,7 @@ export default function AdminDashboard() {
                   </div>
 
                   {/* Who Cut the Receipt Tracker */}
-                  <div className="bg-white border border-slate-200/80 p-6 rounded-3xl shadow-sm space-y-4">
+                  <div className="bg-white border border-slate-200/80 p-3 sm:p-6 sm:rounded-3xl rounded-2xl shadow-sm space-y-4">
                     <div className="border-b border-slate-100 pb-3">
                       <h4 className="text-sm font-black text-slate-800 tracking-tight">Collection Logs By User</h4>
                     </div>
@@ -1931,7 +1932,7 @@ export default function AdminDashboard() {
                 {/* Revenue Overview Monthly Chart & Student Per Class */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                   {/* Revenue Overview Monthly Chart */}
-                  <div className="lg:col-span-2 bg-white border border-slate-200/80 p-6 rounded-3xl shadow-sm space-y-4">
+                  <div className="lg:col-span-2 bg-white border border-slate-200/80 p-3 sm:p-6 sm:rounded-3xl rounded-2xl shadow-sm space-y-4">
                     <div className="border-b border-slate-100 pb-3 flex justify-between items-center">
                       <h4 className="text-sm font-black text-slate-800 tracking-tight">Revenue Overview (Monthly Graph)</h4>
                       <span className="text-[10px] text-slate-400 font-bold">Session 2026-27</span>
@@ -1962,7 +1963,7 @@ export default function AdminDashboard() {
                     </div>
                   </div>
                   {/* Attendance Overview gauge card */}
-                  <div className="bg-white border border-slate-200/80 p-6 rounded-3xl shadow-sm space-y-4">
+                  <div className="bg-white border border-slate-200/80 p-3 sm:p-6 sm:rounded-3xl rounded-2xl shadow-sm space-y-4">
                     <div className="border-b border-slate-100 pb-3">
                       <h4 className="text-sm font-black text-slate-800 tracking-tight">Attendance Overview</h4>
                     </div>
@@ -1994,7 +1995,7 @@ export default function AdminDashboard() {
                   </div>
 
                   {/* Upcoming Birthday of Students */}
-                  <div className="bg-white border border-slate-200/80 p-6 rounded-3xl shadow-sm space-y-4 lg:col-span-2">
+                  <div className="bg-white border border-slate-200/80 p-3 sm:p-6 sm:rounded-3xl rounded-2xl shadow-sm space-y-4 lg:col-span-2">
                     <div className="border-b border-slate-100 pb-3 flex justify-between items-center">
                       <h4 className="text-sm font-black text-slate-800 tracking-tight">Upcoming Birthdays This Month</h4>
                       <span className="text-[10px] text-slate-455 font-bold uppercase">Happy Birthday! 🎂</span>
@@ -2024,7 +2025,7 @@ export default function AdminDashboard() {
           })()}
         </div>
       ) : (
-        <div className="bg-white border border-slate-200/80 p-6 rounded-2xl shadow-sm">
+        <div className="bg-white border-y sm:border border-slate-200/80 p-3 sm:p-6 sm:rounded-2xl shadow-sm">
 
           {/* TAB: Collect Fees (Offline Counter Payment) */}
           {activeTab === "collect" && (
@@ -3165,7 +3166,7 @@ export default function AdminDashboard() {
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start animate-fade-in">
 
                 {/* Left Panel: Matrix */}
-                <div className="lg:col-span-2 bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4">
+                <div className="lg:col-span-2 bg-white border border-slate-200/80 sm:rounded-2xl rounded-xl p-3 sm:p-5 shadow-sm space-y-4">
                   <div className="flex justify-between items-center">
                     <div>
                       <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider">
@@ -3346,7 +3347,7 @@ export default function AdminDashboard() {
                 <div className="lg:col-span-1 space-y-5">
 
                   {/* Card 1: Manage Classes */}
-                  <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4">
+                  <div className="bg-white border border-slate-200/80 sm:rounded-2xl rounded-xl p-3 sm:p-5 shadow-sm space-y-4">
                     <div>
                       <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider">1. Classes &amp; Sections</h3>
                       <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Create classes and sections for your school (KG to 12th).</p>
@@ -3416,7 +3417,7 @@ export default function AdminDashboard() {
                   </div>
 
                   {/* Card 2: Manage Fee Types */}
-                  <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4">
+                  <div className="bg-white border border-slate-200/80 sm:rounded-2xl rounded-xl p-3 sm:p-5 shadow-sm space-y-4">
                     <div>
                       <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider">2. Fee Types (Heads)</h3>
                       <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Define fee name and billing cycle. Select billing frequency rather than writing specific months.</p>
@@ -4504,7 +4505,7 @@ export default function AdminDashboard() {
                 </div>
               )
             ) : importMode === "single" ? (
-                <div className="max-w-4xl mx-auto space-y-4 bg-white border border-slate-200/80 p-6 rounded-3xl shadow-sm">
+                <div className="max-w-4xl mx-auto space-y-4 bg-white border border-slate-200/80 p-3 sm:p-6 sm:rounded-3xl rounded-xl shadow-sm">
                     <div>
                       <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider">
                         Register Student Profile
@@ -5050,7 +5051,7 @@ export default function AdminDashboard() {
                 </div>
               ) : (
                 // Bulk import mode panel
-                <div className="space-y-6 max-w-4xl bg-white border border-slate-200/80 p-6 rounded-2xl shadow-sm">
+                <div className="space-y-6 max-w-4xl bg-white border border-slate-200/80 p-3 sm:p-6 sm:rounded-2xl rounded-xl shadow-sm">
                   <div className="flex justify-between items-start border-b border-slate-100 pb-4">
                     <div>
                       <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider">
@@ -5152,7 +5153,7 @@ export default function AdminDashboard() {
           {activeTab === "idcards" && (
             <div className="space-y-6 animate-fade-in text-left">
               {/* Header */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-slate-200/60 p-5 rounded-2xl shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-slate-200/60 p-3 sm:p-5 sm:rounded-2xl rounded-xl shadow-sm">
                 <div>
                   <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider">
                     Student ID Cards &amp; Photos Center
@@ -5308,7 +5309,7 @@ export default function AdminDashboard() {
             <div className="space-y-8 animate-fade-in">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
                 {/* Left Column: School Profile */}
-                <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-sm space-y-4 text-left">
+                <div className="bg-white border border-slate-200/60 p-3 sm:p-6 sm:rounded-2xl rounded-xl shadow-sm space-y-4 text-left">
                   <div>
                     <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider">
                       School Profile customizer
@@ -5347,7 +5348,7 @@ export default function AdminDashboard() {
                       />
                     </div>
 
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
                       <div>
                         <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Contact Phone</label>
                         <input
@@ -5411,7 +5412,7 @@ export default function AdminDashboard() {
                 </div>
 
                 {/* Right Column: Admin Profile Settings */}
-                <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-sm space-y-4 text-left">
+                <div className="bg-white border border-slate-200/60 p-3 sm:p-6 sm:rounded-2xl rounded-xl shadow-sm space-y-4 text-left">
                   <div>
                     <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider">
                       Admin Profile Settings
@@ -5507,7 +5508,7 @@ export default function AdminDashboard() {
               </div>
 
               {/* Google Cloud Integration Panel */}
-              <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-sm space-y-4 text-left">
+              <div className="bg-white border border-slate-200/60 p-3 sm:p-6 sm:rounded-2xl rounded-xl shadow-sm space-y-4 text-left">
                 <div>
                   <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider flex items-center gap-1.5">
                     <Database className="h-4 w-4 text-indigo-600" /> Google Cloud Integration Panel
@@ -5617,7 +5618,7 @@ export default function AdminDashboard() {
               </div>
 
               {/* Dynamic Exam Configuration Panel */}
-              <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-sm space-y-4 text-left">
+              <div className="bg-white border border-slate-200/60 p-3 sm:p-6 sm:rounded-2xl rounded-xl shadow-sm space-y-4 text-left">
                 <div>
                   <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider">
                     Academic Examination Customizer
@@ -6282,6 +6283,11 @@ export default function AdminDashboard() {
                 </div>
               )}
             </div>
+          )}
+
+          {/* TAB: Attendance Management Console */}
+          {activeTab === "attendance" && (
+            <AttendanceConsole />
           )}
 
           {/* TAB: Feed Student Marks */}

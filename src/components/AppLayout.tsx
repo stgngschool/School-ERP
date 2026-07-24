@@ -29,6 +29,9 @@ import {
   Shield,
   Menu,
   Layers,
+  Award,
+  ShieldCheck,
+  GraduationCap,
 } from "lucide-react";
 import AppsIntegrationModal from "@/components/AppsIntegrationModal";
 
@@ -36,47 +39,56 @@ interface AppLayoutProps {
   children: React.ReactNode;
 }
 
+export interface NavItem {
+  category: string;
+  name: string;
+  shortName: string;
+  icon: React.ComponentType<{ className?: string }>;
+  tab: string;
+}
+
 // ─── Nav items per role ────────────────────────────────────────────────────
-const getNavItems = (activeRole: string) => {
+const getNavItems = (activeRole: string): NavItem[] => {
   switch (activeRole) {
     case "PARENT":
       return [
-        { name: "My Child's Dashboard", shortName: "Home", icon: Home, tab: "dashboard" },
-        { name: "Academic Report Card", shortName: "Reports", icon: FileText, tab: "reportcard" },
-        { name: "Pay School Fees", shortName: "Fees", icon: CreditCard, tab: "fees" },
-        { name: "Homework & Assignments", shortName: "Homework", icon: BookOpen, tab: "homework" },
-        { name: "Attendance History", shortName: "Attendance", icon: Calendar, tab: "attendance" },
-        { name: "Apply for Leave", shortName: "Leave", icon: FileText, tab: "leave" },
+        { category: "Academic Portal", name: "Child's Dashboard", shortName: "Home", icon: Home, tab: "dashboard" },
+        { category: "Academic Portal", name: "Academic Report Card", shortName: "Reports", icon: Award, tab: "reportcard" },
+        { category: "Academic Portal", name: "Homework & Assignments", shortName: "Homework", icon: BookOpen, tab: "homework" },
+        { category: "Academic Portal", name: "Attendance History", shortName: "Attendance", icon: Calendar, tab: "attendance" },
+        { category: "Finance & Services", name: "Pay School Fees", shortName: "Fees", icon: CreditCard, tab: "fees" },
+        { category: "Finance & Services", name: "Apply for Leave", shortName: "Leave", icon: FileText, tab: "leave" },
       ];
     case "TEACHER":
       return [
-        { name: "Mark Attendance", shortName: "Attendance", icon: UserCheck, tab: "attendance" },
-        { name: "Feed Student Marks", shortName: "Marks", icon: PlusCircle, tab: "marks" },
-        { name: "Upload Homework", shortName: "Homework", icon: BookOpen, tab: "homework" },
-        { name: "Leave Requests", shortName: "Leaves", icon: FileText, tab: "leaves" },
+        { category: "Daily Academics", name: "Mark Attendance", shortName: "Attendance", icon: UserCheck, tab: "attendance" },
+        { category: "Daily Academics", name: "Marks & Exam Roster", shortName: "Marks", icon: GraduationCap, tab: "marks" },
+        { category: "Daily Academics", name: "Upload Homework", shortName: "Homework", icon: BookOpen, tab: "homework" },
+        { category: "Daily Academics", name: "Leave Requests", shortName: "Leaves", icon: FileText, tab: "leaves" },
       ];
     case "ACCOUNTANT":
       return [
-        { name: "Collect Offline Fee", shortName: "Collect", icon: CreditCard, tab: "collect" },
-        { name: "Dues Report", shortName: "Dues", icon: AlertTriangle, tab: "defaulters" },
-        { name: "Feed Student Marks", shortName: "Marks", icon: PlusCircle, tab: "marks" },
-        { name: "Configure Fee Structures", shortName: "Fees", icon: Settings, tab: "structures" },
-        { name: "System Ledger Logs", shortName: "Ledger", icon: ArrowRightLeft, tab: "ledger" },
+        { category: "Fee Transactions", name: "Fee Collection", shortName: "Collect", icon: CreditCard, tab: "collect" },
+        { category: "Fee Transactions", name: "Fee Defaulters & Dues", shortName: "Dues", icon: AlertTriangle, tab: "defaulters" },
+        { category: "Fee Transactions", name: "Receipts & Ledger Logs", shortName: "Ledger", icon: ArrowRightLeft, tab: "ledger" },
+        { category: "Fee Management", name: "Fee Structure Setup", shortName: "Fee Setup", icon: Settings, tab: "structures" },
+        { category: "Fee Management", name: "Marks & Exam Entry", shortName: "Marks", icon: GraduationCap, tab: "marks" },
       ];
     case "ADMIN":
       return [
-        { name: "Admin Dashboard", shortName: "Dashboard", icon: LayoutDashboard, tab: "dashboard" },
-        { name: "Collect Fees", shortName: "Collect", icon: CreditCard, tab: "collect" },
-        { name: "Feed Student Marks", shortName: "Marks", icon: PlusCircle, tab: "marks" },
-        { name: "Dues Report", shortName: "Dues", icon: AlertTriangle, tab: "defaulters" },
-        { name: "Receipts Ledger", shortName: "Ledger", icon: ArrowRightLeft, tab: "ledger" },
-        { name: "Configure Fees", shortName: "Fee Config", icon: Settings, tab: "structures" },
-        { name: "Register Student", shortName: "Students", icon: Users, tab: "students" },
-        { name: "User Status Control", shortName: "Users", icon: UserX, tab: "users" },
-        { name: "ID Cards & Photos", shortName: "ID Cards", icon: Users, tab: "idcards" },
-        { name: "Create Notices", shortName: "Notices", icon: Bell, tab: "notices" },
-        { name: "System Config", shortName: "Config", icon: Settings, tab: "school" },
-        { name: "System Audit Logs", shortName: "Audit", icon: FileSpreadsheet, tab: "audit" },
+        { category: "Overview", name: "Admin Dashboard", shortName: "Dashboard", icon: LayoutDashboard, tab: "dashboard" },
+        { category: "Student & Academics", name: "Student Management", shortName: "Students", icon: Users, tab: "students" },
+        { category: "Student & Academics", name: "Attendance Console", shortName: "Attendance", icon: UserCheck, tab: "attendance" },
+        { category: "Student & Academics", name: "Marks & Exam Roster", shortName: "Marks", icon: GraduationCap, tab: "marks" },
+        { category: "Student & Academics", name: "ID Cards & Photos", shortName: "ID Cards", icon: UserCheck, tab: "idcards" },
+        { category: "Finance & Fees", name: "Fee Collection", shortName: "Collect", icon: CreditCard, tab: "collect" },
+        { category: "Finance & Fees", name: "Fee Defaulters & Dues", shortName: "Dues", icon: AlertTriangle, tab: "defaulters" },
+        { category: "Finance & Fees", name: "Receipts & Ledger", shortName: "Ledger", icon: ArrowRightLeft, tab: "ledger" },
+        { category: "Finance & Fees", name: "Fee Structure Setup", shortName: "Fee Setup", icon: Settings, tab: "structures" },
+        { category: "System & Communication", name: "Notices & Announcements", shortName: "Notices", icon: Bell, tab: "notices" },
+        { category: "System & Communication", name: "User Access Control", shortName: "Users", icon: ShieldCheck, tab: "users" },
+        { category: "System & Communication", name: "School Settings", shortName: "Settings", icon: Building2, tab: "school" },
+        { category: "System & Communication", name: "System Audit Logs", shortName: "Audit", icon: FileSpreadsheet, tab: "audit" },
       ];
     default:
       return [];
@@ -183,24 +195,31 @@ export default function AppLayout({ children }: AppLayoutProps) {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 space-y-1 overflow-y-auto">
-          <span className="px-3 text-[9px] font-black uppercase tracking-wider text-slate-400 block mb-2">Features</span>
+        <nav className="flex-1 space-y-1 overflow-y-auto pr-1 select-none">
           {navItems.map((item, idx) => {
             const Icon = item.icon;
             const isActive = activeTab === item.tab;
+            const showCategoryHeader = idx === 0 || navItems[idx - 1].category !== item.category;
+
             return (
-              <button
-                key={idx}
-                onClick={() => setActiveTab(item.tab)}
-                className={`w-full flex items-center gap-3 rounded-lg px-3 py-2 text-xs font-bold transition-all ${
-                  isActive
-                    ? "bg-indigo-50 text-indigo-700 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                }`}
-              >
-                <Icon className={`h-4 w-4 shrink-0 ${isActive ? "text-indigo-600" : "text-slate-400"}`} />
-                {item.name}
-              </button>
+              <React.Fragment key={item.tab + "-" + idx}>
+                {showCategoryHeader && item.category && (
+                  <span className={`px-3 text-[9px] font-black uppercase tracking-widest text-slate-400 block ${idx > 0 ? "mt-4 mb-1.5" : "mb-1.5"}`}>
+                    {item.category}
+                  </span>
+                )}
+                <button
+                  onClick={() => setActiveTab(item.tab)}
+                  className={`w-full flex items-center gap-3 rounded-xl px-3 py-2 text-xs font-bold transition-all cursor-pointer ${
+                    isActive
+                      ? "bg-indigo-50 text-indigo-700 shadow-[0_1px_2px_rgba(0,0,0,0.02)] border border-indigo-100/80 font-extrabold"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                  }`}
+                >
+                  <Icon className={`h-4 w-4 shrink-0 ${isActive ? "text-indigo-600" : "text-slate-400"}`} />
+                  <span className="truncate">{item.name}</span>
+                </button>
+              </React.Fragment>
             );
           })}
         </nav>
@@ -470,7 +489,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
         )}
 
         {/* Main Content */}
-        <main className="flex-1 p-3 sm:p-4 md:p-5 lg:p-6 xl:p-8 pb-28 md:pb-8 overflow-y-auto overflow-x-hidden min-w-0 max-w-full touch-scroll-y">
+        <main className="flex-1 p-2 sm:p-4 md:p-5 lg:p-6 xl:p-8 pb-28 md:pb-8 overflow-y-auto overflow-x-hidden min-w-0 max-w-full touch-scroll-y">
           {children}
         </main>
       </div>
@@ -527,24 +546,31 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 max-h-[70vh] overflow-y-auto pr-1">
               {navItems.map((item, idx) => {
                 const Icon = item.icon;
                 const isActive = activeTab === item.tab;
+                const showCategoryHeader = idx === 0 || navItems[idx - 1].category !== item.category;
                 return (
-                  <button
-                    key={idx}
-                    onClick={() => handleTabChange(item.tab)}
-                    className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all press-scale ${
-                      isActive
-                        ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/20"
-                        : "bg-slate-50 text-slate-700 hover:bg-slate-100"
-                    }`}
-                  >
-                    <Icon className={`h-5 w-5 shrink-0 ${isActive ? "text-white" : "text-slate-400"}`} />
-                    <span className="font-bold text-sm">{item.name}</span>
-                    {!isActive && <ChevronRight className="h-4 w-4 text-slate-300 ml-auto" />}
-                  </button>
+                  <React.Fragment key={item.tab + "-mobile-" + idx}>
+                    {showCategoryHeader && item.category && (
+                      <span className={`px-2 text-[10px] font-black uppercase tracking-wider text-slate-400 block ${idx > 0 ? "mt-3 mb-1" : "mb-1"}`}>
+                        {item.category}
+                      </span>
+                    )}
+                    <button
+                      onClick={() => handleTabChange(item.tab)}
+                      className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all press-scale ${
+                        isActive
+                          ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/20 font-black"
+                          : "bg-slate-50 text-slate-700 hover:bg-slate-100 font-bold"
+                      }`}
+                    >
+                      <Icon className={`h-5 w-5 shrink-0 ${isActive ? "text-white" : "text-slate-400"}`} />
+                      <span className="text-sm">{item.name}</span>
+                      {!isActive && <ChevronRight className="h-4 w-4 text-slate-300 ml-auto" />}
+                    </button>
+                  </React.Fragment>
                 );
               })}
             </div>

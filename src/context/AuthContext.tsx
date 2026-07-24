@@ -210,6 +210,7 @@ interface AuthContextType {
   registerNewStaff: (data: any) => Promise<{ success: boolean; error?: string }>;
   updateSchoolInfo: (info: MockSchoolInfo) => Promise<void>;
   markAttendance: (studentId: string, date: string, status: AttendanceStatus) => Promise<void>;
+  markBatchAttendance: (records: { studentId: string; date: string; status: AttendanceStatus }[]) => Promise<void>;
   addHomework: (
     classSection: string,
     subject: string,
@@ -742,6 +743,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const markBatchAttendance = async (records: { studentId: string; date: string; status: AttendanceStatus }[]) => {
+    try {
+      const res = await fetch("/api/attendance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ records }),
+      });
+
+      if (res.ok) {
+        await refreshData();
+      }
+    } catch (err) {
+      console.error("Mark batch attendance failed:", err);
+    }
+  };
+
   const addHomework = async (
     classSection: string,
     subject: string,
@@ -1177,6 +1194,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         registerNewStaff,
         updateSchoolInfo,
         markAttendance,
+        markBatchAttendance,
         addHomework,
         deleteHomework,
         applyLeave,

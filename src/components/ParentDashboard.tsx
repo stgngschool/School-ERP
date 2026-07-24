@@ -279,9 +279,9 @@ export default function ParentDashboard() {
   }
 
   return (
-    <div className="space-y-4 pb-2 font-sans w-full max-w-full overflow-x-hidden">
+    <div className="-mx-2 sm:mx-0 space-y-4 pb-2 font-sans w-full max-w-full overflow-x-hidden">
       {/* 1. Header Banner & Sibling Switcher */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="bg-white border-y sm:border border-slate-200 sm:rounded-2xl p-3 sm:p-6 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="space-y-1">
           <span className="text-[9px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-100/50">
             School Parents Portal
@@ -312,7 +312,7 @@ export default function ParentDashboard() {
       </div>
 
       {child && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex items-center gap-3 hover:border-indigo-300 transition-all duration-300">
+        <div className="bg-white border-y sm:border border-slate-200 sm:rounded-2xl p-3 sm:p-4 shadow-sm flex items-center gap-3 hover:border-indigo-300 transition-all duration-300">
           {child.photoUrl ? (
             <img src={child.photoUrl} alt={child.name} className="h-14 w-14 rounded-xl object-cover border border-slate-200 shadow-sm shrink-0" />
           ) : (
@@ -353,11 +353,11 @@ export default function ParentDashboard() {
       ) : (
         <>
           {/* Quick Action Stickers Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-4">
         {/* Sticker 1: Pay Fees */}
         <button
           onClick={() => setActiveTab("fees")}
-          className="bg-white border border-slate-200/80 p-4 rounded-2xl shadow-[0_1px_2px_rgba(0,0,0,0.02)] flex flex-col items-center justify-center text-center gap-2 hover:-translate-y-0.5 hover:rotate-1 hover:border-indigo-300 transition-all duration-300 group cursor-pointer"
+          className="bg-white border border-slate-200/80 p-3 sm:p-4 rounded-xl sm:rounded-2xl shadow-[0_1px_2px_rgba(0,0,0,0.02)] flex flex-col items-center justify-center text-center gap-2 hover:-translate-y-0.5 hover:rotate-1 hover:border-indigo-300 transition-all duration-300 group cursor-pointer"
         >
           <div className="h-10 w-10 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-600 border border-indigo-100 group-hover:scale-110 transition-transform">
             <CreditCard className="h-5 w-5" />
@@ -368,7 +368,7 @@ export default function ParentDashboard() {
         {/* Sticker 2: Homework Board */}
         <button
           onClick={() => setActiveTab("homework")}
-          className="bg-white border border-slate-200/80 p-4 rounded-2xl shadow-[0_1px_2px_rgba(0,0,0,0.02)] flex flex-col items-center justify-center text-center gap-2 hover:-translate-y-0.5 hover:-rotate-1 hover:border-indigo-300 transition-all duration-300 group cursor-pointer"
+          className="bg-white border border-slate-200/80 p-3 sm:p-4 rounded-xl sm:rounded-2xl shadow-[0_1px_2px_rgba(0,0,0,0.02)] flex flex-col items-center justify-center text-center gap-2 hover:-translate-y-0.5 hover:-rotate-1 hover:border-indigo-300 transition-all duration-300 group cursor-pointer"
         >
           <div className="h-10 w-10 bg-pink-50 rounded-full flex items-center justify-center text-pink-600 border border-pink-100 group-hover:scale-110 transition-transform">
             <BookOpen className="h-5 w-5" />
@@ -379,7 +379,7 @@ export default function ParentDashboard() {
         {/* Sticker 3: Attendance History */}
         <button
           onClick={() => setActiveTab("attendance")}
-          className="bg-white border border-slate-200/80 p-4 rounded-2xl shadow-[0_1px_2px_rgba(0,0,0,0.02)] flex flex-col items-center justify-center text-center gap-2 hover:-translate-y-0.5 hover:rotate-1 hover:border-indigo-300 transition-all duration-300 group cursor-pointer"
+          className="bg-white border border-slate-200/80 p-3 sm:p-4 rounded-xl sm:rounded-2xl shadow-[0_1px_2px_rgba(0,0,0,0.02)] flex flex-col items-center justify-center text-center gap-2 hover:-translate-y-0.5 hover:rotate-1 hover:border-indigo-300 transition-all duration-300 group cursor-pointer"
         >
           <div className="h-10 w-10 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-650 border border-emerald-100 group-hover:scale-110 transition-transform">
             <CalendarIcon className="h-5 w-5" />
@@ -390,7 +390,7 @@ export default function ParentDashboard() {
         {/* Sticker 4: Apply for Leave */}
         <button
           onClick={() => setActiveTab("leave")}
-          className="bg-white border border-slate-200/80 p-4 rounded-2xl shadow-[0_1px_2px_rgba(0,0,0,0.02)] flex flex-col items-center justify-center text-center gap-2 hover:-translate-y-0.5 hover:-rotate-1 hover:border-indigo-300 transition-all duration-300 group cursor-pointer"
+          className="bg-white border border-slate-200/80 p-3 sm:p-4 rounded-xl sm:rounded-2xl shadow-[0_1px_2px_rgba(0,0,0,0.02)] flex flex-col items-center justify-center text-center gap-2 hover:-translate-y-0.5 hover:-rotate-1 hover:border-indigo-300 transition-all duration-300 group cursor-pointer"
         >
           <div className="h-10 w-10 bg-amber-50 rounded-full flex items-center justify-center text-amber-655 border border-amber-100 group-hover:scale-110 transition-transform">
             <FileText className="h-5 w-5" />
@@ -401,9 +401,9 @@ export default function ParentDashboard() {
 
       {/* 2. Dynamic Views based on activeTab */}
       {activeTab === "dashboard" && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-6">
           {/* Card 1: Attendance Rate */}
-          <div className="bg-white border border-slate-200/80 p-5 rounded-2xl shadow-sm flex items-start justify-between hover:border-indigo-300 transition-all duration-300 relative overflow-hidden group">
+          <div className="bg-white border border-slate-200/80 p-3 sm:p-5 sm:rounded-2xl rounded-xl shadow-sm flex items-start justify-between hover:border-indigo-300 transition-all duration-300 relative overflow-hidden group">
             <div className="space-y-3">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Attendance Rate</span>
               <div>
@@ -417,7 +417,7 @@ export default function ParentDashboard() {
           </div>
 
           {/* Card 2: Active Homework */}
-          <div className="bg-white border border-slate-200/80 p-5 rounded-2xl shadow-sm flex items-start justify-between hover:border-indigo-300 transition-all duration-300 relative overflow-hidden group">
+          <div className="bg-white border border-slate-200/80 p-3 sm:p-5 sm:rounded-2xl rounded-xl shadow-sm flex items-start justify-between hover:border-indigo-300 transition-all duration-300 relative overflow-hidden group">
             <div className="space-y-3">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Active Homework</span>
               <div>
@@ -431,7 +431,7 @@ export default function ParentDashboard() {
           </div>
 
           {/* Card 3: Outstanding Dues */}
-          <div className="bg-white border border-slate-200/80 p-5 rounded-2xl shadow-sm flex items-start justify-between hover:border-indigo-300 transition-all duration-300 relative overflow-hidden group">
+          <div className="bg-white border border-slate-200/80 p-3 sm:p-5 sm:rounded-2xl rounded-xl shadow-sm flex items-start justify-between hover:border-indigo-300 transition-all duration-300 relative overflow-hidden group">
             <div className="space-y-3">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Outstanding Dues</span>
               <div>
@@ -449,7 +449,7 @@ export default function ParentDashboard() {
       {activeTab === "reportcard" && (
         <div className="space-y-6 animate-fade-in text-left">
           {/* Header Panel */}
-          <div className="bg-white border border-slate-200/80 p-6 rounded-2xl shadow-sm space-y-2">
+          <div className="bg-white border border-slate-200/80 p-3 sm:p-6 sm:rounded-2xl rounded-xl shadow-sm space-y-2">
             <h3 className="text-xs font-black uppercase text-indigo-600 tracking-widest">
               Academic Report Card
             </h3>
@@ -517,7 +517,7 @@ export default function ParentDashboard() {
                 {/* Aggregate Scorecard Panel */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                   {/* Total Score Card */}
-                  <div className="bg-white border border-slate-200/80 p-5 rounded-2xl shadow-sm space-y-2">
+                  <div className="bg-white border border-slate-200/80 p-3 sm:p-5 sm:rounded-2xl rounded-xl shadow-sm space-y-2">
                     <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Total Marks</span>
                     <div>
                       <h3 className="text-xl font-black text-slate-800">
@@ -528,7 +528,7 @@ export default function ParentDashboard() {
                   </div>
 
                   {/* Percentage Card */}
-                  <div className="bg-white border border-slate-200/80 p-5 rounded-2xl shadow-sm space-y-2">
+                  <div className="bg-white border border-slate-200/80 p-3 sm:p-5 sm:rounded-2xl rounded-xl shadow-sm space-y-2">
                     <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Percentage</span>
                     <div>
                       <h3 className="text-xl font-black text-slate-800">{percentage}%</h3>
@@ -542,7 +542,7 @@ export default function ParentDashboard() {
                   </div>
 
                   {/* Aggregate Grade */}
-                  <div className="bg-white border border-slate-200/80 p-5 rounded-2xl shadow-sm space-y-2">
+                  <div className="bg-white border border-slate-200/80 p-3 sm:p-5 sm:rounded-2xl rounded-xl shadow-sm space-y-2">
                     <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Overall Grade</span>
                     <div>
                       <h3 className={`text-xl font-black ${isPassed ? "text-indigo-600" : "text-rose-600"}`}>
@@ -553,7 +553,7 @@ export default function ParentDashboard() {
                   </div>
 
                   {/* Pass/Fail Status Badge */}
-                  <div className="bg-white border border-slate-200/80 p-5 rounded-2xl shadow-sm flex flex-col justify-center items-center">
+                  <div className="bg-white border border-slate-200/80 p-3 sm:p-5 sm:rounded-2xl rounded-xl shadow-sm flex flex-col justify-center items-center">
                     <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Result Status</span>
                     {isPassed ? (
                       <span className="px-4 py-1.5 bg-green-50 border border-green-200 rounded-xl text-green-700 font-black text-xs uppercase tracking-wider">
@@ -568,7 +568,7 @@ export default function ParentDashboard() {
                 </div>
 
                 {/* Subject-Wise Report Card Table */}
-                <div className="bg-white border border-slate-200/80 rounded-2xl shadow-sm overflow-hidden">
+                <div className="bg-white border border-slate-200/80 sm:rounded-2xl shadow-sm overflow-hidden">
                   <div className="p-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
                     <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">
                       Subject Details ({currentExamTab})
@@ -753,7 +753,7 @@ export default function ParentDashboard() {
       {activeTab === "fees" && (
         <div className="space-y-6">
           {/* Outstanding Invoices Billing Desk */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm space-y-4">
+        <div className="bg-white border-y sm:border border-slate-200 sm:rounded-2xl p-3 sm:p-6 shadow-sm space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 pb-3">
               <div className="flex items-center gap-2">
                 <CreditCard className="h-4.5 w-4.5 text-indigo-600 animate-pulse" />
@@ -841,7 +841,7 @@ export default function ParentDashboard() {
         </div>
 
           {/* Paid Receipts Ledger Log */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm space-y-4">
+          <div className="bg-white border-y sm:border border-slate-200 sm:rounded-2xl p-3 sm:p-6 shadow-sm space-y-4">
             <div className="flex items-center gap-2 border-b border-slate-200/80 pb-3">
               <FileText className="h-4.5 w-4.5 text-indigo-600" />
               <h3 className="text-xs font-black uppercase tracking-wider text-slate-800">
@@ -885,7 +885,7 @@ export default function ParentDashboard() {
       )}
 
       {activeTab === "homework" && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm space-y-4">
+        <div className="bg-white border-y sm:border border-slate-200 sm:rounded-2xl p-3 sm:p-6 shadow-sm space-y-4">
           <div className="flex items-center gap-2 border-b border-slate-200/80 pb-3">
             <BookOpen className="h-4.5 w-4.5 text-indigo-600" />
             <h3 className="text-xs font-black uppercase tracking-wider text-slate-800">
@@ -920,7 +920,7 @@ export default function ParentDashboard() {
       )}
 
       {activeTab === "attendance" && (
-        <div className="bg-white border border-slate-200/80 p-6 rounded-2xl shadow-sm space-y-4">
+        <div className="bg-white border border-slate-200/80 p-3 sm:p-6 sm:rounded-2xl rounded-xl shadow-sm space-y-4">
           <div className="flex items-center justify-between border-b border-slate-200/80 pb-3">
             <div className="flex items-center gap-2">
               <CalendarIcon className="h-4.5 w-4.5 text-indigo-600" />
@@ -973,7 +973,7 @@ export default function ParentDashboard() {
 
       {activeTab === "leave" && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="bg-white border border-slate-200/80 p-6 rounded-2xl shadow-sm flex flex-col gap-4">
+          <div className="bg-white border border-slate-200/80 p-3 sm:p-6 sm:rounded-2xl rounded-xl shadow-sm flex flex-col gap-4">
             <div className="flex items-center gap-2 border-b border-slate-200/80 pb-3">
               <FileText className="h-4.5 w-4.5 text-indigo-600" />
               <h3 className="text-xs font-black uppercase tracking-wider text-slate-800">
@@ -1029,7 +1029,7 @@ export default function ParentDashboard() {
             </form>
           </div>
 
-          <div className="lg:col-span-2 bg-white border border-slate-200/80 p-6 rounded-2xl shadow-sm space-y-4">
+          <div className="lg:col-span-2 bg-white border border-slate-200/80 p-3 sm:p-6 sm:rounded-2xl rounded-xl shadow-sm space-y-4">
             <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 border-b border-slate-200/80 pb-3">
               Leave Requests Log
             </h3>

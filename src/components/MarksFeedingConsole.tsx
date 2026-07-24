@@ -408,9 +408,9 @@ export default function MarksFeedingConsole() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="-mx-2 sm:mx-0 space-y-4 text-left">
       {/* ─── Clean Header & Filter Control Console ─── */}
-      <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-xs text-left">
+      <div className="bg-white border-y sm:border border-slate-200/90 sm:rounded-2xl p-3 sm:p-5 shadow-xs text-left">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 bg-indigo-50 border border-indigo-100/80 rounded-xl flex items-center justify-center text-indigo-600 shrink-0 shadow-xs">
@@ -550,7 +550,7 @@ export default function MarksFeedingConsole() {
 
       {/* ─── Class Performance Overview Strip ─── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-left">
-        <div className="bg-white border border-slate-200/90 p-3.5 rounded-2xl shadow-2xs flex items-center gap-3">
+        <div className="bg-white border border-slate-200/90 p-3 sm:p-3.5 rounded-xl sm:rounded-2xl shadow-2xs flex items-center gap-3">
           <div className="h-10 w-10 bg-indigo-50 border border-indigo-100 rounded-xl flex items-center justify-center text-indigo-600 shrink-0">
             <Users className="h-5 w-5" />
           </div>
@@ -562,7 +562,7 @@ export default function MarksFeedingConsole() {
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200/90 p-3.5 rounded-2xl shadow-2xs flex items-center gap-3">
+        <div className="bg-white border border-slate-200/90 p-3 sm:p-3.5 rounded-xl sm:rounded-2xl shadow-2xs flex items-center gap-3">
           <div className="h-10 w-10 bg-emerald-50 border border-emerald-100 rounded-xl flex items-center justify-center text-emerald-600 shrink-0">
             <TrendingUp className="h-5 w-5" />
           </div>
@@ -574,7 +574,7 @@ export default function MarksFeedingConsole() {
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200/90 p-3.5 rounded-2xl shadow-2xs flex items-center gap-3">
+        <div className="bg-white border border-slate-200/90 p-3 sm:p-3.5 rounded-xl sm:rounded-2xl shadow-2xs flex items-center gap-3">
           <div className="h-10 w-10 bg-amber-50 border border-amber-100 rounded-xl flex items-center justify-center text-amber-600 shrink-0">
             <Award className="h-5 w-5" />
           </div>
@@ -586,7 +586,7 @@ export default function MarksFeedingConsole() {
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200/90 p-3.5 rounded-2xl shadow-2xs flex items-center gap-3">
+        <div className="bg-white border border-slate-200/90 p-3 sm:p-3.5 rounded-xl sm:rounded-2xl shadow-2xs flex items-center gap-3">
           <div className="h-10 w-10 bg-teal-50 border border-teal-100 rounded-xl flex items-center justify-center text-teal-600 shrink-0">
             <CheckCircle2 className="h-5 w-5" />
           </div>
@@ -600,7 +600,7 @@ export default function MarksFeedingConsole() {
       </div>
 
       {/* ─── Search & Status Row ─── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200/90 shadow-2xs text-left">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 sm:p-3.5 sm:rounded-2xl rounded-xl border-y sm:border border-slate-200/90 shadow-2xs text-left">
         <div className="flex items-center gap-2 flex-wrap">
           {isEditMode ? (
             <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 rounded-lg px-2.5 py-1 font-bold uppercase tracking-wider">
@@ -647,7 +647,7 @@ export default function MarksFeedingConsole() {
       {/* ─── Student Roster Section ─── */}
       <div className="text-left">
         {/* Roster Header & Save Action Bar */}
-        <div className="p-3.5 bg-white border border-slate-200/90 rounded-2xl shadow-xs mb-3 flex items-center justify-between">
+        <div className="p-3 sm:p-3.5 bg-white border-y sm:border border-slate-200/90 sm:rounded-2xl shadow-xs mb-3 flex items-center justify-between">
           <div>
             <h3 className="text-xs font-black uppercase tracking-wider text-slate-700">
               Class Roster ({filteredStudents.length} Students)

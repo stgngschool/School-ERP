@@ -35,7 +35,44 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
     }
 
-    const { studentId, date, status, overrideLeave } = await request.json();
+    const body = await request.json();
+    const teacherUserId = authUser.userId;
+
+    // Handle Bulk / Batch Attendance Save
+    if (body.records && Array.isArray(body.records)) {
+      const { records } = body;
+
+      const upsertOps = records.map((rec: { studentId: string; date: string; status: AttendanceStatus }) => {
+        const dateStr = typeof rec.date === "string" ? rec.date.split("T")[0] : new Date(rec.date).toISOString().split("T")[0];
+        const dateObj = new Date(`${dateStr}T00:00:00.000Z`);
+
+        return db.attendance.upsert({
+          where: {
+            studentId_date: {
+              studentId: rec.studentId,
+              date: dateObj,
+            },
+          },
+          update: {
+            status: rec.status as AttendanceStatus,
+            markedBy: teacherUserId,
+          },
+          create: {
+            studentId: rec.studentId,
+            date: dateObj,
+            status: rec.status as AttendanceStatus,
+            markedBy: teacherUserId,
+          },
+        });
+      });
+
+      await db.$transaction(upsertOps);
+
+      return NextResponse.json({ success: true, count: records.length });
+    }
+
+    // Handle Single Attendance Mark
+    const { studentId, date, status, overrideLeave } = body;
 
     if (!studentId || !date || !status) {
       return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
@@ -48,8 +85,6 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-
-    const teacherUserId = authUser.userId;
 
     const student = await db.student.findUnique({
       where: { id: studentId },
