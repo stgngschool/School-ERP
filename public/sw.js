@@ -53,8 +53,12 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // API routes: Network-first
+  // API routes: Direct network for auth, network-first for rest
   if (url.pathname.startsWith("/api/")) {
+    if (url.pathname.startsWith("/api/auth/")) {
+      event.respondWith(fetch(request));
+      return;
+    }
     event.respondWith(networkFirstWithCache(request, API_CACHE, 10));
     return;
   }
@@ -88,8 +92,12 @@ async function networkFirstWithCache(request, cacheName, maxAgeSeconds) {
   try {
     const networkResponse = await fetch(request);
     if (networkResponse.ok) {
-      const cache = await caches.open(cacheName);
-      cache.put(request, networkResponse.clone());
+      try {
+        const cache = await caches.open(cacheName);
+        await cache.put(request, networkResponse.clone());
+      } catch (e) {
+        // Ignore cache storage error for responses with set-cookie or non-cacheable headers
+      }
     }
     return networkResponse;
   } catch {
