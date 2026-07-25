@@ -51,6 +51,10 @@ import {
   AlertCircle,
   Loader2,
   Database,
+  Filter,
+  RotateCcw,
+  SlidersHorizontal,
+  X,
 } from "lucide-react";
 
 // Groups multiple months or siblings into a single row if the list grows too long (> 4 items)
@@ -245,6 +249,12 @@ export default function AdminDashboard() {
   const [importMode, setImportMode] = useState<"directory" | "single" | "bulk">("directory");
   const [dirSearch, setDirSearch] = useState("");
   const [dirClassFilter, setDirClassFilter] = useState("");
+  const [dirSectionFilter, setDirSectionFilter] = useState("");
+  const [dirFamilyFilter, setDirFamilyFilter] = useState("");
+  const [dirStatusFilter, setDirStatusFilter] = useState("ALL");
+  const [dirRteFilter, setDirRteFilter] = useState("ALL");
+  const [dirCategoryFilter, setDirCategoryFilter] = useState("ALL");
+  const [dirDuesFilter, setDirDuesFilter] = useState("ALL");
   const [activeMenuStudentId, setActiveMenuStudentId] = useState<string | null>(null);
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -542,6 +552,29 @@ export default function AdminDashboard() {
   const [csvPreview, setCsvPreview] = useState<any[] | null>(null);
   const [importCount, setImportCount] = useState<number | null>(null);
   const [csvError, setCsvError] = useState<string | null>(null);
+  const [importProgress, setImportProgress] = useState<{
+    isImporting: boolean;
+    processed: number;
+    total: number;
+    currentBatch: number;
+    totalBatches: number;
+    speed: number | null;
+    etaSeconds: number | null;
+    success: boolean;
+    error: string | null;
+    timeTaken: number | null;
+  }>({
+    isImporting: false,
+    processed: 0,
+    total: 0,
+    currentBatch: 0,
+    totalBatches: 0,
+    speed: null,
+    etaSeconds: null,
+    success: false,
+    error: null,
+    timeTaken: null,
+  });
 
   // Fee Collection States (ported from Accountant)
   const [selectedStudentId, setSelectedStudentId] = useState("");
@@ -1378,13 +1411,67 @@ export default function AdminDashboard() {
 
   const handleImportStudents = async () => {
     if (!csvPreview || csvPreview.length === 0) return;
-    const ok = await bulkImportStudents(csvPreview);
-    if (ok) {
-      setImportCount(csvPreview.length);
+
+    const total = csvPreview.length;
+    const startTime = Date.now();
+
+    setCsvError(null);
+    setImportProgress({
+      isImporting: true,
+      processed: 0,
+      total,
+      currentBatch: 1,
+      totalBatches: Math.ceil(total / 50),
+      speed: null,
+      etaSeconds: null,
+      success: false,
+      error: null,
+      timeTaken: null,
+    });
+
+    const result = await bulkImportStudents(csvPreview, (processed, totalCount, currentBatch, totalBatches) => {
+      const elapsedSec = (Date.now() - startTime) / 1000;
+      const speed = elapsedSec > 0 ? Math.round((processed / elapsedSec) * 10) / 10 : 0;
+      const remaining = totalCount - processed;
+      const etaSeconds = speed > 0 ? Math.ceil(remaining / speed) : 0;
+
+      setImportProgress((prev) => ({
+        ...prev,
+        processed,
+        total: totalCount,
+        currentBatch,
+        totalBatches,
+        speed,
+        etaSeconds,
+      }));
+    });
+
+    const timeTakenSec = Math.round((Date.now() - startTime) / 1000);
+
+    if (result.success) {
+      setImportProgress({
+        isImporting: false,
+        processed: result.totalImported,
+        total,
+        currentBatch: Math.ceil(total / 50),
+        totalBatches: Math.ceil(total / 50),
+        speed: null,
+        etaSeconds: null,
+        success: true,
+        error: null,
+        timeTaken: timeTakenSec,
+      });
+      setImportCount(result.totalImported);
       setCsvPreview(null);
-      setTimeout(() => setImportCount(null), 5000);
+      setTimeout(() => setImportCount(null), 10000);
     } else {
-      setCsvError("Server failed to import students. Check database fields.");
+      setImportProgress((prev) => ({
+        ...prev,
+        isImporting: false,
+        success: false,
+        error: result.error || "Server failed to import students.",
+      }));
+      setCsvError(result.error || "Server failed to import students. Check database fields.");
     }
   };
 
@@ -1643,6 +1730,9 @@ export default function AdminDashboard() {
             const monthlyReceipts = receipts.filter(r => r.createdAt.startsWith(currentMonthStr));
             const monthlyTotal = monthlyReceipts.reduce((sum, r) => sum + r.amount, 0);
 
+            const staffUsers = usersList.filter(u => u.role === "ADMIN" || u.role === "ACCOUNTANT" || u.role === "TEACHER");
+            const staffUsersCount = staffUsers.length || 1;
+
             const collectorStats: { [key: string]: { name: string; role: string; count: number; total: number } } = {};
             receipts.forEach(r => {
               const collectorName = r.collectedBy || "System User";
@@ -1721,22 +1811,22 @@ export default function AdminDashboard() {
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full lg:w-auto pt-2 lg:pt-0">
                     <div className="space-y-1 bg-slate-800/80 p-2.5 rounded-xl border border-slate-700">
                       <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider block">Cash Tally</span>
-                      <span className="text-sm font-black text-emerald-400">₹{(todayCash / 100).toLocaleString("en-IN")}</span>
+                      <span className="text-sm font-black text-emerald-400">₹{todayCash.toLocaleString("en-IN")}</span>
                     </div>
                     
                     <div className="space-y-1 bg-slate-800/80 p-2.5 rounded-xl border border-slate-700">
                       <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider block">UPI QR Scan</span>
-                      <span className="text-sm font-black text-indigo-300">₹{(todayUpi / 100).toLocaleString("en-IN")}</span>
+                      <span className="text-sm font-black text-indigo-300">₹{todayUpi.toLocaleString("en-IN")}</span>
                     </div>
 
                     <div className="space-y-1 bg-slate-800/80 p-2.5 rounded-xl border border-slate-700">
                       <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider block">Bank / Cheque</span>
-                      <span className="text-sm font-black text-white">₹{(todayBank / 100).toLocaleString("en-IN")}</span>
+                      <span className="text-sm font-black text-white">₹{todayBank.toLocaleString("en-IN")}</span>
                     </div>
 
                     <div className="space-y-1 bg-indigo-600 p-2.5 rounded-xl border border-indigo-500 shadow-sm">
                       <span className="text-[8px] font-black text-indigo-200 uppercase tracking-wider block leading-none mb-1">Total Today</span>
-                      <span className="text-sm font-black text-white block">₹{(todayTotal / 100).toLocaleString("en-IN")}</span>
+                      <span className="text-sm font-black text-white block">₹{todayTotal.toLocaleString("en-IN")}</span>
                     </div>
                   </div>
                 </div>
@@ -1826,7 +1916,7 @@ export default function AdminDashboard() {
                   <div className="bg-white border-y sm:border border-slate-200/90 sm:rounded-2xl p-3 sm:p-4 shadow-xs">
                     <div className="flex justify-between items-start">
                       <div className="space-y-1">
-                        <h4 className="text-2xl font-black text-emerald-700 tracking-tight">₹{(totalEarnings / 100).toLocaleString("en-IN")}</h4>
+                        <h4 className="text-2xl font-black text-emerald-700 tracking-tight">₹{totalEarnings.toLocaleString("en-IN")}</h4>
                         <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Total Revenue Collected</span>
                       </div>
                       <div className="h-10 w-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 border border-emerald-100 shrink-0">
@@ -1834,7 +1924,7 @@ export default function AdminDashboard() {
                       </div>
                     </div>
                     <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold text-slate-500">
-                      <span>This Month: ₹{(monthlyTotal / 100).toLocaleString("en-IN")}</span>
+                      <span>This Month: ₹{monthlyTotal.toLocaleString("en-IN")}</span>
                     </div>
                   </div>
 
@@ -1842,7 +1932,7 @@ export default function AdminDashboard() {
                   <div className="bg-white border-y sm:border border-slate-200/90 sm:rounded-2xl p-3 sm:p-4 shadow-xs">
                     <div className="flex justify-between items-start">
                       <div className="space-y-1">
-                        <h4 className="text-2xl font-black text-amber-600 tracking-tight">₹{(totalDues / 100).toLocaleString("en-IN")}</h4>
+                        <h4 className="text-2xl font-black text-amber-600 tracking-tight">₹{totalDues.toLocaleString("en-IN")}</h4>
                         <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Pending Fee Dues</span>
                       </div>
                       <div className="h-10 w-10 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600 border border-amber-100 shrink-0">
@@ -1859,7 +1949,7 @@ export default function AdminDashboard() {
                   <div className="bg-white border-y sm:border border-slate-200/90 sm:rounded-2xl p-3 sm:p-4 shadow-xs">
                     <div className="flex justify-between items-start">
                       <div className="space-y-1">
-                        <h4 className="text-2xl font-black text-slate-900 tracking-tight">{usersList.length} Staff</h4>
+                        <h4 className="text-2xl font-black text-slate-900 tracking-tight">{staffUsersCount} Staff</h4>
                         <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Attendance Rate: {attendanceRate}%</span>
                       </div>
                       <div className="h-10 w-10 bg-teal-50 rounded-xl flex items-center justify-center text-teal-600 border border-teal-100 shrink-0">
@@ -4070,37 +4160,242 @@ export default function AdminDashboard() {
                   />
                 ) : (
                   <div className="space-y-4 animate-fade-in">
-                    {/* SEARCH AND FILTERS */}
-                  <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-white border border-slate-200/60 p-4 rounded-2xl shadow-sm">
-                    <div className="relative w-full sm:max-w-xs">
-                      <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                      <input
-                        type="text"
-                        placeholder="Search Name, ADM No, Family ID..."
-                        value={dirSearch}
-                        onChange={(e) => {
-                          setDirSearch(e.target.value);
-                          setCurrentPage(1);
-                        }}
-                        className="w-full text-xs font-semibold py-2 pl-9 pr-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 transition-all"
-                      />
+                    {/* ENHANCED MULTI-FACTOR FILTERS TOOLBAR */}
+                    <div className="bg-white border border-slate-200/80 p-4 sm:p-5 rounded-2xl shadow-sm space-y-4">
+                      {/* Top Row: Search Input + Clear All Button */}
+                      <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
+                        <div className="relative w-full sm:max-w-md">
+                          <Search className="absolute left-3.5 top-2.5 h-4 w-4 text-slate-400" />
+                          <input
+                            type="text"
+                            placeholder="Search Student Name, ADM No, Roll, Family ID, Phone, Aadhaar..."
+                            value={dirSearch}
+                            onChange={(e) => {
+                              setDirSearch(e.target.value);
+                              setCurrentPage(1);
+                            }}
+                            className="w-full text-xs font-semibold py-2.5 pl-10 pr-8 border border-slate-200 rounded-xl outline-none bg-slate-50/70 focus:bg-white focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/10 transition-all shadow-inner"
+                          />
+                          {dirSearch && (
+                            <button
+                              onClick={() => {
+                                setDirSearch("");
+                                setCurrentPage(1);
+                              }}
+                              className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-100"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                          {(dirSearch || dirClassFilter || dirSectionFilter || dirFamilyFilter || dirStatusFilter !== "ALL" || dirRteFilter !== "ALL" || dirCategoryFilter !== "ALL" || dirDuesFilter !== "ALL") && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDirSearch("");
+                                setDirClassFilter("");
+                                setDirSectionFilter("");
+                                setDirFamilyFilter("");
+                                setDirStatusFilter("ALL");
+                                setDirRteFilter("ALL");
+                                setDirCategoryFilter("ALL");
+                                setDirDuesFilter("ALL");
+                                setCurrentPage(1);
+                              }}
+                              className="py-2 px-3 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer border border-rose-200/60"
+                            >
+                              <RotateCcw className="h-3.5 w-3.5" /> Clear All Filters
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Filter Grid (Class, Section, Family ID, Status, Billing Type, Caste Category, Dues Status) */}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2.5 pt-1 border-t border-slate-100">
+                        {/* 1. Class Filter */}
+                        <div>
+                          <label className="text-[9px] font-extrabold uppercase text-slate-400 block mb-1 tracking-wider">Class</label>
+                          <select
+                            value={dirClassFilter}
+                            onChange={(e) => {
+                              setDirClassFilter(e.target.value);
+                              setCurrentPage(1);
+                            }}
+                            className="w-full text-xs font-bold py-2 px-2.5 border border-slate-200 rounded-xl outline-none bg-slate-50/70 focus:bg-white focus:border-indigo-600 cursor-pointer"
+                          >
+                            <option value="">All Classes</option>
+                            {Array.from(new Set(classes.map((c: any) => c.name))).sort().map((className: any) => (
+                              <option key={className} value={className}>Class {className}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* 2. Section Filter */}
+                        <div>
+                          <label className="text-[9px] font-extrabold uppercase text-slate-400 block mb-1 tracking-wider">Section</label>
+                          <select
+                            value={dirSectionFilter}
+                            onChange={(e) => {
+                              setDirSectionFilter(e.target.value);
+                              setCurrentPage(1);
+                            }}
+                            className="w-full text-xs font-bold py-2 px-2.5 border border-slate-200 rounded-xl outline-none bg-slate-50/70 focus:bg-white focus:border-indigo-600 cursor-pointer"
+                          >
+                            <option value="">All Sections</option>
+                            {Array.from(new Set(classes.map((c: any) => c.section))).sort().map((sec: any) => (
+                              <option key={sec} value={sec}>Section {sec}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* 3. Family ID Filter */}
+                        <div>
+                          <label className="text-[9px] font-extrabold uppercase text-indigo-600 block mb-1 tracking-wider">Family ID</label>
+                          <select
+                            value={dirFamilyFilter}
+                            onChange={(e) => {
+                              setDirFamilyFilter(e.target.value);
+                              setCurrentPage(1);
+                            }}
+                            className="w-full text-xs font-bold py-2 px-2.5 border border-indigo-200 rounded-xl outline-none bg-indigo-50/40 focus:bg-white focus:border-indigo-600 cursor-pointer text-indigo-900"
+                          >
+                            <option value="">All Family IDs</option>
+                            {Array.from(new Set(students.map((s: any) => s.familyCode).filter(Boolean))).sort().map((fCode: any) => (
+                              <option key={fCode} value={fCode}>{fCode}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* 4. Account Status */}
+                        <div>
+                          <label className="text-[9px] font-extrabold uppercase text-slate-400 block mb-1 tracking-wider">Status</label>
+                          <select
+                            value={dirStatusFilter}
+                            onChange={(e) => {
+                              setDirStatusFilter(e.target.value);
+                              setCurrentPage(1);
+                            }}
+                            className="w-full text-xs font-bold py-2 px-2.5 border border-slate-200 rounded-xl outline-none bg-slate-50/70 focus:bg-white focus:border-indigo-600 cursor-pointer"
+                          >
+                            <option value="ALL">All Statuses</option>
+                            <option value="ACTIVE">Active Only</option>
+                            <option value="SUSPENDED">Suspended</option>
+                            <option value="LEFT">Left (TC Issued)</option>
+                          </select>
+                        </div>
+
+                        {/* 5. Billing / RTE Filter */}
+                        <div>
+                          <label className="text-[9px] font-extrabold uppercase text-slate-400 block mb-1 tracking-wider">Billing Type</label>
+                          <select
+                            value={dirRteFilter}
+                            onChange={(e) => {
+                              setDirRteFilter(e.target.value);
+                              setCurrentPage(1);
+                            }}
+                            className="w-full text-xs font-bold py-2 px-2.5 border border-slate-200 rounded-xl outline-none bg-slate-50/70 focus:bg-white focus:border-indigo-600 cursor-pointer"
+                          >
+                            <option value="ALL">All Billing Types</option>
+                            <option value="RTE">RTE Waiver (100%)</option>
+                            <option value="NON_RTE">Standard Billing</option>
+                            <option value="TRANSPORT">Bus Transport</option>
+                          </select>
+                        </div>
+
+                        {/* 6. Caste Category */}
+                        <div>
+                          <label className="text-[9px] font-extrabold uppercase text-slate-400 block mb-1 tracking-wider">Category</label>
+                          <select
+                            value={dirCategoryFilter}
+                            onChange={(e) => {
+                              setDirCategoryFilter(e.target.value);
+                              setCurrentPage(1);
+                            }}
+                            className="w-full text-xs font-bold py-2 px-2.5 border border-slate-200 rounded-xl outline-none bg-slate-50/70 focus:bg-white focus:border-indigo-600 cursor-pointer"
+                          >
+                            <option value="ALL">All Categories</option>
+                            <option value="General">General</option>
+                            <option value="OBC">OBC</option>
+                            <option value="SC">SC</option>
+                            <option value="ST">ST</option>
+                          </select>
+                        </div>
+
+                        {/* 7. Fee Dues Status */}
+                        <div>
+                          <label className="text-[9px] font-extrabold uppercase text-slate-400 block mb-1 tracking-wider">Fee Dues</label>
+                          <select
+                            value={dirDuesFilter}
+                            onChange={(e) => {
+                              setDirDuesFilter(e.target.value);
+                              setCurrentPage(1);
+                            }}
+                            className="w-full text-xs font-bold py-2 px-2.5 border border-slate-200 rounded-xl outline-none bg-slate-50/70 focus:bg-white focus:border-indigo-600 cursor-pointer"
+                          >
+                            <option value="ALL">All Fee Status</option>
+                            <option value="HAS_DUES">Pending Dues</option>
+                            <option value="FULLY_PAID">Fully Paid</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* ACTIVE FILTERS STRIP */}
+                      {(dirSearch || dirClassFilter || dirSectionFilter || dirFamilyFilter || dirStatusFilter !== "ALL" || dirRteFilter !== "ALL" || dirCategoryFilter !== "ALL" || dirDuesFilter !== "ALL") && (
+                        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 text-[11px] font-bold">
+                          <span className="text-slate-400 font-extrabold uppercase text-[9px] tracking-wider">Active Filters:</span>
+                          {dirSearch && (
+                            <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-0.5 rounded-lg border border-slate-200">
+                              Search: "{dirSearch}"
+                              <button onClick={() => setDirSearch("")} className="hover:text-slate-900"><X className="h-3 w-3" /></button>
+                            </span>
+                          )}
+                          {dirClassFilter && (
+                            <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-0.5 rounded-lg border border-slate-200">
+                              Class: {dirClassFilter}
+                              <button onClick={() => setDirClassFilter("")} className="hover:text-slate-900"><X className="h-3 w-3" /></button>
+                            </span>
+                          )}
+                          {dirSectionFilter && (
+                            <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-0.5 rounded-lg border border-slate-200">
+                              Section: {dirSectionFilter}
+                              <button onClick={() => setDirSectionFilter("")} className="hover:text-slate-900"><X className="h-3 w-3" /></button>
+                            </span>
+                          )}
+                          {dirFamilyFilter && (
+                            <span className="inline-flex items-center gap-1 bg-purple-50 text-purple-700 px-2.5 py-0.5 rounded-lg border border-purple-200 font-black">
+                              Family ID: {dirFamilyFilter}
+                              <button onClick={() => setDirFamilyFilter("")} className="hover:text-purple-900"><X className="h-3 w-3" /></button>
+                            </span>
+                          )}
+                          {dirStatusFilter !== "ALL" && (
+                            <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-0.5 rounded-lg border border-slate-200">
+                              Status: {dirStatusFilter}
+                              <button onClick={() => setDirStatusFilter("ALL")} className="hover:text-slate-900"><X className="h-3 w-3" /></button>
+                            </span>
+                          )}
+                          {dirRteFilter !== "ALL" && (
+                            <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-0.5 rounded-lg border border-slate-200">
+                              Billing: {dirRteFilter}
+                              <button onClick={() => setDirRteFilter("ALL")} className="hover:text-slate-900"><X className="h-3 w-3" /></button>
+                            </span>
+                          )}
+                          {dirCategoryFilter !== "ALL" && (
+                            <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-0.5 rounded-lg border border-slate-200">
+                              Category: {dirCategoryFilter}
+                              <button onClick={() => setDirCategoryFilter("ALL")} className="hover:text-slate-900"><X className="h-3 w-3" /></button>
+                            </span>
+                          )}
+                          {dirDuesFilter !== "ALL" && (
+                            <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-0.5 rounded-lg border border-slate-200">
+                              Dues: {dirDuesFilter}
+                              <button onClick={() => setDirDuesFilter("ALL")} className="hover:text-slate-900"><X className="h-3 w-3" /></button>
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    <div className="flex gap-2 w-full sm:w-auto">
-                      <select
-                        value={dirClassFilter}
-                        onChange={(e) => {
-                          setDirClassFilter(e.target.value);
-                          setCurrentPage(1);
-                        }}
-                        className="text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 cursor-pointer w-full sm:w-auto"
-                      >
-                        <option value="">All Classes</option>
-                        {classes.map((cls: any) => (
-                          <option key={cls.id} value={cls.name}>{cls.name}-{cls.section}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
 
                   {/* BULK ACTIONS FLOATING BAR */}
                   {selectedStudentIds.length > 0 && (
@@ -4161,13 +4456,43 @@ export default function AdminDashboard() {
                   {/* STUDENT DIRECTORY TABLE */}
                   {(() => {
                     const filtered = students.filter((s: any) => {
-                      const matchesSearch = 
-                        s.name.toLowerCase().includes(dirSearch.toLowerCase()) ||
-                        s.admissionNo.toLowerCase().includes(dirSearch.toLowerCase()) ||
-                        (s.familyCode && s.familyCode.toLowerCase().includes(dirSearch.toLowerCase()));
-                      const matchesClass = 
-                        !dirClassFilter || s.class === dirClassFilter;
-                      return matchesSearch && matchesClass;
+                      const q = dirSearch.trim().toLowerCase();
+                      const matchesSearch =
+                        !q ||
+                        s.name?.toLowerCase().includes(q) ||
+                        s.admissionNo?.toLowerCase().includes(q) ||
+                        (s.rollNumber && s.rollNumber.toLowerCase().includes(q)) ||
+                        (s.familyCode && s.familyCode.toLowerCase().includes(q)) ||
+                        (s.parentName && s.parentName.toLowerCase().includes(q)) ||
+                        (s.fatherMobile && s.fatherMobile.toLowerCase().includes(q)) ||
+                        (s.aadhaar && s.aadhaar.includes(q));
+
+                      const matchesClass = !dirClassFilter || s.class === dirClassFilter;
+                      const matchesSection = !dirSectionFilter || s.section === dirSectionFilter;
+                      const matchesFamily = !dirFamilyFilter || (s.familyCode && s.familyCode.toLowerCase().trim() === dirFamilyFilter.toLowerCase().trim());
+                      const matchesStatus = dirStatusFilter === "ALL" || (s.status || "ACTIVE") === dirStatusFilter;
+
+                      const matchesRte =
+                        dirRteFilter === "ALL"
+                          ? true
+                          : dirRteFilter === "RTE"
+                          ? !!s.isRte
+                          : dirRteFilter === "NON_RTE"
+                          ? !s.isRte
+                          : dirRteFilter === "TRANSPORT"
+                          ? s.transportMode && s.transportMode !== "Self"
+                          : true;
+
+                      const matchesCategory = dirCategoryFilter === "ALL" || (s.category || "General") === dirCategoryFilter;
+
+                      let matchesDues = true;
+                      if (dirDuesFilter !== "ALL") {
+                        const studentUnpaidDues = dueItems.filter((d) => d.studentId === s.id && d.status === "UNPAID");
+                        const hasDues = studentUnpaidDues.length > 0;
+                        matchesDues = dirDuesFilter === "HAS_DUES" ? hasDues : !hasDues;
+                      }
+
+                      return matchesSearch && matchesClass && matchesSection && matchesFamily && matchesStatus && matchesRte && matchesCategory && matchesDues;
                     });
 
                     const totalItems = filtered.length;
@@ -5069,7 +5394,101 @@ export default function AdminDashboard() {
                     </button>
                   </div>
 
-                  {importCount && (
+                  {/* LIVE IMPORT PROGRESS MODAL OVERLAY */}
+                  {importProgress.isImporting && (
+                    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+                      <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-100 space-y-6 animate-scale-in text-left">
+                        <div className="flex items-center space-x-3.5">
+                          <div className="h-12 w-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100 shadow-inner">
+                            <Loader2 className="h-6 w-6 animate-spin" />
+                          </div>
+                          <div>
+                            <h3 className="text-sm font-black text-slate-800 uppercase tracking-wide">
+                              Importing Students ({importProgress.processed} / {importProgress.total})
+                            </h3>
+                            <p className="text-xs font-semibold text-slate-500 mt-0.5">
+                              Processing Batch {importProgress.currentBatch} of {importProgress.totalBatches}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Progress Bar */}
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center text-xs font-black">
+                            <span className="text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-100">
+                              {Math.round((importProgress.processed / importProgress.total) * 100)}% Completed
+                            </span>
+                            <span className="text-slate-500 font-bold">
+                              {importProgress.processed} / {importProgress.total} Pupils
+                            </span>
+                          </div>
+                          <div className="w-full bg-slate-100 rounded-full h-3.5 overflow-hidden p-0.5 border border-slate-200 shadow-inner">
+                            <div
+                              className="bg-gradient-to-r from-indigo-500 via-indigo-600 to-emerald-500 h-full rounded-full transition-all duration-300 ease-out shadow-sm"
+                              style={{
+                                width: `${Math.min(100, Math.round((importProgress.processed / importProgress.total) * 100))}%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Live Metrics Grid */}
+                        <div className="grid grid-cols-2 gap-3 pt-1">
+                          <div className="bg-slate-50 border border-slate-200/60 p-3 rounded-2xl text-center">
+                            <div className="flex items-center justify-center gap-1 text-slate-400 mb-1">
+                              <Clock className="h-3.5 w-3.5" />
+                              <span className="text-[10px] font-extrabold uppercase tracking-wider">Estimated Time Left</span>
+                            </div>
+                            <p className="text-sm font-black text-slate-800">
+                              {importProgress.etaSeconds !== null ? `~${importProgress.etaSeconds} sec` : "Calculating..."}
+                            </p>
+                          </div>
+                          <div className="bg-slate-50 border border-slate-200/60 p-3 rounded-2xl text-center">
+                            <div className="flex items-center justify-center gap-1 text-slate-400 mb-1">
+                              <TrendingUp className="h-3.5 w-3.5" />
+                              <span className="text-[10px] font-extrabold uppercase tracking-wider">Import Speed</span>
+                            </div>
+                            <p className="text-sm font-black text-slate-800">
+                              {importProgress.speed ? `${importProgress.speed} std/s` : "Calculating..."}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="bg-indigo-50/50 border border-indigo-100 p-3 rounded-2xl text-center">
+                          <p className="text-[11px] text-indigo-700 font-semibold flex items-center justify-center gap-1.5">
+                            <span className="h-2 w-2 rounded-full bg-indigo-500 animate-ping inline-block" />
+                            Importing in safe batches to prevent server timeouts. Please keep window open.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {importProgress.success && (
+                    <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 p-4 rounded-2xl flex items-center justify-between shadow-sm animate-fade-in">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center font-bold shadow-md shadow-emerald-500/20">
+                          <CheckCircle className="h-6 w-6" />
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-black uppercase tracking-wide text-emerald-800">
+                            Bulk Import Completed Successfully!
+                          </h4>
+                          <p className="text-xs text-emerald-700 font-medium mt-0.5">
+                            Successfully imported <strong>{importProgress.processed} students</strong> in {importProgress.timeTaken || 0} seconds. All billing ledgers &amp; parent profiles auto-generated.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setImportProgress((prev) => ({ ...prev, success: false }))}
+                        className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-all cursor-pointer"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  )}
+
+                  {importCount && !importProgress.success && (
                     <div className="bg-green-50 text-green-700 p-3 rounded-xl border border-green-200 text-xs font-bold flex items-center gap-2 animate-fade-in">
                       <CheckCircle className="h-5 w-5" /> Successfully imported {importCount} student records!
                     </div>
@@ -6762,28 +7181,39 @@ export default function AdminDashboard() {
             {/* Print Styling Override */}
             <style dangerouslySetInnerHTML={{__html: `
               @media print {
+                @page {
+                  size: ${receiptPageSize === "A5" ? "A5 portrait" : "A4 portrait"};
+                  margin: 8mm;
+                }
+                html, body {
+                  background: #ffffff !important;
+                  margin: 0 !important;
+                  padding: 0 !important;
+                  height: auto !important;
+                  overflow: visible !important;
+                }
                 body * {
-                  visibility: hidden;
+                  visibility: hidden !important;
                 }
                 #receipt-print-area, #receipt-print-area * {
-                  visibility: visible;
+                  visibility: visible !important;
                 }
                 #receipt-print-area {
                   position: fixed !important;
                   left: 0 !important;
                   top: 0 !important;
                   width: 100% !important;
-                  height: 100% !important;
-                  box-sizing: border-box;
-                  padding: ${receiptPageSize === "A5" ? "8mm" : "15mm"} !important;
+                  height: auto !important;
+                  box-sizing: border-box !important;
+                  padding: ${receiptPageSize === "A5" ? "4mm 6mm" : "6mm 8mm"} !important;
                   margin: 0 !important;
-                  border: none !important;
-                  border-radius: 0 !important;
+                  border: 1px solid #cbd5e1 !important;
+                  border-radius: 16px !important;
                   box-shadow: none !important;
-                }
-                @page {
-                  size: ${receiptPageSize === "A5" ? "A5 portrait" : "A4 portrait"};
-                  margin: 0;
+                  background: #ffffff !important;
+                  page-break-after: avoid !important;
+                  page-break-inside: avoid !important;
+                  break-inside: avoid !important;
                 }
               }
             `}} />

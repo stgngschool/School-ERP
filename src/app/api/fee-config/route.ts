@@ -124,13 +124,40 @@ export async function POST(request: Request) {
             });
           }
 
+          const itemAmountPaisa = Math.round(Number(item.amount) * 100);
+
           await db.feeStructureItem.create({
             data: {
               feeStructureId: structure.id,
               feeHeadId: feeHead.id,
-              amount: Math.round(Number(item.amount) * 100), // convert to Paisa
+              amount: itemAmountPaisa,
             },
           });
+
+          // Sync existing unpaid charges for this fee head to the newly updated amount
+          const targetClassStr = className || "All";
+          const classStudents = await db.student.findMany({
+            where: { status: "ACTIVE", ...(targetClassStr !== "All" ? { class: { name: targetClassStr } } : {}) },
+            select: { id: true },
+          });
+          const studentIds = classStudents.map((s) => s.id);
+          if (studentIds.length > 0) {
+            const unpaidCharges = await db.ledgerEntry.findMany({
+              where: {
+                studentId: { in: studentIds },
+                feeHeadId: feeHead.id,
+                entryType: "CHARGE",
+                receiptItems: { none: {} },
+              },
+              select: { id: true },
+            });
+            if (unpaidCharges.length > 0) {
+              await db.ledgerEntry.updateMany({
+                where: { id: { in: unpaidCharges.map((c) => c.id) } },
+                data: { amount: itemAmountPaisa },
+              });
+            }
+          }
         }
       }
 

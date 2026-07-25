@@ -272,7 +272,10 @@ interface AuthContextType {
     },
     initialDues?: { name: string; amount: number }[]
   ) => Promise<void>;
-  bulkImportStudents: (studentsList: any[]) => Promise<boolean>;
+  bulkImportStudents: (
+    studentsList: any[],
+    onProgress?: (processed: number, total: number, currentBatch: number, totalBatches: number) => void
+  ) => Promise<{ success: boolean; totalImported: number; error?: string }>;
   addFeeHead: (name: string, frequency?: string) => Promise<void>;
   removeFeeHead: (name: string) => Promise<void>;
   addFeeStructure: (name: string, frequency: string, total: number, className?: string, items?: { headName: string; amount: number }[]) => Promise<void>;
@@ -364,79 +367,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     initSession();
+    refreshData();
   }, []);
 
   // Fetch live database records scoped by user role & needs
   const refreshData = async () => {
     try {
-      const isStaff = user?.role === "ADMIN" || user?.role === "ACCOUNTANT";
+      const isStaff = user?.role === "ADMIN" || user?.role === "ACCOUNTANT" || !user;
 
-      // Fire core requests in parallel for fast initial load
-      const corePromises: Promise<Response>[] = [
-        fetch("/api/school"),
-        fetch("/api/students"),
-        fetch("/api/attendance"),
-        fetch("/api/homework"),
-        fetch("/api/leave"),
-        fetch("/api/notice"),
-        fetch("/api/billing"),
-        fetch("/api/fee-config"),
-        fetch("/api/classes"),
-        fetch("/api/events"),
-        fetch("/api/transport"),
-        fetch("/api/concessions"),
-      ];
+      // Stream initial state hydration instantly as each endpoint responds
+      fetch("/api/school").then((r) => r.ok && r.json()).then((data) => data && setSchoolInfo(data)).catch(() => {});
+      fetch("/api/students").then((r) => r.ok && r.json()).then((data) => data && setStudents(data)).catch(() => {});
+      fetch("/api/attendance").then((r) => r.ok && r.json()).then((data) => data && setAttendances(data)).catch(() => {});
+      fetch("/api/homework").then((r) => r.ok && r.json()).then((data) => data && setHomeworks(data)).catch(() => {});
+      fetch("/api/leave").then((r) => r.ok && r.json()).then((data) => data && setLeaveRequests(data)).catch(() => {});
+      fetch("/api/notice").then((r) => r.ok && r.json()).then((data) => data && setNotices(data)).catch(() => {});
+      fetch("/api/events").then((r) => r.ok && r.json()).then((data) => data && setEventsList(data)).catch(() => {});
+      fetch("/api/classes").then((r) => r.ok && r.json()).then((data) => data && setClasses(data)).catch(() => {});
+      fetch("/api/concessions").then((r) => r.ok && r.json()).then((data) => data && setConcessions(data)).catch(() => {});
 
-      // Only fetch staff administrative records if user is staff
+      fetch("/api/transport")
+        .then((r) => r.ok && r.json())
+        .then((transData) => {
+          if (transData) setTransportStops(transData.map((d: any) => ({ ...d, amount: d.amount / 100 })));
+        })
+        .catch(() => {});
+
+      fetch("/api/fee-config")
+        .then((r) => r.ok && r.json())
+        .then((feeData) => {
+          if (feeData) {
+            setFeeHeads(feeData.feeHeads || []);
+            setFeeStructures(feeData.feeStructures || []);
+          }
+        })
+        .catch(() => {});
+
+      fetch("/api/billing")
+        .then((r) => r.ok && r.json())
+        .then((billingData) => {
+          if (billingData) {
+            setLedgerEntries(billingData.ledgerEntries || []);
+            setReceipts(billingData.receipts || []);
+            setDueItems(billingData.dueItems || []);
+          }
+        })
+        .catch(() => {});
+
       if (isStaff) {
-        corePromises.push(fetch("/api/users"));
-        corePromises.push(fetch("/api/audits"));
+        fetch("/api/users").then((r) => r.ok && r.json()).then((data) => data && setUsersList(data)).catch(() => {});
+        fetch("/api/audits").then((r) => r.ok && r.json()).then((data) => data && setAuditLogs(data)).catch(() => {});
       }
-
-      const results = await Promise.all(corePromises);
-      const [
-        schoolRes,
-        studentsRes,
-        attendanceRes,
-        homeworkRes,
-        leaveRes,
-        noticeRes,
-        billingRes,
-        feeRes,
-        classRes,
-        eventsRes,
-        transportRes,
-        concessionsRes,
-        usersRes,
-        auditRes,
-      ] = results;
-
-      if (schoolRes?.ok) setSchoolInfo(await schoolRes.json());
-      if (studentsRes?.ok) setStudents(await studentsRes.json());
-      if (attendanceRes?.ok) setAttendances(await attendanceRes.json());
-      if (homeworkRes?.ok) setHomeworks(await homeworkRes.json());
-      if (leaveRes?.ok) setLeaveRequests(await leaveRes.json());
-      if (noticeRes?.ok) setNotices(await noticeRes.json());
-      if (eventsRes?.ok) setEventsList(await eventsRes.json());
-      if (billingRes?.ok) {
-        const billingData = await billingRes.json();
-        setLedgerEntries(billingData.ledgerEntries || []);
-        setReceipts(billingData.receipts || []);
-        setDueItems(billingData.dueItems || []);
-      }
-      if (feeRes?.ok) {
-        const feeData = await feeRes.json();
-        setFeeHeads(feeData.feeHeads || []);
-        setFeeStructures(feeData.feeStructures || []);
-      }
-      if (classRes?.ok) setClasses(await classRes.json());
-      if (transportRes?.ok) {
-        const transData = await transportRes.json();
-        setTransportStops(transData.map((d: any) => ({ ...d, amount: d.amount / 100 })));
-      }
-      if (concessionsRes?.ok) setConcessions(await concessionsRes.json());
-      if (usersRes?.ok) setUsersList(await usersRes.json());
-      if (auditRes?.ok) setAuditLogs(await auditRes.json());
     } catch (err) {
       console.error("Data refresh failed:", err);
     }
@@ -949,22 +930,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const bulkImportStudents = async (
-    studentsList: any[]
-  ) => {
+    studentsList: any[],
+    onProgress?: (processed: number, total: number, currentBatch: number, totalBatches: number) => void
+  ): Promise<{ success: boolean; totalImported: number; error?: string }> => {
     try {
-      const res = await fetch("/api/students/bulk", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ students: studentsList }),
-      });
+      const BATCH_SIZE = 50;
+      const total = studentsList.length;
+      const totalBatches = Math.ceil(total / BATCH_SIZE);
+      let totalImported = 0;
 
-      if (res.ok) {
-        await refreshData();
+      for (let i = 0; i < totalBatches; i++) {
+        const chunk = studentsList.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE);
+        const res = await fetch("/api/students/bulk", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ students: chunk }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          const errMsg = errData.error || `Batch ${i + 1} of ${totalBatches} failed on server.`;
+          return { success: false, totalImported, error: errMsg };
+        }
+
+        const data = await res.json();
+        const batchCount = typeof data.count === "number" ? data.count : chunk.length;
+        totalImported += batchCount;
+
+        if (onProgress) {
+          onProgress(totalImported, total, i + 1, totalBatches);
+        }
       }
-      return res.ok;
-    } catch (err) {
+
+      await refreshData();
+      return { success: true, totalImported };
+    } catch (err: any) {
       console.error("Bulk import students failed:", err);
-      return false;
+      return { success: false, totalImported: 0, error: err?.message || "Network error occurred during import." };
     }
   };
 

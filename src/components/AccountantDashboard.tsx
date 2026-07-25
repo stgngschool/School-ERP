@@ -2246,28 +2246,39 @@ export default function AccountantDashboard() {
             {/* Print Styling Override */}
             <style dangerouslySetInnerHTML={{__html: `
               @media print {
+                @page {
+                  size: ${receiptPageSize === "A5" ? "A5 portrait" : "A4 portrait"};
+                  margin: 8mm;
+                }
+                html, body {
+                  background: #ffffff !important;
+                  margin: 0 !important;
+                  padding: 0 !important;
+                  height: auto !important;
+                  overflow: visible !important;
+                }
                 body * {
-                  visibility: hidden;
+                  visibility: hidden !important;
                 }
                 #receipt-print-area, #receipt-print-area * {
-                  visibility: visible;
+                  visibility: visible !important;
                 }
                 #receipt-print-area {
                   position: fixed !important;
                   left: 0 !important;
                   top: 0 !important;
                   width: 100% !important;
-                  height: 100% !important;
-                  box-sizing: border-box;
-                  padding: ${receiptPageSize === "A5" ? "8mm" : "15mm"} !important;
+                  height: auto !important;
+                  box-sizing: border-box !important;
+                  padding: ${receiptPageSize === "A5" ? "4mm 6mm" : "6mm 8mm"} !important;
                   margin: 0 !important;
-                  border: none !important;
-                  border-radius: 0 !important;
+                  border: 1px solid #cbd5e1 !important;
+                  border-radius: 16px !important;
                   box-shadow: none !important;
-                }
-                @page {
-                  size: ${receiptPageSize === "A5" ? "A5 portrait" : "A4 portrait"};
-                  margin: 0;
+                  background: #ffffff !important;
+                  page-break-after: avoid !important;
+                  page-break-inside: avoid !important;
+                  break-inside: avoid !important;
                 }
               }
             `}} />

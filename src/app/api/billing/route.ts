@@ -43,12 +43,27 @@ export async function GET() {
       }),
       db.ledgerEntry.findMany({
         where: { entryType: EntryType.CHARGE },
-        include: {
-          receiptItems: true,
+        select: {
+          id: true,
+          studentId: true,
+          description: true,
+          amount: true,
+          createdAt: true,
+          receiptItems: {
+            select: {
+              amount: true,
+            },
+          },
         },
       }),
       db.ledgerEntry.findMany({
         where: { entryType: EntryType.DISCOUNT },
+        select: {
+          id: true,
+          studentId: true,
+          description: true,
+          amount: true,
+        },
       }),
     ]);
 

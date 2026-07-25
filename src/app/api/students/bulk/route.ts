@@ -91,7 +91,12 @@ export async function POST(request: Request) {
       }
     }
 
-    // 6. Pre-create any missing parent users and profiles using Multi-Factor Matching
+    // 6. Pre-calculate default parent password hash ONCE for speed
+    const defaultParentPasswordHash = await bcrypt.hash("parent123", 10);
+    const existingUsers = await db.user.findMany({ select: { email: true } });
+    const existingEmailsSet = new Set<string>(existingUsers.map((u) => u.email.toLowerCase()));
+
+    // Pre-create any missing parent users and profiles using Multi-Factor Matching
     for (const record of students) {
       if (!record.fatherMobile && !record.fatherName) continue;
 
@@ -118,36 +123,39 @@ export async function POST(request: Request) {
 
         const cleanMobile = record.fatherMobile ? String(record.fatherMobile).trim() : record.motherMobile ? String(record.motherMobile).trim() : "";
         const uniqueSuffix = `${Date.now()}_${Math.floor(Math.random() * 1000000)}_${maxFamilyNum}`;
-        const email = record.parentEmail ? String(record.parentEmail).trim() : `parent_${uniqueSuffix}@school.com`;
+        const emailCandidate = record.parentEmail ? String(record.parentEmail).trim() : `parent_${uniqueSuffix}@school.com`;
 
-        const existingUserWithEmail = await db.user.findUnique({ where: { email } });
-        const finalEmail = existingUserWithEmail ? `parent_${uniqueSuffix}@school.com` : email;
-        const passwordHash = await bcrypt.hash(crypto.randomBytes(16).toString("hex"), 10);
+        const finalEmail = existingEmailsSet.has(emailCandidate.toLowerCase()) ? `parent_${uniqueSuffix}@school.com` : emailCandidate;
+        existingEmailsSet.add(finalEmail.toLowerCase());
 
         const user = await db.user.create({
           data: {
             username: `user_${uniqueSuffix}`,
             email: finalEmail,
-            passwordHash,
+            passwordHash: defaultParentPasswordHash,
             role: "PARENT",
             name: String(record.fatherName || record.name).trim(),
             phone: cleanMobile || null,
-          },
-        });
-
-        const newProfile = await db.parentProfile.create({
-          data: {
-            userId: user.id,
-            familyCode,
-            address: record.address ? String(record.address).trim() : null,
+            parentProfile: {
+              create: {
+                familyCode,
+                address: record.address ? String(record.address).trim() : null,
+              },
+            },
           },
           include: {
-            user: true,
-            students: { select: { fatherName: true, motherName: true, fatherMobile: true, motherMobile: true } },
+            parentProfile: {
+              include: {
+                user: true,
+                students: { select: { fatherName: true, motherName: true, fatherMobile: true, motherMobile: true } },
+              },
+            },
           },
         });
 
-        activeProfilesList.push(newProfile);
+        if (user.parentProfile) {
+          activeProfilesList.push(user.parentProfile);
+        }
       }
     }
 
