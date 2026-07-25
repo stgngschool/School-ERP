@@ -4455,6 +4455,8 @@ export default function AdminDashboard() {
 
                   {/* STUDENT DIRECTORY TABLE */}
                   {(() => {
+                    const unpaidStudentIdsSet = new Set(dueItems.filter((d) => d.status === "UNPAID").map((d) => d.studentId));
+
                     const filtered = students.filter((s: any) => {
                       const q = dirSearch.trim().toLowerCase();
                       const matchesSearch =
@@ -4487,8 +4489,7 @@ export default function AdminDashboard() {
 
                       let matchesDues = true;
                       if (dirDuesFilter !== "ALL") {
-                        const studentUnpaidDues = dueItems.filter((d) => d.studentId === s.id && d.status === "UNPAID");
-                        const hasDues = studentUnpaidDues.length > 0;
+                        const hasDues = unpaidStudentIdsSet.has(s.id);
                         matchesDues = dirDuesFilter === "HAS_DUES" ? hasDues : !hasDues;
                       }
 
@@ -4505,6 +4506,35 @@ export default function AdminDashboard() {
                       <>
                         <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
 
+                          {/* ── MOBILE: Select All Bar ── */}
+                          <div className="flex sm:hidden items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-700">
+                            <label className="flex items-center gap-2.5 cursor-pointer active:opacity-80">
+                              <input
+                                type="checkbox"
+                                checked={
+                                  paginatedStudents.length > 0 &&
+                                  paginatedStudents.every((s) => selectedStudentIds.includes(s.id))
+                                }
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    const currentIds = paginatedStudents.map((s) => s.id);
+                                    setSelectedStudentIds((prev) => Array.from(new Set([...prev, ...currentIds])));
+                                  } else {
+                                    const currentIds = paginatedStudents.map((s) => s.id);
+                                    setSelectedStudentIds((prev) => prev.filter((id) => !currentIds.includes(id)));
+                                  }
+                                }}
+                                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4.5 w-4.5 cursor-pointer accent-indigo-600"
+                              />
+                              <span>Select All ({paginatedStudents.length} Students)</span>
+                            </label>
+                            {selectedStudentIds.length > 0 && (
+                              <span className="text-[10px] font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
+                                {selectedStudentIds.length} Selected
+                              </span>
+                            )}
+                          </div>
+
                           {/* ── MOBILE: Student Cards ── */}
                           <div className="block sm:hidden divide-y divide-slate-100">
                             {paginatedStudents.length === 0 ? (
@@ -4518,17 +4548,22 @@ export default function AdminDashboard() {
                                 SUSPENDED: "bg-amber-50 text-amber-700 border-amber-200",
                                 LEFT: "bg-rose-50 text-rose-700 border-rose-200",
                               };
+                              const isChecked = selectedStudentIds.includes(std.id);
                               return (
-                                <div key={std.id} className="p-4 flex items-center gap-3">
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedStudentIds.includes(std.id)}
-                                    onChange={(e) => {
-                                      if (e.target.checked) setSelectedStudentIds(prev => [...prev, std.id]);
-                                      else setSelectedStudentIds(prev => prev.filter(id => id !== std.id));
-                                    }}
-                                    className="rounded border-slate-300 text-indigo-600 h-4 w-4 shrink-0"
-                                  />
+                                <div key={std.id} className={`p-3.5 flex items-center gap-3 transition-colors ${isChecked ? "bg-indigo-50/40" : ""}`}>
+                                  <label className="p-2 -m-2 flex items-center justify-center shrink-0 cursor-pointer active:scale-90 transition-transform">
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={(e) => {
+                                        const checked = e.target.checked;
+                                        setSelectedStudentIds((prev) =>
+                                          checked ? [...prev, std.id] : prev.filter((id) => id !== std.id)
+                                        );
+                                      }}
+                                      className="rounded-md border-slate-300 text-indigo-600 focus:ring-indigo-500 h-5 w-5 cursor-pointer accent-indigo-600"
+                                    />
+                                  </label>
                                   <div className="h-10 w-10 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-700 flex items-center justify-center font-extrabold text-xs uppercase shrink-0">
                                     {std.photoUrl ? <img src={std.photoUrl} alt={std.name} className="h-full w-full object-cover rounded-full" /> : std.name.substring(0, 2)}
                                   </div>
