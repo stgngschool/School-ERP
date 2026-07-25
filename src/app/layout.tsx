@@ -76,7 +76,10 @@ export default function RootLayout({
         {/* Google Fonts for Universal Mobile UI Typography */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&family=Rozha+One&family=Tiro+Devanagari+Hindi:ital@0;1&display=swap" rel="stylesheet" />
+        <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&family=Rozha+One&family=Tiro+Devanagari+Hindi:ital@0;1&display=optional" rel="stylesheet" />
+
+        {/* Preload logo for faster LCP on mobile — logo is 628KB, preload hints reduce blocking */}
+        <link rel="preload" href="/logo.png" as="image" />
 
         {/* Icons */}
         <link rel="icon" href="/logo.png" />
@@ -85,8 +88,6 @@ export default function RootLayout({
         <link rel="apple-touch-icon" sizes="180x180" href="/logo.png" />
         <link rel="apple-touch-icon" sizes="167x167" href="/logo.png" />
 
-        {/* Splash Screen Colours for iOS */}
-        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
       </head>
       <body className="min-h-full flex flex-col bg-slate-50 text-slate-900">
         <PWAInitializer />

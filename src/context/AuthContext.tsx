@@ -371,85 +371,228 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentStage, setCurrentStage] = useState<AuthStage>("APP STARTED");
   const [stageError, setStageError] = useState<string | null>(null);
 
-  const apiFetch = async (url: string, options: RequestInit = {}) => {
+  // apiFetch: wraps fetch with credentials, error logging, and an optional timeout
+  const apiFetch = async (url: string, options: RequestInit = {}, timeoutMs = 12000) => {
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const res = await fetch(url, { credentials: "include", ...options });
+      const res = await fetch(url, {
+        credentials: "include",
+        signal: controller.signal,
+        ...options,
+      });
+      clearTimeout(tid);
       if (!res.ok) {
-        console.error(`[AuthContext API Error] ${url} returned status ${res.status}`);
+        console.error(`[AuthContext API Error] ${url} returned HTTP ${res.status} ${res.statusText}`);
         return null;
       }
       return await res.json();
-    } catch (err) {
-      console.error(`[AuthContext Network Error] Fetching ${url} failed:`, err);
+    } catch (err: any) {
+      clearTimeout(tid);
+      if (err.name === "AbortError") {
+        console.error(`[AuthContext Timeout] ${url} timed out after ${timeoutMs}ms`);
+      } else {
+        console.error(`[AuthContext Network Error] ${url} failed:`, err);
+      }
       return null;
     }
   };
 
-  // Load user session and database records on mount
+  // ─── Session Initializer with Auto-Retry ──────────────────────────────────
+  // Handles: cold start, warm start, Android PWA standalone, slow network,
+  // cell tower handoff, device wake-from-sleep.
   const initSession = async () => {
     setAuthLoading(true);
     setStageError(null);
     setCurrentStage("APP STARTED");
-    console.log("STAGE [1/10]: APP STARTED - Initializing Application Context");
+
+    // ── Device / Environment Diagnostics (visible in Chrome DevTools via USB) ──
+    const isStandalone =
+      typeof window !== "undefined" &&
+      (window.matchMedia("(display-mode: standalone)").matches ||
+        (navigator as any).standalone === true);
+    const isOnline = typeof navigator !== "undefined" ? navigator.onLine : true;
+    const ua = typeof navigator !== "undefined" ? navigator.userAgent : "SSR";
+    const isAndroid = /Android/i.test(ua);
+    const androidVer = ua.match(/Android\s([\d.]+)/)?.[1] ?? "N/A";
+    const chromeVer = ua.match(/Chrome\/([\d.]+)/)?.[1] ?? "N/A";
+    const connection = typeof navigator !== "undefined" ? (navigator as any).connection : null;
+    const netType = connection?.effectiveType ?? "unknown";
+    const now = new Date().toISOString();
+
+    console.group(`[AuthContext] 🚀 Session Init — ${now}`);
+    console.log("📱 Device       :", isAndroid ? `Android ${androidVer}` : "Desktop/iOS");
+    console.log("🌐 Browser      :", `Chrome ${chromeVer}`);
+    console.log("🖥️  Display Mode :", isStandalone ? "Standalone PWA" : "Browser");
+    console.log("📶 Network      :", isOnline ? `Online (${netType})` : "⚠️ OFFLINE");
+    console.log("🔧 User Agent   :", ua);
+    console.groupEnd();
+
+    if (!isOnline) {
+      console.warn("[AuthContext] Device is offline — deferring session check until online.");
+      setStageError("Device is offline. Waiting for network connection...");
+      setCurrentStage("CHECKING SESSION");
+      setAuthLoading(false);
+      return;
+    }
 
     setCurrentStage("SUPABASE CLIENT CREATED");
-    console.log("STAGE [2/10]: SUPABASE CLIENT CREATED - Auth API Client Configured");
+    console.log("[AuthContext] STAGE [2]: Auth API client configured");
 
-    try {
-      setCurrentStage("CHECKING SESSION");
-      console.log("STAGE [3/10]: CHECKING SESSION - Fetching /api/auth/me");
+    // ── Retry loop: up to 3 attempts (initial + 2 retries) ──────────────────
+    // On mobile, the first request often fails due to:
+    //  - Cell network handoff (tower switch)
+    //  - Device waking from sleep (radio reconnect delay)
+    //  - Slow 3G/2G networks exceeding single timeout
+    // Automatic retry silently recovers without user action.
+    const MAX_ATTEMPTS = 3;
+    const RETRY_DELAY_MS = 1500;
+    const ATTEMPT_TIMEOUT_MS = 8000;
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
+    let lastError: string | null = null;
 
-      const res = await fetch("/api/auth/me", {
-        credentials: "include",
-        signal: controller.signal,
-      });
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        if (attempt > 1) {
+          console.log(`[AuthContext] 🔄 Retry attempt ${attempt}/${MAX_ATTEMPTS} after ${RETRY_DELAY_MS}ms delay...`);
+          await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+        }
 
-      clearTimeout(timeoutId);
+        setCurrentStage("CHECKING SESSION");
+        console.log(`[AuthContext] STAGE [3]: Checking session — attempt ${attempt}/${MAX_ATTEMPTS}`);
+        const t0 = performance.now();
 
-      if (res.ok) {
-        const data = await res.json();
-        setCurrentStage("SESSION FOUND");
-        console.log("STAGE [4/10]: SESSION FOUND - Authenticated user verified", {
-          status: res.status,
-          userId: data.user.id,
-          role: data.user.role,
-        });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), ATTEMPT_TIMEOUT_MS);
 
-        setUser(data.user);
-        setCurrentStage("AUTH USER LOADED");
-        console.log("STAGE [5/10]: AUTH USER LOADED - Username:", data.user.username);
+        let res: Response;
+        try {
+          res = await fetch("/api/auth/me", {
+            credentials: "include",  // CRITICAL: must send cookies in PWA standalone mode
+            cache: "no-store",        // Never serve cached auth responses on Android
+            signal: controller.signal,
+          });
+        } finally {
+          clearTimeout(timeoutId);
+        }
 
-        setCurrentStage("PROFILE LOADED");
-        console.log("STAGE [6/10]: PROFILE LOADED - User Name:", data.user.name);
+        const elapsed = Math.round(performance.now() - t0);
+        console.log(`[AuthContext] /api/auth/me → HTTP ${res.status} in ${elapsed}ms`);
 
-        setActiveRole(data.user.role);
-        setCurrentStage("ADMIN LOADED");
-        console.log("STAGE [7/10]: ADMIN LOADED - Role set to:", data.user.role);
-      } else {
-        const errText = `Session check returned status HTTP ${res.status}`;
-        console.error("STAGE FAILED at CHECKING SESSION:", {
-          status: res.status,
-          statusText: res.statusText,
-        });
-        setStageError(errText);
+        if (res.ok) {
+          const data = await res.json();
+
+          console.group("[AuthContext] ✅ Session verified");
+          console.log("User ID  :", data.user?.id);
+          console.log("Username :", data.user?.username);
+          console.log("Role     :", data.user?.role);
+          console.log("Status   :", data.user?.status);
+          console.log("Attempt  :", attempt);
+          console.groupEnd();
+
+          setCurrentStage("SESSION FOUND");
+          setUser(data.user);
+          setCurrentStage("AUTH USER LOADED");
+          setCurrentStage("PROFILE LOADED");
+          setActiveRole(data.user.role);
+          setCurrentStage("ADMIN LOADED");
+          setAuthLoading(false);
+          return; // ✅ Success — exit retry loop
+
+        } else if (res.status === 401 || res.status === 403) {
+          // Definitive auth failure — don't retry (user is not logged in)
+          const errBody = await res.json().catch(() => ({}));
+          console.warn(`[AuthContext] Auth definitive failure HTTP ${res.status}:`, errBody);
+          if (res.status === 403) {
+            setStageError(errBody?.error || "Account is locked by administrator.");
+          }
+          // Not an error per se — just not logged in. Let the redirect handle it.
+          setAuthLoading(false);
+          return;
+
+        } else {
+          // Server error (5xx) — retry
+          lastError = `Server returned HTTP ${res.status} ${res.statusText}`;
+          console.error(`[AuthContext] Server error attempt ${attempt}:`, lastError);
+          continue;
+        }
+
+      } catch (err: any) {
+        const isAbort = err.name === "AbortError";
+        lastError = isAbort
+          ? `Request timed out after ${ATTEMPT_TIMEOUT_MS / 1000}s (attempt ${attempt}/${MAX_ATTEMPTS})`
+          : err.message || "Network error";
+        console.error(`[AuthContext] ❌ Attempt ${attempt} failed:`, lastError, err);
       }
-    } catch (err: any) {
-      const isAbort = err.name === "AbortError";
-      const errMsg = isAbort
-        ? "Network request to /api/auth/me timed out after 8s."
-        : err.message || "Failed to communicate with authentication API.";
-      console.error("STAGE FAILED at CHECKING SESSION:", err);
-      setStageError(errMsg);
-    } finally {
-      setAuthLoading(false);
     }
+
+    // All attempts exhausted
+    console.error(`[AuthContext] ❌ All ${MAX_ATTEMPTS} session check attempts failed. Last error:`, lastError);
+    setStageError(lastError || "Authentication failed after multiple attempts. Please check your internet connection.");
+    setAuthLoading(false);
   };
 
   useEffect(() => {
+    // Initial session check on mount
     initSession();
+
+    // ── Page Visibility Handler ─────────────────────────────────────────────
+    // ANDROID FIX: When user backgrounds the app and returns, Android Chrome
+    // may have suspended the tab. On return, we re-verify the session to
+    // prevent showing a frozen/stale authenticated state.
+    let visibilityDebounce: NodeJS.Timeout;
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        console.log("[AuthContext] 👁️ App became visible — re-checking session...");
+        // Debounce: avoid multiple rapid fires when switching between apps quickly
+        clearTimeout(visibilityDebounce);
+        visibilityDebounce = setTimeout(() => {
+          // Only re-check if we were previously authenticated
+          // (avoids re-running on login page)
+          if (user) {
+            fetch("/api/auth/me", { credentials: "include", cache: "no-store" })
+              .then((res) => {
+                if (!res.ok) {
+                  console.warn("[AuthContext] Session expired while app was in background. Redirecting to login.");
+                  setUser(null);
+                  setActiveRole(null);
+                  if (typeof window !== "undefined") {
+                    window.location.replace("/login");
+                  }
+                } else {
+                  console.log("[AuthContext] ✅ Session still valid after resume.");
+                }
+              })
+              .catch((err) => console.warn("[AuthContext] Background resume check failed:", err));
+          } else {
+            // Not logged in yet — try full init (handles device-wake + login page)
+            initSession();
+          }
+        }, 500);
+      }
+    };
+
+    // ── Online Handler ─────────────────────────────────────────────────────
+    // ANDROID FIX: When device reconnects to network (e.g. after airplane mode,
+    // walking into WiFi coverage, or cell tower handoff), automatically retry
+    // the session check instead of leaving the user on a frozen loading screen.
+    const handleOnline = () => {
+      console.log("[AuthContext] 📶 Network came online — triggering session re-check...");
+      // Only trigger if we're in a loading or error state (not already authenticated)
+      if (authLoading || stageError) {
+        initSession();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("online", handleOnline);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("online", handleOnline);
+      clearTimeout(visibilityDebounce);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Fetch live database records scoped by user role & needs

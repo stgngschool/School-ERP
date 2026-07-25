@@ -60,6 +60,7 @@ export async function GET() {
         role: user.role,
         name: user.name,
         phone: user.phone,
+        status: user.status, // Required: page.tsx checks user?.status === "BLOCKED"
         parentProfile: user.parentProfile,
         teacherProfile: user.teacherProfile,
         accountantProfile: user.accountantProfile,
