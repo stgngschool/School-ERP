@@ -187,7 +187,8 @@ export interface MockCalendarEvent {
 
 interface AuthContextType {
   user: MockUser | null;
-  activeRole: Role;
+  activeRole: Role | null;
+  authLoading: boolean;
   usersList: MockUser[];
   schoolInfo: MockSchoolInfo;
   students: MockStudent[];
@@ -307,8 +308,9 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [activeRole, setActiveRole] = useState<Role>("PARENT");
+  const [activeRole, setActiveRole] = useState<Role | null>(null);
   const [user, setUser] = useState<MockUser | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [usersList, setUsersList] = useState<MockUser[]>([]);
   const [activeTab, setActiveTab] = useState<string>("");
 
@@ -363,17 +365,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } catch (err) {
         console.error("Session load failed:", err);
+      } finally {
+        setAuthLoading(false);
       }
     };
 
     initSession();
-    refreshData();
   }, []);
 
   // Fetch live database records scoped by user role & needs
   const refreshData = async () => {
     try {
-      const isStaff = user?.role === "ADMIN" || user?.role === "ACCOUNTANT" || !user;
+      const isStaff = user?.role === "ADMIN" || user?.role === "ACCOUNTANT";
 
       // Stream initial state hydration instantly as each endpoint responds
       fetch("/api/school").then((r) => r.ok && r.json()).then((data) => data && setSchoolInfo(data)).catch(() => {});
@@ -1231,6 +1234,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         logout,
         refreshData,
+        authLoading,
       }}
     >
       {children}

@@ -7,10 +7,35 @@ import ParentDashboard from "@/components/ParentDashboard";
 import TeacherDashboard from "@/components/TeacherDashboard";
 import AccountantDashboard from "@/components/AccountantDashboard";
 import AdminDashboard from "@/components/AdminDashboard";
-import { ShieldAlert, Lock } from "lucide-react";
+import { ShieldAlert, Lock, Loader2 } from "lucide-react";
 
 export default function IndexPage() {
-  const { activeRole, user } = useAuth();
+  const { activeRole, user, authLoading } = useAuth();
+
+  // Show loading spinner while auth session is being verified
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-3">
+        <div className="h-14 w-14 bg-white border border-slate-200/90 rounded-2xl flex items-center justify-center shadow-lg shadow-slate-200/50">
+          <Loader2 className="h-7 w-7 text-indigo-600 animate-spin" />
+        </div>
+        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Loading Dashboard...</p>
+      </div>
+    );
+  }
+
+  // Redirect to login if not authenticated
+  if (!user || !activeRole) {
+    if (typeof window !== "undefined") {
+      window.location.replace("/login");
+    }
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-3">
+        <Loader2 className="h-6 w-6 text-slate-400 animate-spin" />
+        <p className="text-xs font-semibold text-slate-400">Redirecting to login...</p>
+      </div>
+    );
+  }
 
   // If mock user status is blocked, show custom locked account screen
   const isBlocked = user?.status === "BLOCKED";
@@ -32,9 +57,9 @@ export default function IndexPage() {
             <div className="flex gap-2">
               <ShieldAlert className="h-4 w-4 shrink-0 text-amber-600" />
               <div>
-                <p className="font-bold">Developer Note:</p>
+                <p className="font-bold">Contact Administrator</p>
                 <p className="mt-0.5">
-                  You are testing the block user feature. To unlock this account, open the **Role Switcher** panel, switch to **ADMIN**, go to **User Account Security**, and click **Activate Account** next to this username.
+                  Your account has been locked. Please contact the school administration to restore access.
                 </p>
               </div>
             </div>
@@ -55,7 +80,7 @@ export default function IndexPage() {
       default:
         return (
           <div className="text-center py-12 text-slate-400 font-medium">
-            Select a role from the floating control panel to view dashboard.
+            Loading dashboard...
           </div>
         );
     }

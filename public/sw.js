@@ -1,7 +1,7 @@
-// St. GNG School Finance OS — Service Worker v4
+// St. GNG School Finance OS — Service Worker v5
 // Strategy: Network-first for JS bundles & API, Cache-first only for static media
 
-const CACHE_VERSION = "v4";
+const CACHE_VERSION = "v5";
 const STATIC_CACHE = `gng-static-${CACHE_VERSION}`;
 const API_CACHE = `gng-api-${CACHE_VERSION}`;
 
@@ -19,12 +19,14 @@ self.addEventListener("install", (event) => {
   self.skipWaiting();
 });
 
-// ─── Activate: Clean up ALL old caches ───────────────────────────────────────────
+// ─── Activate: Clean up OLD version caches only ──────────────────────────────
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) =>
       Promise.all(
-        cacheNames.map((name) => caches.delete(name))
+        cacheNames
+          .filter((name) => name !== STATIC_CACHE && name !== API_CACHE)
+          .map((name) => caches.delete(name))
       )
     )
   );
@@ -53,17 +55,19 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // API routes: Direct network for auth, network-first for rest
-  if (url.pathname.startsWith("/api/")) {
-    if (url.pathname.startsWith("/api/auth/")) {
-      event.respondWith(fetch(request));
-      return;
-    }
-    event.respondWith(networkFirstWithCache(request, API_CACHE, 10));
+  // Auth API routes: ALWAYS direct network, NEVER cache (critical for login/session)
+  if (url.pathname.startsWith("/api/auth/")) {
+    event.respondWith(fetch(request));
     return;
   }
 
-  // Navigation requests: Network-first
+  // Other API routes: Network-first with cache fallback
+  if (url.pathname.startsWith("/api/")) {
+    event.respondWith(networkFirstWithCache(request, API_CACHE));
+    return;
+  }
+
+  // Navigation requests (HTML pages): Network-first
   if (request.mode === "navigate") {
     event.respondWith(
       fetch(request).catch(() =>
@@ -88,7 +92,7 @@ self.addEventListener("fetch", (event) => {
 });
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-async function networkFirstWithCache(request, cacheName, maxAgeSeconds) {
+async function networkFirstWithCache(request, cacheName) {
   try {
     const networkResponse = await fetch(request);
     if (networkResponse.ok) {
@@ -96,7 +100,7 @@ async function networkFirstWithCache(request, cacheName, maxAgeSeconds) {
         const cache = await caches.open(cacheName);
         await cache.put(request, networkResponse.clone());
       } catch (e) {
-        // Ignore cache storage error for responses with set-cookie or non-cacheable headers
+        // Silently ignore cache storage errors (e.g. set-cookie responses)
       }
     }
     return networkResponse;
@@ -118,8 +122,12 @@ async function cacheFirstWithFetch(request, cacheName) {
   try {
     const networkResponse = await fetch(request);
     if (networkResponse.ok) {
-      const cache = await caches.open(cacheName);
-      cache.put(request, networkResponse.clone());
+      try {
+        const cache = await caches.open(cacheName);
+        await cache.put(request, networkResponse.clone());
+      } catch (e) {
+        // Silently ignore cache storage errors
+      }
     }
     return networkResponse;
   } catch {

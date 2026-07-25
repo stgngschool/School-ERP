@@ -12,9 +12,9 @@ if (!connectionString) {
 
 const poolConfig = {
   connectionString,
-  max: 3,
-  idleTimeoutMillis: 10000,
-  connectionTimeoutMillis: 5000,
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 15000,
 };
 
 if (process.env.NODE_ENV === "production") {
