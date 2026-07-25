@@ -5,8 +5,6 @@ import { useEffect } from "react";
 export default function PWAInitializer() {
   useEffect(() => {
     if ("serviceWorker" in navigator) {
-      // In development mode, automatically unregister active service workers
-      // to prevent stale asset caching and ensure code edits apply instantly on reload.
       if (process.env.NODE_ENV === "development") {
         navigator.serviceWorker.getRegistrations().then((registrations) => {
           for (const registration of registrations) {
@@ -18,13 +16,22 @@ export default function PWAInitializer() {
           navigator.serviceWorker
             .register("/sw.js")
             .then((reg) => {
+              console.log("[PWAInitializer] Service Worker v6 registered successfully.");
               reg.update();
             })
             .catch((err) => {
-              console.error("PWA Service Worker registration error:", err);
+              console.error("[PWAInitializer] Service Worker registration error:", err);
             });
         });
       }
+    }
+
+    // Diagnostic PWA display-mode detection
+    if (typeof window !== "undefined") {
+      const isStandalone =
+        window.matchMedia("(display-mode: standalone)").matches ||
+        (navigator as any).standalone === true;
+      console.log(`[PWAInitializer] Display Mode: ${isStandalone ? "Installed PWA (Standalone)" : "Standard Browser Window"}`);
     }
   }, []);
 

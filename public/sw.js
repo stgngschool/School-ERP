@@ -1,9 +1,8 @@
-// St. GNG School Finance OS — Service Worker v5
-// Strategy: Network-first for JS bundles & API, Cache-first only for static media
+// St. GNG School Finance OS — Service Worker v6 (Production PWA Fix)
+// Strategy: Network-first for static assets, ALWAYS bypass SW for /api/ routes to ensure cookie auth works on PWA standalone
 
-const CACHE_VERSION = "v5";
+const CACHE_VERSION = "v6-pwa-fix";
 const STATIC_CACHE = `gng-static-${CACHE_VERSION}`;
-const API_CACHE = `gng-api-${CACHE_VERSION}`;
 
 const STATIC_ASSETS = [
   "/",
@@ -11,7 +10,7 @@ const STATIC_ASSETS = [
   "/manifest.json",
 ];
 
-// ─── Install: Pre-cache static assets ────────────────────────────────────────
+// ─── Install: Skip waiting immediately ──────────────────────────────────────
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(STATIC_CACHE).then((cache) => cache.addAll(STATIC_ASSETS))
@@ -19,26 +18,35 @@ self.addEventListener("install", (event) => {
   self.skipWaiting();
 });
 
-// ─── Activate: Clean up OLD version caches only ──────────────────────────────
+// ─── Activate: Purge ALL old caches (including legacy gng-api-* & gng-static-*)
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) =>
       Promise.all(
         cacheNames
-          .filter((name) => name !== STATIC_CACHE && name !== API_CACHE)
-          .map((name) => caches.delete(name))
+          .filter((name) => name !== STATIC_CACHE)
+          .map((name) => {
+            console.log(`[SW v6] Purging legacy cache: ${name}`);
+            return caches.delete(name);
+          })
       )
     )
   );
   self.clients.claim();
 });
 
-// ─── Fetch: Smart routing strategy ───────────────────────────────────────────
+// ─── Fetch: Smart routing & API bypass ──────────────────────────────────────
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Skip non-GET, cross-origin, chrome-extension requests
+  // 1. ALL API ROUTES (/api/*): ALWAYS BYPASS Service Worker!
+  // Direct network fetch ensures native browser cookie handling & credentials work in PWA standalone mode.
+  if (url.pathname.startsWith("/api/")) {
+    return;
+  }
+
+  // 2. Skip non-GET or cross-origin requests
   if (
     request.method !== "GET" ||
     !url.origin.includes(self.location.origin) ||
@@ -47,7 +55,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Next.js static bundles & scripts: ALWAYS Network First (never serve stale JS code)
+  // 3. Next.js static bundles & scripts: ALWAYS Network First (never serve stale JS code)
   if (url.pathname.startsWith("/_next/")) {
     event.respondWith(
       fetch(request).catch(() => caches.match(request))
@@ -55,19 +63,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Auth API routes: ALWAYS direct network, NEVER cache (critical for login/session)
-  if (url.pathname.startsWith("/api/auth/")) {
-    event.respondWith(fetch(request));
-    return;
-  }
-
-  // Other API routes: Network-first with cache fallback
-  if (url.pathname.startsWith("/api/")) {
-    event.respondWith(networkFirstWithCache(request, API_CACHE));
-    return;
-  }
-
-  // Navigation requests (HTML pages): Network-first
+  // 4. Navigation requests (HTML pages): Network-first
   if (request.mode === "navigate") {
     event.respondWith(
       fetch(request).catch(() =>
@@ -77,7 +73,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Static media assets (images, fonts): Cache-first
+  // 5. Static media assets (images, fonts): Cache-first
   if (
     url.pathname.match(/\.(png|jpg|jpeg|svg|gif|webp|ico|woff|woff2|ttf)$/)
   ) {
@@ -90,31 +86,6 @@ self.addEventListener("fetch", (event) => {
     fetch(request).catch(() => caches.match(request))
   );
 });
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-async function networkFirstWithCache(request, cacheName) {
-  try {
-    const networkResponse = await fetch(request);
-    if (networkResponse.ok) {
-      try {
-        const cache = await caches.open(cacheName);
-        await cache.put(request, networkResponse.clone());
-      } catch (e) {
-        // Silently ignore cache storage errors (e.g. set-cookie responses)
-      }
-    }
-    return networkResponse;
-  } catch {
-    const cached = await caches.match(request);
-    if (cached) {
-      return cached;
-    }
-    return new Response(JSON.stringify({ error: "Offline" }), {
-      status: 503,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-}
 
 async function cacheFirstWithFetch(request, cacheName) {
   const cached = await caches.match(request);

@@ -353,18 +353,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [transportStops, setTransportStops] = useState<{ id: string; name: string; amount: number }[]>([]);
   const [concessions, setConcessions] = useState<{ id: string; name: string; percentage: number; feeHeadName: string }[]>([]);
 
+  const apiFetch = async (url: string, options: RequestInit = {}) => {
+    try {
+      const res = await fetch(url, { credentials: "include", ...options });
+      if (!res.ok) {
+        console.error(`[AuthContext API Error] ${url} returned status ${res.status}`);
+        return null;
+      }
+      return await res.json();
+    } catch (err) {
+      console.error(`[AuthContext Network Error] Fetching ${url} failed:`, err);
+      return null;
+    }
+  };
+
   // Load user session and database records on mount
   useEffect(() => {
     const initSession = async () => {
       try {
-        const res = await fetch("/api/auth/me");
+        const res = await fetch("/api/auth/me", { credentials: "include" });
         if (res.ok) {
           const data = await res.json();
           setUser(data.user);
           setActiveRole(data.user.role);
+          console.log(`[AuthContext] Session initialized for user: ${data.user.username} (Role: ${data.user.role})`);
+        } else {
+          console.error(`[AuthContext] Session init failed with HTTP ${res.status}`);
         }
       } catch (err) {
-        console.error("Session load failed:", err);
+        console.error("[AuthContext] Session load failed:", err);
       } finally {
         setAuthLoading(false);
       }
@@ -376,53 +393,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Fetch live database records scoped by user role & needs
   const refreshData = async () => {
     try {
-      const isStaff = user?.role === "ADMIN" || user?.role === "ACCOUNTANT";
+      if (!user) {
+        console.warn("[AuthContext] Skipping refreshData: User not authenticated.");
+        return;
+      }
+
+      console.log(`[AuthContext] Refreshing data for ${user.username} (${user.role})...`);
+      const isStaff = user.role === "ADMIN" || user.role === "ACCOUNTANT";
 
       // Stream initial state hydration instantly as each endpoint responds
-      fetch("/api/school").then((r) => r.ok && r.json()).then((data) => data && setSchoolInfo(data)).catch(() => {});
-      fetch("/api/students").then((r) => r.ok && r.json()).then((data) => data && setStudents(data)).catch(() => {});
-      fetch("/api/attendance").then((r) => r.ok && r.json()).then((data) => data && setAttendances(data)).catch(() => {});
-      fetch("/api/homework").then((r) => r.ok && r.json()).then((data) => data && setHomeworks(data)).catch(() => {});
-      fetch("/api/leave").then((r) => r.ok && r.json()).then((data) => data && setLeaveRequests(data)).catch(() => {});
-      fetch("/api/notice").then((r) => r.ok && r.json()).then((data) => data && setNotices(data)).catch(() => {});
-      fetch("/api/events").then((r) => r.ok && r.json()).then((data) => data && setEventsList(data)).catch(() => {});
-      fetch("/api/classes").then((r) => r.ok && r.json()).then((data) => data && setClasses(data)).catch(() => {});
-      fetch("/api/concessions").then((r) => r.ok && r.json()).then((data) => data && setConcessions(data)).catch(() => {});
+      apiFetch("/api/school").then((data) => data && setSchoolInfo(data));
+      apiFetch("/api/students").then((data) => {
+        if (data) {
+          setStudents(data);
+          console.log(`[AuthContext] Loaded ${data.length} student records.`);
+        }
+      });
+      apiFetch("/api/attendance").then((data) => data && setAttendances(data));
+      apiFetch("/api/homework").then((data) => data && setHomeworks(data));
+      apiFetch("/api/leave").then((data) => data && setLeaveRequests(data));
+      apiFetch("/api/notice").then((data) => data && setNotices(data));
+      apiFetch("/api/events").then((data) => data && setEventsList(data));
+      apiFetch("/api/classes").then((data) => data && setClasses(data));
+      apiFetch("/api/concessions").then((data) => data && setConcessions(data));
 
-      fetch("/api/transport")
-        .then((r) => r.ok && r.json())
-        .then((transData) => {
-          if (transData) setTransportStops(transData.map((d: any) => ({ ...d, amount: d.amount / 100 })));
-        })
-        .catch(() => {});
+      apiFetch("/api/transport").then((transData) => {
+        if (transData) setTransportStops(transData.map((d: any) => ({ ...d, amount: d.amount / 100 })));
+      });
 
-      fetch("/api/fee-config")
-        .then((r) => r.ok && r.json())
-        .then((feeData) => {
-          if (feeData) {
-            setFeeHeads(feeData.feeHeads || []);
-            setFeeStructures(feeData.feeStructures || []);
-          }
-        })
-        .catch(() => {});
+      apiFetch("/api/fee-config").then((feeData) => {
+        if (feeData) {
+          setFeeHeads(feeData.feeHeads || []);
+          setFeeStructures(feeData.feeStructures || []);
+        }
+      });
 
-      fetch("/api/billing")
-        .then((r) => r.ok && r.json())
-        .then((billingData) => {
-          if (billingData) {
-            setLedgerEntries(billingData.ledgerEntries || []);
-            setReceipts(billingData.receipts || []);
-            setDueItems(billingData.dueItems || []);
-          }
-        })
-        .catch(() => {});
+      apiFetch("/api/billing").then((billingData) => {
+        if (billingData) {
+          setLedgerEntries(billingData.ledgerEntries || []);
+          setReceipts(billingData.receipts || []);
+          setDueItems(billingData.dueItems || []);
+          console.log(`[AuthContext] Loaded billing records: ${billingData.dueItems?.length || 0} dues.`);
+        }
+      });
 
       if (isStaff) {
-        fetch("/api/users").then((r) => r.ok && r.json()).then((data) => data && setUsersList(data)).catch(() => {});
-        fetch("/api/audits").then((r) => r.ok && r.json()).then((data) => data && setAuditLogs(data)).catch(() => {});
+        apiFetch("/api/users").then((data) => data && setUsersList(data));
+        apiFetch("/api/audits").then((data) => data && setAuditLogs(data));
       }
     } catch (err) {
-      console.error("Data refresh failed:", err);
+      console.error("[AuthContext] Data refresh failed:", err);
     }
   };
 
