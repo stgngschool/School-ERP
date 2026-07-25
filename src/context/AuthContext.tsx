@@ -300,7 +300,7 @@ interface AuthContextType {
   addConcession: (name: string, percentage: number, feeHeadName: string) => Promise<void>;
   removeConcession: (id: string) => Promise<void>;
   refreshConcessions: () => Promise<void>;
-  login: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  login: (username: string, password: string, portal?: "STAFF" | "PARENT") => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   refreshData: () => Promise<void>;
 }
@@ -541,12 +541,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Action methods calling Next.js API routes
 
-  const login = async (usernameVal: string, passwordVal: string) => {
+  const login = async (usernameVal: string, passwordVal: string, portalVal?: "STAFF" | "PARENT") => {
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: usernameVal, password: passwordVal }),
+        body: JSON.stringify({ username: usernameVal, password: passwordVal, portal: portalVal }),
       });
 
       const data = await res.json();

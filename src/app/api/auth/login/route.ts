@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import db from "@/lib/db";
 import { signToken } from "@/lib/auth";
+import { Role } from "@prisma/client";
 
 export async function POST(request: Request) {
   try {
-    const { username, password } = await request.json();
+    const { username, password, portal } = await request.json();
 
     if (!username || !password) {
       return NextResponse.json(
@@ -18,9 +19,18 @@ export async function POST(request: Request) {
     const cleanPassword = String(password).trim();
     const digitsOnly = cleanInput.replace(/\D/g, "");
 
-    // Query user from database by username, email, phone, familyCode, or admissionNumber
-    let user = await db.user.findFirst({
+    // Determine target roles based on login portal selected (STAFF vs PARENT)
+    const targetRoles: Role[] =
+      portal === "STAFF"
+        ? [Role.ADMIN, Role.ACCOUNTANT, Role.TEACHER]
+        : portal === "PARENT"
+        ? [Role.PARENT]
+        : [Role.ADMIN, Role.ACCOUNTANT, Role.TEACHER, Role.PARENT];
+
+    // Find candidate users in database matching login criteria and role filter
+    let candidateUsers = await db.user.findMany({
       where: {
+        role: { in: targetRoles },
         OR: [
           { username: { equals: cleanInput, mode: "insensitive" } },
           { email: { equals: cleanInput, mode: "insensitive" } },
@@ -31,8 +41,8 @@ export async function POST(request: Request) {
       },
     });
 
-    // Fallback: Check if input matches Family Code (FAM-XXXX) or Child Admission Number (ADM-XXXX)
-    if (!user) {
+    // Fallback for Parent portal: Check Family Code (FAM-XXXX) or Child Admission Number (ADM-XXXX)
+    if (candidateUsers.length === 0 && (portal === "PARENT" || !portal)) {
       const parentByCode = await db.parentProfile.findFirst({
         where: {
           OR: [
@@ -44,49 +54,59 @@ export async function POST(request: Request) {
       });
 
       if (parentByCode && parentByCode.user) {
-        user = parentByCode.user;
+        candidateUsers = [parentByCode.user];
       }
     }
 
-    if (!user) {
+    if (candidateUsers.length === 0) {
+      const portalName = portal === "STAFF" ? "Staff Login" : portal === "PARENT" ? "Parent Portal" : "system";
       return NextResponse.json(
-        { error: "Invalid credentials. Please check your username, phone, or family code." },
+        { error: `No account found for ${portalName}. Please check your username/phone.` },
         { status: 401 }
       );
     }
 
-    if (user.status === "BLOCKED") {
+    // Authenticate candidate user by password
+    let authenticatedUser = null;
+    for (const candidate of candidateUsers) {
+      if (candidate.status === "BLOCKED") continue;
+      const isMatch = await bcrypt.compare(cleanPassword, candidate.passwordHash);
+      if (isMatch) {
+        authenticatedUser = candidate;
+        break;
+      }
+    }
+
+    if (!authenticatedUser) {
+      return NextResponse.json(
+        { error: "Invalid password. Please check your credentials." },
+        { status: 401 }
+      );
+    }
+
+    if (authenticatedUser.status === "BLOCKED") {
       return NextResponse.json(
         { error: "Your account has been locked/blocked by administrator." },
         { status: 403 }
       );
     }
 
-    // Verify password
-    const isMatch = await bcrypt.compare(cleanPassword, user.passwordHash);
-    if (!isMatch) {
-      return NextResponse.json(
-        { error: "Invalid credentials. Please check your password." },
-        { status: 401 }
-      );
-    }
-
     // Sign JWT token
     const token = signToken({
-      userId: user.id,
-      username: user.username,
-      role: user.role,
+      userId: authenticatedUser.id,
+      username: authenticatedUser.username,
+      role: authenticatedUser.role,
     });
 
     // Set cookie directly on response object
     const response = NextResponse.json({
       success: true,
       user: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        role: user.role,
-        name: user.name,
+        id: authenticatedUser.id,
+        username: authenticatedUser.username,
+        email: authenticatedUser.email,
+        role: authenticatedUser.role,
+        name: authenticatedUser.name,
       },
     });
 
@@ -106,4 +126,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+
 

@@ -19,7 +19,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const result = await login(username.trim(), password.trim());
+      const result = await login(username.trim(), password.trim(), activeTab);
 
       if (!result.success) {
         throw new Error(result.error || "Invalid credentials. Please try again.");
