@@ -7,6 +7,18 @@ export type UserStatus = "ACTIVE" | "BLOCKED";
 export type AttendanceStatus = "PRESENT" | "ABSENT" | "LATE" | "LEAVE";
 export type LeaveStatus = "PENDING" | "APPROVED" | "REJECTED";
 
+export type AuthStage =
+  | "APP STARTED"
+  | "SUPABASE CLIENT CREATED"
+  | "CHECKING SESSION"
+  | "SESSION FOUND"
+  | "AUTH USER LOADED"
+  | "PROFILE LOADED"
+  | "ADMIN LOADED"
+  | "STUDENTS FETCH START"
+  | "STUDENTS FETCH COMPLETE"
+  | "DASHBOARD READY";
+
 export interface MockUser {
   id: string;
   username: string;
@@ -303,6 +315,9 @@ interface AuthContextType {
   login: (username: string, password: string, portal?: "STAFF" | "PARENT") => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   refreshData: () => Promise<void>;
+  currentStage: AuthStage;
+  stageError: string | null;
+  retryInitSession: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -353,6 +368,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [transportStops, setTransportStops] = useState<{ id: string; name: string; amount: number }[]>([]);
   const [concessions, setConcessions] = useState<{ id: string; name: string; percentage: number; feeHeadName: string }[]>([]);
 
+  const [currentStage, setCurrentStage] = useState<AuthStage>("APP STARTED");
+  const [stageError, setStageError] = useState<string | null>(null);
+
   const apiFetch = async (url: string, options: RequestInit = {}) => {
     try {
       const res = await fetch(url, { credentials: "include", ...options });
@@ -368,25 +386,69 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Load user session and database records on mount
-  useEffect(() => {
-    const initSession = async () => {
-      try {
-        const res = await fetch("/api/auth/me", { credentials: "include" });
-        if (res.ok) {
-          const data = await res.json();
-          setUser(data.user);
-          setActiveRole(data.user.role);
-          console.log(`[AuthContext] Session initialized for user: ${data.user.username} (Role: ${data.user.role})`);
-        } else {
-          console.error(`[AuthContext] Session init failed with HTTP ${res.status}`);
-        }
-      } catch (err) {
-        console.error("[AuthContext] Session load failed:", err);
-      } finally {
-        setAuthLoading(false);
-      }
-    };
+  const initSession = async () => {
+    setAuthLoading(true);
+    setStageError(null);
+    setCurrentStage("APP STARTED");
+    console.log("STAGE [1/10]: APP STARTED - Initializing Application Context");
 
+    setCurrentStage("SUPABASE CLIENT CREATED");
+    console.log("STAGE [2/10]: SUPABASE CLIENT CREATED - Auth API Client Configured");
+
+    try {
+      setCurrentStage("CHECKING SESSION");
+      console.log("STAGE [3/10]: CHECKING SESSION - Fetching /api/auth/me");
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+      const res = await fetch("/api/auth/me", {
+        credentials: "include",
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const data = await res.json();
+        setCurrentStage("SESSION FOUND");
+        console.log("STAGE [4/10]: SESSION FOUND - Authenticated user verified", {
+          status: res.status,
+          userId: data.user.id,
+          role: data.user.role,
+        });
+
+        setUser(data.user);
+        setCurrentStage("AUTH USER LOADED");
+        console.log("STAGE [5/10]: AUTH USER LOADED - Username:", data.user.username);
+
+        setCurrentStage("PROFILE LOADED");
+        console.log("STAGE [6/10]: PROFILE LOADED - User Name:", data.user.name);
+
+        setActiveRole(data.user.role);
+        setCurrentStage("ADMIN LOADED");
+        console.log("STAGE [7/10]: ADMIN LOADED - Role set to:", data.user.role);
+      } else {
+        const errText = `Session check returned status HTTP ${res.status}`;
+        console.error("STAGE FAILED at CHECKING SESSION:", {
+          status: res.status,
+          statusText: res.statusText,
+        });
+        setStageError(errText);
+      }
+    } catch (err: any) {
+      const isAbort = err.name === "AbortError";
+      const errMsg = isAbort
+        ? "Network request to /api/auth/me timed out after 8s."
+        : err.message || "Failed to communicate with authentication API.";
+      console.error("STAGE FAILED at CHECKING SESSION:", err);
+      setStageError(errMsg);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  useEffect(() => {
     initSession();
   }, []);
 
@@ -398,7 +460,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      console.log(`[AuthContext] Refreshing data for ${user.username} (${user.role})...`);
+      console.log(`STAGE [8/10]: STUDENTS FETCH START - Requesting /api/students for ${user.username}...`);
+      setCurrentStage("STUDENTS FETCH START");
       const isStaff = user.role === "ADMIN" || user.role === "ACCOUNTANT";
 
       // Stream initial state hydration instantly as each endpoint responds
@@ -406,7 +469,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       apiFetch("/api/students").then((data) => {
         if (data) {
           setStudents(data);
-          console.log(`[AuthContext] Loaded ${data.length} student records.`);
+          setCurrentStage("STUDENTS FETCH COMPLETE");
+          console.log(`STAGE [9/10]: STUDENTS FETCH COMPLETE - Loaded ${data.length} students.`);
         }
       });
       apiFetch("/api/attendance").then((data) => data && setAttendances(data));
@@ -441,6 +505,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         apiFetch("/api/users").then((data) => data && setUsersList(data));
         apiFetch("/api/audits").then((data) => data && setAuditLogs(data));
       }
+
+      setCurrentStage("DASHBOARD READY");
+      console.log("STAGE [10/10]: DASHBOARD READY - All data streams initialized.");
     } catch (err) {
       console.error("[AuthContext] Data refresh failed:", err);
     }
@@ -1255,6 +1322,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         logout,
         refreshData,
         authLoading,
+        currentStage,
+        stageError,
+        retryInitSession: initSession,
       }}
     >
       {children}
