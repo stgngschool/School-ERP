@@ -1,13 +1,34 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { useAuth } from "@/context/AuthContext";
 import AppLayout from "@/components/AppLayout";
-import ParentDashboard from "@/components/ParentDashboard";
-import TeacherDashboard from "@/components/TeacherDashboard";
-import AccountantDashboard from "@/components/AccountantDashboard";
-import AdminDashboard from "@/components/AdminDashboard";
 import { ShieldAlert, Lock, Loader2, AlertOctagon, RotateCcw } from "lucide-react";
+
+const DashboardLoading = () => (
+  <div className="min-h-[50vh] flex flex-col items-center justify-center gap-3 text-slate-400">
+    <Loader2 className="h-6 w-6 animate-spin" />
+    <p className="text-xs font-bold uppercase tracking-widest">Loading dashboard module...</p>
+  </div>
+);
+
+const ParentDashboard = dynamic(() => import("@/components/ParentDashboard"), {
+  loading: DashboardLoading,
+  ssr: false,
+});
+const TeacherDashboard = dynamic(() => import("@/components/TeacherDashboard"), {
+  loading: DashboardLoading,
+  ssr: false,
+});
+const AccountantDashboard = dynamic(() => import("@/components/AccountantDashboard"), {
+  loading: DashboardLoading,
+  ssr: false,
+});
+const AdminDashboard = dynamic(() => import("@/components/AdminDashboard"), {
+  loading: DashboardLoading,
+  ssr: false,
+});
 
 export default function IndexPage() {
   const { activeRole, user, authLoading, currentStage, stageError, retryInitSession } = useAuth();

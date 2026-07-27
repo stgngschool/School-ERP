@@ -110,20 +110,23 @@ export async function POST(request: Request) {
       },
     });
 
-    // ANDROID PWA FIX: sameSite must be "none" in production so the auth cookie
-    // is sent correctly when the app runs in PWA standalone mode on Android Chrome.
-    // With sameSite:"lax", standalone-mode navigations are treated as cross-origin
-    // and the cookie is silently stripped → server returns 401 → app freezes forever.
-    // Development uses "lax" because localhost is HTTP (SameSite=None requires HTTPS).
-    const isProduction = process.env.NODE_ENV === "production";
+    // Mobile/PWA auth fix:
+    // Keep the cookie same-site and only mark it secure on HTTPS requests.
+    // SameSite=None requires HTTPS and can silently fail on LAN/HTTP mobile tests.
+    response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    response.headers.set("Pragma", "no-cache");
+    response.headers.set("Expires", "0");
+
+    const requestUrl = new URL(request.url);
+    const isHttps = requestUrl.protocol === "https:";
     response.cookies.set({
       name: "auth_token",
       value: token,
       httpOnly: true,
-      secure: isProduction,
+      secure: isHttps,
       maxAge: 60 * 60 * 24 * 7, // 7 days
       path: "/",
-      sameSite: isProduction ? "none" : "lax",
+      sameSite: "lax",
     });
 
     return response;
@@ -132,5 +135,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
-
-

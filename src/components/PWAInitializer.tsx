@@ -23,7 +23,6 @@ export default function PWAInitializer() {
       // Check if any cookies are present (value redacted for security)
       const hasCookies = document.cookie.length > 0;
       const cookieNames = document.cookie.split(";").map((c) => c.trim().split("=")[0]).filter(Boolean);
-      const hasAuthCookie = cookieNames.includes("auth_token");
 
       console.group("[PWAInitializer] 📱 Device & PWA Diagnostics");
       console.log("🖥️  Display Mode   :", isStandalone ? "✅ Standalone PWA" : "🌐 Browser Window");
@@ -31,18 +30,10 @@ export default function PWAInitializer() {
       console.log("🌐 Browser        :", isChrome ? `Chrome ${chromeVersion}` : ua.includes("Samsung") ? "Samsung Internet" : ua.includes("Edg") ? "Edge" : "Other");
       console.log("📐 Viewport       :", viewport, "| Screen:", screenSize);
       console.log("📶 Network        :", navigator.onLine ? `Online (${effectiveType})` : "⚠️ OFFLINE");
-      console.log("🍪 Auth Cookie    :", hasAuthCookie ? "✅ Present (auth_token)" : "❌ MISSING — will cause 401!");
+      console.log("🍪 Auth Cookie    :", "HttpOnly cookie is hidden from client JS; /api/auth/me verifies it.");
       console.log("🍪 All Cookies    :", cookieNames.length > 0 ? cookieNames.join(", ") : "none");
       console.log("🔧 User Agent     :", ua);
       console.groupEnd();
-
-      if (!hasAuthCookie && isStandalone) {
-        console.warn(
-          "[PWAInitializer] ⚠️ ANDROID DEBUG: Running in standalone PWA mode but auth_token cookie is missing.\n" +
-          "This is the primary cause of 'Loading Dashboard...' freeze.\n" +
-          "Check: cookie sameSite setting, HTTPS, and whether the user has logged in before."
-        );
-      }
 
       // Log when network goes offline/online during session
       const onOffline = () => console.warn("[PWAInitializer] 📵 Network went OFFLINE");
@@ -72,6 +63,13 @@ export default function PWAInitializer() {
     } else {
       // Production: Register SW after window load to not block initial render
       const registerSW = () => {
+        let refreshing = false;
+        navigator.serviceWorker.addEventListener("controllerchange", () => {
+          if (refreshing) return;
+          refreshing = true;
+          window.location.reload();
+        });
+
         navigator.serviceWorker
           .register("/sw.js", {
             // updateViaCache: "none" forces Chrome to always check the network for
@@ -80,7 +78,7 @@ export default function PWAInitializer() {
             updateViaCache: "none",
           })
           .then((reg) => {
-            console.log("[PWAInitializer] ✅ Service Worker v7 registered:", reg.scope);
+            console.log("[PWAInitializer] ✅ Service Worker v8 registered:", reg.scope);
 
             // Check for waiting SW (new version available)
             if (reg.waiting) {

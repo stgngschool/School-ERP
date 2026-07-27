@@ -3,18 +3,29 @@ import { cookies } from "next/headers";
 import db from "@/lib/db";
 import { verifyToken } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
+function noStoreJson(body: unknown, init?: ResponseInit) {
+  const response = NextResponse.json(body, init);
+  response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  response.headers.set("Pragma", "no-cache");
+  response.headers.set("Expires", "0");
+  response.headers.set("Vary", "Cookie");
+  return response;
+}
+
 export async function GET() {
   try {
     const cookieStore = await cookies();
     const token = cookieStore.get("auth_token")?.value;
 
     if (!token) {
-      return NextResponse.json({ authenticated: false }, { status: 401 });
+      return noStoreJson({ authenticated: false }, { status: 401 });
     }
 
     const decoded = verifyToken(token);
     if (!decoded) {
-      return NextResponse.json({ authenticated: false }, { status: 401 });
+      return noStoreJson({ authenticated: false }, { status: 401 });
     }
 
     // Fetch user from DB with rich profile context
@@ -40,18 +51,18 @@ export async function GET() {
     });
 
     if (!user) {
-      return NextResponse.json({ authenticated: false }, { status: 401 });
+      return noStoreJson({ authenticated: false }, { status: 401 });
     }
 
     if (user.status === "BLOCKED") {
       cookieStore.delete("auth_token");
-      return NextResponse.json(
+      return noStoreJson(
         { error: "Your account has been locked/blocked by administrator." },
         { status: 403 }
       );
     }
 
-    return NextResponse.json({
+    return noStoreJson({
       authenticated: true,
       user: {
         id: user.id,
@@ -68,6 +79,6 @@ export async function GET() {
     });
   } catch (error: any) {
     console.error("Auth Me API error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return noStoreJson({ error: "Internal server error" }, { status: 500 });
   }
 }

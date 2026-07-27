@@ -377,9 +377,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const tid = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const res = await fetch(url, {
-        credentials: "include",
-        signal: controller.signal,
         ...options,
+        credentials: "include",
+        cache: options.cache ?? "no-store",
+        signal: controller.signal,
       });
       clearTimeout(tid);
       if (!res.ok) {
@@ -607,15 +608,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setCurrentStage("STUDENTS FETCH START");
       const isStaff = user.role === "ADMIN" || user.role === "ACCOUNTANT";
 
-      // Stream initial state hydration instantly as each endpoint responds
-      apiFetch("/api/school").then((data) => data && setSchoolInfo(data));
-      apiFetch("/api/students").then((data) => {
+      const criticalLoads = [
+        apiFetch("/api/school").then((data) => data && setSchoolInfo(data)),
+        apiFetch("/api/students").then((data) => {
         if (data) {
           setStudents(data);
           setCurrentStage("STUDENTS FETCH COMPLETE");
           console.log(`STAGE [9/10]: STUDENTS FETCH COMPLETE - Loaded ${data.length} students.`);
         }
-      });
+        }),
+        apiFetch("/api/billing").then((billingData) => {
+          if (billingData) {
+            setLedgerEntries(billingData.ledgerEntries || []);
+            setReceipts(billingData.receipts || []);
+            setDueItems(billingData.dueItems || []);
+            console.log(`[AuthContext] Loaded billing records: ${billingData.dueItems?.length || 0} dues.`);
+          }
+        }),
+      ];
+
+      // Stream secondary state hydration as each endpoint responds.
       apiFetch("/api/attendance").then((data) => data && setAttendances(data));
       apiFetch("/api/homework").then((data) => data && setHomeworks(data));
       apiFetch("/api/leave").then((data) => data && setLeaveRequests(data));
@@ -635,20 +647,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       });
 
-      apiFetch("/api/billing").then((billingData) => {
-        if (billingData) {
-          setLedgerEntries(billingData.ledgerEntries || []);
-          setReceipts(billingData.receipts || []);
-          setDueItems(billingData.dueItems || []);
-          console.log(`[AuthContext] Loaded billing records: ${billingData.dueItems?.length || 0} dues.`);
-        }
-      });
-
       if (isStaff) {
         apiFetch("/api/users").then((data) => data && setUsersList(data));
         apiFetch("/api/audits").then((data) => data && setAuditLogs(data));
       }
 
+      await Promise.allSettled(criticalLoads);
       setCurrentStage("DASHBOARD READY");
       console.log("STAGE [10/10]: DASHBOARD READY - All data streams initialized.");
     } catch (err) {
@@ -659,7 +663,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Targeted refresh — only fee config (fast, avoids full reload)
   const refreshFeeConfig = async () => {
     try {
-      const feeRes = await fetch("/api/fee-config");
+      const feeRes = await fetch("/api/fee-config", { credentials: "include", cache: "no-store" });
       if (feeRes.ok) {
         const feeData = await feeRes.json();
         setFeeHeads(feeData.feeHeads);
@@ -673,7 +677,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Targeted refresh — only classes list (fast, avoids full reload)
   const refreshClasses = async () => {
     try {
-      const classRes = await fetch("/api/classes");
+      const classRes = await fetch("/api/classes", { credentials: "include", cache: "no-store" });
       if (classRes.ok) setClasses(await classRes.json());
     } catch (err) {
       console.error("Classes refresh failed:", err);
@@ -682,7 +686,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshTransportStops = async () => {
     try {
-      const res = await fetch("/api/transport");
+      const res = await fetch("/api/transport", { credentials: "include", cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
         setTransportStops(data.map((d: any) => ({ ...d, amount: d.amount / 100 })));
@@ -724,7 +728,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshConcessions = async () => {
     try {
-      const res = await fetch("/api/concessions");
+      const res = await fetch("/api/concessions", { credentials: "include", cache: "no-store" });
       if (res.ok) {
         setConcessions(await res.json());
       }
@@ -775,6 +779,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
+        credentials: "include",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: usernameVal, password: passwordVal, portal: portalVal }),
       });
@@ -795,7 +801,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
-      await fetch("/api/auth/logout", { method: "POST" });
+      await fetch("/api/auth/logout", { method: "POST", credentials: "include", cache: "no-store" });
       setUser(null);
       window.location.href = "/login";
     } catch (err) {

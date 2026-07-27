@@ -5,7 +5,7 @@
 // 3. API routes are always bypassed (return early) — never intercepted
 // 4. Stale shell cache is never served for navigation — always network-first with credentials
 
-const CACHE_VERSION = "v7-android-fix";
+const CACHE_VERSION = "v8-mobile-data-fix";
 const STATIC_CACHE = `gng-static-${CACHE_VERSION}`;
 
 const STATIC_ASSETS = [
@@ -45,6 +45,12 @@ self.addEventListener("activate", (event) => {
       return self.clients.claim();
     })
   );
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 // ─── Fetch: Smart routing with Android PWA credential safety ─────────────────
