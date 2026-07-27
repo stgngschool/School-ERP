@@ -323,9 +323,33 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [activeRole, setActiveRole] = useState<Role | null>(null);
-  const [user, setUser] = useState<MockUser | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
+  const [activeRole, setActiveRole] = useState<Role | null>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        return (localStorage.getItem("gng_active_role") as Role) || null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
+  const [user, setUser] = useState<MockUser | null>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("gng_user");
+        return cached ? JSON.parse(cached) : null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
+  const [authLoading, setAuthLoading] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return !localStorage.getItem("gng_user");
+    }
+    return true;
+  });
   const [usersList, setUsersList] = useState<MockUser[]>([]);
   const [activeTab, setActiveTab] = useState<string>("");
 
@@ -497,6 +521,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setCurrentStage("PROFILE LOADED");
           setActiveRole(data.user.role);
           setCurrentStage("ADMIN LOADED");
+          try {
+            localStorage.setItem("gng_user", JSON.stringify(data.user));
+            localStorage.setItem("gng_active_role", data.user.role);
+          } catch (e) {}
           setAuthLoading(false);
           return; // ✅ Success — exit retry loop
 
@@ -507,7 +535,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (res.status === 403) {
             setStageError(errBody?.error || "Account is locked by administrator.");
           }
-          // Not an error per se — just not logged in. Let the redirect handle it.
+          try {
+            localStorage.removeItem("gng_user");
+            localStorage.removeItem("gng_active_role");
+          } catch (e) {}
+          setUser(null);
+          setActiveRole(null);
           setAuthLoading(false);
           return;
 
@@ -793,6 +826,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setUser(data.user);
       setActiveRole(data.user.role);
+      try {
+        localStorage.setItem("gng_user", JSON.stringify(data.user));
+        localStorage.setItem("gng_active_role", data.user.role);
+      } catch (e) {}
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message || "Login failed. Please try again." };
@@ -802,10 +839,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     try {
       await fetch("/api/auth/logout", { method: "POST", credentials: "include", cache: "no-store" });
+      try {
+        localStorage.removeItem("gng_user");
+        localStorage.removeItem("gng_active_role");
+      } catch (e) {}
       setUser(null);
+      setActiveRole(null);
       window.location.href = "/login";
     } catch (err) {
       console.error("Logout failed:", err);
+      try {
+        localStorage.removeItem("gng_user");
+        localStorage.removeItem("gng_active_role");
+      } catch (e) {}
+      setUser(null);
+      setActiveRole(null);
       window.location.href = "/login";
     }
   };

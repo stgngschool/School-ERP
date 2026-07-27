@@ -28,25 +28,20 @@ export async function GET() {
       return noStoreJson({ authenticated: false }, { status: 401 });
     }
 
-    // Fetch user from DB with rich profile context
+    // Fetch user from DB with lightweight profile select for ultra-fast response
     const user = await db.user.findUnique({
       where: { id: decoded.userId },
-      include: {
-        parentProfile: {
-          include: {
-            students: {
-              include: {
-                class: true,
-              },
-            },
-          },
-        },
-        teacherProfile: {
-          include: {
-            classes: true,
-          },
-        },
-        accountantProfile: true,
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        role: true,
+        name: true,
+        phone: true,
+        status: true,
+        parentProfile: { select: { id: true, familyCode: true } },
+        teacherProfile: { select: { id: true, employeeId: true } },
+        accountantProfile: { select: { id: true, employeeId: true } },
       },
     });
 
