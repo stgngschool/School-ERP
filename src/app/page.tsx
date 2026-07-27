@@ -33,10 +33,10 @@ const AdminDashboard = dynamic(() => import("@/components/AdminDashboard"), {
 export default function IndexPage() {
   const { activeRole, user, authLoading } = useAuth();
 
-  // Instant redirect to login if session check finishes and user is not authenticated
+  // Redirect to login ONLY when session check has finished (authLoading === false) and user is unauthenticated
   useEffect(() => {
     if (!authLoading && (!user || !activeRole)) {
-      if (typeof window !== "undefined") {
+      if (typeof window !== "undefined" && window.location.pathname !== "/login") {
         window.location.replace("/login");
       }
     }

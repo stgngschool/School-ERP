@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef } from "react";
 
 export type Role = "ADMIN" | "ACCOUNTANT" | "TEACHER" | "PARENT";
 export type UserStatus = "ACTIVE" | "BLOCKED";
@@ -432,16 +432,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // ─── Session Initializer with Auto-Retry ──────────────────────────────────
-  // Handles: cold start, warm start, Android PWA standalone, slow network,
-  // cell tower handoff, device wake-from-sleep.
+  // Concurrency Lock & Version Tracking Refs to prevent race conditions and duplicate calls
+  const isInitSessionActiveRef = useRef(false);
+  const sessionVersionRef = useRef(0);
+
   const initSession = async () => {
-    console.log("[DIAGNOSTIC][CLIENT] APP START / SESSION START");
+    // Task 1: If an execution is already running, ignore subsequent calls
+    if (isInitSessionActiveRef.current) {
+      console.log("[AuthContext] 🔒 initSession skipped: another session check is already active.");
+      return;
+    }
+    isInitSessionActiveRef.current = true;
+    const currentVersion = ++sessionVersionRef.current;
+
+    console.log(`[AuthContext] 🚀 Session Init Started (Version #${currentVersion})`);
     setAuthLoading(true);
     setStageError(null);
     setCurrentStage("APP STARTED");
 
-    // ── Device / Environment Diagnostics (visible in Chrome DevTools via USB) ──
+    // ── Device / Environment Diagnostics ──
     const isStandalone =
       typeof window !== "undefined" &&
       (window.matchMedia("(display-mode: standalone)").matches ||
@@ -465,21 +474,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (!isOnline) {
       console.warn("[AuthContext] Device is offline — deferring session check until online.");
-      setStageError("Device is offline. Waiting for network connection...");
-      setCurrentStage("CHECKING SESSION");
-      setAuthLoading(false);
+      if (currentVersion === sessionVersionRef.current) {
+        setStageError("Device is offline. Waiting for network connection...");
+        setCurrentStage("CHECKING SESSION");
+        setAuthLoading(false);
+      }
+      isInitSessionActiveRef.current = false;
       return;
     }
 
     setCurrentStage("SUPABASE CLIENT CREATED");
-    console.log("[AuthContext] STAGE [2]: Auth API client configured");
 
-    // ── Retry loop: up to 3 attempts (initial + 2 retries) ──────────────────
-    // On mobile, the first request often fails due to:
-    //  - Cell network handoff (tower switch)
-    //  - Device waking from sleep (radio reconnect delay)
-    //  - Slow 3G/2G networks exceeding single timeout
-    // Automatic retry silently recovers without user action.
     const MAX_ATTEMPTS = 3;
     const RETRY_DELAY_MS = 1500;
     const ATTEMPT_TIMEOUT_MS = 8000;
@@ -489,12 +494,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
         if (attempt > 1) {
-          console.log(`[AuthContext] 🔄 Retry attempt ${attempt}/${MAX_ATTEMPTS} after ${RETRY_DELAY_MS}ms delay...`);
           await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
         }
 
+        // Task 2: Check if newer session or login has occurred mid-flight
+        if (currentVersion !== sessionVersionRef.current) {
+          console.log(`[AuthContext] 🛑 Stale session check (Version #${currentVersion}) discarded.`);
+          isInitSessionActiveRef.current = false;
+          return;
+        }
+
         setCurrentStage("CHECKING SESSION");
-        console.log(`[AuthContext] STAGE [3]: Checking session — attempt ${attempt}/${MAX_ATTEMPTS}`);
         const t0 = performance.now();
 
         const controller = new AbortController();
@@ -503,8 +513,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         let res: Response;
         try {
           res = await fetch("/api/auth/me", {
-            credentials: "include",  // CRITICAL: must send cookies in PWA standalone mode
-            cache: "no-store",        // Never serve cached auth responses on Android
+            credentials: "include",
+            cache: "no-store",
             signal: controller.signal,
           });
         } finally {
@@ -514,19 +524,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const elapsed = Math.round(performance.now() - t0);
         console.log(`[AuthContext] /api/auth/me → HTTP ${res.status} in ${elapsed}ms`);
 
+        // Task 2: Check version again before mutating state
+        if (currentVersion !== sessionVersionRef.current) {
+          console.log(`[AuthContext] 🛑 Stale session check response (Version #${currentVersion}) discarded.`);
+          isInitSessionActiveRef.current = false;
+          return;
+        }
+
         if (res.ok) {
           const data = await res.json();
-
-          console.group("[AuthContext] ✅ Session verified");
-          console.log("User ID  :", data.user?.id);
-          console.log("Username :", data.user?.username);
-          console.log("Role     :", data.user?.role);
-          console.log("Status   :", data.user?.status);
-          console.log("Attempt  :", attempt);
-          console.groupEnd();
-
-          console.log(`[DIAGNOSTIC][CLIENT] SESSION SUCCESS | userId: ${data.user?.id} | role: ${data.user?.role}`);
-          console.log(`[DIAGNOSTIC][RENDER] User loaded: ${data.user?.username} | Role loaded: ${data.user?.role}`);
 
           setCurrentStage("SESSION FOUND");
           setUser(data.user);
@@ -540,13 +546,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           } catch (e) {}
           setAuthLoading(false);
           refreshData(data.user);
-          return; // ✅ Success — exit retry loop
+          isInitSessionActiveRef.current = false;
+          return;
 
         } else if (res.status === 401 || res.status === 403) {
-          // Definitive auth failure — don't retry (user is not logged in)
           const errBody = await res.json().catch(() => ({}));
-          console.warn(`[AuthContext] Auth definitive failure HTTP ${res.status}:`, errBody);
-          console.warn(`[DIAGNOSTIC][CLIENT] SESSION FAILURE | status: ${res.status} | error: ${errBody?.error || "Unauthenticated"}`);
+          console.warn(`[AuthContext] Auth failure HTTP ${res.status}:`, errBody);
           if (res.status === 403) {
             setStageError(errBody?.error || "Account is locked by administrator.");
           }
@@ -557,12 +562,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(null);
           setActiveRole(null);
           setAuthLoading(false);
+          isInitSessionActiveRef.current = false;
           return;
 
         } else {
-          // Server error (5xx) — retry
           lastError = `Server returned HTTP ${res.status} ${res.statusText}`;
-          console.error(`[AuthContext] Server error attempt ${attempt}:`, lastError);
           continue;
         }
 
@@ -571,14 +575,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         lastError = isAbort
           ? `Request timed out after ${ATTEMPT_TIMEOUT_MS / 1000}s (attempt ${attempt}/${MAX_ATTEMPTS})`
           : err.message || "Network error";
-        console.error(`[AuthContext] ❌ Attempt ${attempt} failed:`, lastError, err);
       }
     }
 
-    // All attempts exhausted
-    console.error(`[AuthContext] ❌ All ${MAX_ATTEMPTS} session check attempts failed. Last error:`, lastError);
-    setStageError(lastError || "Authentication failed after multiple attempts. Please check your internet connection.");
-    setAuthLoading(false);
+    if (currentVersion === sessionVersionRef.current) {
+      setStageError(lastError || "Authentication failed after multiple attempts.");
+      setAuthLoading(false);
+    }
+    isInitSessionActiveRef.current = false;
   };
 
   useEffect(() => {
@@ -861,8 +865,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { success: false, error: data.error || "Invalid username/phone or password." };
       }
 
+      sessionVersionRef.current++;
       setUser(data.user);
       setActiveRole(data.user.role);
+      setAuthLoading(false);
       try {
         localStorage.setItem("gng_user", JSON.stringify(data.user));
         localStorage.setItem("gng_active_role", data.user.role);
@@ -875,6 +881,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
+    sessionVersionRef.current++;
     try {
       await fetch("/api/auth/logout", { method: "POST", credentials: "include", cache: "no-store" });
       try {
@@ -883,6 +890,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (e) {}
       setUser(null);
       setActiveRole(null);
+      setAuthLoading(false);
       window.location.href = "/login";
     } catch (err) {
       console.error("Logout failed:", err);
@@ -892,6 +900,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (e) {}
       setUser(null);
       setActiveRole(null);
+      setAuthLoading(false);
       window.location.href = "/login";
     }
   };
