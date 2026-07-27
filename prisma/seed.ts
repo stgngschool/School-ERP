@@ -37,22 +37,40 @@ async function main() {
 
   console.log("All data, mock users, students, teachers, parents, fees, classes cleaned.");
 
-  // Password hash for admin
-  const adminPasswordHash = await bcrypt.hash("admin123", 10);
+  // Password hash for admin & staff
+  const passwordHash = await bcrypt.hash("admin123", 10);
+  const accountantPasswordHash = await bcrypt.hash("accountant123", 10);
 
   // Create single Admin User
   const adminUser = await prisma.user.create({
     data: {
       username: "admin",
       email: "admin@school.com",
-      passwordHash: adminPasswordHash,
+      passwordHash: passwordHash,
       role: Role.ADMIN,
       name: "Shubham (Admin)",
       phone: "+919876543210",
     },
   });
 
-  console.log(`Database clean setup completed successfully! Admin created: ${adminUser.username}`);
+  // Create Accountant User
+  const accountantUser = await prisma.user.create({
+    data: {
+      username: "accountant",
+      email: "accountant@school.com",
+      passwordHash: accountantPasswordHash,
+      role: Role.ACCOUNTANT,
+      name: "Amit Kannaujiya (Accountant)",
+      phone: "+919876543211",
+      accountantProfile: {
+        create: {
+          employeeId: "ACC-001"
+        }
+      }
+    },
+  });
+
+  console.log(`Database clean setup completed successfully! Admin created: ${adminUser.username}, Accountant created: ${accountantUser.username}`);
 }
 
 main()

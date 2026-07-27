@@ -526,6 +526,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             localStorage.setItem("gng_active_role", data.user.role);
           } catch (e) {}
           setAuthLoading(false);
+          refreshData(data.user);
           return; // ✅ Success — exit retry loop
 
         } else if (res.status === 401 || res.status === 403) {
@@ -570,49 +571,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Initial session check on mount
     initSession();
 
-    // ── Page Visibility Handler ─────────────────────────────────────────────
-    // ANDROID FIX: When user backgrounds the app and returns, Android Chrome
-    // may have suspended the tab. On return, we re-verify the session to
-    // prevent showing a frozen/stale authenticated state.
     let visibilityDebounce: NodeJS.Timeout;
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        console.log("[AuthContext] 👁️ App became visible — re-checking session...");
-        // Debounce: avoid multiple rapid fires when switching between apps quickly
         clearTimeout(visibilityDebounce);
         visibilityDebounce = setTimeout(() => {
-          // Only re-check if we were previously authenticated
-          // (avoids re-running on login page)
           if (user) {
             fetch("/api/auth/me", { credentials: "include", cache: "no-store" })
               .then((res) => {
                 if (!res.ok) {
-                  console.warn("[AuthContext] Session expired while app was in background. Redirecting to login.");
                   setUser(null);
                   setActiveRole(null);
                   if (typeof window !== "undefined") {
                     window.location.replace("/login");
                   }
-                } else {
-                  console.log("[AuthContext] ✅ Session still valid after resume.");
                 }
               })
-              .catch((err) => console.warn("[AuthContext] Background resume check failed:", err));
+              .catch(() => {});
           } else {
-            // Not logged in yet — try full init (handles device-wake + login page)
             initSession();
           }
         }, 500);
       }
     };
 
-    // ── Online Handler ─────────────────────────────────────────────────────
-    // ANDROID FIX: When device reconnects to network (e.g. after airplane mode,
-    // walking into WiFi coverage, or cell tower handoff), automatically retry
-    // the session check instead of leaving the user on a frozen loading screen.
     const handleOnline = () => {
-      console.log("[AuthContext] 📶 Network came online — triggering session re-check...");
-      // Only trigger if we're in a loading or error state (not already authenticated)
       if (authLoading || stageError) {
         initSession();
       }
@@ -630,16 +613,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Fetch live database records scoped by user role & needs
-  const refreshData = async () => {
+  const refreshData = async (targetUser?: MockUser | null) => {
     try {
-      if (!user) {
+      const activeUser = targetUser !== undefined ? targetUser : user;
+      if (!activeUser) {
         console.warn("[AuthContext] Skipping refreshData: User not authenticated.");
         return;
       }
 
-      console.log(`STAGE [8/10]: STUDENTS FETCH START - Requesting /api/students for ${user.username}...`);
+      console.log(`STAGE [8/10]: STUDENTS FETCH START - Requesting /api/students for ${activeUser.username}...`);
       setCurrentStage("STUDENTS FETCH START");
-      const isStaff = user.role === "ADMIN" || user.role === "ACCOUNTANT";
+      const isStaff = activeUser.role === "ADMIN" || activeUser.role === "ACCOUNTANT";
 
       const criticalLoads = [
         apiFetch("/api/school").then((data) => data && setSchoolInfo(data)),
@@ -830,6 +814,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem("gng_user", JSON.stringify(data.user));
         localStorage.setItem("gng_active_role", data.user.role);
       } catch (e) {}
+      refreshData(data.user);
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message || "Login failed. Please try again." };
