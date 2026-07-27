@@ -5,10 +5,16 @@ import { signToken } from "@/lib/auth";
 import { Role } from "@prisma/client";
 
 export async function POST(request: Request) {
+  const reqId = `login_${Math.random().toString(36).substring(2, 9)}`;
+  const startTime = performance.now();
+  console.log(`[DIAGNOSTIC][API][START] POST /api/auth/login [${reqId}] | timestamp: ${new Date().toISOString()}`);
+
   try {
     const { username, password, portal } = await request.json();
 
     if (!username || !password) {
+      const duration = (performance.now() - startTime).toFixed(2);
+      console.warn(`[DIAGNOSTIC][API][END] POST /api/auth/login [${reqId}] | status: 400 | duration: ${duration}ms | reason: Missing username or password`);
       return NextResponse.json(
         { error: "Username/Phone and password are required." },
         { status: 400 }
@@ -27,6 +33,7 @@ export async function POST(request: Request) {
         ? [Role.PARENT]
         : [Role.ADMIN, Role.ACCOUNTANT, Role.TEACHER, Role.PARENT];
 
+    const dbStart = performance.now();
     // Find candidate users in database matching login criteria and role filter
     let candidateUsers = await db.user.findMany({
       where: {
@@ -58,7 +65,12 @@ export async function POST(request: Request) {
       }
     }
 
+    const dbDuration = (performance.now() - dbStart).toFixed(2);
+    console.log(`[DIAGNOSTIC][DB][${reqId}] db.user candidate lookup | duration: ${dbDuration}ms | candidatesFound: ${candidateUsers.length}`);
+
     if (candidateUsers.length === 0) {
+      const duration = (performance.now() - startTime).toFixed(2);
+      console.warn(`[DIAGNOSTIC][API][END] POST /api/auth/login [${reqId}] | status: 401 | duration: ${duration}ms | reason: Candidate user not found | input: ${cleanInput}`);
       const portalName = portal === "STAFF" ? "Staff Login" : portal === "PARENT" ? "Parent Portal" : "system";
       return NextResponse.json(
         { error: `No account found for ${portalName}. Please check your username/phone.` },
@@ -78,6 +90,8 @@ export async function POST(request: Request) {
     }
 
     if (!authenticatedUser) {
+      const duration = (performance.now() - startTime).toFixed(2);
+      console.warn(`[DIAGNOSTIC][API][END] POST /api/auth/login [${reqId}] | status: 401 | duration: ${duration}ms | reason: Password mismatch`);
       return NextResponse.json(
         { error: "Invalid password. Please check your credentials." },
         { status: 401 }
@@ -85,6 +99,8 @@ export async function POST(request: Request) {
     }
 
     if (authenticatedUser.status === "BLOCKED") {
+      const duration = (performance.now() - startTime).toFixed(2);
+      console.warn(`[DIAGNOSTIC][API][END] POST /api/auth/login [${reqId}] | status: 403 | duration: ${duration}ms | user: ${authenticatedUser.username} | status: BLOCKED`);
       return NextResponse.json(
         { error: "Your account has been locked/blocked by administrator." },
         { status: 403 }
@@ -98,8 +114,7 @@ export async function POST(request: Request) {
       role: authenticatedUser.role,
     });
 
-    // Set cookie directly on response object
-    const response = NextResponse.json({
+    const payload = {
       success: true,
       user: {
         id: authenticatedUser.id,
@@ -108,11 +123,10 @@ export async function POST(request: Request) {
         role: authenticatedUser.role,
         name: authenticatedUser.name,
       },
-    });
+    };
 
-    // Mobile/PWA auth fix:
-    // Keep the cookie same-site and only mark it secure on HTTPS requests.
-    // SameSite=None requires HTTPS and can silently fail on LAN/HTTP mobile tests.
+    const response = NextResponse.json(payload);
+
     response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
     response.headers.set("Pragma", "no-cache");
     response.headers.set("Expires", "0");
@@ -129,9 +143,13 @@ export async function POST(request: Request) {
       sameSite: "lax",
     });
 
+    const duration = (performance.now() - startTime).toFixed(2);
+    console.log(`[DIAGNOSTIC][API][END] POST /api/auth/login [${reqId}] | status: 200 | duration: ${duration}ms | dbDuration: ${dbDuration}ms | userId: ${authenticatedUser.id} | role: ${authenticatedUser.role} | secureCookie: ${isHttps}`);
+
     return response;
   } catch (error: any) {
-    console.error("Login API error:", error);
+    const duration = (performance.now() - startTime).toFixed(2);
+    console.error(`[DIAGNOSTIC][API][ERROR] POST /api/auth/login [${reqId}] | status: 500 | duration: ${duration}ms | error: ${error.message}`);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

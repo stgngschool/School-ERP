@@ -21,19 +21,23 @@ export default function PWAInitializer() {
       const screenSize = `${window.screen.width}x${window.screen.height}`;
 
       // Check if any cookies are present (value redacted for security)
-      const hasCookies = document.cookie.length > 0;
       const cookieNames = document.cookie.split(";").map((c) => c.trim().split("=")[0]).filter(Boolean);
 
-      console.group("[PWAInitializer] 📱 Device & PWA Diagnostics");
-      console.log("🖥️  Display Mode   :", isStandalone ? "✅ Standalone PWA" : "🌐 Browser Window");
-      console.log("📱 Platform       :", isAndroid ? `Android ${androidVersion}` : ua.includes("iPhone") ? "iOS" : "Desktop/Other");
-      console.log("🌐 Browser        :", isChrome ? `Chrome ${chromeVersion}` : ua.includes("Samsung") ? "Samsung Internet" : ua.includes("Edg") ? "Edge" : "Other");
-      console.log("📐 Viewport       :", viewport, "| Screen:", screenSize);
-      console.log("📶 Network        :", navigator.onLine ? `Online (${effectiveType})` : "⚠️ OFFLINE");
-      console.log("🍪 Auth Cookie    :", "HttpOnly cookie is hidden from client JS; /api/auth/me verifies it.");
-      console.log("🍪 All Cookies    :", cookieNames.length > 0 ? cookieNames.join(", ") : "none");
-      console.log("🔧 User Agent     :", ua);
+      console.group("[DIAGNOSTIC][PWA] 📱 Device & Service Worker Inspection");
+      console.log("[DIAGNOSTIC][PWA] displayMode       :", isStandalone ? "standalone" : "browser");
+      console.log("[DIAGNOSTIC][PWA] navigator.onLine  :", navigator.onLine);
+      console.log("[DIAGNOSTIC][PWA] effectiveNetwork  :", effectiveType);
+      console.log("[DIAGNOSTIC][PWA] swSupported       :", "serviceWorker" in navigator);
+      console.log("[DIAGNOSTIC][PWA] swController      :", navigator.serviceWorker?.controller ? "ACTIVE" : "NONE");
+      console.log("[DIAGNOSTIC][PWA] cookiesPresent    :", cookieNames.join(", ") || "NONE");
+      console.log("[DIAGNOSTIC][PWA] userAgent         :", ua);
       console.groupEnd();
+
+      if ("caches" in window) {
+        caches.keys().then((names) => {
+          console.log("[DIAGNOSTIC][PWA] activeCacheNames:", names);
+        });
+      }
 
       // Log when network goes offline/online during session
       const onOffline = () => console.warn("[PWAInitializer] 📵 Network went OFFLINE");

@@ -2,7 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import pg from "pg";
 
-let prisma: PrismaClient;
+let basePrisma: PrismaClient;
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -20,16 +20,46 @@ const poolConfig = {
 if (process.env.NODE_ENV === "production") {
   const pool = new pg.Pool(poolConfig);
   const adapter = new PrismaPg(pool);
-  prisma = new PrismaClient({ adapter });
+  basePrisma = new PrismaClient({ adapter });
 } else {
-  // Prevent multiple instances of Prisma Client from being instantiated during hot-reloads in development
   if (!(global as any).prismaGlobal) {
     const pool = new pg.Pool(poolConfig);
     const adapter = new PrismaPg(pool);
     (global as any).prismaGlobal = new PrismaClient({ adapter });
   }
-  prisma = (global as any).prismaGlobal;
+  basePrisma = (global as any).prismaGlobal;
 }
+
+const prismaWithLogging = basePrisma.$extends({
+  query: {
+    $allModels: {
+      async $allOperations({ model, operation, args, query }) {
+        const start = performance.now();
+        let rowsReturned = 0;
+        let queryError: any = null;
+        try {
+          const result = await query(args);
+          if (Array.isArray(result)) {
+            rowsReturned = result.length;
+          } else if (result && typeof result === "object") {
+            rowsReturned = 1;
+          }
+          return result;
+        } catch (err: any) {
+          queryError = err;
+          throw err;
+        } finally {
+          const duration = (performance.now() - start).toFixed(2);
+          if (queryError) {
+            console.error(`[DIAGNOSTIC][DB][ERROR] ${model}.${operation} | duration: ${duration}ms | error: ${queryError.message}`);
+          } else {
+            console.log(`[DIAGNOSTIC][DB][QUERY] ${model}.${operation} | duration: ${duration}ms | rowsReturned: ${rowsReturned}`);
+          }
+        }
+      },
+    },
+  },
+});
 
 import { initDailyCronJob } from "./cron";
 
@@ -41,5 +71,6 @@ if (typeof window === "undefined") {
   }
 }
 
-export const db = prisma;
+export const db = prismaWithLogging as unknown as PrismaClient;
 export default db;
+

@@ -9,12 +9,19 @@ import { getAuthUser } from "@/lib/auth";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
+  const reqId = `std_${Math.random().toString(36).substring(2, 9)}`;
+  const startTime = performance.now();
+  console.log(`[DIAGNOSTIC][API][START] GET /api/students [${reqId}] | timestamp: ${new Date().toISOString()}`);
+
   try {
     const authUser = await getAuthUser(request);
     if (!authUser) {
+      const duration = (performance.now() - startTime).toFixed(2);
+      console.warn(`[DIAGNOSTIC][API][END] GET /api/students [${reqId}] | status: 401 | duration: ${duration}ms | authenticated: false | reason: Unauthorized access`);
       return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
     }
 
+    const dbStart = performance.now();
     const students = await db.student.findMany({
       include: {
         class: true,
@@ -28,6 +35,8 @@ export async function GET(request: Request) {
       },
       orderBy: { name: "asc" },
     });
+    const dbDuration = (performance.now() - dbStart).toFixed(2);
+    console.log(`[DIAGNOSTIC][DB][${reqId}] db.student.findMany | duration: ${dbDuration}ms | rows: ${students.length}`);
 
     const formatted = students.map((s) => ({
       id: s.id,
@@ -85,15 +94,19 @@ export async function GET(request: Request) {
         notebook: m.notebook,
         subjectEnrichment: m.subjectEnrichment,
         practical: m.practical,
-        breakdown: m.breakdown,
         remarks: m.remarks || "",
         createdAt: m.createdAt,
       })),
     }));
 
+    const responseStr = JSON.stringify(formatted);
+    const duration = (performance.now() - startTime).toFixed(2);
+    console.log(`[DIAGNOSTIC][API][END] GET /api/students [${reqId}] | status: 200 | duration: ${duration}ms | dbDuration: ${dbDuration}ms | authenticatedUser: ${authUser.username} (${authUser.role}) | size: ${responseStr.length}B`);
+
     return NextResponse.json(formatted);
   } catch (error: any) {
-    console.error("Fetch students error:", error);
+    const duration = (performance.now() - startTime).toFixed(2);
+    console.error(`[DIAGNOSTIC][API][ERROR] GET /api/students [${reqId}] | status: 500 | duration: ${duration}ms | error: ${error.message}`);
     return NextResponse.json({ error: "Failed to fetch students" }, { status: 500 });
   }
 }

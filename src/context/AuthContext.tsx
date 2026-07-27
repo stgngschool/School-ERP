@@ -397,6 +397,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // apiFetch: wraps fetch with credentials, error logging, and an optional timeout
   const apiFetch = async (url: string, options: RequestInit = {}, timeoutMs = 12000) => {
+    const reqId = `fetch_${Math.random().toString(36).substring(2, 9)}`;
+    const start = performance.now();
+    console.log(`[DIAGNOSTIC][NETWORK][START] fetch(${url}) [${reqId}] | method: ${options.method || "GET"} | credentials: include | cache: ${options.cache ?? "no-store"}`);
+
     const controller = new AbortController();
     const tid = setTimeout(() => controller.abort(), timeoutMs);
     try {
@@ -407,17 +411,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signal: controller.signal,
       });
       clearTimeout(tid);
+      const duration = (performance.now() - start).toFixed(2);
       if (!res.ok) {
-        console.error(`[AuthContext API Error] ${url} returned HTTP ${res.status} ${res.statusText}`);
+        console.error(`[DIAGNOSTIC][NETWORK][END] fetch(${url}) [${reqId}] | status: ${res.status} ${res.statusText} | duration: ${duration}ms`);
         return null;
       }
-      return await res.json();
+      const data = await res.json();
+      const size = JSON.stringify(data).length;
+      console.log(`[DIAGNOSTIC][NETWORK][END] fetch(${url}) [${reqId}] | status: ${res.status} | duration: ${duration}ms | size: ${size}B`);
+      return data;
     } catch (err: any) {
       clearTimeout(tid);
+      const duration = (performance.now() - start).toFixed(2);
       if (err.name === "AbortError") {
-        console.error(`[AuthContext Timeout] ${url} timed out after ${timeoutMs}ms`);
+        console.error(`[DIAGNOSTIC][NETWORK][ABORT] fetch(${url}) [${reqId}] TIMEOUT/ABORT after ${timeoutMs}ms | duration: ${duration}ms`);
       } else {
-        console.error(`[AuthContext Network Error] ${url} failed:`, err);
+        console.error(`[DIAGNOSTIC][NETWORK][ERROR] fetch(${url}) [${reqId}] failed | duration: ${duration}ms | error: ${err.message}`);
       }
       return null;
     }
@@ -427,6 +436,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Handles: cold start, warm start, Android PWA standalone, slow network,
   // cell tower handoff, device wake-from-sleep.
   const initSession = async () => {
+    console.log("[DIAGNOSTIC][CLIENT] APP START / SESSION START");
     setAuthLoading(true);
     setStageError(null);
     setCurrentStage("APP STARTED");
@@ -515,6 +525,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.log("Attempt  :", attempt);
           console.groupEnd();
 
+          console.log(`[DIAGNOSTIC][CLIENT] SESSION SUCCESS | userId: ${data.user?.id} | role: ${data.user?.role}`);
+          console.log(`[DIAGNOSTIC][RENDER] User loaded: ${data.user?.username} | Role loaded: ${data.user?.role}`);
+
           setCurrentStage("SESSION FOUND");
           setUser(data.user);
           setCurrentStage("AUTH USER LOADED");
@@ -533,6 +546,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Definitive auth failure — don't retry (user is not logged in)
           const errBody = await res.json().catch(() => ({}));
           console.warn(`[AuthContext] Auth definitive failure HTTP ${res.status}:`, errBody);
+          console.warn(`[DIAGNOSTIC][CLIENT] SESSION FAILURE | status: ${res.status} | error: ${errBody?.error || "Unauthenticated"}`);
           if (res.status === 403) {
             setStageError(errBody?.error || "Account is locked by administrator.");
           }
@@ -614,38 +628,73 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Fetch live database records scoped by user role & needs
   const refreshData = async (targetUser?: MockUser | null) => {
+    const refreshId = `ref_${Math.random().toString(36).substring(2, 9)}`;
+    const timestamp = new Date().toISOString();
+    const stack = new Error().stack || "";
+    let caller = "unknown";
+    if (stack.includes("initSession")) {
+      caller = "initSession()";
+    } else if (stack.includes("useEffect")) {
+      caller = "useEffect([user])";
+    } else if (stack.includes("login")) {
+      caller = "login()";
+    }
+
+    console.group(`[DIAGNOSTIC][REFRESH] refreshData START | ID: ${refreshId}`);
+    console.log(`Timestamp : ${timestamp}`);
+    console.log(`Caller    : ${caller}`);
+    console.log(`Stack     :\n${stack}`);
+    console.groupEnd();
+
+    const refreshStart = performance.now();
     try {
       const activeUser = targetUser !== undefined ? targetUser : user;
       if (!activeUser) {
-        console.warn("[AuthContext] Skipping refreshData: User not authenticated.");
+        console.warn(`[DIAGNOSTIC][REFRESH] refreshData SKIPPED [${refreshId}]: User not authenticated.`);
         return;
       }
 
+      console.log(`[DIAGNOSTIC][CLIENT] refreshData START for user: ${activeUser.username} (${activeUser.role})`);
       console.log(`STAGE [8/10]: STUDENTS FETCH START - Requesting /api/students for ${activeUser.username}...`);
       setCurrentStage("STUDENTS FETCH START");
       const isStaff = activeUser.role === "ADMIN" || activeUser.role === "ACCOUNTANT";
 
       const criticalLoads = [
-        apiFetch("/api/school").then((data) => data && setSchoolInfo(data)),
+        apiFetch("/api/school").then((data) => {
+          if (data) {
+            setSchoolInfo(data);
+            console.log(`[DIAGNOSTIC][RENDER] School loaded: ${data.name}`);
+          }
+        }),
         apiFetch("/api/students").then((data) => {
-        if (data) {
-          setStudents(data);
-          setCurrentStage("STUDENTS FETCH COMPLETE");
-          console.log(`STAGE [9/10]: STUDENTS FETCH COMPLETE - Loaded ${data.length} students.`);
-        }
+          if (data) {
+            setStudents(data);
+            setCurrentStage("STUDENTS FETCH COMPLETE");
+            console.log(`[DIAGNOSTIC][RENDER] Students count: ${data.length}`);
+            console.log(`STAGE [9/10]: STUDENTS FETCH COMPLETE - Loaded ${data.length} students.`);
+          } else {
+            console.warn(`[DIAGNOSTIC][RENDER] Students count: 0 (API returned null/error)`);
+          }
         }),
         apiFetch("/api/billing").then((billingData) => {
           if (billingData) {
             setLedgerEntries(billingData.ledgerEntries || []);
             setReceipts(billingData.receipts || []);
             setDueItems(billingData.dueItems || []);
-            console.log(`[AuthContext] Loaded billing records: ${billingData.dueItems?.length || 0} dues.`);
+            console.log(`[DIAGNOSTIC][RENDER] Billing count: ${billingData.dueItems?.length || 0} dues, ${billingData.receipts?.length || 0} receipts`);
+          } else {
+            console.warn(`[DIAGNOSTIC][RENDER] Billing count: 0 (API returned null/error)`);
           }
         }),
       ];
 
       // Stream secondary state hydration as each endpoint responds.
-      apiFetch("/api/attendance").then((data) => data && setAttendances(data));
+      apiFetch("/api/attendance").then((data) => {
+        if (data) {
+          setAttendances(data);
+          console.log(`[DIAGNOSTIC][RENDER] Attendance loaded: ${data.length} records`);
+        }
+      });
       apiFetch("/api/homework").then((data) => data && setHomeworks(data));
       apiFetch("/api/leave").then((data) => data && setLeaveRequests(data));
       apiFetch("/api/notice").then((data) => data && setNotices(data));
@@ -671,9 +720,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       await Promise.allSettled(criticalLoads);
       setCurrentStage("DASHBOARD READY");
+      const refreshDuration = (performance.now() - refreshStart).toFixed(2);
+      console.log(`[DIAGNOSTIC][REFRESH] refreshData END | ID: ${refreshId} | totalDuration: ${refreshDuration}ms`);
+      console.log("[DIAGNOSTIC][RENDER] Dashboard ready");
       console.log("STAGE [10/10]: DASHBOARD READY - All data streams initialized.");
     } catch (err) {
-      console.error("[AuthContext] Data refresh failed:", err);
+      console.error("[DIAGNOSTIC][CLIENT] refreshData EXCEPTION:", err);
     }
   };
 
@@ -786,7 +838,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (user) {
-      refreshData();
+      // Temporarily disabled for diagnostic experiment
+      // refreshData();
     }
   }, [user]);
 
