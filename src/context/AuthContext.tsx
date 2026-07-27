@@ -1265,6 +1265,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       let totalImported = 0;
 
       for (let i = 0; i < totalBatches; i++) {
+        if (i > 0) {
+          // Pause 150ms between batches to allow Supabase serverless pooler connections to drain
+          await new Promise((resolve) => setTimeout(resolve, 150));
+        }
+
         const chunk = studentsList.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE);
         const res = await fetch("/api/students/bulk", {
           method: "POST",
