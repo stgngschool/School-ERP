@@ -145,9 +145,20 @@ export default function TeacherDashboard() {
             onChange={(e) => setSelectedClass(e.target.value)}
             className="text-sm font-bold text-slate-700 outline-none bg-transparent cursor-pointer"
           >
-            <option value="10-A">Class 10-A</option>
-            <option value="10-B">Class 10-B</option>
-            <option value="9-A">Class 9-A</option>
+            {Array.from(new Set(students.map((s) => `${s.class}-${s.section}`)))
+              .sort()
+              .map((cls) => (
+                <option key={cls} value={cls}>
+                  Class {cls}
+                </option>
+              ))}
+            {students.length === 0 && (
+              <>
+                <option value="1-A">Class 1-A</option>
+                <option value="2-A">Class 2-A</option>
+                <option value="3-A">Class 3-A</option>
+              </>
+            )}
           </select>
         </div>
       </div>

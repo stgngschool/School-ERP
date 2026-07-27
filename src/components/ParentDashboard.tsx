@@ -124,10 +124,18 @@ export default function ParentDashboard() {
     setActiveTab,
   } = useAuth();
 
-  // Filter students belonging to this parent dynamically
-  const parentStudents = students.filter(
-    (s) => user && (s.parentPhone === user.phone || s.parentName === user.name)
-  );
+  // Filter students belonging to this parent dynamically with robust phone/family matching
+  const parentStudents = students.filter((s) => {
+    if (!user) return false;
+    const norm = (str?: string) => (str ? str.replace(/\D/g, "").slice(-10) : "");
+    const userPhone = norm(user.phone || user.username);
+    const sFatherPhone = norm(s.fatherMobile || s.parentPhone);
+    const sMotherPhone = norm(s.motherMobile);
+    if (userPhone && (userPhone === sFatherPhone || userPhone === sMotherPhone)) return true;
+    if (user.name && s.parentName && user.name.toLowerCase().trim() === s.parentName.toLowerCase().trim()) return true;
+    if (user.name && s.fatherName && user.name.toLowerCase().trim() === s.fatherName.toLowerCase().trim()) return true;
+    return false;
+  });
   
   const [selectedChildId, setSelectedChildId] = useState(
     parentStudents.length > 0 ? parentStudents[0].id : ""
