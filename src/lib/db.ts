@@ -1,4 +1,6 @@
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
+import pg from "pg";
 import { initDailyCronJob } from "./cron";
 
 let basePrisma: PrismaClient;
@@ -9,21 +11,24 @@ if (!connectionString) {
   throw new Error("Missing DATABASE_URL environment variable.");
 }
 
-// Automatically append required Supavisor (pgBouncer) flags for transaction pooler
-if (connectionString.includes("pooler.supabase.com") && connectionString.includes(":6543")) {
-  if (!connectionString.includes("pgbouncer=true")) {
-    connectionString += (connectionString.includes("?") ? "&" : "?") + "pgbouncer=true&connection_limit=5";
-  }
-}
-
-// Ensure Prisma picks up the patched URL
-process.env.DATABASE_URL = connectionString;
+// In Prisma 7, adapter is strictly required. 
+// We use a small connection pool per instance to prevent exhausting Supavisor session limit.
+const poolConfig = {
+  connectionString,
+  max: 1, // Restrict to 1 connection per worker to drastically reduce global connection count
+  idleTimeoutMillis: 5000,
+  connectionTimeoutMillis: 10000,
+};
 
 if (process.env.NODE_ENV === "production") {
-  basePrisma = new PrismaClient();
+  const pool = new pg.Pool(poolConfig);
+  const adapter = new PrismaPg(pool);
+  basePrisma = new PrismaClient({ adapter });
 } else {
   if (!(global as any).prismaGlobal) {
-    (global as any).prismaGlobal = new PrismaClient();
+    const pool = new pg.Pool(poolConfig);
+    const adapter = new PrismaPg(pool);
+    (global as any).prismaGlobal = new PrismaClient({ adapter });
   }
   basePrisma = (global as any).prismaGlobal;
 }
@@ -33,16 +38,9 @@ const prismaWithLogging = basePrisma.$extends({
     $allModels: {
       async $allOperations({ model, operation, args, query }) {
         const start = performance.now();
-        let rowsReturned = 0;
         let queryError: any = null;
         try {
-          const result = await query(args);
-          if (Array.isArray(result)) {
-            rowsReturned = result.length;
-          } else if (result && typeof result === "object") {
-            rowsReturned = 1;
-          }
-          return result;
+          return await query(args);
         } catch (err: any) {
           queryError = err;
           throw err;
