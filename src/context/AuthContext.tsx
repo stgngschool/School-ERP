@@ -1,6 +1,7 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useRef } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
+import { useAuthLogic } from "../hooks/useAuthLogic";
 
 export type Role = "ADMIN" | "ACCOUNTANT" | "TEACHER" | "PARENT";
 export type UserStatus = "ACTIVE" | "BLOCKED";
@@ -323,33 +324,26 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [activeRole, setActiveRole] = useState<Role | null>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        return (localStorage.getItem("gng_active_role") as Role) || null;
-      } catch {
-        return null;
-      }
+  const authLogic = useAuthLogic(async (targetUser) => {
+    if (typeof refreshData !== "undefined") {
+      await refreshData(targetUser);
     }
-    return null;
   });
-  const [user, setUser] = useState<MockUser | null>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const cached = localStorage.getItem("gng_user");
-        return cached ? JSON.parse(cached) : null;
-      } catch {
-        return null;
-      }
-    }
-    return null;
-  });
-  const [authLoading, setAuthLoading] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      return !localStorage.getItem("gng_user");
-    }
-    return true;
-  });
+  const {
+    user,
+    setUser,
+    activeRole,
+    setActiveRole,
+    authLoading,
+    currentStage,
+    setCurrentStage,
+    stageError,
+    initSession,
+    login,
+    logout,
+    switchRole
+  } = authLogic;
+
   const [usersList, setUsersList] = useState<MockUser[]>([]);
   const [activeTab, setActiveTab] = useState<string>("");
 
@@ -392,15 +386,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [transportStops, setTransportStops] = useState<{ id: string; name: string; amount: number }[]>([]);
   const [concessions, setConcessions] = useState<{ id: string; name: string; percentage: number; feeHeadName: string }[]>([]);
 
-  const [currentStage, setCurrentStage] = useState<AuthStage>("APP STARTED");
-  const [stageError, setStageError] = useState<string | null>(null);
 
-  // apiFetch: wraps fetch with credentials, error logging, and an optional timeout
   const apiFetch = async (url: string, options: RequestInit = {}, timeoutMs = 12000) => {
-    const reqId = `fetch_${Math.random().toString(36).substring(2, 9)}`;
-    const start = performance.now();
-    console.log(`[DIAGNOSTIC][NETWORK][START] fetch(${url}) [${reqId}] | method: ${options.method || "GET"} | credentials: include | cache: ${options.cache ?? "no-store"}`);
-
     const controller = new AbortController();
     const tid = setTimeout(() => controller.abort(), timeoutMs);
     try {
@@ -411,273 +398,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signal: controller.signal,
       });
       clearTimeout(tid);
-      const duration = (performance.now() - start).toFixed(2);
-      if (!res.ok) {
-        console.error(`[DIAGNOSTIC][NETWORK][END] fetch(${url}) [${reqId}] | status: ${res.status} ${res.statusText} | duration: ${duration}ms`);
-        return null;
-      }
-      const data = await res.json();
-      const size = JSON.stringify(data).length;
-      console.log(`[DIAGNOSTIC][NETWORK][END] fetch(${url}) [${reqId}] | status: ${res.status} | duration: ${duration}ms | size: ${size}B`);
-      return data;
-    } catch (err: any) {
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (err) {
       clearTimeout(tid);
-      const duration = (performance.now() - start).toFixed(2);
-      if (err.name === "AbortError") {
-        console.error(`[DIAGNOSTIC][NETWORK][ABORT] fetch(${url}) [${reqId}] TIMEOUT/ABORT after ${timeoutMs}ms | duration: ${duration}ms`);
-      } else {
-        console.error(`[DIAGNOSTIC][NETWORK][ERROR] fetch(${url}) [${reqId}] failed | duration: ${duration}ms | error: ${err.message}`);
-      }
       return null;
     }
   };
 
-  // Concurrency Lock & Version Tracking Refs to prevent race conditions and duplicate calls
-  const isInitSessionActiveRef = useRef(false);
-  const sessionVersionRef = useRef(0);
-
-  const initSession = async () => {
-    // Task 1: If an execution is already running, ignore subsequent calls
-    if (isInitSessionActiveRef.current) {
-      console.log("[AuthContext] 🔒 initSession skipped: another session check is already active.");
-      return;
-    }
-    isInitSessionActiveRef.current = true;
-    const currentVersion = ++sessionVersionRef.current;
-
-    console.log(`[AuthContext] 🚀 Session Init Started (Version #${currentVersion})`);
-    setAuthLoading(true);
-    setStageError(null);
-    setCurrentStage("APP STARTED");
-
-    // ── Device / Environment Diagnostics ──
-    const isStandalone =
-      typeof window !== "undefined" &&
-      (window.matchMedia("(display-mode: standalone)").matches ||
-        (navigator as any).standalone === true);
-    const isOnline = typeof navigator !== "undefined" ? navigator.onLine : true;
-    const ua = typeof navigator !== "undefined" ? navigator.userAgent : "SSR";
-    const isAndroid = /Android/i.test(ua);
-    const androidVer = ua.match(/Android\s([\d.]+)/)?.[1] ?? "N/A";
-    const chromeVer = ua.match(/Chrome\/([\d.]+)/)?.[1] ?? "N/A";
-    const connection = typeof navigator !== "undefined" ? (navigator as any).connection : null;
-    const netType = connection?.effectiveType ?? "unknown";
-    const now = new Date().toISOString();
-
-    console.group(`[AuthContext] 🚀 Session Init — ${now}`);
-    console.log("📱 Device       :", isAndroid ? `Android ${androidVer}` : "Desktop/iOS");
-    console.log("🌐 Browser      :", `Chrome ${chromeVer}`);
-    console.log("🖥️  Display Mode :", isStandalone ? "Standalone PWA" : "Browser");
-    console.log("📶 Network      :", isOnline ? `Online (${netType})` : "⚠️ OFFLINE");
-    console.log("🔧 User Agent   :", ua);
-    console.groupEnd();
-
-    if (!isOnline) {
-      console.warn("[AuthContext] Device is offline — deferring session check until online.");
-      if (currentVersion === sessionVersionRef.current) {
-        setStageError("Device is offline. Waiting for network connection...");
-        setCurrentStage("CHECKING SESSION");
-        setAuthLoading(false);
-      }
-      isInitSessionActiveRef.current = false;
-      return;
-    }
-
-    setCurrentStage("SUPABASE CLIENT CREATED");
-
-    const MAX_ATTEMPTS = 3;
-    const RETRY_DELAY_MS = 1500;
-    const ATTEMPT_TIMEOUT_MS = 8000;
-
-    let lastError: string | null = null;
-
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      try {
-        if (attempt > 1) {
-          await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
-        }
-
-        // Task 2: Check if newer session or login has occurred mid-flight
-        if (currentVersion !== sessionVersionRef.current) {
-          console.log(`[AuthContext] 🛑 Stale session check (Version #${currentVersion}) discarded.`);
-          isInitSessionActiveRef.current = false;
-          return;
-        }
-
-        setCurrentStage("CHECKING SESSION");
-        const t0 = performance.now();
-
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), ATTEMPT_TIMEOUT_MS);
-
-        let res: Response;
-        try {
-          res = await fetch("/api/auth/me", {
-            credentials: "include",
-            cache: "no-store",
-            signal: controller.signal,
-          });
-        } finally {
-          clearTimeout(timeoutId);
-        }
-
-        const elapsed = Math.round(performance.now() - t0);
-        console.log(`[AuthContext] /api/auth/me → HTTP ${res.status} in ${elapsed}ms`);
-
-        // Task 2: Check version again before mutating state
-        if (currentVersion !== sessionVersionRef.current) {
-          console.log(`[AuthContext] 🛑 Stale session check response (Version #${currentVersion}) discarded.`);
-          isInitSessionActiveRef.current = false;
-          return;
-        }
-
-        if (res.ok) {
-          const data = await res.json();
-
-          setCurrentStage("SESSION FOUND");
-          setUser(data.user);
-          setCurrentStage("AUTH USER LOADED");
-          setCurrentStage("PROFILE LOADED");
-          setActiveRole(data.user.role);
-          setCurrentStage("ADMIN LOADED");
-          try {
-            localStorage.setItem("gng_user", JSON.stringify(data.user));
-            localStorage.setItem("gng_active_role", data.user.role);
-          } catch (e) {}
-          setAuthLoading(false);
-          refreshData(data.user);
-          isInitSessionActiveRef.current = false;
-          return;
-
-        } else if (res.status === 401 || res.status === 403) {
-          const errBody = await res.json().catch(() => ({}));
-          console.warn(`[AuthContext] Auth failure HTTP ${res.status}:`, errBody);
-          if (res.status === 403) {
-            setStageError(errBody?.error || "Account is locked by administrator.");
-          }
-          try {
-            localStorage.removeItem("gng_user");
-            localStorage.removeItem("gng_active_role");
-          } catch (e) {}
-          setUser(null);
-          setActiveRole(null);
-          setAuthLoading(false);
-          isInitSessionActiveRef.current = false;
-          return;
-
-        } else {
-          lastError = `Server returned HTTP ${res.status} ${res.statusText}`;
-          continue;
-        }
-
-      } catch (err: any) {
-        const isAbort = err.name === "AbortError";
-        lastError = isAbort
-          ? `Request timed out after ${ATTEMPT_TIMEOUT_MS / 1000}s (attempt ${attempt}/${MAX_ATTEMPTS})`
-          : err.message || "Network error";
-      }
-    }
-
-    if (currentVersion === sessionVersionRef.current) {
-      setStageError(lastError || "Authentication failed after multiple attempts.");
-      setAuthLoading(false);
-    }
-    isInitSessionActiveRef.current = false;
-  };
-
-  useEffect(() => {
-    // Initial session check on mount
-    initSession();
-
-    let visibilityDebounce: NodeJS.Timeout;
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        clearTimeout(visibilityDebounce);
-        visibilityDebounce = setTimeout(() => {
-          if (user) {
-            fetch("/api/auth/me", { credentials: "include", cache: "no-store" })
-              .then((res) => {
-                if (!res.ok) {
-                  setUser(null);
-                  setActiveRole(null);
-                  if (typeof window !== "undefined") {
-                    window.location.replace("/login");
-                  }
-                }
-              })
-              .catch(() => {});
-          } else {
-            initSession();
-          }
-        }, 500);
-      }
-    };
-
-    const handleOnline = () => {
-      if (authLoading || stageError) {
-        initSession();
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("online", handleOnline);
-
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("online", handleOnline);
-      clearTimeout(visibilityDebounce);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Fetch live database records scoped by user role & needs
   const refreshData = async (targetUser?: MockUser | null) => {
-    const refreshId = `ref_${Math.random().toString(36).substring(2, 9)}`;
-    const timestamp = new Date().toISOString();
-    const stack = new Error().stack || "";
-    let caller = "unknown";
-    if (stack.includes("initSession")) {
-      caller = "initSession()";
-    } else if (stack.includes("useEffect")) {
-      caller = "useEffect([user])";
-    } else if (stack.includes("login")) {
-      caller = "login()";
-    }
-
-    console.group(`[DIAGNOSTIC][REFRESH] refreshData START | ID: ${refreshId}`);
-    console.log(`Timestamp : ${timestamp}`);
-    console.log(`Caller    : ${caller}`);
-    console.log(`Stack     :\n${stack}`);
-    console.groupEnd();
-
-    const refreshStart = performance.now();
     try {
       const activeUser = targetUser !== undefined ? targetUser : user;
-      if (!activeUser) {
-        console.warn(`[DIAGNOSTIC][REFRESH] refreshData SKIPPED [${refreshId}]: User not authenticated.`);
-        return;
-      }
+      if (!activeUser) return;
 
-      console.log(`[DIAGNOSTIC][CLIENT] refreshData START for user: ${activeUser.username} (${activeUser.role})`);
-      console.log(`STAGE [8/10]: STUDENTS FETCH START - Requesting /api/students for ${activeUser.username}...`);
       setCurrentStage("STUDENTS FETCH START");
       const isStaff = activeUser.role === "ADMIN" || activeUser.role === "ACCOUNTANT";
 
       const criticalLoads = [
-        apiFetch("/api/school").then((data) => {
-          if (data) {
-            setSchoolInfo(data);
-            console.log(`[DIAGNOSTIC][RENDER] School loaded: ${data.name}`);
-          }
-        }),
+        apiFetch("/api/school").then((data) => { if (data) setSchoolInfo(data); }),
         apiFetch("/api/students").then((data) => {
           if (data) {
             setStudents(data);
             setCurrentStage("STUDENTS FETCH COMPLETE");
-            console.log(`[DIAGNOSTIC][RENDER] Students count: ${data.length}`);
-            console.log(`STAGE [9/10]: STUDENTS FETCH COMPLETE - Loaded ${data.length} students.`);
-          } else {
-            console.warn(`[DIAGNOSTIC][RENDER] Students count: 0 (API returned null/error)`);
           }
         }),
         apiFetch("/api/billing").then((billingData) => {
@@ -685,20 +429,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setLedgerEntries(billingData.ledgerEntries || []);
             setReceipts(billingData.receipts || []);
             setDueItems(billingData.dueItems || []);
-            console.log(`[DIAGNOSTIC][RENDER] Billing count: ${billingData.dueItems?.length || 0} dues, ${billingData.receipts?.length || 0} receipts`);
-          } else {
-            console.warn(`[DIAGNOSTIC][RENDER] Billing count: 0 (API returned null/error)`);
           }
         }),
       ];
 
-      // Stream secondary state hydration as each endpoint responds.
-      apiFetch("/api/attendance").then((data) => {
-        if (data) {
-          setAttendances(data);
-          console.log(`[DIAGNOSTIC][RENDER] Attendance loaded: ${data.length} records`);
-        }
-      });
+      apiFetch("/api/attendance").then((data) => data && setAttendances(data));
       apiFetch("/api/homework").then((data) => data && setHomeworks(data));
       apiFetch("/api/leave").then((data) => data && setLeaveRequests(data));
       apiFetch("/api/notice").then((data) => data && setNotices(data));
@@ -724,16 +459,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       await Promise.allSettled(criticalLoads);
       setCurrentStage("DASHBOARD READY");
-      const refreshDuration = (performance.now() - refreshStart).toFixed(2);
-      console.log(`[DIAGNOSTIC][REFRESH] refreshData END | ID: ${refreshId} | totalDuration: ${refreshDuration}ms`);
-      console.log("[DIAGNOSTIC][RENDER] Dashboard ready");
-      console.log("STAGE [10/10]: DASHBOARD READY - All data streams initialized.");
     } catch (err) {
-      console.error("[DIAGNOSTIC][CLIENT] refreshData EXCEPTION:", err);
+      console.error("[AuthContext] refreshData EXCEPTION:", err);
     }
   };
 
-  // Targeted refresh — only fee config (fast, avoids full reload)
   const refreshFeeConfig = async () => {
     try {
       const feeRes = await fetch("/api/fee-config", { credentials: "include", cache: "no-store" });
@@ -840,89 +570,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  useEffect(() => {
-    if (user) {
-      // Temporarily disabled for diagnostic experiment
-      // refreshData();
-    }
-  }, [user]);
-
-  // Action methods calling Next.js API routes
-
-  const login = async (usernameVal: string, passwordVal: string, portalVal?: "STAFF" | "PARENT") => {
-    try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        credentials: "include",
-        cache: "no-store",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: usernameVal, password: passwordVal, portal: portalVal }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        return { success: false, error: data.error || "Invalid username/phone or password." };
-      }
-
-      sessionVersionRef.current++;
-      setUser(data.user);
-      setActiveRole(data.user.role);
-      setAuthLoading(false);
-      try {
-        localStorage.setItem("gng_user", JSON.stringify(data.user));
-        localStorage.setItem("gng_active_role", data.user.role);
-      } catch (e) {}
-      refreshData(data.user);
-      return { success: true };
-    } catch (err: any) {
-      return { success: false, error: err.message || "Login failed. Please try again." };
-    }
-  };
-
-  const logout = async () => {
-    sessionVersionRef.current++;
-    try {
-      await fetch("/api/auth/logout", { method: "POST", credentials: "include", cache: "no-store" });
-      try {
-        localStorage.removeItem("gng_user");
-        localStorage.removeItem("gng_active_role");
-      } catch (e) {}
-      setUser(null);
-      setActiveRole(null);
-      setAuthLoading(false);
-      window.location.href = "/login";
-    } catch (err) {
-      console.error("Logout failed:", err);
-      try {
-        localStorage.removeItem("gng_user");
-        localStorage.removeItem("gng_active_role");
-      } catch (e) {}
-      setUser(null);
-      setActiveRole(null);
-      setAuthLoading(false);
-      window.location.href = "/login";
-    }
-  };
-
-  const switchRole = async (role: Role) => {
-    try {
-      const res = await fetch("/api/auth/switch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setUser(data.user);
-        setActiveRole(role);
-        window.location.reload();
-      }
-    } catch (err) {
-      console.error("Switch role failed:", err);
-    }
-  };
 
   const toggleUserStatus = async (userId: string) => {
     try {
