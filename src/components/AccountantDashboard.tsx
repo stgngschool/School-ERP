@@ -484,7 +484,7 @@ export default function AccountantDashboard() {
     .reduce((sum, item) => sum + item.amount, 0);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 mobile-edge-grid">
       {/* 1. Header & Quick Overview (Shown only on Dashboard tab to save vertical screen space) */}
       {activeTab === "dashboard" && (
         <div className="flex flex-col gap-1 border-b border-slate-200/80 pb-3">

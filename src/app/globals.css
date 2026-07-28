@@ -463,3 +463,36 @@ body {
   color: #fff;
   box-shadow: 0 2px 8px rgba(79,70,229,0.3);
 }
+
+/* ─────────────────────────────────────────
+   MOBILE EDGE-TO-EDGE OVERRIDES (FACEBOOK/INSTAGRAM STYLE)
+───────────────────────────────────────── */
+@media (max-width: 767px) {
+  /* Cards stretch fully edge-to-edge on mobile */
+  .stripe-card, .mobile-card {
+    border-radius: 0 !important;
+    border-left: none !important;
+    border-right: none !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    box-shadow: none !important;
+    border-bottom: 1px solid rgba(226, 232, 240, 0.8) !important;
+    border-top: 1px solid rgba(226, 232, 240, 0.4) !important;
+  }
+  
+  /* Reset general gaps for grid layouts used heavily in dashboards */
+  .mobile-edge-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0 !important;
+  }
+  .mobile-edge-grid > * + * {
+    margin-top: 0 !important;
+  }
+  }
+  
+  /* Add subtle background separation if needed, otherwise white */
+  body {
+    background: #ffffff !important;
+  }
+}

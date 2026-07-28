@@ -161,7 +161,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const activeNavItem = navItems.find((i) => i.tab === activeTab) || navItems[0];
 
   return (
-    <div className="flex flex-col md:flex-row h-screen w-full max-w-full overflow-hidden bg-slate-50 text-slate-800 font-sans">
+    <div className="flex flex-col md:flex-row h-screen w-full max-w-full overflow-hidden bg-white md:bg-slate-50 text-slate-800 font-sans">
 
       {/* ════════════════════════════════════════
           DESKTOP SIDEBAR (md and above)
@@ -489,7 +489,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
         )}
 
         {/* Main Content */}
-        <main className="flex-1 p-2 sm:p-4 md:p-5 lg:p-6 xl:p-8 pb-28 md:pb-8 overflow-y-auto overflow-x-hidden min-w-0 max-w-full touch-scroll-y">
+        <main className="flex-1 p-0 sm:p-4 md:p-5 lg:p-6 xl:p-8 pb-28 md:pb-8 overflow-y-auto overflow-x-hidden min-w-0 max-w-full touch-scroll-y mobile-edge-grid bg-white md:bg-transparent">
           {children}
         </main>
       </div>

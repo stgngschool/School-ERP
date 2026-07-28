@@ -1671,7 +1671,7 @@ export default function AdminDashboard() {
   };
 
   return (
-    <div className="space-y-6 font-sans w-full max-w-full overflow-x-hidden text-left">
+    <div className="space-y-6 font-sans mobile-edge-grid w-full max-w-full overflow-x-hidden text-left">
       {/* ─── Header shown only on Dashboard Overview ─── */}
       {activeTab === "dashboard" && (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200/80 pb-3">

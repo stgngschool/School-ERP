@@ -287,7 +287,7 @@ export default function ParentDashboard() {
   }
 
   return (
-    <div className="-mx-2 sm:mx-0 space-y-4 pb-2 font-sans w-full max-w-full overflow-x-hidden">
+    <div className="sm:mx-0 space-y-4 mobile-edge-grid pb-2 font-sans w-full max-w-full overflow-x-hidden">
       {/* 1. Header Banner & Sibling Switcher */}
       <div className="bg-white border-y sm:border border-slate-200 sm:rounded-2xl p-3 sm:p-6 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="space-y-1">
@@ -1089,7 +1089,7 @@ export default function ParentDashboard() {
               Simulating payment clearance via integrated gateway protocols.
             </p>
 
-            <form onSubmit={handleSimulatePayment} className="space-y-4 font-sans">
+            <form onSubmit={handleSimulatePayment} className="space-y-4 font-sans mobile-edge-grid">
               <div>
                 <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
                   Amount to Pay (Subtotal)

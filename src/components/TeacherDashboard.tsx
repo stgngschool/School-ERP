@@ -129,7 +129,7 @@ export default function TeacherDashboard() {
   };
 
   return (
-    <div className="-mx-2 sm:mx-0 space-y-4 pb-4">
+    <div className="sm:mx-0 space-y-4 mobile-edge-grid pb-4">
       {/* ─── Header & Class Selector ─── */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
