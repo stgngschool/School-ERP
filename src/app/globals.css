@@ -489,7 +489,6 @@ body {
   .mobile-edge-grid > * + * {
     margin-top: 0 !important;
   }
-  }
   
   /* Add subtle background separation if needed, otherwise white */
   body {
