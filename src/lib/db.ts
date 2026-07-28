@@ -1,31 +1,29 @@
 import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import pg from "pg";
+import { initDailyCronJob } from "./cron";
 
 let basePrisma: PrismaClient;
 
-const connectionString = process.env.DATABASE_URL;
+let connectionString = process.env.DATABASE_URL;
 
 if (!connectionString) {
   throw new Error("Missing DATABASE_URL environment variable.");
 }
 
-const poolConfig = {
-  connectionString,
-  max: 2,
-  idleTimeoutMillis: 1000,
-  connectionTimeoutMillis: 10000,
-};
+// Automatically append required Supavisor (pgBouncer) flags for transaction pooler
+if (connectionString.includes("pooler.supabase.com") && connectionString.includes(":6543")) {
+  if (!connectionString.includes("pgbouncer=true")) {
+    connectionString += (connectionString.includes("?") ? "&" : "?") + "pgbouncer=true&connection_limit=5";
+  }
+}
+
+// Ensure Prisma picks up the patched URL
+process.env.DATABASE_URL = connectionString;
 
 if (process.env.NODE_ENV === "production") {
-  const pool = new pg.Pool(poolConfig);
-  const adapter = new PrismaPg(pool);
-  basePrisma = new PrismaClient({ adapter });
+  basePrisma = new PrismaClient();
 } else {
   if (!(global as any).prismaGlobal) {
-    const pool = new pg.Pool(poolConfig);
-    const adapter = new PrismaPg(pool);
-    (global as any).prismaGlobal = new PrismaClient({ adapter });
+    (global as any).prismaGlobal = new PrismaClient();
   }
   basePrisma = (global as any).prismaGlobal;
 }
@@ -52,16 +50,12 @@ const prismaWithLogging = basePrisma.$extends({
           const duration = (performance.now() - start).toFixed(2);
           if (queryError) {
             console.error(`[DIAGNOSTIC][DB][ERROR] ${model}.${operation} | duration: ${duration}ms | error: ${queryError.message}`);
-          } else {
-            console.log(`[DIAGNOSTIC][DB][QUERY] ${model}.${operation} | duration: ${duration}ms | rowsReturned: ${rowsReturned}`);
           }
         }
       },
     },
   },
 });
-
-import { initDailyCronJob } from "./cron";
 
 if (typeof window === "undefined") {
   try {
@@ -73,4 +67,3 @@ if (typeof window === "undefined") {
 
 export const db = prismaWithLogging as unknown as PrismaClient;
 export default db;
-
