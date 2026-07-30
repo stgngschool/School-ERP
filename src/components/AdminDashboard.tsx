@@ -1681,6 +1681,50 @@ export default function AdminDashboard() {
     }
   };
 
+  // Global Memoized Variables for Students Directory (extracted from IIFE)
+  const unpaidStudentIdsSet = React.useMemo(() => new Set(dueItems.filter((d) => d.status === "UNPAID").map((d) => d.studentId)), [dueItems]);
+
+  const filteredStudentsMemo = React.useMemo(() => {
+    return students.filter((s: any) => {
+      const q = dirSearch.trim().toLowerCase();
+      const matchesSearch =
+        !q ||
+        s.name?.toLowerCase().includes(q) ||
+        s.admissionNo?.toLowerCase().includes(q) ||
+        (s.rollNumber && s.rollNumber.toLowerCase().includes(q)) ||
+        (s.familyCode && s.familyCode.toLowerCase().includes(q)) ||
+        (s.parentName && s.parentName.toLowerCase().includes(q)) ||
+        (s.fatherMobile && s.fatherMobile.toLowerCase().includes(q)) ||
+        (s.aadhaar && s.aadhaar.includes(q));
+
+      const matchesClass = !dirClassFilter || s.class === dirClassFilter;
+      const matchesSection = !dirSectionFilter || s.section === dirSectionFilter;
+      const matchesFamily = !dirFamilyFilter || (s.familyCode && s.familyCode.toLowerCase().trim() === dirFamilyFilter.toLowerCase().trim());
+      const matchesStatus = dirStatusFilter === "ALL" || (s.status || "ACTIVE") === dirStatusFilter;
+
+      const matchesRte =
+        dirRteFilter === "ALL"
+          ? true
+          : dirRteFilter === "RTE"
+          ? !!s.isRte
+          : dirRteFilter === "NON_RTE"
+          ? !s.isRte
+          : dirRteFilter === "TRANSPORT"
+          ? s.transportMode && s.transportMode !== "Self"
+          : true;
+
+      const matchesCategory = dirCategoryFilter === "ALL" || (s.category || "General") === dirCategoryFilter;
+
+      let matchesDues = true;
+      if (dirDuesFilter !== "ALL") {
+        const hasDues = unpaidStudentIdsSet.has(s.id);
+        matchesDues = dirDuesFilter === "HAS_DUES" ? hasDues : !hasDues;
+      }
+
+      return matchesSearch && matchesClass && matchesSection && matchesFamily && matchesStatus && matchesRte && matchesCategory && matchesDues;
+    });
+  }, [students, dirSearch, dirClassFilter, dirSectionFilter, dirFamilyFilter, dirStatusFilter, dirRteFilter, dirCategoryFilter, dirDuesFilter, unpaidStudentIdsSet]);
+
   return (
     <div className="space-y-6 font-sans mobile-edge-grid w-full max-w-full overflow-x-hidden text-left">
       {/* ─── Header shown only on Dashboard Overview ─── */}
@@ -4363,54 +4407,12 @@ export default function AdminDashboard() {
 
                   {/* STUDENT DIRECTORY TABLE */}
                   {(() => {
-                    const unpaidStudentIdsSet = React.useMemo(() => new Set(dueItems.filter((d) => d.status === "UNPAID").map((d) => d.studentId)), [dueItems]);
-
-                    const filtered = React.useMemo(() => {
-                      return students.filter((s: any) => {
-                        const q = dirSearch.trim().toLowerCase();
-                        const matchesSearch =
-                          !q ||
-                          s.name?.toLowerCase().includes(q) ||
-                          s.admissionNo?.toLowerCase().includes(q) ||
-                          (s.rollNumber && s.rollNumber.toLowerCase().includes(q)) ||
-                          (s.familyCode && s.familyCode.toLowerCase().includes(q)) ||
-                          (s.parentName && s.parentName.toLowerCase().includes(q)) ||
-                          (s.fatherMobile && s.fatherMobile.toLowerCase().includes(q)) ||
-                          (s.aadhaar && s.aadhaar.includes(q));
-
-                        const matchesClass = !dirClassFilter || s.class === dirClassFilter;
-                        const matchesSection = !dirSectionFilter || s.section === dirSectionFilter;
-                        const matchesFamily = !dirFamilyFilter || (s.familyCode && s.familyCode.toLowerCase().trim() === dirFamilyFilter.toLowerCase().trim());
-                        const matchesStatus = dirStatusFilter === "ALL" || (s.status || "ACTIVE") === dirStatusFilter;
-
-                        const matchesRte =
-                          dirRteFilter === "ALL"
-                            ? true
-                            : dirRteFilter === "RTE"
-                            ? !!s.isRte
-                            : dirRteFilter === "NON_RTE"
-                            ? !s.isRte
-                            : dirRteFilter === "TRANSPORT"
-                            ? s.transportMode && s.transportMode !== "Self"
-                            : true;
-
-                        const matchesCategory = dirCategoryFilter === "ALL" || (s.category || "General") === dirCategoryFilter;
-
-                        let matchesDues = true;
-                        if (dirDuesFilter !== "ALL") {
-                          const hasDues = unpaidStudentIdsSet.has(s.id);
-                          matchesDues = dirDuesFilter === "HAS_DUES" ? hasDues : !hasDues;
-                        }
-
-                        return matchesSearch && matchesClass && matchesSection && matchesFamily && matchesStatus && matchesRte && matchesCategory && matchesDues;
-                      });
-                    }, [students, dirSearch, dirClassFilter, dirSectionFilter, dirFamilyFilter, dirStatusFilter, dirRteFilter, dirCategoryFilter, dirDuesFilter, unpaidStudentIdsSet]);
-
+                    const filtered = filteredStudentsMemo;
                     const totalItems = filtered.length;
                     const totalPages = Math.ceil(totalItems / itemsPerPage);
                     const activePage = Math.min(currentPage, totalPages || 1);
                     const startIndex = (activePage - 1) * itemsPerPage;
-                    const paginatedStudents = React.useMemo(() => filtered.slice(startIndex, startIndex + itemsPerPage), [filtered, startIndex, itemsPerPage]);
+                    const paginatedStudents = filtered.slice(startIndex, startIndex + itemsPerPage);
 
                     return (
                       <>
