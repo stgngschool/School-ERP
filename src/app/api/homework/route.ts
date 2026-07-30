@@ -12,6 +12,7 @@ export async function GET(request: Request) {
     }
 
     const homeworks = await db.homework.findMany({
+take: 100,
       include: { class: true },
       orderBy: { createdAt: "desc" },
     });

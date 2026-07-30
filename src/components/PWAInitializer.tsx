@@ -52,74 +52,7 @@ export default function PWAInitializer() {
     }
   }, []);
 
-  useEffect(() => {
-    // ─── Service Worker Registration ─────────────────────────────────────────
-    if (!("serviceWorker" in navigator)) return;
 
-    if (process.env.NODE_ENV === "development") {
-      // In development: unregister all service workers to prevent caching issues
-      navigator.serviceWorker.getRegistrations().then((registrations) => {
-        for (const registration of registrations) {
-          registration.unregister();
-          console.log("[PWAInitializer] Dev: Unregistered service worker");
-        }
-      });
-    } else {
-      // Production: Register SW after window load to not block initial render
-      const registerSW = () => {
-        let refreshing = false;
-        navigator.serviceWorker.addEventListener("controllerchange", () => {
-          if (refreshing) return;
-          refreshing = true;
-          window.location.reload();
-        });
-
-        navigator.serviceWorker
-          .register("/sw.js", {
-            // updateViaCache: "none" forces Chrome to always check the network for
-            // a new SW file, even if the request would normally be cached.
-            // This ensures Android PWA always picks up new SW versions.
-            updateViaCache: "none",
-          })
-          .then((reg) => {
-            console.log("[PWAInitializer] ✅ Service Worker v8 registered:", reg.scope);
-
-            // Check for waiting SW (new version available)
-            if (reg.waiting) {
-              console.log("[PWAInitializer] New SW waiting — sending skipWaiting");
-              reg.waiting.postMessage({ type: "SKIP_WAITING" });
-            }
-
-            // Force update check to catch any pending new version
-            reg.update().catch((err) =>
-              console.warn("[PWAInitializer] SW update check failed:", err)
-            );
-
-            // Listen for new SW installing
-            reg.addEventListener("updatefound", () => {
-              const newSW = reg.installing;
-              if (newSW) {
-                newSW.addEventListener("statechange", () => {
-                  if (newSW.state === "installed" && navigator.serviceWorker.controller) {
-                    console.log("[PWAInitializer] New SW installed — page will use it on next load");
-                  }
-                });
-              }
-            });
-          })
-          .catch((err) => {
-            console.error("[PWAInitializer] ❌ Service Worker registration failed:", err);
-          });
-      };
-
-      // Register after page load to avoid blocking initial render
-      if (document.readyState === "complete") {
-        registerSW();
-      } else {
-        window.addEventListener("load", registerSW, { once: true });
-      }
-    }
-  }, []);
 
   return null;
 }

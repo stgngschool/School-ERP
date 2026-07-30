@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 
 export default function MarksFeedingConsole() {
-  const { students, schoolInfo, refreshData } = useAuth();
+  const { students, schoolInfo, refreshStudents } = useAuth();
 
   const availableClasses = Array.from(
     new Set(students.map((s) => `${s.class}-${s.section}`))
@@ -84,74 +84,85 @@ export default function MarksFeedingConsole() {
   useEffect(() => {
     if (!selectedClass || !selectedExam || !selectedSubject) return;
 
-    const subjectToUse = isCustomSubjectMode ? customSubject : selectedSubject;
-    if (!subjectToUse) return;
+    const subjectToUse = isCustomSubjectMode && customSubject.trim() ? customSubject.trim() : selectedSubject;
 
-    const classStudents = students.filter(
-      (s) => `${s.class}-${s.section}` === selectedClass
-    );
+    if (!selectedClass || !selectedExam || !subjectToUse) return;
 
-    const newRoster: typeof marksRoster = {};
-    let foundAny = false;
-    let loadedMaxMarks = "100";
+    let isMounted = true;
+    
+    const fetchMarks = async () => {
+      try {
+        const [className, section] = selectedClass.split("-");
+        const res = await fetch(`/api/marks/roster?class=${encodeURIComponent(className)}&section=${encodeURIComponent(section)}&exam=${encodeURIComponent(selectedExam)}&subject=${encodeURIComponent(subjectToUse)}`);
+        if (!res.ok) throw new Error("Failed to fetch marks");
+        const marksRecord = await res.json();
 
-    classStudents.forEach((student) => {
-      const existingMark = student.marks?.find(
-        (m: any) =>
-          m.subject.toLowerCase() === subjectToUse.toLowerCase() &&
-          m.examName.toLowerCase() === selectedExam.toLowerCase()
-      );
+        if (!isMounted) return;
 
-      if (existingMark) {
-        const initialBreakdown: { [key: string]: string } = {};
-        if (existingMark.breakdown && typeof existingMark.breakdown === "object") {
-          Object.entries(existingMark.breakdown).forEach(([k, v]) => {
-            initialBreakdown[k] = v !== null && v !== undefined ? v.toString() : "";
-          });
-        } else if (isSplitExam) {
-          splitComponents.forEach((comp: any) => {
-            const normalizedKey = comp.name.toLowerCase().replace(/[^a-z]/g, "");
-            if (normalizedKey.includes("written") || normalizedKey.includes("exam")) {
-              if (existingMark.writtenExam !== null && existingMark.writtenExam !== undefined) {
-                initialBreakdown[comp.name] = existingMark.writtenExam.toString();
-              }
-            } else if (normalizedKey.includes("notebook") || normalizedKey.includes("note")) {
-              if (existingMark.notebook !== null && existingMark.notebook !== undefined) {
-                initialBreakdown[comp.name] = existingMark.notebook.toString();
-              }
-            } else if (normalizedKey.includes("enrichment") || normalizedKey.includes("enri") || normalizedKey.includes("sub")) {
-              if (existingMark.subjectEnrichment !== null && existingMark.subjectEnrichment !== undefined) {
-                initialBreakdown[comp.name] = existingMark.subjectEnrichment.toString();
-              }
-            } else if (normalizedKey.includes("practical") || normalizedKey.includes("act") || normalizedKey.includes("prac")) {
-              if (existingMark.practical !== null && existingMark.practical !== undefined) {
-                initialBreakdown[comp.name] = existingMark.practical.toString();
-              }
+        const newRoster: any = {};
+        let foundAny = false;
+        let loadedMaxMarks = "100";
+
+        classStudents.forEach((student) => {
+          const existingMark = marksRecord[student.id];
+
+          if (existingMark) {
+            const initialBreakdown: { [key: string]: string } = {};
+            if (existingMark.breakdown && typeof existingMark.breakdown === "object") {
+              Object.entries(existingMark.breakdown).forEach(([k, v]) => {
+                initialBreakdown[k] = v !== null && v !== undefined ? (v as any).toString() : "";
+              });
+            } else if (isSplitExam) {
+              splitComponents.forEach((comp: any) => {
+                const normalizedKey = comp.name.toLowerCase().replace(/[^a-z]/g, "");
+                if (normalizedKey.includes("written") || normalizedKey.includes("exam")) {
+                  if (existingMark.writtenExam !== null && existingMark.writtenExam !== undefined) {
+                    initialBreakdown[comp.name] = existingMark.writtenExam.toString();
+                  }
+                } else if (normalizedKey.includes("notebook") || normalizedKey.includes("note")) {
+                  if (existingMark.notebook !== null && existingMark.notebook !== undefined) {
+                    initialBreakdown[comp.name] = existingMark.notebook.toString();
+                  }
+                } else if (normalizedKey.includes("enrichment") || normalizedKey.includes("enri") || normalizedKey.includes("sub")) {
+                  if (existingMark.subjectEnrichment !== null && existingMark.subjectEnrichment !== undefined) {
+                    initialBreakdown[comp.name] = existingMark.subjectEnrichment.toString();
+                  }
+                } else if (normalizedKey.includes("practical") || normalizedKey.includes("act") || normalizedKey.includes("prac")) {
+                  if (existingMark.practical !== null && existingMark.practical !== undefined) {
+                    initialBreakdown[comp.name] = existingMark.practical.toString();
+                  }
+                }
+              });
             }
-          });
+
+            newRoster[student.id] = {
+              marksObtained: existingMark.marksObtained?.toString() || "",
+              remarks: existingMark.remarks || "",
+              breakdown: initialBreakdown,
+            };
+            foundAny = true;
+            loadedMaxMarks = existingMark.maxMarks?.toString() || "100";
+          } else {
+            newRoster[student.id] = {
+              marksObtained: "",
+              remarks: "",
+              breakdown: {},
+            };
+          }
+        });
+
+        setMarksRoster(newRoster);
+        setIsEditMode(foundAny);
+        if (foundAny) {
+          setMaxMarks(loadedMaxMarks);
         }
-
-        newRoster[student.id] = {
-          marksObtained: existingMark.marksObtained?.toString() || "",
-          remarks: existingMark.remarks || "",
-          breakdown: initialBreakdown,
-        };
-        foundAny = true;
-        loadedMaxMarks = existingMark.maxMarks.toString();
-      } else {
-        newRoster[student.id] = {
-          marksObtained: "",
-          remarks: "",
-          breakdown: {},
-        };
+      } catch (err) {
+        console.error(err);
       }
-    });
-
-    setMarksRoster(newRoster);
-    setIsEditMode(foundAny);
-    if (foundAny) {
-      setMaxMarks(loadedMaxMarks);
-    }
+    };
+    
+    fetchMarks();
+    return () => { isMounted = false; };
   }, [selectedClass, selectedExam, selectedSubject, customSubject, isCustomSubjectMode, students, isSplitExam]);
 
   const classStudents = students.filter(
@@ -372,7 +383,7 @@ export default function MarksFeedingConsole() {
         throw new Error(errJson.error || "Failed to save marks.");
       }
 
-      await refreshData();
+      await refreshStudents();
       setSuccessMsg("Marks saved successfully for the entire roster!");
       setIsEditMode(true);
       setTimeout(() => setSuccessMsg(""), 4000);

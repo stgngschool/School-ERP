@@ -33,7 +33,6 @@ import {
   ShieldCheck,
   GraduationCap,
 } from "lucide-react";
-import AppsIntegrationModal from "@/components/AppsIntegrationModal";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -215,10 +214,10 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 )}
                 <button
                   onClick={() => setActiveTab(item.tab)}
-                  className={`w-full flex items-center gap-3 rounded-xl px-3 py-2 text-xs font-bold transition-all cursor-pointer ${
+                  className={`w-full flex items-center gap-3 rounded-xl px-3 py-2 text-xs font-bold transition-all cursor-pointer focus:outline-none ${
                     isActive
                       ? "bg-indigo-50 text-indigo-700 shadow-[0_1px_2px_rgba(0,0,0,0.02)] border border-indigo-100/80 font-extrabold"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 border border-transparent"
                   }`}
                 >
                   <Icon className={`h-4 w-4 shrink-0 ${isActive ? "text-indigo-600" : "text-slate-400"}`} />
@@ -413,15 +412,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
           {/* Right Controls */}
           <div className="flex items-center gap-3.5">
-            {/* Apps & Integrations Connector Button */}
-            <button
-              onClick={() => setShowAppsModal(true)}
-              title="Apps & Integrations Connector Hub"
-              className="flex items-center gap-1.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white py-1.5 px-3.5 rounded-xl text-xs font-black transition-all cursor-pointer shadow-md shadow-indigo-600/15"
-            >
-              <Layers className="h-4 w-4 text-indigo-200" />
-              <span>Apps Hub</span>
-            </button>
 
             <div className="hidden lg:flex items-center gap-2 bg-indigo-50/80 border border-indigo-100/80 text-indigo-700 py-1.5 px-3 rounded-xl text-xs font-black">
               <Building2 className="h-3.5 w-3.5 text-indigo-500" />
@@ -565,10 +555,10 @@ export default function AppLayout({ children }: AppLayoutProps) {
                     )}
                     <button
                       onClick={() => handleTabChange(item.tab)}
-                      className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all press-scale ${
+                      className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all press-scale focus:outline-none ${
                         isActive
-                          ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/20 font-black"
-                          : "bg-slate-50 text-slate-700 hover:bg-slate-100 font-bold"
+                          ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/20 font-black border border-transparent"
+                          : "bg-slate-50 text-slate-700 hover:bg-slate-100 font-bold border border-transparent"
                       }`}
                     >
                       <Icon className={`h-5 w-5 shrink-0 ${isActive ? "text-white" : "text-slate-400"}`} />
@@ -627,7 +617,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
       )}
 
       {/* Apps & Integrations Connector Modal */}
-      <AppsIntegrationModal isOpen={showAppsModal} onClose={() => setShowAppsModal(false)} />
+
     </div>
   );
 }

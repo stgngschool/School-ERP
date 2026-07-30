@@ -12,6 +12,7 @@ export async function GET(request: Request) {
     }
 
     const leaves = await db.leaveRequest.findMany({
+take: 100,
       include: {
         student: {
           include: {

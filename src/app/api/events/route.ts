@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     let events = await db.calendarEvent.findMany({
+take: 100,
       orderBy: { day: "asc" },
     });
 

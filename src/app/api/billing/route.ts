@@ -7,9 +7,15 @@ import { PaymentMethod, EntryType } from "@prisma/client";
 import { getNextReceiptNumber } from "@/lib/family";
 import fs from "fs";
 import path from "path";
+import { getAcademicYear } from "@/lib/generateYearlyCharges";
 
 export async function GET() {
   try {
+    const acYear = getAcademicYear();
+    const startYear = parseInt(acYear.split("-")[0]);
+    // Fetch charges created from March 1st of the current academic year to cover early assignments
+    const sessionStartDate = new Date(`${startYear}-03-01T00:00:00.000Z`);
+
     // Execute all database queries concurrently in parallel
     const [ledger, receipts, charges, discounts] = await Promise.all([
       db.ledgerEntry.findMany({
@@ -42,7 +48,10 @@ export async function GET() {
         orderBy: { createdAt: "desc" },
       }),
       db.ledgerEntry.findMany({
-        where: { entryType: EntryType.CHARGE },
+        where: { 
+          entryType: EntryType.CHARGE,
+          createdAt: { gte: sessionStartDate }
+        },
         select: {
           id: true,
           studentId: true,
@@ -57,7 +66,10 @@ export async function GET() {
         },
       }),
       db.ledgerEntry.findMany({
-        where: { entryType: EntryType.DISCOUNT },
+        where: { 
+          entryType: EntryType.DISCOUNT,
+          createdAt: { gte: sessionStartDate }
+        },
         select: {
           id: true,
           studentId: true,

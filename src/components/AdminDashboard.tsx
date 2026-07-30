@@ -4,7 +4,6 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import StudentProfileModal from "@/components/StudentProfileModal";
 import MarksFeedingConsole from "@/components/MarksFeedingConsole";
-import AppsIntegrationModal from "@/components/AppsIntegrationModal";
 import AttendanceConsole from "@/components/AttendanceConsole";
 import {
   Users,
@@ -152,6 +151,13 @@ const getGroupedReceiptItems = (items: any[]) => {
 };
 
 export default function AdminDashboard() {
+  const [itemsPerPage, setItemsPerPage] = useState(50);
+  useEffect(() => {
+    const handleResize = () => setItemsPerPage(window.innerWidth < 768 ? 10 : 50);
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   const {
     user,
     usersList,
@@ -188,7 +194,8 @@ export default function AdminDashboard() {
     addEvent,
     ledgerEntries,
     attendances,
-    refreshData,
+    refreshStudents,
+    refreshBilling,
   } = useAuth();
 
   const validTabs = ["dashboard", "collect", "attendance", "marks", "defaulters", "ledger", "structures", "students", "users", "idcards", "notices", "school", "audit"];
@@ -271,7 +278,6 @@ export default function AdminDashboard() {
   const [isPrintingIdCards, setIsPrintingIdCards] = useState(false);
   
   // Apps & Connectors Hub State
-  const [showAppsModal, setShowAppsModal] = useState(false);
 
   // Single Student / Class Ledger Generator in Configure Fees
   const [ledgerGenTarget, setLedgerGenTarget] = useState<"single" | "class" | "all">("single");
@@ -369,7 +375,7 @@ export default function AdminDashboard() {
   const [addStaffError, setAddStaffError] = useState("");
   const [addStaffSuccess, setAddStaffSuccess] = useState("");
 
-  const itemsPerPage = 50;
+  // itemsPerPage is now state
   
   const [receiptPageSize, setReceiptPageSize] = useState<"A4" | "A5">("A5");
 
@@ -1666,7 +1672,7 @@ export default function AdminDashboard() {
         throw new Error(errJson.error || "Upload failed");
       }
       
-      await refreshData();
+      await refreshStudents();
       alert("Photo uploaded and updated successfully!");
     } catch (err: any) {
       alert("Auto-compress & upload failed: " + err.message);
@@ -2935,7 +2941,7 @@ export default function AdminDashboard() {
                         });
                         const json = await res.json();
                         setLedgerGenResult(`✓ Cleaned up ${json.cleanedCount || 0} duplicate unpaid entries.`);
-                        refreshData();
+                        await refreshBilling();
                       } catch (err) {
                         setLedgerGenResult("Failed to cleanup duplicates.");
                       } finally {
@@ -3134,7 +3140,7 @@ export default function AdminDashboard() {
                                 const json = await res.json();
                                 if (!res.ok) throw new Error(json.error || "Generation failed.");
                                 setLedgerGenResult(`✓ Generated: ${json.generated || 0} | Skipped: ${json.skipped || 0}`);
-                                refreshData();
+                                await refreshBilling();
                               } catch (err: any) {
                                 setLedgerGenResult(`Error: ${err.message || "Failed"}`);
                               } finally {
@@ -3542,26 +3548,7 @@ export default function AdminDashboard() {
                 </p>
               </div>
 
-              {/* Apps & Integration Hub Banner */}
-              <div className="bg-slate-900 text-white border border-slate-800 p-4 rounded-2xl shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-black shrink-0 shadow-md shadow-indigo-500/20">
-                    <Layers className="h-5 w-5 text-indigo-200" />
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-black text-white">Apps & Software Connectors Hub</h4>
-                    <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
-                      Connect Google Sheets, Google Drive, WhatsApp, Email Dispatcher, and UPI Gateways with 1-click.
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowAppsModal(true)}
-                  className="py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition-all cursor-pointer shrink-0 flex items-center gap-1.5 shadow-md shadow-indigo-500/20"
-                >
-                  Open Connectors Hub
-                </button>
-              </div>
+              
 
               {/* Staff vs Parents Directory Switcher */}
               <div className="flex border-b border-slate-200 gap-2">
@@ -3715,7 +3702,7 @@ export default function AdminDashboard() {
                         });
 
                         const totalItems = filtered.length;
-                        const itemsPerPageLocal = securityTabMode === "parents" ? 10 : 50;
+                        const itemsPerPageLocal = securityTabMode === "parents" ? 10 : itemsPerPage;
                         const totalPages = Math.ceil(totalItems / itemsPerPageLocal);
                         const activePage = securityTabMode === "parents" ? Math.min(parentsCurrentPage, totalPages || 1) : 1;
                         const startIndex = (activePage - 1) * itemsPerPageLocal;
@@ -8353,7 +8340,6 @@ export default function AdminDashboard() {
       )}
 
       {/* Apps & Integrations Connector Modal */}
-      <AppsIntegrationModal isOpen={showAppsModal} onClose={() => setShowAppsModal(false)} />
     </div>
   );
 }

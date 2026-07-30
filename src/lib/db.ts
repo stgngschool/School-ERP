@@ -1,7 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import pg from "pg";
-import { initDailyCronJob } from "./cron";
 
 let basePrisma: PrismaClient;
 
@@ -54,14 +53,6 @@ const prismaWithLogging = basePrisma.$extends({
     },
   },
 });
-
-if (typeof window === "undefined") {
-  try {
-    initDailyCronJob();
-  } catch (e) {
-    console.error("[CRON] Failed to initialize daily cron:", e);
-  }
-}
 
 export const db = prismaWithLogging as unknown as PrismaClient;
 export default db;

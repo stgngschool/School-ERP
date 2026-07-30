@@ -23,15 +23,28 @@ export async function GET(request: Request) {
 
     const dbStart = performance.now();
     const students = await db.student.findMany({
-      include: {
-        class: true,
-        parentProfile: {
-          include: {
-            user: true,
-          },
+      select: {
+        id: true,
+        name: true,
+        admissionNumber: true,
+        rollNumber: true,
+        fatherName: true,
+        fatherMobile: true,
+        isRte: true,
+        photoUrl: true,
+        concessionId: true,
+        class: {
+          select: { name: true, section: true }
         },
-        concession: true,
-        marks: true,
+        parentProfile: {
+          select: { 
+            familyCode: true,
+            user: { select: { name: true, phone: true } }
+          }
+        },
+        concession: {
+          select: { id: true, name: true, percentage: true, feeHeadName: true }
+        },
       },
       orderBy: { name: "asc" },
     });
@@ -43,39 +56,14 @@ export async function GET(request: Request) {
       name: s.name,
       admissionNo: s.admissionNumber,
       rollNo: s.rollNumber || "",
-      dob: s.dob ? s.dob.toISOString().split("T")[0] : "",
-      aadhaar: s.aadhaar || "",
-      disability: s.disability || "",
       fatherName: s.fatherName || "",
-      motherName: s.motherName || "",
       fatherMobile: s.fatherMobile || "",
-      motherMobile: s.motherMobile || "",
-      fatherAadhaar: s.fatherAadhaar || "",
-      category: s.category || "",
-      religion: s.religion || "",
-      motherTongue: s.motherTongue || "",
-      nationality: s.nationality || "",
-      admissionDate: s.admissionDate ? s.admissionDate.toISOString().split("T")[0] : "",
-      boardRegNo: s.boardRegNo || "",
-      prevSchoolName: s.prevSchoolName || "",
-      prevClassPassed: s.prevClassPassed || "",
-      tcNumber: s.tcNumber || "",
-      parentOccupation: s.parentOccupation || "",
-      familyIncome: s.familyIncome || "",
-      emergencyName: s.emergencyName || "",
-      emergencyPhone: s.emergencyPhone || "",
-      motherAadhaar: s.motherAadhaar || "",
-      transportMode: s.transportMode || "",
-      busRoute: s.busRoute || "",
-      busStop: s.busStop || "",
       isRte: s.isRte,
       class: s.class.name,
       section: s.class.section,
-      parentName: s.parentProfile.user.name,
-      parentPhone: s.parentProfile.user.phone || "",
-      parentEmail: s.parentProfile.user.email || "",
-      address: s.parentProfile.address || "",
-      familyCode: s.parentProfile.familyCode,
+      parentName: s.parentProfile?.user?.name || "",
+      parentPhone: s.parentProfile?.user?.phone || "",
+      familyCode: s.parentProfile?.familyCode || "",
       concessionId: s.concessionId || "",
       photoUrl: s.photoUrl || "",
       concession: s.concession ? {
@@ -84,19 +72,6 @@ export async function GET(request: Request) {
         percentage: s.concession.percentage,
         feeHeadName: s.concession.feeHeadName,
       } : null,
-      marks: s.marks.map((m) => ({
-        id: m.id,
-        subject: m.subject,
-        examName: m.examName,
-        marksObtained: m.marksObtained,
-        maxMarks: m.maxMarks,
-        writtenExam: m.writtenExam,
-        notebook: m.notebook,
-        subjectEnrichment: m.subjectEnrichment,
-        practical: m.practical,
-        remarks: m.remarks || "",
-        createdAt: m.createdAt,
-      })),
     }));
 
     const responseStr = JSON.stringify(formatted);

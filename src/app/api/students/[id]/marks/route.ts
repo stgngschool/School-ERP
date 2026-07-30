@@ -4,6 +4,35 @@ import { getAuthUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const authUser = await getAuthUser(request);
+    if (!authUser) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id: studentId } = await params;
+
+    const marks = await db.mark.findMany({
+      where: {
+        studentId,
+      },
+      orderBy: {
+        createdAt: "desc"
+      }
+    });
+
+    return NextResponse.json(marks);
+  } catch (error: any) {
+    console.error("Failed to fetch student marks:", error);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+  }
+}
+
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }

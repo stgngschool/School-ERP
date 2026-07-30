@@ -76,7 +76,6 @@ export interface MockStudent {
     feeHeadName: string;
   } | null;
   photoUrl?: string;
-  marks?: any[];
 }
 
 export interface MockDueItem {
@@ -316,6 +315,16 @@ interface AuthContextType {
   login: (username: string, password: string, portal?: "STAFF" | "PARENT") => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   refreshData: () => Promise<void>;
+  refreshStudents: () => Promise<void>;
+  refreshBilling: () => Promise<void>;
+  refreshAttendance: () => Promise<void>;
+  refreshHomework: () => Promise<void>;
+  refreshLeave: () => Promise<void>;
+  refreshEvents: () => Promise<void>;
+  refreshNotices: () => Promise<void>;
+  refreshSchool: () => Promise<void>;
+  refreshUsers: () => Promise<void>;
+  refreshAudits: () => Promise<void>;
   currentStage: AuthStage;
   stageError: string | null;
   retryInitSession: () => void;
@@ -509,6 +518,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+
+  const refreshStudents = async () => {
+    const data = await apiFetch("/api/students");
+    if (data) setStudents(data);
+  };
+
+  const refreshBilling = async () => {
+    const data = await apiFetch("/api/billing");
+    if (data) {
+      setLedgerEntries(data.ledgerEntries || []);
+      setReceipts(data.receipts || []);
+      setDueItems(data.dueItems || []);
+    }
+  };
+
+  const refreshAttendance = async () => {
+    const data = await apiFetch("/api/attendance");
+    if (data) setAttendances(data);
+  };
+
+  const refreshHomework = async () => {
+    const data = await apiFetch("/api/homework");
+    if (data) setHomeworks(data);
+  };
+
+  const refreshLeave = async () => {
+    const data = await apiFetch("/api/leave");
+    if (data) setLeaveRequests(data);
+  };
+
+  const refreshEvents = async () => {
+    const data = await apiFetch("/api/events");
+    if (data) setEventsList(data);
+  };
+
+  const refreshNotices = async () => {
+    const data = await apiFetch("/api/notice");
+    if (data) setNotices(data);
+  };
+
+  const refreshSchool = async () => {
+    const data = await apiFetch("/api/school");
+    if (data) setSchoolInfo(data);
+  };
+
+  const refreshUsers = async () => {
+    const data = await apiFetch("/api/users");
+    if (data) setUsersList(data);
+  };
+
+  const refreshAudits = async () => {
+    const data = await apiFetch("/api/audits");
+    if (data) setAuditLogs(data);
+  };
+
   // Targeted refresh — only classes list (fast, avoids full reload)
   const refreshClasses = async () => {
     try {
@@ -612,7 +676,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (res.ok) {
-        await refreshData();
+        await refreshUsers();
       }
     } catch (err) {
       console.error("Toggle user status failed:", err);
@@ -628,7 +692,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       const data = await res.json();
       if (res.ok) {
-        await refreshData();
+        await refreshUsers();
         return { success: true };
       }
       return { success: false, error: data.error || "Failed to reset password" };
@@ -647,7 +711,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       const data = await res.json();
       if (res.ok) {
-        await refreshData();
+        await refreshUsers();
         return { success: true };
       }
       return { success: false, error: data.error || "Failed to delete user" };
@@ -672,7 +736,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const meData = await meRes.json();
           setUser(meData.user);
         }
-        await refreshData();
+        await refreshUsers();
         return { success: true };
       }
       return { success: false, error: data.error || "Failed to update profile" };
@@ -691,7 +755,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       const data = await res.json();
       if (res.ok) {
-        await refreshData();
+        await refreshUsers();
         return { success: true };
       }
       return { success: false, error: data.error || "Failed to register staff" };
@@ -714,7 +778,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (res.ok) {
-        await refreshData();
+        await refreshUsers();
       }
     } catch (err) {
       console.error("Update school profile failed:", err);
@@ -730,7 +794,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (res.ok) {
-        await refreshData();
+        await refreshSchool();
       }
     } catch (err) {
       console.error("Mark attendance failed:", err);
@@ -746,7 +810,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (res.ok) {
-        await refreshData();
+        await refreshAttendance();
       }
     } catch (err) {
       console.error("Mark batch attendance failed:", err);
@@ -778,7 +842,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (res.ok) {
-        await refreshData();
+        await refreshAttendance();
       }
     } catch (err) {
       console.error("Add homework failed:", err);
@@ -792,7 +856,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (res.ok) {
-        await refreshData();
+        await refreshHomework();
       }
     } catch (err) {
       console.error("Delete homework failed:", err);
@@ -822,7 +886,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (res.ok) {
-        await refreshData();
+        await refreshHomework();
       }
     } catch (err) {
       console.error("Apply leave failed:", err);
@@ -838,7 +902,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (res.ok) {
-        await refreshData();
+        await refreshLeave();
       }
     } catch (err) {
       console.error("Update leave status failed:", err);
@@ -854,7 +918,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (res.ok) {
-        await refreshData();
+        await refreshLeave();
       }
     } catch (err) {
       console.error("Add notice failed:", err);
@@ -877,7 +941,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (res.ok) {
         // Run refreshData in background without blocking receipt modal generation
-        refreshData().catch((err) => console.error("Background refresh error:", err));
+        refreshBilling().catch((err: any) => console.error("Background refresh error:", err));
         return true;
       }
       return false;
@@ -935,7 +999,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (res.ok) {
-        await refreshData();
+        await refreshNotices();
       }
     } catch (err) {
       console.error("Add student failed:", err);
@@ -980,7 +1044,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      await refreshData();
+      await refreshStudents();
       return { success: true, totalImported };
     } catch (err: any) {
       console.error("Bulk import students failed:", err);
@@ -1101,7 +1165,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (res.ok) {
-        await refreshData();
+        await refreshBilling();
       }
     } catch (err) {
       console.error("Trigger audit log failed:", err);
@@ -1116,7 +1180,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({ studentId, action: "updateStatus", data: { status } }),
       });
       if (res.ok) {
-        await refreshData();
+        await refreshStudents();
       }
     } catch (err) {
       console.error("Update student status failed:", err);
@@ -1131,7 +1195,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({ studentId, action: "promote", data: { classVal, section } }),
       });
       if (res.ok) {
-        await refreshData();
+        await refreshStudents();
       }
     } catch (err) {
       console.error("Promote student failed:", err);
@@ -1146,7 +1210,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({ studentId, action: "updateDetails", data: studentData }),
       });
       if (res.ok) {
-        await refreshData();
+        await refreshStudents();
       }
     } catch (err) {
       console.error("Edit student details failed:", err);
@@ -1161,7 +1225,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({ title, day, weekday }),
       });
       if (res.ok) {
-        await refreshData();
+        await refreshEvents();
       }
     } catch (err) {
       console.error("Add event failed:", err);
@@ -1177,7 +1241,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       if (res.ok) {
         await refreshFeeConfig();
-        await refreshData();
+        await refreshBilling();
         return true;
       }
       return false;
@@ -1249,6 +1313,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         logout,
         refreshData,
+        refreshStudents,
+        refreshBilling,
+        refreshAttendance,
+        refreshHomework,
+        refreshLeave,
+        refreshEvents,
+        refreshNotices,
+        refreshSchool,
+        refreshUsers,
+        refreshAudits,
         authLoading,
         currentStage,
         stageError,

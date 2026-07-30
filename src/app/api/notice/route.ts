@@ -6,6 +6,7 @@ import { verifyToken, getAuthUser } from "@/lib/auth";
 export async function GET() {
   try {
     const notices = await db.notice.findMany({
+take: 100,
       orderBy: { createdAt: "desc" },
     });
 

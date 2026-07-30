@@ -3,6 +3,8 @@ import db from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
 import { AttendanceStatus } from "@prisma/client";
 
+import { getAcademicYear } from "@/lib/generateYearlyCharges";
+
 export async function GET(request: Request) {
   try {
     const authUser = await getAuthUser(request);
@@ -10,7 +12,14 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
     }
 
+    const acYear = getAcademicYear();
+    const startYear = parseInt(acYear.split("-")[0]);
+    const sessionStartDate = new Date(`${startYear}-03-01T00:00:00.000Z`);
+
     const logs = await db.attendance.findMany({
+      where: {
+        date: { gte: sessionStartDate }
+      },
       orderBy: { date: "desc" },
     });
 

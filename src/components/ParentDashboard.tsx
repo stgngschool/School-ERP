@@ -178,6 +178,21 @@ export default function ParentDashboard() {
   const [showLeaveSuccess, setShowLeaveSuccess] = useState(false);
   const [selectedExamTab, setSelectedExamTab] = useState("");
 
+  const [childMarks, setChildMarks] = useState<any[]>([]);
+
+  React.useEffect(() => {
+    if (child?.id) {
+      fetch(`/api/students/${child.id}/marks`)
+        .then(res => res.json())
+        .then(data => {
+           if (Array.isArray(data)) setChildMarks(data);
+        })
+        .catch(console.error);
+    } else {
+      setChildMarks([]);
+    }
+  }, [child?.id]);
+
   const handleToggleDueSelection = (dueId: string) => {
     setSelectedDueIds((prev) =>
       prev.includes(dueId) ? prev.filter((id) => id !== dueId) : [...prev, dueId]
@@ -491,7 +506,7 @@ export default function ParentDashboard() {
 
           {/* Report Card content */}
           {(() => {
-            const examMarks = (child?.marks || []).filter(
+            const examMarks = childMarks.filter(
               (m: any) => m.examName.toLowerCase() === currentExamTab.toLowerCase()
             );
 
