@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import { getAuthUser } from "@/lib/auth";
 
 const configPath = path.join(process.cwd(), "src/data/school.json");
 
@@ -15,6 +16,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const authUser = await getAuthUser(request);
+  if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   try {
     const body = await request.json();
     fs.writeFileSync(configPath, JSON.stringify(body, null, 2), "utf-8");

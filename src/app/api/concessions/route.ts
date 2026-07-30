@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getAuthUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +17,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const authUser = await getAuthUser(request);
+  if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   try {
     const { name, percentage, feeHeadName } = await request.json();
     if (!name || percentage === undefined || !feeHeadName) {
@@ -44,6 +48,9 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const authUser = await getAuthUser(request);
+  if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   try {
     const { id } = await request.json();
     if (!id) {

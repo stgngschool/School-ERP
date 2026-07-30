@@ -408,13 +408,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 
   // Fetch live database records scoped by user role & needs
-  const refreshData = async (targetUser?: MockUser | null) => {
-    try {
-      const activeUser = targetUser !== undefined ? targetUser : user;
-      if (!activeUser) return;
+  const refreshData = useCallback(async (targetUser?: MockUser | null) => {
+    const userToFetch = targetUser !== undefined ? targetUser : user;
+    if (!userToFetch) {
+      setSchoolInfo(null);
+      setDueItems([]);
+      setAttendances([]);
+      setHomeworks([]);
+      setLeaveRequests([]);
+      setNotices([]);
+      setLedgerEntries([]);
+      setReceipts([]);
+      setStudents([]);
+      setFeeHeads([]);
+      setFeeStructures([]);
+      setClasses([]);
+      setAuditLogs([]);
+      setEventsList([]);
+      setTransportStops([]);
+      setConcessions([]);
+      return;
+    }
 
+    try {
       setCurrentStage("STUDENTS FETCH START");
-      const isStaff = activeUser.role === "ADMIN" || activeUser.role === "ACCOUNTANT";
+      const isStaff = userToFetch.role === "ADMIN" || userToFetch.role === "ACCOUNTANT";
 
       const criticalLoads = [
         apiFetch("/api/school").then((data) => { if (data) setSchoolInfo(data); }),
@@ -462,7 +480,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (err) {
       console.error("[AuthContext] refreshData EXCEPTION:", err);
     }
-  };
+  }, [user]);
 
   const refreshFeeConfig = async () => {
     try {

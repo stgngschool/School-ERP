@@ -42,13 +42,23 @@ export default function IndexPage() {
     }
   }, [authLoading, user, activeRole]);
 
-  // If unauthenticated or loading, redirect to login cleanly
+  // If loading, show loader inside AppLayout
+  if (authLoading) {
+    return (
+      <AppLayout>
+        <DashboardLoading />
+      </AppLayout>
+    );
+  }
+
+  // If not loading and still unauthenticated, the useEffect will redirect. Show empty to prevent flash.
   if (!user || !activeRole) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-3">
-        <Loader2 className="h-7 w-7 text-indigo-600 animate-spin" />
-        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Opening St. GNG School ERP...</p>
-      </div>
+      <AppLayout>
+        <div className="min-h-[50vh] flex flex-col items-center justify-center gap-3 text-slate-400">
+          <Loader2 className="h-6 w-6 animate-spin text-indigo-600" />
+        </div>
+      </AppLayout>
     );
   }
 

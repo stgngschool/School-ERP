@@ -2,12 +2,16 @@ import { NextResponse } from "next/server";
 import { syncStudentsToSheet, syncLedgerToSheet } from "@/lib/google";
 import fs from "fs";
 import path from "path";
+import { getAuthUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 const INTEGRATIONS_FILE = path.join(process.cwd(), "src/data/integrations.json");
 
-export async function GET() {
+export async function GET(request: Request) {
+  const authUser = await getAuthUser(request);
+  if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   try {
     if (!fs.existsSync(INTEGRATIONS_FILE)) {
       return NextResponse.json({ error: "Integrations configuration file not found." }, { status: 404 });
@@ -46,6 +50,6 @@ export async function GET() {
   }
 }
 
-export async function POST() {
-  return GET();
+export async function POST(request: Request) {
+  return GET(request);
 }

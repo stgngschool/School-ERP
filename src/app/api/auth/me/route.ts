@@ -61,8 +61,10 @@ export async function GET() {
     console.log(`[DIAGNOSTIC][DB][${reqId}] db.user.findUnique | duration: ${dbDuration}ms | userId: ${decoded.userId}`);
 
     if (!user) {
+      // CRITICAL: Clear the stale cookie so browser stops sending it in a loop
+      cookieStore.delete("auth_token");
       const duration = (performance.now() - startTime).toFixed(2);
-      console.warn(`[DIAGNOSTIC][API][END] GET /api/auth/me [${reqId}] | status: 401 | duration: ${duration}ms | authenticated: false | reason: User not found in DB`);
+      console.warn(`[DIAGNOSTIC][API][END] GET /api/auth/me [${reqId}] | status: 401 | duration: ${duration}ms | authenticated: false | reason: User not found in DB (cookie cleared)`);
       return noStoreJson({ authenticated: false }, { status: 401 });
     }
 

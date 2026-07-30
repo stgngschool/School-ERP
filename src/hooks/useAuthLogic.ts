@@ -2,6 +2,11 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { MockUser, Role, AuthStage } from "../context/AuthContext";
 
 export function useAuthLogic(refreshData: (user?: MockUser | null) => Promise<void> | void) {
+  const refreshDataRef = useRef(refreshData);
+  useEffect(() => {
+    refreshDataRef.current = refreshData;
+  }, [refreshData]);
+
   const [user, setUser] = useState<MockUser | null>(() => {
     if (typeof window !== "undefined") {
       try {
@@ -110,7 +115,7 @@ export function useAuthLogic(refreshData: (user?: MockUser | null) => Promise<vo
           } catch (e) {}
           setAuthLoading(false);
           
-          refreshData(data.user);
+          refreshDataRef.current(data.user);
           isInitSessionActiveRef.current = false;
           return;
         } else if (res.status === 401 || res.status === 403) {
@@ -144,7 +149,7 @@ export function useAuthLogic(refreshData: (user?: MockUser | null) => Promise<vo
       setAuthLoading(false);
     }
     isInitSessionActiveRef.current = false;
-  }, [refreshData]);
+  }, []);
 
   const login = useCallback(async (usernameVal: string, passwordVal: string, portalVal?: "STAFF" | "PARENT") => {
     try {
@@ -171,12 +176,12 @@ export function useAuthLogic(refreshData: (user?: MockUser | null) => Promise<vo
         localStorage.setItem("gng_active_role", data.user.role);
       } catch (e) {}
       
-      refreshData(data.user);
+      refreshDataRef.current(data.user);
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message || "Login failed. Please try again." };
     }
-  }, [refreshData]);
+  }, []);
 
   const logout = useCallback(async () => {
     sessionVersionRef.current++;
@@ -223,7 +228,9 @@ export function useAuthLogic(refreshData: (user?: MockUser | null) => Promise<vo
 
   useEffect(() => {
     initSession();
+  }, [initSession]);
 
+  useEffect(() => {
     let visibilityDebounce: NodeJS.Timeout;
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {

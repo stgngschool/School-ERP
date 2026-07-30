@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { uploadFile } from "@/lib/storage";
+import { getAuthUser } from "@/lib/auth";
 
 export async function POST(request: Request) {
+  const authUser = await getAuthUser(request);
+  if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   try {
     const formData = await request.formData();
     const studentId = formData.get("studentId") as string;

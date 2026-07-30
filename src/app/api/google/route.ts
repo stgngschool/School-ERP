@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getAuthUser } from "@/lib/auth";
 import { syncStudentsToSheet, syncLedgerToSheet, backupDatabaseToDrive } from "@/lib/google";
 import fs from "fs";
 import path from "path";
@@ -28,6 +29,9 @@ function extractId(input: string): string {
 }
 
 export async function POST(request: Request) {
+  const authUser = await getAuthUser(request);
+  if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   try {
     const body = await request.json();
     const { action, spreadsheetId, folderId, serviceAccountJson } = body;

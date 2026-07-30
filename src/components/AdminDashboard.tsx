@@ -55,6 +55,11 @@ import {
   RotateCcw,
   SlidersHorizontal,
   X,
+  Sparkles,
+  Zap,
+  Trophy,
+  Ghost,
+  Gift,
 } from "lucide-react";
 
 // Groups multiple months or siblings into a single row if the list grows too long (> 4 items)
@@ -1793,324 +1798,232 @@ export default function AdminDashboard() {
             const maxRev = Math.max(...Object.values(monthlyRevenue), 1000);
 
             return (
-              <>
-                {/* ─── Executive Daily Revenue Counter Till ─── */}
-                <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl p-4 sm:p-5 shadow-md flex flex-col lg:flex-row justify-between items-center gap-4 relative overflow-hidden border border-slate-800">
-                  <div className="space-y-1">
-                    <span className="text-[9px] font-black text-indigo-300 uppercase tracking-widest block">
-                      Daily Revenue Counter Till
+              <div className="space-y-6">
+                {/* ─── Header Section ─── */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div>
+                    <h2 className="text-2xl font-bold text-slate-800">Dashboard Overview</h2>
+                    <p className="text-sm text-slate-500 mt-1">Key metrics and quick actions for your school.</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-full border border-emerald-100">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                      System Online
                     </span>
-                    <h3 className="text-sm sm:text-base font-black tracking-tight text-white">
-                      Today's Payment Tally ({new Date().toLocaleDateString("en-IN")})
-                    </h3>
-                    <p className="text-[10px] text-slate-300 font-medium">
-                      Match cash drawer balance before session closing.
-                    </p>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full lg:w-auto pt-2 lg:pt-0">
-                    <div className="space-y-1 bg-slate-800/80 p-2.5 rounded-xl border border-slate-700">
-                      <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider block">Cash Tally</span>
-                      <span className="text-sm font-black text-emerald-400">₹{todayCash.toLocaleString("en-IN")}</span>
-                    </div>
-                    
-                    <div className="space-y-1 bg-slate-800/80 p-2.5 rounded-xl border border-slate-700">
-                      <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider block">UPI QR Scan</span>
-                      <span className="text-sm font-black text-indigo-300">₹{todayUpi.toLocaleString("en-IN")}</span>
-                    </div>
-
-                    <div className="space-y-1 bg-slate-800/80 p-2.5 rounded-xl border border-slate-700">
-                      <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider block">Bank / Cheque</span>
-                      <span className="text-sm font-black text-white">₹{todayBank.toLocaleString("en-IN")}</span>
-                    </div>
-
-                    <div className="space-y-1 bg-indigo-600 p-2.5 rounded-xl border border-indigo-500 shadow-sm">
-                      <span className="text-[8px] font-black text-indigo-200 uppercase tracking-wider block leading-none mb-1">Total Today</span>
-                      <span className="text-sm font-black text-white block">₹{todayTotal.toLocaleString("en-IN")}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* ─── Quick Actions Launcher Hub ─── */}
-                <div className="bg-white border-y sm:border border-slate-200/90 sm:rounded-2xl p-3 sm:p-4 shadow-xs space-y-3">
-                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-700">
-                    Quick Action Shortcuts
-                  </h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
-                    <button
-                      onClick={() => setActiveTab("collect")}
-                      className="p-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl text-left transition-all cursor-pointer group"
-                    >
-                      <CreditCard className="h-5 w-5 text-emerald-600 mb-1.5 group-hover:scale-110 transition-transform" />
-                      <p className="text-xs font-extrabold text-emerald-900">Collect Fees</p>
-                      <p className="text-[9px] text-emerald-600 font-medium">Record payment</p>
-                    </button>
-
-                    <button
-                      onClick={() => setActiveTab("students")}
-                      className="p-3 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl text-left transition-all cursor-pointer group"
-                    >
-                      <PlusCircle className="h-5 w-5 text-indigo-600 mb-1.5 group-hover:scale-110 transition-transform" />
-                      <p className="text-xs font-extrabold text-indigo-900">Add Student</p>
-                      <p className="text-[9px] text-indigo-600 font-medium">Register profile</p>
-                    </button>
-
-                    <button
-                      onClick={() => setActiveTab("marks")}
-                      className="p-3 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl text-left transition-all cursor-pointer group"
-                    >
-                      <BookOpen className="h-5 w-5 text-blue-600 mb-1.5 group-hover:scale-110 transition-transform" />
-                      <p className="text-xs font-extrabold text-blue-900">Feed Marks</p>
-                      <p className="text-[9px] text-blue-600 font-medium">Enter scores</p>
-                    </button>
-
-                    <button
-                      onClick={() => setActiveTab("defaulters")}
-                      className="p-3 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl text-left transition-all cursor-pointer group"
-                    >
-                      <AlertTriangle className="h-5 w-5 text-amber-600 mb-1.5 group-hover:scale-110 transition-transform" />
-                      <p className="text-xs font-extrabold text-amber-900">Fee Dues</p>
-                      <p className="text-[9px] text-amber-600 font-medium">View defaulters</p>
-                    </button>
-
-                    <button
-                      onClick={() => setActiveTab("notices")}
-                      className="p-3 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl text-left transition-all cursor-pointer group"
-                    >
-                      <Bell className="h-5 w-5 text-purple-600 mb-1.5 group-hover:scale-110 transition-transform" />
-                      <p className="text-xs font-extrabold text-purple-900">Post Notice</p>
-                      <p className="text-[9px] text-purple-600 font-medium">Broadcast alert</p>
-                    </button>
-
-                    <button
-                      onClick={() => setActiveTab("idcards")}
-                      className="p-3 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-xl text-left transition-all cursor-pointer group"
-                    >
-                      <FileText className="h-5 w-5 text-teal-600 mb-1.5 group-hover:scale-110 transition-transform" />
-                      <p className="text-xs font-extrabold text-teal-900">Print ID Cards</p>
-                      <p className="text-[9px] text-teal-600 font-medium">Student cards</p>
-                    </button>
                   </div>
                 </div>
 
                 {/* ─── Metric Cards Grid ─── */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                  {/* Total Students Card */}
-                  <div className="bg-white border-y sm:border border-slate-200/90 sm:rounded-2xl p-3 sm:p-4 shadow-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+                  {/* Revenue Card */}
+                  <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow">
                     <div className="flex justify-between items-start">
-                      <div className="space-y-1">
-                        <h4 className="text-2xl font-black text-slate-900 tracking-tight">{totalStudents}</h4>
-                        <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Total Enrolled</span>
+                      <div>
+                        <p className="text-sm font-medium text-slate-500">Total Revenue</p>
+                        <h3 className="text-2xl font-bold text-slate-800 mt-1">₹{totalEarnings.toLocaleString("en-IN")}</h3>
                       </div>
-                      <div className="h-10 w-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 border border-indigo-100 shrink-0">
-                        <Users className="h-5 w-5" />
+                      <div className="p-2 bg-indigo-50 rounded-lg">
+                        <TrendingUp className="w-5 h-5 text-indigo-600" />
                       </div>
                     </div>
-                    <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold text-slate-500">
-                      <span>Boys: {boysCount}</span>
-                      <span>Girls: {girlsCount}</span>
+                    <div className="mt-4 pt-4 border-t border-slate-100 flex items-center text-xs">
+                      <span className="text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded">+₹{monthlyTotal.toLocaleString("en-IN")}</span>
+                      <span className="text-slate-500 ml-2">this month</span>
                     </div>
                   </div>
 
-                  {/* Revenue Collected Card */}
-                  <div className="bg-white border-y sm:border border-slate-200/90 sm:rounded-2xl p-3 sm:p-4 shadow-xs">
+                  {/* Students Card */}
+                  <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow">
                     <div className="flex justify-between items-start">
-                      <div className="space-y-1">
-                        <h4 className="text-2xl font-black text-emerald-700 tracking-tight">₹{totalEarnings.toLocaleString("en-IN")}</h4>
-                        <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Total Revenue Collected</span>
+                      <div>
+                        <p className="text-sm font-medium text-slate-500">Total Enrolled</p>
+                        <h3 className="text-2xl font-bold text-slate-800 mt-1">{totalStudents}</h3>
                       </div>
-                      <div className="h-10 w-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 border border-emerald-100 shrink-0">
-                        <TrendingUp className="h-5 w-5" />
+                      <div className="p-2 bg-blue-50 rounded-lg">
+                        <Users className="w-5 h-5 text-blue-600" />
                       </div>
                     </div>
-                    <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold text-slate-500">
-                      <span>This Month: ₹{monthlyTotal.toLocaleString("en-IN")}</span>
+                    <div className="mt-4 pt-4 border-t border-slate-100 flex items-center text-xs">
+                      <span className="text-slate-600 font-medium">{boysCount} Boys</span>
+                      <span className="text-slate-300 mx-2">•</span>
+                      <span className="text-slate-600 font-medium">{girlsCount} Girls</span>
                     </div>
                   </div>
 
-                  {/* Pending Dues Card */}
-                  <div className="bg-white border-y sm:border border-slate-200/90 sm:rounded-2xl p-3 sm:p-4 shadow-xs">
+                  {/* Dues Card */}
+                  <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow">
                     <div className="flex justify-between items-start">
-                      <div className="space-y-1">
-                        <h4 className="text-2xl font-black text-amber-600 tracking-tight">₹{totalDues.toLocaleString("en-IN")}</h4>
-                        <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Pending Fee Dues</span>
+                      <div>
+                        <p className="text-sm font-medium text-slate-500">Pending Dues</p>
+                        <h3 className="text-2xl font-bold text-rose-600 mt-1">₹{totalDues.toLocaleString("en-IN")}</h3>
                       </div>
-                      <div className="h-10 w-10 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600 border border-amber-100 shrink-0">
-                        <AlertTriangle className="h-5 w-5" />
+                      <div className="p-2 bg-rose-50 rounded-lg">
+                        <AlertTriangle className="w-5 h-5 text-rose-600" />
                       </div>
                     </div>
-                    <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold text-amber-700">
-                      <span>{dueItems.filter(d => d.status === "UNPAID").length} Unpaid Dues</span>
-                      <button onClick={() => setActiveTab("defaulters")} className="underline cursor-pointer">View Report</button>
+                    <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between text-xs">
+                      <span className="text-slate-500">{dueItems.filter(d => d.status === "UNPAID").length} invoices</span>
+                      <button onClick={() => setActiveTab("defaulters")} className="text-indigo-600 font-semibold hover:underline cursor-pointer">View All</button>
                     </div>
                   </div>
 
-                  {/* Staff & Attendance Card */}
-                  <div className="bg-white border-y sm:border border-slate-200/90 sm:rounded-2xl p-3 sm:p-4 shadow-xs">
+                  {/* Staff Card */}
+                  <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow">
                     <div className="flex justify-between items-start">
-                      <div className="space-y-1">
-                        <h4 className="text-2xl font-black text-slate-900 tracking-tight">{staffUsersCount} Staff</h4>
-                        <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Attendance Rate: {attendanceRate}%</span>
+                      <div>
+                        <p className="text-sm font-medium text-slate-500">Active Staff</p>
+                        <h3 className="text-2xl font-bold text-slate-800 mt-1">{staffUsersCount}</h3>
                       </div>
-                      <div className="h-10 w-10 bg-teal-50 rounded-xl flex items-center justify-center text-teal-600 border border-teal-100 shrink-0">
-                        <UserCheck className="h-5 w-5" />
+                      <div className="p-2 bg-emerald-50 rounded-lg">
+                        <UserCheck className="w-5 h-5 text-emerald-600" />
                       </div>
                     </div>
-                    <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold text-slate-500">
-                      <span>Present Today: {presentCount}</span>
-                      <button onClick={() => setActiveTab("users")} className="underline cursor-pointer">Staff Users</button>
+                    <div className="mt-4 pt-4 border-t border-slate-100 flex items-center text-xs">
+                      <span className="text-slate-600 font-semibold">{attendanceRate}% attendance</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Finance Snapshot & Who Cut Receipt Tracker */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  {/* Finance Snapshot Card */}
-                  <div className="bg-white border border-slate-200/80 p-3 sm:p-6 sm:rounded-3xl rounded-2xl shadow-sm space-y-4 lg:col-span-2">
-                    <div className="border-b border-slate-100 pb-3 flex justify-between items-center">
-                      <h4 className="text-sm font-black text-slate-800 tracking-tight">Finance Snapshot</h4>
-                      <span className="text-[10px] font-bold text-slate-400">Total collection methods</span>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-                      <div className="p-4 bg-emerald-50/50 border border-emerald-100 rounded-2xl space-y-1">
-                        <span className="text-[9px] font-black text-emerald-600 block uppercase tracking-wider">Cash in Hand</span>
-                        <p className="text-lg font-black text-emerald-700">₹{cashTally.toLocaleString("en-IN")}</p>
-                      </div>
-                      <div className="p-4 bg-indigo-50/50 border border-indigo-100 rounded-2xl space-y-1">
-                        <span className="text-[9px] font-black text-indigo-600 block uppercase tracking-wider">UPI Collections</span>
-                        <p className="text-lg font-black text-indigo-700">₹{upiTally.toLocaleString("en-IN")}</p>
-                      </div>
-                      <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
-                        <span className="text-[9px] font-black text-slate-500 block uppercase tracking-wider">Bank / Cheque</span>
-                        <p className="text-lg font-black text-slate-700">₹{bankTally.toLocaleString("en-IN")}</p>
+                  {/* Chart Section */}
+                  <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col">
+                    <div className="flex justify-between items-start mb-6">
+                      <div>
+                        <h3 className="text-base font-bold text-slate-800">Revenue Overview</h3>
+                        <p className="text-xs text-slate-500 mt-1">Session 2026-27</p>
                       </div>
                     </div>
-
-                    <div className="pt-3 flex justify-between text-xs font-semibold text-slate-500">
-                      <span>Monthly Total: <strong className="text-slate-800 font-bold">₹{monthlyTotal.toLocaleString("en-IN")}</strong></span>
-                      <span>Total Sales Volume: <strong className="text-indigo-650 font-bold">₹{totalSales.toLocaleString("en-IN")}</strong></span>
-                    </div>
-                  </div>
-
-                  {/* Who Cut the Receipt Tracker */}
-                  <div className="bg-white border border-slate-200/80 p-3 sm:p-6 sm:rounded-3xl rounded-2xl shadow-sm space-y-4">
-                    <div className="border-b border-slate-100 pb-3">
-                      <h4 className="text-sm font-black text-slate-800 tracking-tight">Collection Logs By User</h4>
-                    </div>
-
-                    <div className="space-y-3 max-h-[170px] overflow-y-auto pr-1">
-                      {collectorsList.map((col, idx) => (
-                        <div key={idx} className="flex items-center justify-between p-2.5 bg-slate-50 rounded-2xl border border-slate-100">
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-bold text-slate-800 truncate">{col.name}</p>
-                            <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">{col.role}</p>
-                          </div>
-                          <div className="text-right shrink-0">
-                            <p className="text-xs font-black text-slate-800">₹{col.total.toLocaleString("en-IN")}</p>
-                            <p className="text-[9px] text-slate-400 font-bold">{col.count} receipts</p>
-                          </div>
-                        </div>
-                      ))}
-                      {collectorsList.length === 0 && (
-                        <p className="text-center py-6 text-xs text-slate-400 font-semibold">No collections logged yet.</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Revenue Overview Monthly Chart & Student Per Class */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  {/* Revenue Overview Monthly Chart */}
-                  <div className="lg:col-span-2 bg-white border border-slate-200/80 p-3 sm:p-6 sm:rounded-3xl rounded-2xl shadow-sm space-y-4">
-                    <div className="border-b border-slate-100 pb-3 flex justify-between items-center">
-                      <h4 className="text-sm font-black text-slate-800 tracking-tight">Revenue Overview (Monthly Graph)</h4>
-                      <span className="text-[10px] text-slate-400 font-bold">Session 2026-27</span>
-                    </div>
-
-                    <div className="h-64 w-full flex items-end justify-between gap-2 pt-4 px-2 select-none">
+                    <div className="flex-1 min-h-[200px] flex items-end justify-between gap-2 relative mt-4">
+                      {/* Grid Lines */}
+                      <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
+                        {[...Array(5)].map((_, i) => (
+                          <div key={i} className="w-full h-px bg-slate-100" />
+                        ))}
+                      </div>
                       {monthsOrder.map((m) => {
                         const val = monthlyRevenue[m] || 0;
                         const pct = maxRev > 0 ? (val / maxRev) * 100 : 0;
                         return (
-                          <div key={m} className="flex-1 flex flex-col items-center gap-2 group relative">
-                            {/* Value Tooltip */}
-                            <div className="absolute bottom-full mb-2 bg-slate-900 text-white text-[9px] font-black py-1 px-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-md z-10 whitespace-nowrap">
+                          <div key={m} className="flex-1 flex flex-col items-center gap-2 group relative z-10 h-full justify-end">
+                            <div className="absolute bottom-full mb-2 opacity-0 group-hover:opacity-100 bg-slate-800 text-white text-[10px] font-medium py-1 px-2 rounded shadow-sm whitespace-nowrap pointer-events-none transition-opacity">
                               ₹{val.toLocaleString("en-IN")}
                             </div>
-                            {/* Bar */}
-                            <div className="w-full bg-slate-50 border border-slate-100 rounded-xl h-44 flex items-end overflow-hidden">
+                            <div className="w-full max-w-[32px] bg-indigo-50 rounded-t-md h-full relative flex items-end overflow-hidden">
                               <div 
-                                className="w-full bg-gradient-to-t from-indigo-500 to-indigo-655 hover:from-indigo-655 hover:to-indigo-700 transition-all rounded-t-lg" 
-                                style={{ height: `${Math.max(pct, 4)}%` }} 
+                                className="w-full bg-indigo-500 group-hover:bg-indigo-600 transition-colors rounded-t-md" 
+                                style={{ height: `${Math.max(pct, 2)}%` }} 
                               />
                             </div>
-                            {/* Label */}
-                            <span className="text-[9px] font-black text-slate-455 uppercase tracking-wider">{m}</span>
+                            <span className="text-[10px] text-slate-500 font-medium uppercase">{m}</span>
                           </div>
                         );
                       })}
                     </div>
                   </div>
-                  {/* Attendance Overview gauge card */}
-                  <div className="bg-white border border-slate-200/80 p-3 sm:p-6 sm:rounded-3xl rounded-2xl shadow-sm space-y-4">
-                    <div className="border-b border-slate-100 pb-3">
-                      <h4 className="text-sm font-black text-slate-800 tracking-tight">Attendance Overview</h4>
+
+                  {/* Quick Actions */}
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
+                    <div className="p-5 border-b border-slate-100 bg-slate-50/50">
+                      <h3 className="text-base font-bold text-slate-800">Quick Actions</h3>
+                      <p className="text-xs text-slate-500 mt-1">Frequently used shortcuts</p>
                     </div>
+                    <div className="p-4 flex-1 grid grid-cols-2 gap-3 bg-white">
+                      {[
+                        { tab: "collect", icon: CreditCard, title: "Collect Fees" },
+                        { tab: "students", icon: PlusCircle, title: "Add Student" },
+                        { tab: "marks", icon: BookOpen, title: "Feed Marks" },
+                        { tab: "defaulters", icon: AlertTriangle, title: "Fee Dues" },
+                        { tab: "notices", icon: Bell, title: "Post Notice" },
+                        { tab: "idcards", icon: FileText, title: "ID Cards" },
+                      ].map((btn, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => setActiveTab(btn.tab)}
+                          className="flex flex-col items-center justify-center gap-2 p-3 rounded-xl border border-slate-100 bg-slate-50 hover:bg-white hover:border-indigo-200 hover:shadow-sm hover:text-indigo-600 text-slate-600 transition-all cursor-pointer"
+                        >
+                          <btn.icon className="w-5 h-5" />
+                          <span className="text-xs font-semibold">{btn.title}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
 
-                    <div className="flex flex-col items-center justify-center py-4 space-y-4">
-                      {/* Gauge Indicator */}
-                      <div className="relative h-28 w-28 flex items-center justify-center">
-                        <svg className="w-full h-full transform -rotate-90">
-                          <circle cx="56" cy="56" r="48" fill="none" stroke="#f1f5f9" strokeWidth="10" />
-                          <circle cx="56" cy="56" r="48" fill="none" stroke="#4f46e5" strokeWidth="10" strokeDasharray={301.6} strokeDashoffset={301.6 - (301.6 * attendanceRate) / 100} strokeLinecap="round" className="transition-all duration-500" />
-                        </svg>
-                        <div className="absolute flex flex-col items-center justify-center">
-                          <span className="text-2xl font-black text-slate-800">{attendanceRate}%</span>
-                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Rate</span>
-                        </div>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Daily Tally */}
+                  <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+                    <h3 className="text-base font-bold text-slate-800 mb-4">Today's Collection</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                      <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/80">
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Cash</p>
+                        <p className="text-xl font-bold text-slate-800">₹{todayCash.toLocaleString("en-IN")}</p>
                       </div>
-
-                      <div className="w-full grid grid-cols-2 gap-2 text-[10px] font-bold text-slate-500">
-                        <div className="flex items-center gap-1.5 p-1.5 bg-slate-50 rounded-xl">
-                          <span className="h-2 w-2 rounded-full bg-indigo-600 shrink-0" />
-                          <span>Present: {presentCount || 0}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 p-1.5 bg-slate-50 rounded-xl">
-                          <span className="h-2 w-2 rounded-full bg-rose-500 shrink-0" />
-                          <span>Absent: {absentCount || 0}</span>
-                        </div>
+                      <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/80">
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">UPI</p>
+                        <p className="text-xl font-bold text-slate-800">₹{todayUpi.toLocaleString("en-IN")}</p>
                       </div>
+                      <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/80">
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Bank</p>
+                        <p className="text-xl font-bold text-slate-800">₹{todayBank.toLocaleString("en-IN")}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between p-4 rounded-xl bg-indigo-50 border border-indigo-100">
+                      <span className="text-sm font-semibold text-indigo-900">Total Today</span>
+                      <span className="text-2xl font-bold text-indigo-700">₹{todayTotal.toLocaleString("en-IN")}</span>
                     </div>
                   </div>
 
-                  {/* Upcoming Birthday of Students */}
-                  <div className="bg-white border border-slate-200/80 p-3 sm:p-6 sm:rounded-3xl rounded-2xl shadow-sm space-y-4 lg:col-span-2">
-                    <div className="border-b border-slate-100 pb-3 flex justify-between items-center">
-                      <h4 className="text-sm font-black text-slate-800 tracking-tight">Upcoming Birthdays This Month</h4>
-                      <span className="text-[10px] text-slate-455 font-bold uppercase">Happy Birthday! 🎂</span>
+                  {/* Top Collectors */}
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col h-[340px]">
+                    <div className="p-5 border-b border-slate-100 bg-slate-50/50 shrink-0">
+                      <h3 className="text-base font-bold text-slate-800">Top Collectors</h3>
                     </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[190px] overflow-y-auto pr-1">
-                      {upcomingBirthdays.map((s) => (
-                        <div key={s.id} className="flex items-center gap-3 p-3 bg-gradient-to-r from-amber-50 to-orange-50/30 border border-amber-100/60 rounded-2xl">
-                          <div className="h-10 w-10 bg-amber-100 text-amber-800 rounded-xl flex flex-col items-center justify-center shrink-0 border border-amber-200 select-none">
-                            <span className="text-xs font-black leading-none">{s.day}</span>
-                            <span className="text-[8px] font-bold uppercase mt-0.5">{s.month}</span>
+                    <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                      {collectorsList.map((col, idx) => (
+                        <div key={idx} className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-100 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-sm">
+                              {col.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-slate-800">{col.name}</p>
+                              <p className="text-[10px] font-semibold text-slate-400 uppercase">{col.role}</p>
+                            </div>
                           </div>
-                          <div className="min-w-0 flex-1">
-                            <h5 className="text-xs font-bold text-slate-800 truncate">{s.name}</h5>
-                            <p className="text-[10px] text-slate-400 font-semibold">Class {s.classSection}</p>
+                          <div className="text-right">
+                            <p className="text-sm font-bold text-slate-800">₹{col.total.toLocaleString("en-IN")}</p>
+                            <p className="text-xs text-slate-500">{col.count} receipts</p>
                           </div>
                         </div>
                       ))}
-                      {upcomingBirthdays.length === 0 && (
-                        <p className="col-span-2 text-center py-8 text-xs text-slate-405 font-semibold">No student birthdays registered this month.</p>
+                      {collectorsList.length === 0 && (
+                        <div className="p-6 text-center text-sm text-slate-400">No collections today.</div>
                       )}
                     </div>
                   </div>
                 </div>
-              </>
+
+                {/* Birthdays */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+                  <h3 className="text-base font-bold text-slate-800 mb-4">Upcoming Birthdays</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {upcomingBirthdays.map((s) => (
+                      <div key={s.id} className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 hover:border-slate-200 bg-slate-50 transition-colors">
+                        <div className="w-10 h-10 rounded-full bg-white border border-slate-200 text-slate-700 flex items-center justify-center font-bold shadow-sm">
+                          {s.day}
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-slate-800">{s.name}</p>
+                          <p className="text-xs text-slate-500 font-medium">Class {s.classSection}</p>
+                        </div>
+                      </div>
+                    ))}
+                    {upcomingBirthdays.length === 0 && (
+                      <p className="col-span-full py-6 text-center text-sm text-slate-400">No birthdays this month.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
             );
           })()}
         </div>

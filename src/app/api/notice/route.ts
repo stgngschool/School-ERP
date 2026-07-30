@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { cookies } from "next/headers";
-import { verifyToken } from "@/lib/auth";
+import { verifyToken, getAuthUser } from "@/lib/auth";
 
 export async function GET() {
   try {
@@ -25,6 +25,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const authUser = await getAuthUser(request);
+  if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   try {
     const { title, content, target } = await request.json();
 
@@ -32,21 +35,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Title and content are required." }, { status: 400 });
     }
 
-    const cookieStore = await cookies();
-    const token = cookieStore.get("auth_token")?.value;
-    let creatorUserId = "";
-
-    if (token) {
-      const decoded = verifyToken(token);
-      if (decoded) {
-        creatorUserId = decoded.userId;
-      }
-    }
-
-    if (!creatorUserId) {
-      const admin = await db.user.findFirst({ where: { role: "ADMIN" } });
-      creatorUserId = admin?.id || "";
-    }
+    let creatorUserId = authUser.userId;
 
     const notice = await db.notice.create({
       data: {
