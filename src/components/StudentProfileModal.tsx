@@ -161,7 +161,7 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
         const existingIndex = prevMarks.findIndex(
           (m: any) => m.subject.toLowerCase() === newSubject.toLowerCase() && m.examName === newExamName
         );
-        let updatedMarks = [...prevMarks];
+        const updatedMarks = [...prevMarks];
         const newMarkObj = {
           id: json.mark.id,
           subject: json.mark.subject,

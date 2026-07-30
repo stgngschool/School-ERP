@@ -2916,6 +2916,7 @@ export default function AdminDashboard() {
                       </h4>
                       <p className="text-[10px] text-slate-500 font-semibold mt-0.5">
                         Generate or update monthly fee ledger charges for a single student, a specific class, or all active students.
+                        <span className="block mt-1 text-amber-600 font-bold">⚠️ Note: This is a fallback utility. Regular monthly bills are auto-generated when you save the Fee Structure Matrix!</span>
                       </p>
                     </div>
                   </div>
@@ -3176,8 +3177,12 @@ export default function AdminDashboard() {
                         Class &times; Fee Type Amount Matrix
                       </h3>
                       <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
-                        Enter the amount (Rs.) for each class and fee type, then click Save. The billing months will be auto-generated.
+                        Enter the amount (Rs.) for each class and fee type, then click Save.
                       </p>
+                      <div className="mt-2 bg-amber-50/80 border border-amber-200/60 p-2 rounded-lg text-[10px] text-amber-700 font-bold flex items-start gap-1.5 animate-fade-in shadow-sm">
+                        <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                        <p>Saving this matrix instantly auto-generates & updates the 12-month ledger bills for ALL active students in the class! You do NOT need to run the manual generator.</p>
+                      </div>
                     </div>
                     {structSuccess && (
                       <div className="flex items-center gap-2 bg-green-50 text-green-700 py-1.5 px-3 rounded-lg border border-green-200 text-[10px] font-bold animate-fade-in">
@@ -3341,7 +3346,10 @@ export default function AdminDashboard() {
                           </span>
                         ))}
                       </div>
-                      <p className="text-[9px] text-slate-400 font-semibold mt-1.5">The system automatically generates these 12 monthly bills &mdash; no manual entry required.</p>
+                      <p className="text-[9px] text-slate-500 font-bold mt-2 flex items-start gap-1 bg-emerald-50/50 p-1.5 rounded-lg border border-emerald-100">
+                        <CheckCircle className="h-3.5 w-3.5 text-emerald-500 shrink-0" /> 
+                        <span>The system automatically generates and updates these 12 monthly bills in the background upon saving the matrix &mdash; no manual generation required!</span>
+                      </p>
                     </div>
                   )}
                 </div>

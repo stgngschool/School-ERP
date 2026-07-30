@@ -14,7 +14,7 @@ const EXAM_MONTHS = ["October", "March", "May"];
  * Helper to normalize charge description keys so "Auto-Assigned: July Tuition Fee"
  * and "Assigned: Tuition Fee - July 2026-2027" normalize to the same key "tuition fee_july".
  */
-export function getNormalizedChargeKey(description: string, feeHeadName: string): string {
+function getNormalizedChargeKey(description: string, feeHeadName: string): string {
   const descLower = description.toLowerCase();
   const headLower = feeHeadName.toLowerCase().trim();
   for (const month of ACADEMIC_MONTHS) {

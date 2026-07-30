@@ -104,6 +104,11 @@ export default function AppLayout({ children }: AppLayoutProps) {
   // Mobile states
   const [showMoreSheet, setShowMoreSheet] = useState(false);
   const [showNoticeSheet, setShowNoticeSheet] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Desktop states
   const [megaMenuOpen, setMegaMenuOpen] = useState(false);
@@ -155,7 +160,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
     TEACHER: "bg-amber-500",
     PARENT: "bg-rose-500",
   };
-  const roleBadgeColor = roleColors[activeRole || ""] || "bg-slate-500";
+  const roleBadgeColor = mounted ? (roleColors[activeRole || ""] || "bg-slate-500") : "bg-slate-500";
 
   // Active tab label for mobile header
   const activeNavItem = navItems.find((i) => i.tab === activeTab) || navItems[0];
@@ -179,11 +184,11 @@ export default function AppLayout({ children }: AppLayoutProps) {
         {/* User Profile Card */}
         <div className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-100 rounded-2xl mb-6 shrink-0">
           <div className={`flex h-8 w-8 items-center justify-center rounded-full ${roleBadgeColor} text-white font-bold text-xs shrink-0`}>
-            {user?.name?.slice(0, 1) || "U"}
+            {mounted ? (user?.name?.slice(0, 1) || "U") : "U"}
           </div>
           <div className="min-w-0 flex-1">
-            <h4 className="text-xs font-bold text-slate-800 truncate">{user?.name || "System User"}</h4>
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{activeRole}</p>
+            <h4 className="text-xs font-bold text-slate-800 truncate">{mounted ? (user?.name || "System User") : "System User"}</h4>
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{mounted ? activeRole : ""}</p>
           </div>
           <button
             onClick={handleLogout}
@@ -196,7 +201,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
         {/* Navigation */}
         <nav className="flex-1 space-y-1 overflow-y-auto pr-1 select-none">
-          {navItems.map((item, idx) => {
+          {mounted && navItems.map((item, idx) => {
             const Icon = item.icon;
             const isActive = activeTab === item.tab;
             const showCategoryHeader = idx === 0 || navItems[idx - 1].category !== item.category;
@@ -245,7 +250,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
           <img src="/logo.png" alt="GNG" className="h-8 w-8 rounded-full object-contain border border-slate-100 bg-white shrink-0" />
           <div className="min-w-0">
             <p className="font-black text-[11px] text-slate-800 leading-tight truncate">
-              {activeNavItem?.name || "Dashboard"}
+              {mounted ? (activeNavItem?.name || "Dashboard") : "Dashboard"}
             </p>
             <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">St. G.N.G. School</p>
           </div>
@@ -268,7 +273,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
           {/* Active Role Badge */}
           <div className={`h-9 px-3 flex items-center gap-1.5 rounded-xl text-white text-[10px] font-black ${roleBadgeColor}`}>
             <Shield className="h-3.5 w-3.5" />
-            <span>{activeRole}</span>
+            <span>{mounted ? activeRole : ""}</span>
           </div>
 
           {/* Mobile Top Header Logout Button */}
@@ -498,7 +503,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
           MOBILE BOTTOM NAVIGATION BAR
       ════════════════════════════════════════ */}
       <nav className="mobile-bottom-nav md:hidden" role="navigation" aria-label="Main navigation">
-        {bottomNavItems.map((item, idx) => {
+        {mounted && bottomNavItems.map((item, idx) => {
           const Icon = item.icon;
           const isActive = activeTab === item.tab;
           return (
@@ -518,7 +523,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
         })}
 
         {/* "More" button if there are extra nav items */}
-        {moreNavItems.length > 0 && (
+        {mounted && moreNavItems.length > 0 && (
           <button
             onClick={() => setShowMoreSheet(!showMoreSheet)}
             className={`bottom-nav-item ${moreNavItems.some(i => i.tab === activeTab) ? "active" : ""}`}
@@ -546,8 +551,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="space-y-1.5 max-h-[70vh] overflow-y-auto pr-1">
-              {navItems.map((item, idx) => {
+            <nav className="space-y-1 mt-2">
+              {mounted && navItems.map((item, idx) => {
                 const Icon = item.icon;
                 const isActive = activeTab === item.tab;
                 const showCategoryHeader = idx === 0 || navItems[idx - 1].category !== item.category;
@@ -573,7 +578,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                   </React.Fragment>
                 );
               })}
-            </div>
+            </nav>
           </div>
         </>
       )}

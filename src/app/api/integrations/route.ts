@@ -180,7 +180,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { action, id, config } = body;
 
-    let integrations = readIntegrationsData();
+    const integrations = readIntegrationsData();
     const targetIdx = integrations.findIndex((i: any) => i.id === id);
 
     if (targetIdx === -1 && action !== "RESET_ALL") {

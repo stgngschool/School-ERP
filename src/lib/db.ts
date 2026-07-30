@@ -5,7 +5,7 @@ import { initDailyCronJob } from "./cron";
 
 let basePrisma: PrismaClient;
 
-let connectionString = process.env.DATABASE_URL;
+const connectionString = process.env.DATABASE_URL;
 
 if (!connectionString) {
   throw new Error("Missing DATABASE_URL environment variable.");

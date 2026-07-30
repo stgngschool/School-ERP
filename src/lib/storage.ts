@@ -9,7 +9,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error("Missing Supabase configuration environment variables.");
 }
 
-export const supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+const supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
 
 /**
  * Uploads a file to a Supabase storage bucket, falling back to local public storage if the bucket doesn't exist.

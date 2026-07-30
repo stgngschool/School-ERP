@@ -35,7 +35,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Title and content are required." }, { status: 400 });
     }
 
-    let creatorUserId = authUser.userId;
+    const creatorUserId = authUser.userId;
 
     const notice = await db.notice.create({
       data: {

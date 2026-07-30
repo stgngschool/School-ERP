@@ -103,7 +103,7 @@ export default function MarksFeedingConsole() {
       );
 
       if (existingMark) {
-        let initialBreakdown: { [key: string]: string } = {};
+        const initialBreakdown: { [key: string]: string } = {};
         if (existingMark.breakdown && typeof existingMark.breakdown === "object") {
           Object.entries(existingMark.breakdown).forEach(([k, v]) => {
             initialBreakdown[k] = v !== null && v !== undefined ? v.toString() : "";

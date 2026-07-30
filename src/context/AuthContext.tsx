@@ -4,7 +4,7 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 import { useAuthLogic } from "../hooks/useAuthLogic";
 
 export type Role = "ADMIN" | "ACCOUNTANT" | "TEACHER" | "PARENT";
-export type UserStatus = "ACTIVE" | "BLOCKED";
+type UserStatus = "ACTIVE" | "BLOCKED";
 export type AttendanceStatus = "PRESENT" | "ABSENT" | "LATE" | "LEAVE";
 export type LeaveStatus = "PENDING" | "APPROVED" | "REJECTED";
 
@@ -411,7 +411,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshData = useCallback(async (targetUser?: MockUser | null) => {
     const userToFetch = targetUser !== undefined ? targetUser : user;
     if (!userToFetch) {
-      setSchoolInfo(null);
+      setSchoolInfo({
+        name: "Loading School Profile...",
+        address: "",
+        phone: "",
+        email: "",
+        upiId: "",
+        upiMerchantName: "",
+        enableTransport: true,
+        enableLateFee: true,
+        lateFeeGraceDays: 10,
+        lateFeeAmount: 50,
+        lateFeeType: "FLAT",
+        exams: [],
+        examConfig: {},
+      });
       setDueItems([]);
       setAttendances([]);
       setHomeworks([]);
