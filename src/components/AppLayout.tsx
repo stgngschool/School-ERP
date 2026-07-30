@@ -484,7 +484,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
         )}
 
         {/* Main Content */}
-        <main className="flex-1 p-0 sm:p-4 md:p-5 lg:p-6 xl:p-8 pb-28 md:pb-8 overflow-y-auto overflow-x-hidden min-w-0 max-w-full touch-scroll-y mobile-edge-grid bg-white md:bg-transparent">
+        <main className="flex-1 px-3 pt-3 pb-28 sm:p-4 md:p-5 lg:p-6 xl:p-8 md:pb-8 overflow-y-auto overflow-x-hidden min-w-0 max-w-full touch-scroll-y  bg-white md:bg-transparent">
           {children}
         </main>
       </div>

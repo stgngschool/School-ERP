@@ -153,7 +153,7 @@ const getGroupedReceiptItems = (items: any[]) => {
 export default function AdminDashboard() {
   const [itemsPerPage, setItemsPerPage] = useState(50);
   useEffect(() => {
-    const handleResize = () => setItemsPerPage(window.innerWidth < 768 ? 15 : 50);
+    const handleResize = () => setItemsPerPage(window.innerWidth < 768 ? 10 : 50);
     handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
@@ -4363,56 +4363,58 @@ export default function AdminDashboard() {
 
                   {/* STUDENT DIRECTORY TABLE */}
                   {(() => {
-                    const unpaidStudentIdsSet = new Set(dueItems.filter((d) => d.status === "UNPAID").map((d) => d.studentId));
+                    const unpaidStudentIdsSet = React.useMemo(() => new Set(dueItems.filter((d) => d.status === "UNPAID").map((d) => d.studentId)), [dueItems]);
 
-                    const filtered = students.filter((s: any) => {
-                      const q = dirSearch.trim().toLowerCase();
-                      const matchesSearch =
-                        !q ||
-                        s.name?.toLowerCase().includes(q) ||
-                        s.admissionNo?.toLowerCase().includes(q) ||
-                        (s.rollNumber && s.rollNumber.toLowerCase().includes(q)) ||
-                        (s.familyCode && s.familyCode.toLowerCase().includes(q)) ||
-                        (s.parentName && s.parentName.toLowerCase().includes(q)) ||
-                        (s.fatherMobile && s.fatherMobile.toLowerCase().includes(q)) ||
-                        (s.aadhaar && s.aadhaar.includes(q));
+                    const filtered = React.useMemo(() => {
+                      return students.filter((s: any) => {
+                        const q = dirSearch.trim().toLowerCase();
+                        const matchesSearch =
+                          !q ||
+                          s.name?.toLowerCase().includes(q) ||
+                          s.admissionNo?.toLowerCase().includes(q) ||
+                          (s.rollNumber && s.rollNumber.toLowerCase().includes(q)) ||
+                          (s.familyCode && s.familyCode.toLowerCase().includes(q)) ||
+                          (s.parentName && s.parentName.toLowerCase().includes(q)) ||
+                          (s.fatherMobile && s.fatherMobile.toLowerCase().includes(q)) ||
+                          (s.aadhaar && s.aadhaar.includes(q));
 
-                      const matchesClass = !dirClassFilter || s.class === dirClassFilter;
-                      const matchesSection = !dirSectionFilter || s.section === dirSectionFilter;
-                      const matchesFamily = !dirFamilyFilter || (s.familyCode && s.familyCode.toLowerCase().trim() === dirFamilyFilter.toLowerCase().trim());
-                      const matchesStatus = dirStatusFilter === "ALL" || (s.status || "ACTIVE") === dirStatusFilter;
+                        const matchesClass = !dirClassFilter || s.class === dirClassFilter;
+                        const matchesSection = !dirSectionFilter || s.section === dirSectionFilter;
+                        const matchesFamily = !dirFamilyFilter || (s.familyCode && s.familyCode.toLowerCase().trim() === dirFamilyFilter.toLowerCase().trim());
+                        const matchesStatus = dirStatusFilter === "ALL" || (s.status || "ACTIVE") === dirStatusFilter;
 
-                      const matchesRte =
-                        dirRteFilter === "ALL"
-                          ? true
-                          : dirRteFilter === "RTE"
-                          ? !!s.isRte
-                          : dirRteFilter === "NON_RTE"
-                          ? !s.isRte
-                          : dirRteFilter === "TRANSPORT"
-                          ? s.transportMode && s.transportMode !== "Self"
-                          : true;
+                        const matchesRte =
+                          dirRteFilter === "ALL"
+                            ? true
+                            : dirRteFilter === "RTE"
+                            ? !!s.isRte
+                            : dirRteFilter === "NON_RTE"
+                            ? !s.isRte
+                            : dirRteFilter === "TRANSPORT"
+                            ? s.transportMode && s.transportMode !== "Self"
+                            : true;
 
-                      const matchesCategory = dirCategoryFilter === "ALL" || (s.category || "General") === dirCategoryFilter;
+                        const matchesCategory = dirCategoryFilter === "ALL" || (s.category || "General") === dirCategoryFilter;
 
-                      let matchesDues = true;
-                      if (dirDuesFilter !== "ALL") {
-                        const hasDues = unpaidStudentIdsSet.has(s.id);
-                        matchesDues = dirDuesFilter === "HAS_DUES" ? hasDues : !hasDues;
-                      }
+                        let matchesDues = true;
+                        if (dirDuesFilter !== "ALL") {
+                          const hasDues = unpaidStudentIdsSet.has(s.id);
+                          matchesDues = dirDuesFilter === "HAS_DUES" ? hasDues : !hasDues;
+                        }
 
-                      return matchesSearch && matchesClass && matchesSection && matchesFamily && matchesStatus && matchesRte && matchesCategory && matchesDues;
-                    });
+                        return matchesSearch && matchesClass && matchesSection && matchesFamily && matchesStatus && matchesRte && matchesCategory && matchesDues;
+                      });
+                    }, [students, dirSearch, dirClassFilter, dirSectionFilter, dirFamilyFilter, dirStatusFilter, dirRteFilter, dirCategoryFilter, dirDuesFilter, unpaidStudentIdsSet]);
 
                     const totalItems = filtered.length;
                     const totalPages = Math.ceil(totalItems / itemsPerPage);
                     const activePage = Math.min(currentPage, totalPages || 1);
                     const startIndex = (activePage - 1) * itemsPerPage;
-                    const paginatedStudents = filtered.slice(startIndex, startIndex + itemsPerPage);
+                    const paginatedStudents = React.useMemo(() => filtered.slice(startIndex, startIndex + itemsPerPage), [filtered, startIndex, itemsPerPage]);
 
                     return (
                       <>
-                        <div className="bg-white border-y sm:border sm:border-slate-200 sm:rounded-2xl overflow-hidden shadow-sm -mx-3 sm:mx-0">
+                        <div className="bg-white border border-slate-200/80 rounded-xl sm:rounded-2xl overflow-hidden shadow-sm">
 
                           {/* ── MOBILE: Select All Bar ── */}
                           <div className="flex sm:hidden items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-700">
@@ -4736,7 +4738,7 @@ export default function AdminDashboard() {
 
                         {/* PAGINATION CONTROLS */}
                         {totalPages > 1 && (
-                          <div className="flex flex-col sm:flex-row items-center justify-between bg-white border-y sm:border sm:border-slate-200 p-3 sm:p-4 -mx-4 sm:mx-0 sm:rounded-2xl sm:shadow-sm mt-3 text-xs font-bold text-slate-500 gap-4">
+                          <div className="flex flex-col sm:flex-row items-center justify-between bg-white border border-slate-200/80 p-3 sm:p-4 rounded-xl sm:rounded-2xl shadow-sm mt-3 text-xs font-bold text-slate-500 gap-4">
                             
                             {/* Mobile Pagination */}
                             <div className="flex sm:hidden w-full items-center justify-between">
