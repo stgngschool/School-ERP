@@ -28,6 +28,7 @@ export async function GET(request: Request) {
         name: true,
         admissionNumber: true,
         rollNumber: true,
+        gender: true,
         fatherName: true,
         fatherMobile: true,
         isRte: true,
@@ -57,6 +58,7 @@ export async function GET(request: Request) {
       name: s.name,
       admissionNo: s.admissionNumber,
       rollNo: s.rollNumber || "",
+      gender: s.gender || "",
       fatherName: s.fatherName || "",
       fatherMobile: s.fatherMobile || "",
       isRte: s.isRte,
@@ -133,6 +135,9 @@ export async function POST(request: Request) {
       previousDues,
       concessionId,
       startingFeeMonth,
+      admissionNo: customAdmissionNo,
+      rollNo: customRollNo,
+      gender,
     } = body;
 
     if (!name || !classVal || !section || !fatherName || !fatherMobile || !address) {
@@ -226,18 +231,38 @@ export async function POST(request: Request) {
       });
     }
 
-    const totalStudents = await db.student.count();
-    const rollCount = await db.student.count({
-      where: { classId: classObj.id },
-    });
-    const rollNo = String(rollCount + 1).padStart(2, "0");
-    const admissionNo = await getNextAdmissionNumber();
+    // Validate Admission Number logic
+    let admissionNo = (customAdmissionNo || "").trim();
+    if (admissionNo) {
+      const existing = await db.student.findUnique({
+        where: { admissionNumber: admissionNo },
+      });
+      if (existing) {
+        return NextResponse.json(
+          { error: `Admission Number "${admissionNo}" is already taken.` },
+          { status: 400 }
+        );
+      }
+    } else {
+      admissionNo = await getNextAdmissionNumber();
+    }
+
+    // Validate Roll Number logic
+    let rollNumber = (customRollNo || "").trim();
+    if (!rollNumber) {
+      const rollCount = await db.student.count({
+        where: { classId: classObj.id },
+      });
+      const rollNoStr = String(rollCount + 1).padStart(2, "0");
+      rollNumber = `${classVal}-${section}-${rollNoStr}`;
+    }
 
     const student = await db.student.create({
       data: {
         name,
         admissionNumber: admissionNo,
-        rollNumber: `${classVal}-${section}-${rollNo}`,
+        rollNumber,
+        gender: gender || null,
         dob: dob ? new Date(dob) : null,
         aadhaar: aadhaar || null,
         disability: disability || null,
@@ -361,10 +386,26 @@ export async function PATCH(request: Request) {
         include: { parentProfile: true }
       });
 
+      // Check admissionNumber uniqueness if changed
+      if (data.admissionNo && data.admissionNo !== student?.admissionNumber) {
+        const existing = await db.student.findUnique({
+          where: { admissionNumber: data.admissionNo },
+        });
+        if (existing) {
+          return NextResponse.json(
+            { error: `Admission Number "${data.admissionNo}" is already taken.` },
+            { status: 400 }
+          );
+        }
+      }
+
       const updated = await db.student.update({
         where: { id: targetId },
         data: {
           name: data.name,
+          admissionNumber: data.admissionNo || undefined,
+          rollNumber: data.rollNo || undefined,
+          gender: data.gender !== undefined ? data.gender : undefined,
           dob: data.dob ? new Date(data.dob) : null,
           aadhaar: data.aadhaar || null,
           disability: data.disability || null,

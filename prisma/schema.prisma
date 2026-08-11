@@ -117,6 +117,7 @@ model Student {
   name            String
   admissionNumber String          @unique
   rollNumber      String?
+  gender          String?
   dob             DateTime?
   aadhaar         String?
   disability      String?

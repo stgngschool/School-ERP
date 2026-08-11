@@ -248,6 +248,11 @@ export default function AdminDashboard() {
   const [stdBusRoute, setStdBusRoute] = useState("");
   const [stdBusStop, setStdBusStop] = useState("");
   
+  // Custom new fields
+  const [stdAdmissionNo, setStdAdmissionNo] = useState("");
+  const [stdRollNo, setStdRollNo] = useState("");
+  const [stdGender, setStdGender] = useState("");
+  
   // Sibling Family Linkage Setup State
   const [stdFamilyIdMode, setStdFamilyIdMode] = useState<"auto" | "existing">("auto");
   const [stdSelectedFamilyCode, setStdSelectedFamilyCode] = useState("");
@@ -551,6 +556,9 @@ export default function AdminDashboard() {
   const [editBusRoute, setEditBusRoute] = useState("");
   const [editBusStop, setEditBusStop] = useState("");
   const [editIsRte, setEditIsRte] = useState(false);
+  const [editAdmissionNo, setEditAdmissionNo] = useState("");
+  const [editRollNo, setEditRollNo] = useState("");
+  const [editGender, setEditGender] = useState("");
   
   // Promotion Fields
   const [promoteClass, setPromoteClass] = useState("");
@@ -973,6 +981,9 @@ export default function AdminDashboard() {
       familyCode: stdFamilyIdMode === "existing" ? stdSelectedFamilyCode : undefined,
       isRte: stdIsRte,
       startingFeeMonth: stdStartingFeeMonth,
+      admissionNo: stdAdmissionNo,
+      rollNo: stdRollNo,
+      gender: stdGender,
     };
 
     addStudent(studentData, initialDues);
@@ -1012,6 +1023,9 @@ export default function AdminDashboard() {
     setStdTransportMode("Self");
     setStdBusRoute("");
     setStdBusStop("");
+    setStdAdmissionNo("");
+    setStdRollNo("");
+    setStdGender("");
 
     setStdSuccess(true);
     setTimeout(() => setStdSuccess(false), 3000);
@@ -1263,6 +1277,9 @@ export default function AdminDashboard() {
   const handleDownloadCSVTemplate = () => {
     const headers = [
       "Student Name",
+      "Admission Number",
+      "Roll Number",
+      "Gender",
       "DOB",
       "Aadhaar number",
       "Disability",
@@ -1296,6 +1313,9 @@ export default function AdminDashboard() {
     ];
     const sampleRow = [
       "Rajesh Sharma",
+      "ADM-2026-0001",
+      "10-A-01",
+      "Boy",
       "2015-08-14",
       "123456789012",
       "No",
@@ -1373,6 +1393,9 @@ export default function AdminDashboard() {
 
           const mappedRecord = {
             name: record["Student Name"],
+            admissionNo: record["Admission Number"] || "",
+            rollNo: record["Roll Number"] || "",
+            gender: record["Gender"] || "",
             dob: record["DOB"],
             aadhaar: record["Aadhaar number"],
             disability: record["Disability"] || "No",
@@ -1754,13 +1777,15 @@ export default function AdminDashboard() {
         <div className="space-y-5 animate-fade-in font-sans">
           {(() => {
             const girlsFirstNames = ["diya", "anya", "ananya", "kiara", "priya", "sneha", "pooja", "neha", "riya", "simran", "kajal", "preeti", "shalini", "deepika", "kiran", "aisha", "jyoti", "meera", "geeta", "rekha", "sunita", "anita", "kavita", "mamta", "babita", "sapna", "poonam", "usha"];
-            const studentGenders = students.map(s => {
-              const firstName = s.name.split(" ")[0].toLowerCase();
-              const isGirl = girlsFirstNames.includes(firstName);
-              return { ...s, gender: isGirl ? "GIRL" : "BOY" };
-            });
             const totalStudents = students.length;
-            const girlsCount = studentGenders.filter(s => s.gender === "GIRL").length;
+            const girlsCount = students.filter(s => {
+              if (s.gender) {
+                const g = s.gender.toUpperCase();
+                return g === "FEMALE" || g === "GIRL";
+              }
+              const firstName = s.name.split(" ")[0].toLowerCase();
+              return girlsFirstNames.includes(firstName);
+            }).length;
             const boysCount = totalStudents - girlsCount;
 
             const newAdmissionsCount = students.filter(s => {
@@ -4680,6 +4705,9 @@ export default function AdminDashboard() {
                                                     setEditBusRoute(std.busRoute || "");
                                                     setEditBusStop(std.busStop || "");
                                                     setEditIsRte(!!std.isRte);
+                                                    setEditAdmissionNo(std.admissionNo || "");
+                                                    setEditRollNo(std.rollNo || "");
+                                                    setEditGender(std.gender || "");
                                                     
                                                     setShowEditModal(true);
                                                     setActiveMenuStudentId(null);
@@ -4867,6 +4895,42 @@ export default function AdminDashboard() {
                               onChange={(e) => setStdDob(e.target.value)}
                               className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
                             />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div>
+                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Admission Number</label>
+                            <input
+                              type="text"
+                              value={stdAdmissionNo}
+                              onChange={(e) => setStdAdmissionNo(e.target.value)}
+                              placeholder="e.g. ADM-2026-0001 (Optional)"
+                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Roll Number</label>
+                            <input
+                              type="text"
+                              value={stdRollNo}
+                              onChange={(e) => setStdRollNo(e.target.value)}
+                              placeholder="e.g. 10-A-01 (Optional)"
+                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Gender</label>
+                            <select
+                              value={stdGender}
+                              onChange={(e) => setStdGender(e.target.value)}
+                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 cursor-pointer"
+                            >
+                              <option value="">Select Gender</option>
+                              <option value="MALE">Male</option>
+                              <option value="FEMALE">Female</option>
+                              <option value="OTHER">Other</option>
+                            </select>
                           </div>
                         </div>
 
@@ -7479,6 +7543,9 @@ export default function AdminDashboard() {
                 e.preventDefault();
                 await editStudentDetails(selectedStudent.id, {
                   name: editName,
+                  admissionNo: editAdmissionNo,
+                  rollNo: editRollNo,
+                  gender: editGender,
                   dob: editDob,
                   aadhaar: editAadhaar,
                   disability: editDisability,
@@ -7527,6 +7594,37 @@ export default function AdminDashboard() {
                     onChange={(e) => setEditDob(e.target.value)}
                     className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
                   />
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Admission Number</label>
+                  <input
+                    type="text"
+                    value={editAdmissionNo}
+                    onChange={(e) => setEditAdmissionNo(e.target.value)}
+                    className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Roll Number</label>
+                  <input
+                    type="text"
+                    value={editRollNo}
+                    onChange={(e) => setEditRollNo(e.target.value)}
+                    className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Gender</label>
+                  <select
+                    value={editGender}
+                    onChange={(e) => setEditGender(e.target.value)}
+                    className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 cursor-pointer"
+                  >
+                    <option value="">Select Gender</option>
+                    <option value="MALE">Male</option>
+                    <option value="FEMALE">Female</option>
+                    <option value="OTHER">Other</option>
+                  </select>
                 </div>
                 <div>
                   <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Student Aadhaar Number</label>

@@ -444,6 +444,16 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
                           <p className="font-semibold text-slate-700 mt-0.5">{data.dob || "N/A"}</p>
                         </div>
                         <div>
+                          <p className="text-slate-400 font-bold">Gender</p>
+                          <p className="font-semibold text-slate-700 mt-0.5">
+                            {data.gender ? (
+                              data.gender.toUpperCase() === "MALE" || data.gender.toUpperCase() === "BOY" ? "Male" :
+                              data.gender.toUpperCase() === "FEMALE" || data.gender.toUpperCase() === "GIRL" ? "Female" :
+                              "Other"
+                            ) : "N/A"}
+                          </p>
+                        </div>
+                        <div>
                           <p className="text-slate-400 font-bold">Aadhaar Number</p>
                           <p className="font-semibold text-slate-700 mt-0.5">{data.aadhaar || "N/A"}</p>
                         </div>

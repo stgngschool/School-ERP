@@ -196,6 +196,9 @@ export async function POST(request: Request) {
         section,
         admissionNumber: providedAdmissionNo,
         admissionNo: providedAdmissionNoAlt,
+        rollNumber: providedRollNo,
+        rollNo: providedRollNoAlt,
+        gender,
       } = record;
 
       if (!name || !classVal || !section || (!fatherName && !fatherMobile)) continue;
@@ -232,19 +235,31 @@ export async function POST(request: Request) {
       existingAdmissionNumbersSet.add(admissionNo.toUpperCase());
 
       // Roll Number logic
-      const currentRollCount = (classRollMap.get(classObj.id) || 0) + 1;
-      classRollMap.set(classObj.id, currentRollCount);
-      const rollNumber = `${classNameClean}-${sectionClean}-${String(currentRollCount).padStart(2, "0")}`;
+      let rollNumber = (providedRollNo || providedRollNoAlt || "").toString().trim();
+      if (!rollNumber) {
+        const currentRollCount = (classRollMap.get(classObj.id) || 0) + 1;
+        classRollMap.set(classObj.id, currentRollCount);
+        rollNumber = `${classNameClean}-${sectionClean}-${String(currentRollCount).padStart(2, "0")}`;
+      }
 
       const dobDate = dob ? new Date(dob) : null;
       const admDateObj = admissionDate ? new Date(admissionDate) : null;
       const studentId = `std_${Date.now()}_${Math.floor(Math.random() * 1000000)}_${studentsToCreate.length}`;
+
+      const cleanGender = (() => {
+        if (!gender) return null;
+        const g = String(gender).trim().toUpperCase();
+        if (g === "MALE" || g === "M" || g === "BOY") return "MALE";
+        if (g === "FEMALE" || g === "F" || g === "GIRL") return "FEMALE";
+        return "OTHER";
+      })();
 
       studentsToCreate.push({
         id: studentId,
         name: String(name).trim(),
         admissionNumber: admissionNo,
         rollNumber,
+        gender: cleanGender,
         dob: dobDate && !isNaN(dobDate.getTime()) ? dobDate : null,
         aadhaar: aadhaar ? String(aadhaar).trim() : null,
         disability: disability ? String(disability).trim() : null,

@@ -79,6 +79,7 @@ export async function GET(
       name: student.name,
       admissionNo: student.admissionNumber,
       rollNo: student.rollNumber || "",
+      gender: student.gender || "",
       dob: student.dob ? student.dob.toISOString().split("T")[0] : "",
       aadhaar: student.aadhaar || "",
       disability: student.disability || "",

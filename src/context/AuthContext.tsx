@@ -77,6 +77,7 @@ export interface MockStudent {
   } | null;
   photoUrl?: string;
   isMarksheetClaimed?: boolean;
+  gender?: string;
 }
 
 export interface MockDueItem {
