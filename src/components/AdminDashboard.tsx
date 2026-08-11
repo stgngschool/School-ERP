@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import StudentProfileModal from "@/components/StudentProfileModal";
 import MarksFeedingConsole from "@/components/MarksFeedingConsole";
+import PrintMarksheets from "@/components/PrintMarksheets";
 import AttendanceConsole from "@/components/AttendanceConsole";
 import {
   Users,
@@ -198,7 +199,7 @@ export default function AdminDashboard() {
     refreshBilling,
   } = useAuth();
 
-  const validTabs = ["dashboard", "collect", "attendance", "marks", "defaulters", "ledger", "structures", "students", "users", "idcards", "notices", "school", "audit"];
+  const validTabs = ["dashboard", "collect", "attendance", "marks", "print_marksheets", "defaulters", "ledger", "structures", "students", "users", "idcards", "notices", "school", "audit"];
   React.useEffect(() => {
     if (!validTabs.includes(activeTab)) {
       setActiveTab("dashboard");
@@ -300,18 +301,13 @@ export default function AdminDashboard() {
   const [lateFeeMsg, setLateFeeMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/school")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data) {
-          setLateFeeEnabled(data.enableLateFee ?? false);
-          setLateFeeGraceDays(data.lateFeeGraceDays ?? 10);
-          setLateFeeAmount(data.lateFeeAmount ?? 50);
-          setLateFeeType(data.lateFeeType || "FLAT");
-        }
-      })
-      .catch(() => {});
-  }, []);
+    if (schoolInfo) {
+      setLateFeeEnabled(schoolInfo.enableLateFee ?? false);
+      setLateFeeGraceDays(schoolInfo.lateFeeGraceDays ?? 10);
+      setLateFeeAmount(schoolInfo.lateFeeAmount ?? 50);
+      setLateFeeType(schoolInfo.lateFeeType || "FLAT");
+    }
+  }, [schoolInfo]);
 
   const handleSaveLateFeeRules = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -682,27 +678,31 @@ export default function AdminDashboard() {
         setSelectedConfigExam(defaultExams[0]);
       }
       setSchoolExamConfig(schoolInfo.examConfig || {
-        "Unit-1": { "isSplit": false, "maxMarks": 20 },
-        "Unit-2": { "isSplit": false, "maxMarks": 20 },
-        "Half Yearly": {
-          "isSplit": true,
-          "maxMarks": 100,
+        "Unit-1": { 
+          "isSplit": true, 
+          "maxMarks": 20,
           "components": [
-            { "name": "Written Exam", "max": 80 },
             { "name": "Note Book", "max": 5 },
             { "name": "Sub. Enrich.", "max": 5 },
             { "name": "Pr. Act.", "max": 10 }
           ]
         },
-        "Annual": {
-          "isSplit": true,
-          "maxMarks": 100,
+        "Unit-2": { 
+          "isSplit": true, 
+          "maxMarks": 20,
           "components": [
-            { "name": "Written Exam", "max": 80 },
             { "name": "Note Book", "max": 5 },
             { "name": "Sub. Enrich.", "max": 5 },
             { "name": "Pr. Act.", "max": 10 }
           ]
+        },
+        "Half Yearly": {
+          "isSplit": false,
+          "maxMarks": 80
+        },
+        "Annual": {
+          "isSplit": false,
+          "maxMarks": 80
         }
       });
     }
@@ -1602,9 +1602,18 @@ export default function AdminDashboard() {
   const weeklyLabels = last7Days.map(date => new Date(date).toLocaleDateString("en-US", { weekday: "short" }));
   const monthlyLabels = last7Months.map(month => new Date(month + "-02").toLocaleDateString("en-US", { month: "short" }));
 
-  const handleSendSMS = (studentName: string, parentName: string, amount: number) => {
-    setAlertSuccessMsg(`Mock Alert sent to ${parentName} regarding ${studentName}'s pending dues of ₹${amount.toLocaleString("en-IN")}`);
-    setTimeout(() => setAlertSuccessMsg(""), 5000);
+  const handleSendWhatsApp = (studentName: string, parentName: string, amount: number, phone?: string) => {
+    const message = `Dear ${parentName}, this is a gentle reminder that your ward ${studentName} has pending fee dues of Rs. ${amount.toLocaleString("en-IN")}. Please clear the dues at the earliest. Thank you, School Admin.`;
+    const encodedMessage = encodeURIComponent(message);
+    
+    if (phone && phone.trim() !== "") {
+      const numericPhone = phone.replace(/\D/g, "");
+      // if it's 10 digits in India, prepend 91. If it starts with 91 or +91 it's fine.
+      const finalPhone = numericPhone.length === 10 ? `91${numericPhone}` : numericPhone;
+      window.open(`https://wa.me/${finalPhone}?text=${encodedMessage}`, '_blank');
+    } else {
+      window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
+    }
   };
 
   const [compressingStudentId, setCompressingStudentId] = useState<string | null>(null);
@@ -1982,6 +1991,7 @@ export default function AdminDashboard() {
                         { tab: "collect", icon: CreditCard, title: "Collect Fees" },
                         { tab: "students", icon: PlusCircle, title: "Add Student" },
                         { tab: "marks", icon: BookOpen, title: "Feed Marks" },
+                        { tab: "print_marksheets", icon: Printer, title: "Print Marksheets" },
                         { tab: "defaulters", icon: AlertTriangle, title: "Fee Dues" },
                         { tab: "notices", icon: Bell, title: "Post Notice" },
                         { tab: "idcards", icon: FileText, title: "ID Cards" },
@@ -2460,6 +2470,11 @@ export default function AdminDashboard() {
                                           <div>
                                             <div className="flex items-center flex-wrap gap-1.5">
                                               <span className="font-bold text-slate-800 text-xs">{due.name}</span>
+                                              {due.isCurrentSession === false && due.sessionName && (
+                                                <span className="inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-200 px-1.5 py-0.5 rounded leading-none">
+                                                  Past Due ({due.sessionName})
+                                                </span>
+                                              )}
                                               {due.totalPaid && due.totalPaid > 0 ? (
                                                 <span className="inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-100 px-1.5 py-0.5 rounded leading-none">
                                                   Partially Paid (₹{due.totalPaid} Paid)
@@ -3224,14 +3239,15 @@ export default function AdminDashboard() {
                   <div className="flex justify-between items-center">
                     <div>
                       <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider">
-                        Class &times; Fee Type Amount Matrix
+                        Fee Structure Matrix (Auto-Billing)
                       </h3>
-                      <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
-                        Enter the amount (Rs.) for each class and fee type, then click Save.
+                      <p className="text-[10px] text-slate-500 font-semibold mt-0.5">
+                        1. First set the "Global Default" fees and click Save. <br/>
+                        2. Then override amounts for specific classes if they differ, and save their rows.
                       </p>
-                      <div className="mt-2 bg-amber-50/80 border border-amber-200/60 p-2 rounded-lg text-[10px] text-amber-700 font-bold flex items-start gap-1.5 animate-fade-in shadow-sm">
-                        <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                        <p>Saving this matrix instantly auto-generates & updates the 12-month ledger bills for ALL active students in the class! You do NOT need to run the manual generator.</p>
+                      <div className="mt-2 bg-indigo-50/80 border border-indigo-200/60 p-2.5 rounded-lg text-[10px] text-indigo-700 font-bold flex items-start gap-1.5 animate-fade-in shadow-sm">
+                        <CheckCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                        <p>Saving a row instantly updates the 12-month billing ledger for all active students in that class. Existing unpaid amounts are adjusted automatically.</p>
                       </div>
                     </div>
                     {structSuccess && (
@@ -3282,10 +3298,12 @@ export default function AdminDashboard() {
                         </thead>
                         <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-700">
                           {/* Fallback Row */}
-                          <tr className="hover:bg-slate-50/50 bg-indigo-50/20">
-                            <td className="py-3 px-4">
-                              <div className="font-extrabold text-indigo-700 text-xs">All Classes</div>
-                              <div className="text-[9px] text-indigo-400 font-semibold">Fallback — if class-specific amount is not defined</div>
+                          <tr className="hover:bg-slate-50/50 bg-indigo-50/40 border-b-2 border-indigo-200 shadow-sm relative z-10">
+                            <td className="py-4 px-4 bg-indigo-100/30">
+                              <div className="font-black text-indigo-800 text-xs flex items-center gap-1.5">
+                                <Settings className="h-3.5 w-3.5" /> Global Default
+                              </div>
+                              <div className="text-[9px] text-indigo-600 font-bold mt-1 leading-tight">Applied to all classes unless overridden below</div>
                             </td>
                             {feeHeads.map((head) => (
                               <td key={head.name} className="py-2 px-4">
@@ -6129,19 +6147,23 @@ export default function AdminDashboard() {
                             checked={config.isSplit || false}
                             onChange={(e) => {
                               const checked = e.target.checked;
-                              const defaultComps = [
-                                { name: "Written Exam", max: 80 },
-                                { name: "Note Book", max: 5 },
-                                { name: "Sub. Enrich.", max: 5 },
-                                { name: "Pr. Act.", max: 10 }
-                              ];
+                              const isUnit = selectedConfigExam.includes("Unit");
+                              const defaultComps = isUnit 
+                                ? [
+                                    { name: "Note Book", max: 5 },
+                                    { name: "Sub. Enrich.", max: 5 },
+                                    { name: "Pr. Act.", max: 10 }
+                                  ]
+                                : [
+                                    { name: "Written Exam", max: 80 }
+                                  ];
                               setSchoolExamConfig((prev: any) => ({
                                 ...prev,
                                 [selectedConfigExam]: {
                                   ...prev[selectedConfigExam],
                                   isSplit: checked,
                                   components: checked ? defaultComps : [],
-                                  maxMarks: checked ? 100 : 100
+                                  maxMarks: checked ? (isUnit ? 20 : 80) : (isUnit ? 20 : 80)
                                 }
                               }));
                             }}
@@ -6690,6 +6712,10 @@ export default function AdminDashboard() {
             <MarksFeedingConsole />
           )}
 
+          {activeTab === "print_marksheets" && (
+            <PrintMarksheets />
+          )}
+
           {/* TAB 7: Unpaid Fee Defaulters Registry & Dues Report */}
           {activeTab === "defaulters" && (
             <div className="space-y-5">
@@ -6945,10 +6971,10 @@ export default function AdminDashboard() {
                               <Printer className="h-4 w-4 text-slate-500" /> Print Statement
                             </button>
                             <button
-                              onClick={() => handleSendSMS(std.name, std.parentName, totalDue)}
+                              onClick={() => handleSendWhatsApp(std.name, std.parentName, totalDue, std.fatherMobile || std.parentPhone)}
                               className="flex items-center gap-1.5 py-2 px-4 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold transition-all cursor-pointer shadow-sm"
                             >
-                              <Send className="h-4 w-4 text-emerald-600" /> Send Reminder
+                              <Send className="h-4 w-4 text-emerald-600" /> WhatsApp
                             </button>
                             <button
                               onClick={() => alert("Exporting statement...")}

@@ -396,7 +396,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [concessions, setConcessions] = useState<{ id: string; name: string; percentage: number; feeHeadName: string }[]>([]);
 
 
-  const apiFetch = async (url: string, options: RequestInit = {}, timeoutMs = 12000) => {
+  const apiFetch = async (url: string, options: RequestInit = {}, timeoutMs = 12000, useCache = false) => {
+    if (useCache && typeof window !== 'undefined') {
+      const cacheKey = '__api_cache_' + url;
+      const cachedStr = sessionStorage.getItem(cacheKey);
+      if (cachedStr) {
+        try {
+          const cached = JSON.parse(cachedStr);
+          if (Date.now() - cached.timestamp < 1000 * 60 * 5) return cached.data;
+        } catch(e) {}
+      }
+    }
     const controller = new AbortController();
     const tid = setTimeout(() => controller.abort(), timeoutMs);
     try {
@@ -408,7 +418,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       clearTimeout(tid);
       if (!res.ok) return null;
-      return await res.json();
+      const data = await res.json();
+      if (useCache && typeof window !== 'undefined') {
+        sessionStorage.setItem('__api_cache_' + url, JSON.stringify({ data, timestamp: Date.now() }));
+      }
+      return data;
     } catch (err) {
       clearTimeout(tid);
       return null;
@@ -458,7 +472,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const isStaff = userToFetch.role === "ADMIN" || userToFetch.role === "ACCOUNTANT";
 
       const criticalLoads = [
-        apiFetch("/api/school").then((data) => { if (data) setSchoolInfo(data); }),
+        apiFetch("/api/school", {}, 12000, true).then((data) => { if (data) setSchoolInfo(data); }),
         apiFetch("/api/students").then((data) => {
           if (data) {
             setStudents(data);
@@ -479,14 +493,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       apiFetch("/api/leave").then((data) => data && setLeaveRequests(data));
       apiFetch("/api/notice").then((data) => data && setNotices(data));
       apiFetch("/api/events").then((data) => data && setEventsList(data));
-      apiFetch("/api/classes").then((data) => data && setClasses(data));
-      apiFetch("/api/concessions").then((data) => data && setConcessions(data));
+      apiFetch("/api/classes", {}, 12000, true).then((data) => data && setClasses(data));
+      apiFetch("/api/concessions", {}, 12000, true).then((data) => data && setConcessions(data));
 
-      apiFetch("/api/transport").then((transData) => {
+      apiFetch("/api/transport", {}, 12000, true).then((transData) => {
         if (transData) setTransportStops(transData.map((d: any) => ({ ...d, amount: d.amount / 100 })));
       });
 
-      apiFetch("/api/fee-config").then((feeData) => {
+      apiFetch("/api/fee-config", {}, 12000, true).then((feeData) => {
         if (feeData) {
           setFeeHeads(feeData.feeHeads || []);
           setFeeStructures(feeData.feeStructures || []);

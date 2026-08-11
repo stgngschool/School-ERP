@@ -31,6 +31,7 @@ export async function GET(request: Request) {
         fatherName: true,
         fatherMobile: true,
         isRte: true,
+        isMarksheetClaimed: true,
         photoUrl: true,
         concessionId: true,
         class: {
@@ -59,6 +60,7 @@ export async function GET(request: Request) {
       fatherName: s.fatherName || "",
       fatherMobile: s.fatherMobile || "",
       isRte: s.isRte,
+      isMarksheetClaimed: s.isMarksheetClaimed,
       class: s.class.name,
       section: s.class.section,
       parentName: s.parentProfile?.user?.name || "",

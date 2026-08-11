@@ -30,9 +30,11 @@ import {
   AlertCircle,
   Loader2,
   Download,
+  Layers,
 } from "lucide-react";
 import StudentProfileModal from "@/components/StudentProfileModal";
 import MarksFeedingConsole from "@/components/MarksFeedingConsole";
+import PrintMarksheets from "@/components/PrintMarksheets";
 
 
 // Groups multiple months or siblings into a single row if the list grows too long (> 4 items)
@@ -142,7 +144,7 @@ export default function AccountantDashboard() {
     classes,
   } = useAuth();
 
-  const validTabs = ["collect", "defaulters", "structures", "ledger", "marks"];
+  const validTabs = ["dashboard", "collect", "attendance", "defaulters", "ledger", "structures", "students", "idcards", "audit", "print_marksheets", "marks"];
   const currentTab = validTabs.includes(activeTab) ? activeTab : "collect";
 
   React.useEffect(() => {
@@ -427,9 +429,17 @@ export default function AccountantDashboard() {
     }
   };
 
-  const handleSendSMS = (studentName: string, parentName: string, amount: number) => {
-    setAlertSuccessMsg(`SMS Mock Broadcast Sent: Parent ${parentName} notified about ${studentName}'s pending dues of Rs. ${amount.toLocaleString("en-IN")}.`);
-    setTimeout(() => setAlertSuccessMsg(""), 4000);
+  const handleSendWhatsApp = (studentName: string, parentName: string, amount: number, phone?: string) => {
+    const message = `Dear ${parentName}, this is a gentle reminder that your ward ${studentName} has pending fee dues of Rs. ${amount.toLocaleString("en-IN")}. Please clear the dues at the earliest. Thank you, School Admin.`;
+    const encodedMessage = encodeURIComponent(message);
+    
+    if (phone && phone.trim() !== "") {
+      const numericPhone = phone.replace(/\D/g, "");
+      const finalPhone = numericPhone.length === 10 ? `91${numericPhone}` : numericPhone;
+      window.open(`https://wa.me/${finalPhone}?text=${encodedMessage}`, '_blank');
+    } else {
+      window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
+    }
   };
 
   const handleAddHead = (e: React.FormEvent) => {
@@ -569,6 +579,8 @@ export default function AccountantDashboard() {
       {/* 3. Panel Body */}
       {currentTab === "marks" ? (
         <MarksFeedingConsole />
+      ) : activeTab === "print_marksheets" ? (
+        <PrintMarksheets />
       ) : (
         <div className="bg-white border-y sm:border border-slate-200 p-2.5 sm:p-6 sm:rounded-2xl shadow-sm">
           {/* TAB 1: Collect Fee Form */}
@@ -1555,10 +1567,10 @@ export default function AccountantDashboard() {
                             <Printer className="h-4 w-4 text-slate-500" /> Print Statement
                           </button>
                           <button
-                            onClick={() => handleSendSMS(std.name, std.parentName, totalDue)}
+                            onClick={() => handleSendWhatsApp(std.name, std.parentName, totalDue, std.fatherMobile || std.parentPhone)}
                             className="flex items-center gap-1.5 py-2 px-4 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold transition-all cursor-pointer shadow-sm"
                           >
-                            <Send className="h-4 w-4 text-emerald-600" /> Send Reminder
+                            <Send className="h-4 w-4 text-emerald-600" /> WhatsApp
                           </button>
                           <button
                             onClick={() => { setSelectedStudentId(std.id); setActiveTab("collect"); }}
@@ -1776,14 +1788,12 @@ export default function AccountantDashboard() {
 
             {/* Configure Fee Structures */}
             <div className="space-y-4">
-              <div>
                 <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider">
-                  Create Fee Invoices Structure
+                  Create Fee Structure (Auto-Billing)
                 </h3>
-                <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
-                  Bundle heads into a billing template.
+                <p className="text-[10px] text-slate-500 font-semibold mt-0.5">
+                  Set fees for a specific class. Saving instantly updates the 12-month billing ledger for all active students in that class.
                 </p>
-              </div>
 
               {structSuccess && (
                 <div className="flex items-center gap-2 bg-green-50 text-green-700 p-2.5 rounded border border-green-100 text-[11px] font-semibold">

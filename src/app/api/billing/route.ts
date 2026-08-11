@@ -49,8 +49,7 @@ export async function GET() {
       }),
       db.ledgerEntry.findMany({
         where: { 
-          entryType: EntryType.CHARGE,
-          createdAt: { gte: sessionStartDate }
+          entryType: EntryType.CHARGE
         },
         select: {
           id: true,
@@ -58,6 +57,7 @@ export async function GET() {
           description: true,
           amount: true,
           createdAt: true,
+          session: { select: { name: true, isCurrent: true } },
           receiptItems: {
             select: {
               amount: true,
@@ -67,8 +67,7 @@ export async function GET() {
       }),
       db.ledgerEntry.findMany({
         where: { 
-          entryType: EntryType.DISCOUNT,
-          createdAt: { gte: sessionStartDate }
+          entryType: EntryType.DISCOUNT
         },
         select: {
           id: true,
@@ -195,6 +194,8 @@ export async function GET() {
           totalPaid: totalPaid / 100,
           totalDiscount: associatedDiscounts / 100,
           dueDate: new Date(dueTime).toISOString().split("T")[0],
+          sessionName: c.session?.name,
+          isCurrentSession: c.session?.isCurrent !== false, // Default true if session is missing
           status: outstanding <= 0 ? "PAID" : "UNPAID",
           fine: fineAmount,
         };

@@ -34,10 +34,7 @@ export default function MarksFeedingConsole() {
   const [maxMarks, setMaxMarks] = useState("100");
   const [studentSearch, setStudentSearch] = useState("");
 
-  const [showReportCardModal, setShowReportCardModal] = useState(false);
-  const [selectedReportCardStudentId, setSelectedReportCardStudentId] = useState("");
-  const [selectedReportCardExam, setSelectedReportCardExam] = useState("All");
-  const [isBulkPrintMode, setIsBulkPrintMode] = useState(false);
+  
 
   const [marksRoster, setMarksRoster] = useState<{
     [studentId: string]: {
@@ -81,89 +78,92 @@ export default function MarksFeedingConsole() {
     }
   }, [selectedExam, schoolInfo.examConfig]);
 
+  const [isRosterLoaded, setIsRosterLoaded] = useState(false);
+  const [loadingRoster, setLoadingRoster] = useState(false);
+
   useEffect(() => {
+    setIsRosterLoaded(false);
+    setMarksRoster({});
+  }, [selectedClass, selectedExam, selectedSubject, customSubject, isCustomSubjectMode]);
+
+  const loadRoster = async () => {
     if (!selectedClass || !selectedExam || !selectedSubject) return;
 
     const subjectToUse = isCustomSubjectMode && customSubject.trim() ? customSubject.trim() : selectedSubject;
 
     if (!selectedClass || !selectedExam || !subjectToUse) return;
 
-    let isMounted = true;
-    
-    const fetchMarks = async () => {
-      try {
-        const [className, section] = selectedClass.split("-");
-        const res = await fetch(`/api/marks/roster?class=${encodeURIComponent(className)}&section=${encodeURIComponent(section)}&exam=${encodeURIComponent(selectedExam)}&subject=${encodeURIComponent(subjectToUse)}`);
-        if (!res.ok) throw new Error("Failed to fetch marks");
-        const marksRecord = await res.json();
+    setLoadingRoster(true);
+    try {
+      const [className, section] = selectedClass.split("-");
+      const res = await fetch(`/api/marks/roster?class=${encodeURIComponent(className)}&section=${encodeURIComponent(section)}&exam=${encodeURIComponent(selectedExam)}&subject=${encodeURIComponent(subjectToUse)}`);
+      if (!res.ok) throw new Error("Failed to fetch marks");
+      const marksRecord = await res.json();
 
-        if (!isMounted) return;
+      const newRoster: any = {};
+      let foundAny = false;
+      let loadedMaxMarks = "100";
 
-        const newRoster: any = {};
-        let foundAny = false;
-        let loadedMaxMarks = "100";
+      classStudents.forEach((student) => {
+        const existingMark = marksRecord[student.id];
 
-        classStudents.forEach((student) => {
-          const existingMark = marksRecord[student.id];
-
-          if (existingMark) {
-            const initialBreakdown: { [key: string]: string } = {};
-            if (existingMark.breakdown && typeof existingMark.breakdown === "object") {
-              Object.entries(existingMark.breakdown).forEach(([k, v]) => {
-                initialBreakdown[k] = v !== null && v !== undefined ? (v as any).toString() : "";
-              });
-            } else if (isSplitExam) {
-              splitComponents.forEach((comp: any) => {
-                const normalizedKey = comp.name.toLowerCase().replace(/[^a-z]/g, "");
-                if (normalizedKey.includes("written") || normalizedKey.includes("exam")) {
-                  if (existingMark.writtenExam !== null && existingMark.writtenExam !== undefined) {
-                    initialBreakdown[comp.name] = existingMark.writtenExam.toString();
-                  }
-                } else if (normalizedKey.includes("notebook") || normalizedKey.includes("note")) {
-                  if (existingMark.notebook !== null && existingMark.notebook !== undefined) {
-                    initialBreakdown[comp.name] = existingMark.notebook.toString();
-                  }
-                } else if (normalizedKey.includes("enrichment") || normalizedKey.includes("enri") || normalizedKey.includes("sub")) {
-                  if (existingMark.subjectEnrichment !== null && existingMark.subjectEnrichment !== undefined) {
-                    initialBreakdown[comp.name] = existingMark.subjectEnrichment.toString();
-                  }
-                } else if (normalizedKey.includes("practical") || normalizedKey.includes("act") || normalizedKey.includes("prac")) {
-                  if (existingMark.practical !== null && existingMark.practical !== undefined) {
-                    initialBreakdown[comp.name] = existingMark.practical.toString();
-                  }
+        if (existingMark) {
+          const initialBreakdown: { [key: string]: string } = {};
+          if (existingMark.breakdown && typeof existingMark.breakdown === "object") {
+            Object.entries(existingMark.breakdown).forEach(([k, v]) => {
+              initialBreakdown[k] = v !== null && v !== undefined ? (v as any).toString() : "";
+            });
+          } else if (isSplitExam) {
+            splitComponents.forEach((comp: any) => {
+              const normalizedKey = comp.name.toLowerCase().replace(/[^a-z]/g, "");
+              if (normalizedKey.includes("written") || normalizedKey.includes("exam")) {
+                if (existingMark.writtenExam !== null && existingMark.writtenExam !== undefined) {
+                  initialBreakdown[comp.name] = existingMark.writtenExam.toString();
                 }
-              });
-            }
-
-            newRoster[student.id] = {
-              marksObtained: existingMark.marksObtained?.toString() || "",
-              remarks: existingMark.remarks || "",
-              breakdown: initialBreakdown,
-            };
-            foundAny = true;
-            loadedMaxMarks = existingMark.maxMarks?.toString() || "100";
-          } else {
-            newRoster[student.id] = {
-              marksObtained: "",
-              remarks: "",
-              breakdown: {},
-            };
+              } else if (normalizedKey.includes("notebook") || normalizedKey.includes("note")) {
+                if (existingMark.notebook !== null && existingMark.notebook !== undefined) {
+                  initialBreakdown[comp.name] = existingMark.notebook.toString();
+                }
+              } else if (normalizedKey.includes("enrichment") || normalizedKey.includes("enri") || normalizedKey.includes("sub")) {
+                if (existingMark.subjectEnrichment !== null && existingMark.subjectEnrichment !== undefined) {
+                  initialBreakdown[comp.name] = existingMark.subjectEnrichment.toString();
+                }
+              } else if (normalizedKey.includes("practical") || normalizedKey.includes("act") || normalizedKey.includes("prac")) {
+                if (existingMark.practical !== null && existingMark.practical !== undefined) {
+                  initialBreakdown[comp.name] = existingMark.practical.toString();
+                }
+              }
+            });
           }
-        });
 
-        setMarksRoster(newRoster);
-        setIsEditMode(foundAny);
-        if (foundAny) {
-          setMaxMarks(loadedMaxMarks);
+          newRoster[student.id] = {
+            marksObtained: existingMark.marksObtained?.toString() || "",
+            remarks: existingMark.remarks || "",
+            breakdown: initialBreakdown,
+          };
+          foundAny = true;
+          loadedMaxMarks = existingMark.maxMarks?.toString() || "100";
+        } else {
+          newRoster[student.id] = {
+            marksObtained: "",
+            remarks: "",
+            breakdown: {},
+          };
         }
-      } catch (err) {
-        console.error(err);
+      });
+
+      setMarksRoster(newRoster);
+      setIsEditMode(foundAny);
+      if (foundAny) {
+        setMaxMarks(loadedMaxMarks);
       }
-    };
-    
-    fetchMarks();
-    return () => { isMounted = false; };
-  }, [selectedClass, selectedExam, selectedSubject, customSubject, isCustomSubjectMode, students, isSplitExam]);
+      setIsRosterLoaded(true);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingRoster(false);
+    }
+  };
 
   const classStudents = students.filter(
     (s) => `${s.class}-${s.section}` === selectedClass
@@ -221,6 +221,11 @@ export default function MarksFeedingConsole() {
   const passPercentage = enteredCount > 0 ? Math.round((passCount / enteredCount) * 100) : 0;
 
   const handleMarkChange = (studentId: string, val: string) => {
+    if (val !== "") {
+      const numVal = parseFloat(val);
+      const maxVal = parseFloat(maxMarks) || 0;
+      if (numVal > maxVal) return;
+    }
     setMarksRoster((prev) => ({
       ...prev,
       [studentId]: {
@@ -231,6 +236,11 @@ export default function MarksFeedingConsole() {
   };
 
   const handleBreakdownChange = (studentId: string, compName: string, val: string) => {
+    if (val !== "") {
+      const numVal = parseFloat(val);
+      const comp = splitComponents.find((c: any) => c.name === compName);
+      if (comp && numVal > comp.max) return;
+    }
     setMarksRoster((prev) => {
       const entry = prev[studentId] || { marksObtained: "", remarks: "", breakdown: {} };
       return {
@@ -437,35 +447,7 @@ export default function MarksFeedingConsole() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0 pt-2 sm:pt-0">
-            <button
-              type="button"
-              onClick={() => {
-                if (classStudents.length > 0) {
-                  setSelectedReportCardStudentId(classStudents[0].id);
-                }
-                setIsBulkPrintMode(false);
-                setShowReportCardModal(true);
-              }}
-              className="py-2 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
-            >
-              <Eye className="h-4 w-4" />
-              <span>Live Marksheet</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setIsBulkPrintMode(true);
-                setShowReportCardModal(true);
-              }}
-              className="py-2 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
-            >
-              <Printer className="h-4 w-4" />
-              <span>Bulk Print Class</span>
-            </button>
           </div>
-        </div>
 
         {/* Filters Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mt-4">
@@ -557,9 +539,28 @@ export default function MarksFeedingConsole() {
             />
           </div>
         </div>
+
+        <div className="mt-4">
+          <button
+            type="button"
+            disabled={loadingRoster || isRosterLoaded}
+            onClick={loadRoster}
+            className={`w-full py-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 transition-all ${isRosterLoaded ? 'bg-emerald-50 text-emerald-600 border border-emerald-200 cursor-default' : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-500/20 cursor-pointer'}`}
+          >
+            {loadingRoster ? <Loader2 className="h-4 w-4 animate-spin" /> : isRosterLoaded ? <CheckCircle2 className="h-4 w-4" /> : <Layers className="h-4 w-4" />} 
+            {isRosterLoaded ? "Roster Data Loaded" : "Load Roster"}
+          </button>
+        </div>
       </div>
 
-      {/* ─── Class Performance Overview Strip ─── */}
+      {!isRosterLoaded ? (
+        <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+          <BookOpen className="h-12 w-12 mb-4 opacity-30" />
+          <p className="font-bold text-sm">Please click "Load Roster" to view and enter marks.</p>
+        </div>
+      ) : (
+        <>
+          {/* ─── Class Performance Overview Strip ─── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-left">
         <div className="bg-white border border-slate-200/90 p-3 sm:p-3.5 rounded-xl sm:rounded-2xl shadow-2xs flex items-center gap-3">
           <div className="h-10 w-10 bg-indigo-50 border border-indigo-100 rounded-xl flex items-center justify-center text-indigo-600 shrink-0">
@@ -730,18 +731,6 @@ export default function MarksFeedingConsole() {
                         <span className={`text-[10px] font-black px-2.5 py-1 rounded-lg border ${gradeInfo.bg}`}>
                           {gradeInfo.grade}
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedReportCardStudentId(student.id);
-                            setIsBulkPrintMode(false);
-                            setShowReportCardModal(true);
-                          }}
-                          className="p-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl border border-indigo-200 press-scale cursor-pointer"
-                          title="View Marksheet"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </button>
                       </div>
                     </div>
 
@@ -778,7 +767,7 @@ export default function MarksFeedingConsole() {
                     {/* Total & Remarks Row */}
                     <div className="flex items-center gap-2.5 pt-1">
                       <div className="bg-indigo-600 text-white rounded-xl px-3 py-2 text-center shrink-0 shadow-2xs">
-                        <span className="text-[8px] font-extrabold uppercase block leading-none text-indigo-200">TOTAL</span>
+                        <span className="text-[8px] font-extrabold uppercase block leading-none text-indigo-200">TOTAL ({maxMarks})</span>
                         <span className="text-sm font-black">{hasAnyMark ? totalObt : "--"}</span>
                       </div>
                       <input
@@ -813,19 +802,6 @@ export default function MarksFeedingConsole() {
                           </p>
                         </div>
                       </div>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedReportCardStudentId(student.id);
-                          setIsBulkPrintMode(false);
-                          setShowReportCardModal(true);
-                        }}
-                        className="p-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl border border-indigo-200 press-scale cursor-pointer shrink-0"
-                        title="View Marksheet"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </button>
                     </div>
 
                     {/* Touch Input Row */}
@@ -889,10 +865,10 @@ export default function MarksFeedingConsole() {
                       {comp.name} ({comp.max})
                     </th>
                   ))}
-                  <th className="py-3 px-2 text-center w-28">Total</th>
+                  <th className="py-3 px-2 text-center w-28">Total ({maxMarks})</th>
                   <th className="py-3 px-2 text-center w-20">Grade</th>
                   <th className="py-3 px-3">Remarks</th>
-                  <th className="py-3 px-3 text-center w-28">Marksheet</th>
+                  
                 </tr>
               ) : (
                 <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-black uppercase text-slate-400 tracking-wider">
@@ -903,7 +879,7 @@ export default function MarksFeedingConsole() {
                   <th className="py-3 px-3 text-center w-24">Percentage</th>
                   <th className="py-3 px-3 text-center w-20">Grade</th>
                   <th className="py-3 px-3">Teacher Remarks</th>
-                  <th className="py-3 px-3 text-center w-28">Marksheet</th>
+                  
                 </tr>
               )}
             </thead>
@@ -986,19 +962,7 @@ export default function MarksFeedingConsole() {
                             className="w-full text-xs font-medium py-1 px-2 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
                           />
                         </td>
-                        <td className="py-3 px-3 text-center">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedReportCardStudentId(student.id);
-                              setIsBulkPrintMode(false);
-                              setShowReportCardModal(true);
-                            }}
-                            className="py-1.5 px-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-[10px] font-bold transition-all flex items-center justify-center gap-1 mx-auto cursor-pointer"
-                          >
-                            <Eye className="h-3 w-3" /> Marksheet
-                          </button>
-                        </td>
+                        
                       </tr>
                     );
                   } else {
@@ -1055,19 +1019,7 @@ export default function MarksFeedingConsole() {
                             className="w-full text-xs font-medium py-1 px-2 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
                           />
                         </td>
-                        <td className="py-3 px-3 text-center">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedReportCardStudentId(student.id);
-                              setIsBulkPrintMode(false);
-                              setShowReportCardModal(true);
-                            }}
-                            className="py-1.5 px-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-[10px] font-bold transition-all flex items-center justify-center gap-1 mx-auto cursor-pointer"
-                          >
-                            <Eye className="h-3 w-3" /> Marksheet
-                          </button>
-                        </td>
+                        
                       </tr>
                     );
                   }
@@ -1094,493 +1046,9 @@ export default function MarksFeedingConsole() {
           </button>
         </div>
       </div>
-
-      {showReportCardModal && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto print:p-0 print:bg-white print:static print:inset-auto">
-          {/* Inject Global Failproof Print CSS */}
-          <style dangerouslySetInnerHTML={{
-            __html: `
-              @media print {
-                /* 1. Hide all normal UI & background chrome */
-                body > *:not(.print-portal-root),
-                .no-print,
-                header,
-                aside,
-                nav,
-                button {
-                  display: none !important;
-                }
-
-                /* 2. Reset fixed overlay containers to static blocks for print engine */
-                .fixed.inset-0 {
-                  position: static !important;
-                  background: #ffffff !important;
-                  padding: 0 !important;
-                  margin: 0 !important;
-                  overflow: visible !important;
-                  display: block !important;
-                  height: auto !important;
-                  width: 100% !important;
-                }
-
-                .max-h-\\[92vh\\] {
-                  max-height: none !important;
-                  overflow: visible !important;
-                  border: none !important;
-                  box-shadow: none !important;
-                  border-radius: 0 !important;
-                }
-
-                .overflow-y-auto {
-                  overflow: visible !important;
-                }
-
-                /* 3. Elevate printable card to top-level page block */
-                .print-only-container {
-                  position: relative !important;
-                  display: block !important;
-                  visibility: visible !important;
-                  width: 100% !important;
-                  max-width: 210mm !important;
-                  margin: 0 auto !important;
-                  padding: 0 !important;
-                  box-shadow: none !important;
-                  border: 4px solid #0f172a !important;
-                  background-color: #ffffff !important;
-                  page-break-after: always !important;
-                  page-break-inside: avoid !important;
-                  -webkit-print-color-adjust: exact !important;
-                  print-color-adjust: exact !important;
-                }
-
-                @page {
-                  size: A4 portrait;
-                  margin: 6mm;
-                }
-              }
-            `
-          }} />
-
-          <div className="bg-white border border-slate-200 rounded-3xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden text-left print:max-h-none print:border-none print:shadow-none print:rounded-none">
-            {/* Modal Top Bar (Hidden during print) */}
-            <div className="bg-slate-900 text-white p-4 px-6 flex items-center justify-between shrink-0 no-print">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-indigo-500/20 border border-indigo-500/40 rounded-xl text-indigo-300">
-                  <FileText className="h-5 w-5" />
-                </div>
-                <div>
-                  <h4 className="text-sm font-black tracking-tight text-white">
-                    {isBulkPrintMode ? `Bulk Class Marksheets (Class ${selectedClass})` : "Official Student Report Card Preview"}
-                  </h4>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                    St. G.N.G. School • Annual Academic Session 2025-26
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowReportCardModal(false)}
-                className="h-8 w-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-all cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="flex-1 flex flex-col md:flex-row overflow-hidden min-h-0 print:overflow-visible">
-              {/* Left Control Sidebar (Hidden during print) */}
-              <div className="w-full md:w-80 bg-slate-50 border-r border-slate-200 p-5 space-y-5 overflow-y-auto shrink-0 select-none no-print">
-                <div>
-                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-wider block mb-1.5">
-                    Select Student
-                  </label>
-                  <select
-                    value={selectedReportCardStudentId}
-                    onChange={(e) => {
-                      setSelectedReportCardStudentId(e.target.value);
-                      setIsBulkPrintMode(false);
-                    }}
-                    className="w-full text-xs font-bold py-2.5 px-3 border border-slate-200 rounded-xl outline-none bg-white focus:border-indigo-600 shadow-sm"
-                  >
-                    {classStudents.map((std) => (
-                      <option key={std.id} value={std.id}>
-                        {std.name} (Roll: {std.rollNo || "--"})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-wider block mb-1.5">
-                    Examination Scope
-                  </label>
-                  <select
-                    value={selectedReportCardExam}
-                    onChange={(e) => setSelectedReportCardExam(e.target.value)}
-                    className="w-full text-xs font-bold py-2.5 px-3 border border-slate-200 rounded-xl outline-none bg-white focus:border-indigo-600 shadow-sm"
-                  >
-                    <option value="All">All Exams Summary (Final Marksheet)</option>
-                    {availableExams.map((ex) => (
-                      <option key={ex} value={ex}>
-                        {ex} Only
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="pt-2 border-t border-slate-200 space-y-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsBulkPrintMode(false);
-                      setTimeout(() => window.print(), 100);
-                    }}
-                    className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-extrabold shadow-md shadow-indigo-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer"
-                  >
-                    <Printer className="h-4 w-4" /> Print Selected Marksheet
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsBulkPrintMode(true);
-                      setTimeout(() => window.print(), 100);
-                    }}
-                    className="w-full py-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 transition-all cursor-pointer"
-                  >
-                    <Layers className="h-4 w-4" /> Print All Class Marksheets ({classStudents.length})
-                  </button>
-                </div>
-
-                <div className="bg-amber-50 border border-amber-200 p-3.5 rounded-2xl text-[10px] font-semibold text-amber-900 leading-relaxed">
-                  <p className="font-bold text-amber-800 mb-0.5">🖨️ A4 Printing Setup Guide:</p>
-                  Set Margins to <strong>"None" / "Default"</strong> and check <strong>"Background Graphics"</strong> in your browser print settings for full watermark & border rendering.
-                </div>
-              </div>
-
-              {/* Printable Marksheet Container Area */}
-              <div className="flex-1 bg-slate-100 p-4 sm:p-6 overflow-y-auto min-h-0 flex justify-center print:bg-white print:p-0 print:overflow-visible">
-                {isBulkPrintMode ? (
-                  <div className="space-y-8 w-full max-w-[210mm]">
-                    {classStudents.map((std) => (
-                      <SingleMarksheetCard
-                        key={std.id}
-                        student={std}
-                        availableExams={availableExams}
-                        selectedReportCardExam={selectedReportCardExam}
-                        getCbseGrade={getCbseGrade}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  (() => {
-                    const student = classStudents.find((s) => s.id === selectedReportCardStudentId) || classStudents[0];
-                    if (!student) {
-                      return <p className="text-xs text-slate-400 font-bold self-center">No student selected.</p>;
-                    }
-                    return (
-                      <SingleMarksheetCard
-                        student={student}
-                        availableExams={availableExams}
-                        selectedReportCardExam={selectedReportCardExam}
-                        getCbseGrade={getCbseGrade}
-                      />
-                    );
-                  })()
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+        </>
       )}
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// 📜 ST. G.N.G. SCHOOL OFFICIAL ANNUAL ACADEMIC MARKSHEET
-// ─────────────────────────────────────────────────────────────
-
-function numberToWords(num: number): string {
-  const ones = ["", "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "TEN", "ELEVEN", "TWELVE", "THIRTEEN", "FOURTEEN", "FIFTEEN", "SIXTEEN", "SEVENTEEN", "EIGHTEEN", "NINETEEN"];
-  const tens = ["", "", "TWENTY", "THIRTY", "FORTY", "FIFTY", "SIXTY", "SEVENTY", "EIGHTY", "NINETY"];
-  if (num <= 0) return "ZERO";
-  if (num < 20) return ones[num];
-  if (num < 100) return tens[Math.floor(num / 10)] + (num % 10 !== 0 ? " " + ones[num % 10] : "");
-  if (num < 1000) return ones[Math.floor(num / 100)] + " HUNDRED" + (num % 100 !== 0 ? " " + numberToWords(num % 100) : "");
-  return num.toString();
-}
-
-function SingleMarksheetCard({
-  student,
-  availableExams,
-  selectedReportCardExam,
-  getCbseGrade,
-}: {
-  student: any;
-  availableExams: string[];
-  selectedReportCardExam: string;
-  getCbseGrade: (pct: number) => string;
-}) {
-  const sMarks: any[] = student.marks || [];
-
-  // Default St. G.N.G. School subjects list if student marks array is empty
-  const defaultSubjects = [
-    "MATHEMATICS",
-    "SCIENCE",
-    "ENGLISH",
-    "HINDI",
-    "SOCIAL STUDIES",
-    "COMPUTER SCIENCE",
-    "GENERAL KNOWLEDGE",
-    "SANSKRIT / MORAL SCI",
-  ];
-
-  const recordedSubjects = Array.from(new Set(sMarks.map((m) => m.subject.toUpperCase())));
-  const displaySubjects = recordedSubjects.length > 0 ? recordedSubjects : defaultSubjects;
-
-  let term1TotalObtained = 0;
-  let term2TotalObtained = 0;
-  let grandMaxTotal = 0;
-  let grandObtTotal = 0;
-
-  // Compute breakdown metrics for each subject
-  const subjectRows = displaySubjects.map((subName, idx) => {
-    const subMarks = sMarks.filter((m) => m.subject.toUpperCase() === subName.toUpperCase());
-
-    // Term 1 score
-    const t1Match = subMarks.find((m) => m.examName.toLowerCase().includes("half") || m.examName.toLowerCase().includes("term 1") || m.examName.toLowerCase().includes("unit"));
-    const t1Score = t1Match ? t1Match.marksObtained : (subMarks[0] ? Math.round(subMarks[0].marksObtained * 0.9) : 50 + ((idx * 7) % 35));
-    const prAct1 = Math.min(10, Math.max(4, Math.round(t1Score * 0.12)));
-    const noteBook1 = Math.min(5, Math.max(3, Math.round(t1Score * 0.06)));
-    const subEnri1 = Math.min(5, Math.max(3, Math.round(t1Score * 0.06)));
-    const halfYearly1 = Math.min(80, Math.max(20, t1Score - prAct1 - noteBook1 - subEnri1));
-    const obt1 = prAct1 + noteBook1 + subEnri1 + halfYearly1;
-
-    // Term 2 score
-    const t2Match = subMarks.find((m) => m.examName.toLowerCase().includes("yearly") || m.examName.toLowerCase().includes("term 2") || m.examName.toLowerCase().includes("final"));
-    const t2Score = t2Match ? t2Match.marksObtained : (subMarks[1] ? subMarks[1].marksObtained : Math.min(100, t1Score + 8 - (idx % 4)));
-    const prAct2 = Math.min(10, Math.max(4, Math.round(t2Score * 0.11)));
-    const noteBook2 = Math.min(5, Math.max(3, Math.round(t2Score * 0.06)));
-    const subEnri2 = Math.min(5, Math.max(3, Math.round(t2Score * 0.06)));
-    const yearly2 = Math.min(80, Math.max(20, t2Score - prAct2 - noteBook2 - subEnri2));
-    const obt2 = prAct2 + noteBook2 + subEnri2 + yearly2;
-
-    const maxM = 200;
-    const totalTermObt = obt1 + obt2;
-
-    term1TotalObtained += obt1;
-    term2TotalObtained += obt2;
-    grandMaxTotal += maxM;
-    grandObtTotal += totalTermObt;
-
-    return {
-      subName,
-      prAct1,
-      noteBook1,
-      subEnri1,
-      halfYearly1,
-      obt1,
-      prAct2,
-      noteBook2,
-      subEnri2,
-      yearly2,
-      obt2,
-      maxM,
-      totalTermObt,
-    };
-  });
-
-  const overallPercentage = grandMaxTotal > 0 ? (grandObtTotal / grandMaxTotal) * 100 : 0;
-  const finalGrade = getCbseGrade(overallPercentage);
-
-  return (
-    <div
-      id={`report-card-print-${student.id}`}
-      className="bg-white p-4 sm:p-6 w-full max-w-[210mm] border-[5px] border-slate-900 rounded-none text-slate-950 font-serif print-only-container relative shadow-2xl mx-auto page-break-after text-left overflow-hidden"
-      style={{ minHeight: "275mm" }}
-    >
-      <div className="border-2 border-slate-900 p-4 min-h-[265mm] flex flex-col justify-between relative z-10 bg-white">
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-0">
-          <img src="/logo.png" alt="St. G.N.G. School Watermark" className="w-[380px] h-[380px] object-contain" style={{ opacity: 0.10 }} />
-        </div>
-
-        <div className="relative z-10 space-y-3">
-          <div className="text-center space-y-1.5 border-b-2 border-slate-900 pb-3">
-            <div className="flex items-center justify-between px-1">
-              <div className="text-left text-[9px] font-sans font-extrabold text-slate-800 space-y-0.5">
-                <p>SCHOOL CODE: <span className="font-black text-slate-950">09670707502</span></p>
-                <p>DISE CODE: <span className="font-black text-slate-950">09350470492</span></p>
-                <p>REPORT CARD NO: <span className="font-bold text-slate-700">GNG/2025/{student.id.slice(0, 5).toUpperCase()}</span></p>
-              </div>
-              <div className="flex flex-col items-center">
-                <img src="/logo.png" alt="St. G.N.G. School Logo" className="h-20 w-auto object-contain mx-auto" />
-              </div>
-              <div className="text-right text-[9px] font-sans font-extrabold text-slate-800 space-y-0.5">
-                <p>ESTD. - <span className="font-black text-slate-950">2003</span></p>
-                <p>AFFILIATION: <span className="font-black text-slate-950">CBSE BOARD PATTERN</span></p>
-                <p>ADM NO: <span className="font-bold text-slate-700">{student.admissionNo}</span></p>
-              </div>
-            </div>
-            <div className="pt-1 space-y-0.5">
-              <h1 className="text-2xl sm:text-3xl font-black text-slate-950 tracking-normal uppercase" style={{ fontFamily: "'Tiro Devanagari Hindi', 'Rozha One', serif" }}>
-                संत गुरु नानक गार्डेन स्कूल - वाराणसी
-              </h1>
-              <h2 className="text-sm sm:text-base font-black text-slate-900 tracking-wider font-serif uppercase">
-                ST. G.N.G. SCHOOL, VARANASI
-              </h2>
-              <p className="text-[9px] font-sans font-extrabold text-slate-600 uppercase tracking-widest">
-                SALARPUR, RASULGARH, VARANASI - 221007
-              </p>
-            </div>
-            <div className="mt-1 inline-block bg-slate-950 text-amber-300 px-5 py-0.5 text-[11px] font-sans font-black tracking-widest uppercase rounded shadow-sm">
-              ANNUAL ACADEMIC PROGRESS REPORT CARD (SESSION 2025-2026)
-            </div>
-          </div>
-
-          <div className="my-2 font-sans text-xs border-2 border-slate-900 divide-y-2 divide-slate-900 bg-slate-50/70">
-            <div className="grid grid-cols-2 divide-x-2 divide-slate-900 p-2">
-              <div>
-                <span className="text-[8.5px] font-bold text-slate-500 uppercase tracking-wider block">Student Name</span>
-                <span className="font-black text-slate-950 text-xs uppercase">{student.name}</span>
-              </div>
-              <div className="pl-3">
-                <span className="text-[8.5px] font-bold text-slate-500 uppercase tracking-wider block">Roll No & Class</span>
-                <span className="font-black text-slate-950 text-xs">ROLL NO: {student.rollNo || "N/A"} | CLASS {student.class}-{student.section}</span>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 divide-x-2 divide-slate-900 p-2">
-              <div>
-                <span className="text-[8.5px] font-bold text-slate-500 uppercase tracking-wider block">Father's Name</span>
-                <span className="font-extrabold text-slate-900 text-xs uppercase">{student.parentName || student.fatherName || "AJAY PANDEY"}</span>
-              </div>
-              <div className="pl-3">
-                <span className="text-[8.5px] font-bold text-slate-500 uppercase tracking-wider block">Mother's Name</span>
-                <span className="font-extrabold text-slate-900 text-xs uppercase">{student.motherName || "SUMAN SHARMA"}</span>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 divide-x-2 divide-slate-900 p-2">
-              <div>
-                <span className="text-[8.5px] font-bold text-slate-500 uppercase tracking-wider block">Admission No</span>
-                <span className="font-extrabold text-slate-900 text-xs">{student.admissionNo}</span>
-              </div>
-              <div className="px-3">
-                <span className="text-[8.5px] font-bold text-slate-500 uppercase tracking-wider block">Assessment Scope</span>
-                <span className="font-extrabold text-slate-900 text-xs">Full Academic Year</span>
-              </div>
-              <div className="pl-3">
-                <span className="text-[8.5px] font-bold text-slate-500 uppercase tracking-wider block">Academic Session</span>
-                <span className="font-extrabold text-slate-900 text-xs">2025 - 2026</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="my-2 font-sans overflow-x-auto">
-            <table className="w-full text-center border-collapse border-2 border-slate-900 font-sans text-[8.5px] font-bold text-slate-950">
-              <thead>
-                <tr className="bg-slate-900 text-white border-b-2 border-slate-900 font-black uppercase tracking-wider">
-                  <th rowSpan={2} className="py-2 px-2 border-r-2 border-slate-700 text-left w-32 bg-slate-950">SUBJECT</th>
-                  <th colSpan={5} className="py-1 px-1 border-r-2 border-slate-700 border-b border-slate-700 bg-indigo-950 text-indigo-100 tracking-wider">TERM - I</th>
-                  <th colSpan={5} className="py-1 px-1 border-r-2 border-slate-700 border-b border-slate-700 bg-emerald-950 text-emerald-100 tracking-wider">TERM - II</th>
-                  <th colSpan={2} className="py-1 px-1 border-b border-slate-700 bg-amber-950 text-amber-100 tracking-wider">Grand Total Marks</th>
-                </tr>
-                <tr className="bg-slate-200 border-b-2 border-slate-900 text-[7.5px] leading-tight font-black uppercase text-slate-950">
-                  <th className="py-1 px-0.5 border-r border-slate-400 w-9">Pr.Act.<br/>(10)</th>
-                  <th className="py-1 px-0.5 border-r border-slate-400 w-9">Note<br/>Book (5)</th>
-                  <th className="py-1 px-0.5 border-r border-slate-400 w-9">Sub.Enri.<br/>(5)</th>
-                  <th className="py-1 px-0.5 border-r border-slate-400 w-14">Half Yearly<br/>Exam (80)</th>
-                  <th className="py-1 px-0.5 border-r-2 border-slate-900 w-14 bg-amber-200/80 text-amber-950 font-black">Marks<br/>Obtained (100)</th>
-                  <th className="py-1 px-0.5 border-r border-slate-400 w-9">Pr.Act.<br/>(10)</th>
-                  <th className="py-1 px-0.5 border-r border-slate-400 w-9">Note<br/>Book (5)</th>
-                  <th className="py-1 px-0.5 border-r border-slate-400 w-9">Sub.Enri.<br/>(5)</th>
-                  <th className="py-1 px-0.5 border-r border-slate-400 w-14">Yearly<br/>Exam (80)</th>
-                  <th className="py-1 px-0.5 border-r-2 border-slate-900 w-14 bg-amber-200/80 text-amber-950 font-black">Marks<br/>Obtained (100)</th>
-                  <th className="py-1 px-0.5 border-r border-slate-400 w-10">Max.<br/>Marks</th>
-                  <th className="py-1 px-0.5 w-14 bg-indigo-100 text-indigo-950 font-black">Obtn. Marks<br/>TERM (I + II)</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-900 text-[9px] font-extrabold text-slate-950">
-                {subjectRows.map((row, idx) => (
-                  <tr key={idx} className={`border-b border-slate-900 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/80"} hover:bg-amber-50/40 transition-colors`}>
-                    <td className="py-1.5 px-2 border-r-2 border-slate-900 text-left font-black uppercase text-slate-950">{row.subName}</td>
-                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-bold text-slate-700">{row.prAct1}</td>
-                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-bold text-slate-700">{row.noteBook1}</td>
-                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-bold text-slate-700">{row.subEnri1}</td>
-                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-black text-slate-900">{row.halfYearly1}</td>
-                    <td className="py-1.5 px-0.5 border-r-2 border-slate-900 font-black bg-indigo-50/60 text-indigo-950">{row.obt1}</td>
-                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-bold text-slate-700">{row.prAct2}</td>
-                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-bold text-slate-700">{row.noteBook2}</td>
-                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-bold text-slate-700">{row.subEnri2}</td>
-                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-black text-slate-900">{row.yearly2}</td>
-                    <td className="py-1.5 px-0.5 border-r-2 border-slate-900 font-black bg-emerald-50/60 text-emerald-950">{row.obt2}</td>
-                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-extrabold text-slate-700">{row.maxM}</td>
-                    <td className="py-1.5 px-0.5 font-black text-indigo-950 text-xs bg-amber-50">{row.totalTermObt}</td>
-                  </tr>
-                ))}
-                <tr className="border-t-2 border-slate-900 font-black bg-slate-900 text-white">
-                  <td className="py-1.5 px-2 text-left border-r-2 border-slate-700 uppercase tracking-wider text-[9.5px]">GRAND TOTAL</td>
-                  <td colSpan={4} className="border-r border-slate-700"></td>
-                  <td className="py-1.5 px-0.5 border-r-2 border-slate-700 text-center font-black text-amber-300 text-xs bg-indigo-950">{term1TotalObtained}</td>
-                  <td colSpan={4} className="border-r border-slate-700"></td>
-                  <td className="py-1.5 px-0.5 border-r-2 border-slate-700 text-center font-black text-amber-300 text-xs bg-emerald-950">{term2TotalObtained}</td>
-                  <td className="py-1.5 px-0.5 border-r border-slate-700 text-center font-black text-slate-200">{grandMaxTotal}</td>
-                  <td className="py-1.5 px-0.5 text-center font-black text-amber-300 text-xs bg-amber-950">{grandObtTotal}</td>
-                </tr>
-              </tbody>
-            </table>
-            <div className="mt-1.5 flex items-center justify-between font-sans text-xs font-black text-slate-950 px-2 py-1 bg-slate-100 border border-slate-300 rounded">
-              <span className="text-[10px] uppercase tracking-wider text-slate-700">Evaluation: <strong className="text-slate-950 font-black">Annual Aggregate Performance</strong></span>
-              <div className="flex items-center gap-4">
-                <span>Percentage (%): <span className="text-indigo-950 text-sm font-black">{overallPercentage.toFixed(2)} %</span></span>
-                <span>Division: <span className="text-slate-900 font-extrabold">{overallPercentage >= 60 ? "First Division" : overallPercentage >= 45 ? "Second Division" : "Third Division"}</span></span>
-                <span>Grade: <span className="text-indigo-700 font-black text-xs">{finalGrade}</span></span>
-              </div>
-            </div>
-          </div>
-
-          <div className="my-2 font-sans border-2 border-slate-900 bg-amber-50/40 p-3 rounded-none flex items-center justify-between gap-4">
-            <div className="space-y-1 text-xs font-bold text-slate-900 text-left">
-              <p>GRAND TOTAL OBTAINED: <span className="font-black text-sm text-slate-950">{grandObtTotal} / {grandMaxTotal}</span> ({numberToWords(grandObtTotal)} MARKS)</p>
-              <p>AGGREGATE PERCENTAGE: <span className="font-black text-indigo-950 text-sm">{overallPercentage.toFixed(2)}%</span> | OVERALL GRADE: <span className="font-black text-indigo-700">{finalGrade}</span></p>
-              <p className="text-[9.5px] text-slate-600 italic">Class Teacher's Remarks: "{overallPercentage >= 75 ? "Excellent academic performance! Outstanding dedication." : overallPercentage >= 50 ? "Good overall progress. Keep up the hard work." : "Needs consistent practice in core subjects."}"</p>
-            </div>
-            <div className="shrink-0 border-4 border-emerald-800 bg-emerald-100/90 px-4 py-2 text-center rotate-[-2deg] shadow-md rounded-md">
-              <p className="text-[7.5px] font-black uppercase text-emerald-900 tracking-widest">RESULT STATUS</p>
-              <h3 className="text-sm font-black text-emerald-950 tracking-tight uppercase">
-                {overallPercentage >= 33 ? "PASSED & PROMOTED" : "NEEDS IMPROVEMENT"}
-              </h3>
-              <p className="text-[7.5px] font-extrabold text-emerald-800 uppercase mt-0.5">ACADEMIC SESSION 2025-26</p>
-            </div>
-          </div>
-          <div className="my-1.5 border border-slate-400 p-1.5 text-[7.5px] font-sans font-extrabold text-slate-700 text-center uppercase tracking-wider bg-slate-50">
-            GRADING SCALE: A1 (91-100%) | A2 (81-90%) | B1 (71-80%) | B2 (61-70%) | C1 (51-60%) | C2 (41-50%) | D (33-40%) | E (NEEDS IMPROVEMENT)
-          </div>
-        </div>
-
-        <div className="pt-3 border-t-2 border-slate-900 font-sans text-[9px] font-bold text-slate-800">
-          <div className="flex items-end justify-between gap-4">
-            <div className="text-center text-[8.5px]">
-              <p className="font-black text-slate-900">DATE OF ISSUE</p>
-              <p className="font-extrabold text-slate-700 mt-0.5">20-07-2026</p>
-            </div>
-            <div className="text-center space-y-1">
-              <div className="h-7 flex items-end justify-center font-serif text-[11px] font-black italic text-indigo-950">S. S. Sharma</div>
-              <div className="border-t-2 border-slate-900 pt-0.5 uppercase tracking-wider text-[7.5px] font-black">CLASS TEACHER SIGNATURE</div>
-            </div>
-            <div className="text-center space-y-1">
-              <div className="h-7 flex items-end justify-center font-serif text-[11px] font-black italic text-indigo-950">V. K. Gupta</div>
-              <div className="border-t-2 border-slate-900 pt-0.5 uppercase tracking-wider text-[7.5px] font-black">EXAMINATION INCHARGE</div>
-            </div>
-            <div className="text-center space-y-1 relative">
-              <div className="h-7 flex items-end justify-center font-serif text-[11px] font-black italic text-emerald-950">Dr. R. K. Malhotra</div>
-              <div className="border-t-2 border-slate-900 pt-0.5 uppercase tracking-wider text-[7.5px] font-black relative">
-                PRINCIPAL SIGNATURE & SEAL
-                <div className="absolute -top-10 left-1/2 -translate-x-1/2 h-12 w-12 border-2 border-emerald-800/80 rounded-full flex items-center justify-center text-[6.5px] font-black text-emerald-900 uppercase rotate-12 bg-emerald-50/30 shadow-sm pointer-events-none">
-                  ST. GNG SEAL
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}

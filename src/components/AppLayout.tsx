@@ -32,6 +32,7 @@ import {
   Award,
   ShieldCheck,
   GraduationCap,
+  Printer,
 } from "lucide-react";
 
 interface AppLayoutProps {
@@ -71,6 +72,7 @@ const getNavItems = (activeRole: string): NavItem[] => {
         { category: "Fee Transactions", name: "Fee Defaulters & Dues", shortName: "Dues", icon: AlertTriangle, tab: "defaulters" },
         { category: "Fee Transactions", name: "Receipts & Ledger Logs", shortName: "Ledger", icon: ArrowRightLeft, tab: "ledger" },
         { category: "Fee Management", name: "Fee Structure Setup", shortName: "Fee Setup", icon: Settings, tab: "structures" },
+        { category: "Fee Management", name: "Print Marksheets", shortName: "Print Marksheets", icon: Printer, tab: "print_marksheets" },
         { category: "Fee Management", name: "Marks & Exam Entry", shortName: "Marks", icon: GraduationCap, tab: "marks" },
       ];
     case "ADMIN":
@@ -79,6 +81,7 @@ const getNavItems = (activeRole: string): NavItem[] => {
         { category: "Student & Academics", name: "Student Management", shortName: "Students", icon: Users, tab: "students" },
         { category: "Student & Academics", name: "Attendance Console", shortName: "Attendance", icon: UserCheck, tab: "attendance" },
         { category: "Student & Academics", name: "Marks & Exam Roster", shortName: "Marks", icon: GraduationCap, tab: "marks" },
+        { category: "Student & Academics", name: "Print Marksheets", shortName: "Print Marksheets", icon: Printer, tab: "print_marksheets" },
         { category: "Student & Academics", name: "ID Cards & Photos", shortName: "ID Cards", icon: UserCheck, tab: "idcards" },
         { category: "Finance & Fees", name: "Fee Collection", shortName: "Collect", icon: CreditCard, tab: "collect" },
         { category: "Finance & Fees", name: "Fee Defaulters & Dues", shortName: "Dues", icon: AlertTriangle, tab: "defaulters" },
@@ -114,7 +117,21 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [showNoticeDropdown, setShowNoticeDropdown] = useState(false);
   const [sessionYear, setSessionYear] = useState("2026-27");
+  const [sessions, setSessions] = useState<{ id: string; name: string; isCurrent: boolean }[]>([]);
   const [showAppsModal, setShowAppsModal] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/sessions")
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setSessions(data);
+          const current = data.find(s => s.isCurrent);
+          if (current) setSessionYear(current.name);
+        }
+      })
+      .catch(err => console.error("Failed to load sessions", err));
+  }, []);
 
   const megaMenuRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
@@ -423,8 +440,14 @@ export default function AppLayout({ children }: AppLayoutProps) {
               <span className="text-[9px] font-black text-emerald-600 uppercase tracking-wider hidden sm:inline-block">Live:</span>
               <select value={sessionYear} onChange={(e) => setSessionYear(e.target.value)}
                 className="bg-transparent text-xs font-bold text-slate-700 py-0.5 outline-none cursor-pointer">
-                <option value="2026-27">2026 - 2027</option>
-                <option value="2025-26">2025 - 2026</option>
+                {sessions.length > 0 ? (
+                  sessions.map(s => <option key={s.id} value={s.name}>{s.name}</option>)
+                ) : (
+                  <>
+                    <option value="2026-27">2026-27</option>
+                    <option value="2025-26">2025-26</option>
+                  </>
+                )}
               </select>
             </div>
 

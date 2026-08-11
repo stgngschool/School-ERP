@@ -132,14 +132,21 @@ export async function generateYearlyCharges(
   // Fetch all existing entries (charges and discounts) for this student
   const existingEntries = await db.ledgerEntry.findMany({
     where: { studentId },
-    select: { id: true, description: true, entryType: true, amount: true, receiptItems: true },
+    select: { id: true, description: true, entryType: true, amount: true, receiptItems: true, feeHead: { select: { name: true } } },
   });
-  const existingChargesMap = new Map(existingEntries.filter(e => e.entryType === EntryType.CHARGE).map(e => [e.description, e]));
-  const existingDiscountsSet = new Set(existingEntries.filter(e => e.entryType === EntryType.DISCOUNT).map((e) => e.description));
+  const existingChargesMap = new Map(
+    existingEntries.filter(e => e.entryType === EntryType.CHARGE).map(e => [
+      `${studentId}_${getNormalizedChargeKey(e.description, e.feeHead?.name || "")}`, e
+    ])
+  );
+  const existingDiscountsSet = new Set(
+    existingEntries.filter(e => e.entryType === EntryType.DISCOUNT).map(e => `${studentId}_${getNormalizedChargeKey(e.description, e.feeHead?.name || "")}`)
+  );
 
   let generated = 0;
   let skipped = 0;
   const toCreate: any[] = [];
+  const toUpdate: { id: string; amount: number }[] = [];
 
   for (const [, head] of headMap) {
     const { feeHeadId, amount, frequency, name } = head;
@@ -183,9 +190,21 @@ export async function generateYearlyCharges(
         ? `Concession Waiver (${concession.name}): ${chargeName}`
         : "";
 
-      const needCharge = !existingChargesMap.has(charge.description);
-      const needDiscount = isRte && !existingDiscountsSet.has(discountDesc);
-      const needConcessionDiscount = !isRte && concessionDesc && !existingDiscountsSet.has(concessionDesc);
+      const normChargeKey = getNormalizedChargeKey(charge.description, name);
+      const normDiscountKey = getNormalizedChargeKey(discountDesc, name);
+
+      const keyCharge = `${studentId}_${normChargeKey}`;
+      const keyDiscount = `${studentId}_${normDiscountKey}`;
+      const keyConcessionDiscount = concessionDesc ? `${studentId}_${getNormalizedChargeKey(concessionDesc, name)}` : "";
+
+      const existingChargeEntry = existingChargesMap.get(keyCharge);
+      if (existingChargeEntry && existingChargeEntry.amount !== charge.amount && existingChargeEntry.receiptItems.length === 0) {
+        toUpdate.push({ id: existingChargeEntry.id, amount: charge.amount });
+      }
+
+      const needCharge = !existingChargesMap.has(keyCharge);
+      const needDiscount = isRte && !existingDiscountsSet.has(keyDiscount);
+      const needConcessionDiscount = !isRte && concessionDesc && !existingDiscountsSet.has(keyConcessionDiscount);
 
       if (!needCharge && !needDiscount && !needConcessionDiscount) {
         skipped++;
@@ -235,6 +254,13 @@ export async function generateYearlyCharges(
     });
   }
 
+  for (const update of toUpdate) {
+    await db.ledgerEntry.update({
+      where: { id: update.id },
+      data: { amount: update.amount },
+    });
+  }
+
   return { generated, skipped };
 }
 
@@ -267,19 +293,20 @@ export async function generateYearlyChargesBulk(
       entryType: true,
       amount: true,
       receiptItems: true,
+      feeHead: { select: { name: true } },
     },
   });
 
   const existingChargesMap = new Map(
     existingEntries.filter(e => e.entryType === EntryType.CHARGE).map((e) => {
       // Find matching fee head or description name
-      const normKey = `${e.studentId}_${getNormalizedChargeKey(e.description, "")}`;
+      const normKey = `${e.studentId}_${getNormalizedChargeKey(e.description, e.feeHead?.name || "")}`;
       return [normKey, e];
     })
   );
   const existingChargesSet = new Set(existingChargesMap.keys());
   const existingDiscountsSet = new Set(
-    existingEntries.filter(e => e.entryType === EntryType.DISCOUNT).map((e) => `${e.studentId}_${getNormalizedChargeKey(e.description, "")}`)
+    existingEntries.filter(e => e.entryType === EntryType.DISCOUNT).map((e) => `${e.studentId}_${getNormalizedChargeKey(e.description, e.feeHead?.name || "")}`)
   );
 
   // 3. Fetch isRte details for all these students

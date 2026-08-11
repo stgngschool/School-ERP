@@ -105,6 +105,7 @@ model Class {
   classTeacherId String?
   classTeacher   TeacherProfile? @relation("ClassTeacher", fields: [classTeacherId], references: [id])
   students       Student[]
+  studentSessions StudentSession[]
   homeworks      Homework[]
   status         String         @default("ACTIVE") // "ACTIVE" or "ARCHIVED"
 
@@ -147,6 +148,7 @@ model Student {
   class           Class           @relation(fields: [classId], references: [id])
   status          String          @default("ACTIVE") // "ACTIVE", "LEFT"
   isRte           Boolean         @default(false)
+  isMarksheetClaimed Boolean      @default(false)
   
   attendance      Attendance[]
   leaveRequests   LeaveRequest[]
@@ -159,6 +161,7 @@ model Student {
   concession      Concession?     @relation(fields: [concessionId], references: [id], onDelete: SetNull)
   photoUrl        String?
   marks           Mark[]
+  studentSessions StudentSession[]
 }
 
 model Attendance {
@@ -168,6 +171,8 @@ model Attendance {
   date      DateTime         // Date only (no time)
   status    AttendanceStatus
   markedBy  String           // Teacher user ID
+  sessionId String?
+  session   AcademicSession? @relation(fields: [sessionId], references: [id])
   createdAt DateTime         @default(now())
 
   @@unique([studentId, date])
@@ -268,10 +273,11 @@ model FeeAssignment {
   student        Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
   feeStructureId String
   feeStructure   FeeStructure @relation(fields: [feeStructureId], references: [id])
-  academicYear   String       // e.g., '2026-2027'
+  sessionId      String
+  session        AcademicSession @relation(fields: [sessionId], references: [id])
   createdAt      DateTime     @default(now())
 
-  @@unique([studentId, feeStructureId, academicYear])
+  @@unique([studentId, feeStructureId, sessionId])
 }
 
 model LedgerEntry {
@@ -284,6 +290,8 @@ model LedgerEntry {
   amount       Int           // Positive for dues/charges, Negative for payments/reversals/discounts
   referenceId  String?       // Links to receipt ID
   description  String
+  sessionId    String?
+  session      AcademicSession? @relation(fields: [sessionId], references: [id])
   createdById  String
   createdBy    User          @relation("LedgerCreator", fields: [createdById], references: [id])
   createdAt    DateTime      @default(now())
@@ -357,8 +365,38 @@ model Mark {
   practical         Float?   // e.g. out of 10
   breakdown         Json?    // e.g. {"Written": 75, "Notebook": 5}
   remarks           String?
+  sessionId         String?
+  session           AcademicSession? @relation(fields: [sessionId], references: [id])
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
   @@unique([studentId, subject, examName])
+}
+
+model AcademicSession {
+  id             String           @id @default(uuid())
+  name           String           @unique // e.g., "2026-2027"
+  startDate      DateTime
+  endDate        DateTime
+  isCurrent      Boolean          @default(false)
+  createdAt      DateTime         @default(now())
+  
+  enrollments    StudentSession[]
+  feeAssignments FeeAssignment[]
+  marks          Mark[]
+  ledgerEntries  LedgerEntry[]
+  attendance     Attendance[]
+}
+
+model StudentSession {
+  id         String          @id @default(uuid())
+  studentId  String
+  student    Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  sessionId  String
+  session    AcademicSession @relation(fields: [sessionId], references: [id])
+  classId    String
+  class      Class           @relation(fields: [classId], references: [id])
+  rollNumber String?
+  
+  @@unique([studentId, sessionId])
 }

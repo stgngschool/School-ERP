@@ -19,43 +19,31 @@
   ],
   "examConfig": {
     "Unit-1": {
-      "isSplit": false,
-      "maxMarks": 20
+      "isSplit": true,
+      "maxMarks": 20,
+      "components": [
+        {
+          "name": "Note Book",
+          "max": 5
+        },
+        {
+          "name": "Sub. Enrich.",
+          "max": 5
+        },
+        {
+          "name": "Pr. Act.",
+          "max": 10
+        }
+      ]
     },
     "Half Yearly": {
-      "isSplit": true,
-      "maxMarks": 100,
-      "components": [
-        {
-          "name": "Written Exam",
-          "max": 80
-        },
-        {
-          "name": "Note Book",
-          "max": 5
-        },
-        {
-          "name": "Sub. Enrich.",
-          "max": 5
-        },
-        {
-          "name": "Pr. Act.",
-          "max": 10
-        }
-      ]
+      "isSplit": false,
+      "maxMarks": 80
     },
     "Unit-2": {
-      "isSplit": false,
-      "maxMarks": 20
-    },
-    "Annual": {
       "isSplit": true,
-      "maxMarks": 100,
+      "maxMarks": 20,
       "components": [
-        {
-          "name": "Written Exam",
-          "max": 80
-        },
         {
           "name": "Note Book",
           "max": 5
@@ -69,6 +57,10 @@
           "max": 10
         }
       ]
+    },
+    "Annual": {
+      "isSplit": false,
+      "maxMarks": 80
     }
   }
 }
