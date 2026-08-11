@@ -305,7 +305,7 @@ export default function AdminDashboard() {
       setLateFeeEnabled(schoolInfo.enableLateFee ?? false);
       setLateFeeGraceDays(schoolInfo.lateFeeGraceDays ?? 10);
       setLateFeeAmount(schoolInfo.lateFeeAmount ?? 50);
-      setLateFeeType(schoolInfo.lateFeeType || "FLAT");
+      setLateFeeType((schoolInfo.lateFeeType as "FLAT" | "PER_DAY") || "FLAT");
     }
   }, [schoolInfo]);
 
