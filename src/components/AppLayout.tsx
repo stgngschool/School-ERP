@@ -45,6 +45,7 @@ export interface NavItem {
   shortName: string;
   icon: React.ComponentType<{ className?: string }>;
   tab: string;
+  desktopOnly?: boolean;
 }
 
 // ─── Nav items per role ────────────────────────────────────────────────────
@@ -70,9 +71,9 @@ const getNavItems = (activeRole: string): NavItem[] => {
       return [
         { category: "Fee Transactions", name: "Fee Collection", shortName: "Collect", icon: CreditCard, tab: "collect" },
         { category: "Fee Transactions", name: "Fee Defaulters & Dues", shortName: "Dues", icon: AlertTriangle, tab: "defaulters" },
-        { category: "Fee Transactions", name: "Receipts & Ledger Logs", shortName: "Ledger", icon: ArrowRightLeft, tab: "ledger" },
-        { category: "Fee Management", name: "Fee Structure Setup", shortName: "Fee Setup", icon: Settings, tab: "structures" },
-        { category: "Fee Management", name: "Print Marksheets", shortName: "Print Marksheets", icon: Printer, tab: "print_marksheets" },
+        { category: "Fee Transactions", name: "Receipts & Ledger Logs", shortName: "Ledger", icon: ArrowRightLeft, tab: "ledger", desktopOnly: true },
+        { category: "Fee Management", name: "Fee Structure Setup", shortName: "Fee Setup", icon: Settings, tab: "structures", desktopOnly: true },
+        { category: "Fee Management", name: "Print Marksheets", shortName: "Marksheets", icon: Printer, tab: "print_marksheets", desktopOnly: true },
         { category: "Fee Management", name: "Marks & Exam Entry", shortName: "Marks", icon: GraduationCap, tab: "marks" },
       ];
     case "ADMIN":
@@ -81,16 +82,16 @@ const getNavItems = (activeRole: string): NavItem[] => {
         { category: "Student & Academics", name: "Student Management", shortName: "Students", icon: Users, tab: "students" },
         { category: "Student & Academics", name: "Attendance Console", shortName: "Attendance", icon: UserCheck, tab: "attendance" },
         { category: "Student & Academics", name: "Marks & Exam Roster", shortName: "Marks", icon: GraduationCap, tab: "marks" },
-        { category: "Student & Academics", name: "Print Marksheets", shortName: "Print Marksheets", icon: Printer, tab: "print_marksheets" },
-        { category: "Student & Academics", name: "ID Cards & Photos", shortName: "ID Cards", icon: UserCheck, tab: "idcards" },
+        { category: "Student & Academics", name: "Print Marksheets", shortName: "Marksheets", icon: Printer, tab: "print_marksheets", desktopOnly: true },
+        { category: "Student & Academics", name: "ID Cards & Photos", shortName: "ID Cards", icon: UserCheck, tab: "idcards", desktopOnly: true },
         { category: "Finance & Fees", name: "Fee Collection", shortName: "Collect", icon: CreditCard, tab: "collect" },
         { category: "Finance & Fees", name: "Fee Defaulters & Dues", shortName: "Dues", icon: AlertTriangle, tab: "defaulters" },
-        { category: "Finance & Fees", name: "Receipts & Ledger", shortName: "Ledger", icon: ArrowRightLeft, tab: "ledger" },
-        { category: "Finance & Fees", name: "Fee Structure Setup", shortName: "Fee Setup", icon: Settings, tab: "structures" },
+        { category: "Finance & Fees", name: "Receipts & Ledger", shortName: "Ledger", icon: ArrowRightLeft, tab: "ledger", desktopOnly: true },
+        { category: "Finance & Fees", name: "Fee Structure Setup", shortName: "Fee Setup", icon: Settings, tab: "structures", desktopOnly: true },
         { category: "System & Communication", name: "Notices & Announcements", shortName: "Notices", icon: Bell, tab: "notices" },
-        { category: "System & Communication", name: "User Access Control", shortName: "Users", icon: ShieldCheck, tab: "users" },
-        { category: "System & Communication", name: "School Settings", shortName: "Settings", icon: Building2, tab: "school" },
-        { category: "System & Communication", name: "System Audit Logs", shortName: "Audit", icon: FileSpreadsheet, tab: "audit" },
+        { category: "System & Communication", name: "User Access Control", shortName: "Users", icon: ShieldCheck, tab: "users", desktopOnly: true },
+        { category: "System & Communication", name: "School Settings", shortName: "Settings", icon: Building2, tab: "school", desktopOnly: true },
+        { category: "System & Communication", name: "System Audit Logs", shortName: "Audit", icon: FileSpreadsheet, tab: "audit", desktopOnly: true },
       ];
     default:
       return [];
@@ -141,9 +142,13 @@ export default function AppLayout({ children }: AppLayoutProps) {
   };
 
   const navItems = getNavItems(activeRole || "");
-  const bottomNavItems = navItems.slice(0, BOTTOM_NAV_VISIBLE);
-  const moreNavItems = navItems.slice(BOTTOM_NAV_VISIBLE);
+  // On mobile, hide desktop-only sections entirely
+  const mobileNavItems = navItems.filter(item => !item.desktopOnly);
+  const bottomNavItems = mobileNavItems.slice(0, BOTTOM_NAV_VISIBLE);
+  const moreNavItems = mobileNavItems.slice(BOTTOM_NAV_VISIBLE);
   const latestNotice = notices.length > 0 ? notices[notices.length - 1] : null;
+  // Desktop-only tab list (for guard)
+  const desktopOnlyTabs = navItems.filter(i => i.desktopOnly).map(i => i.tab);
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -508,7 +513,25 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
         {/* Main Content */}
         <main className="flex-1 px-3 pt-3 pb-28 sm:p-4 md:p-5 lg:p-6 xl:p-8 md:pb-8 overflow-y-auto overflow-x-hidden min-w-0 max-w-full touch-scroll-y  bg-white md:bg-transparent">
-          {children}
+          {/* Desktop-Only Guard — shown only on mobile for restricted tabs */}
+          {mounted && typeof window !== 'undefined' && window.innerWidth < 768 && desktopOnlyTabs.includes(activeTab) ? (
+            <div className="flex flex-col items-center justify-center h-full min-h-[60vh] text-center px-6 py-12">
+              <div className="w-16 h-16 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mb-5">
+                <svg className="h-8 w-8 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0H3" />
+                </svg>
+              </div>
+              <h2 className="text-base font-black text-slate-800 mb-2">Desktop Required</h2>
+              <p className="text-sm text-slate-500 font-medium leading-relaxed max-w-xs">
+                This section is designed for larger screens. Please open it on a laptop or desktop computer for the best experience.
+              </p>
+              <div className="mt-6 px-4 py-2 bg-indigo-600 text-white text-xs font-black rounded-xl">
+                🖥️ Use Desktop / Laptop
+              </div>
+            </div>
+          ) : (
+            children
+          )}
         </main>
       </div>
 
@@ -565,10 +588,10 @@ export default function AppLayout({ children }: AppLayoutProps) {
               </button>
             </div>
             <nav className="space-y-1 mt-2">
-              {mounted && navItems.map((item, idx) => {
+              {mounted && mobileNavItems.map((item, idx) => {
                 const Icon = item.icon;
                 const isActive = activeTab === item.tab;
-                const showCategoryHeader = idx === 0 || navItems[idx - 1].category !== item.category;
+                const showCategoryHeader = idx === 0 || mobileNavItems[idx - 1].category !== item.category;
                 return (
                   <React.Fragment key={item.tab + "-mobile-" + idx}>
                     {showCategoryHeader && item.category && (
