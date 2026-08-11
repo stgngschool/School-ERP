@@ -252,13 +252,6 @@ body {
   margin: 0 auto 16px;
 }
 
-.bottom-sheet.closing {
-  animation: sheet-slide-down 0.2s cubic-bezier(0.32, 0.72, 0, 1) forwards !important;
-}
-
-.bottom-sheet-overlay.closing {
-  animation: fade-out 0.2s ease forwards !important;
-}
 
 /* ─────────────────────────────────────────
    MOBILE CARD VIEWS

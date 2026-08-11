@@ -90,7 +90,11 @@ export default function BottomSheet({ isOpen, onClose, title, children }: Bottom
         className={`bottom-sheet-overlay md:hidden ${isClosing ? "closing" : ""}`}
         onClick={handleClose}
         style={{
-          opacity: dragY > 0 ? Math.max(0, 1 - dragY / 300) : undefined,
+          opacity: isClosing
+            ? 0
+            : dragY > 0
+              ? Math.max(0, 1 - dragY / 300)
+              : undefined,
           transition: isDragging ? "none" : "opacity 0.2s ease",
         }}
       />
@@ -100,7 +104,11 @@ export default function BottomSheet({ isOpen, onClose, title, children }: Bottom
         ref={sheetRef}
         className={`bottom-sheet md:hidden ${isClosing ? "closing" : ""}`}
         style={{
-          transform: dragY > 0 ? `translateY(${dragY}px)` : undefined,
+          transform: isClosing
+            ? "translateY(100%)"
+            : dragY > 0
+              ? `translateY(${dragY}px)`
+              : undefined,
           transition: isDragging ? "none" : "transform 0.2s cubic-bezier(0.32, 0.72, 0, 1)",
         }}
         onTouchStart={handleTouchStart}
