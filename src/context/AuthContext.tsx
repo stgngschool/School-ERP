@@ -76,6 +76,7 @@ export interface MockStudent {
     feeHeadName: string;
   } | null;
   photoUrl?: string;
+  isMarksheetClaimed?: boolean;
 }
 
 export interface MockDueItem {
