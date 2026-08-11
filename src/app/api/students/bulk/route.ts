@@ -97,7 +97,9 @@ export async function POST(request: Request) {
     const existingEmailsSet = new Set<string>(existingUsers.map((u) => u.email.toLowerCase()));
 
     // Pre-create any missing parent users and profiles using Multi-Factor Matching
-    for (const record of students) {
+    const recordProfileMap = new Map<number, any>();
+    for (let i = 0; i < students.length; i++) {
+      const record = students[i];
       if (!record.fatherMobile && !record.fatherName) continue;
 
       const matchedProfile = findMatchingParentProfile(
@@ -112,7 +114,9 @@ export async function POST(request: Request) {
         activeProfilesList
       );
 
-      if (!matchedProfile) {
+      if (matchedProfile) {
+        recordProfileMap.set(i, matchedProfile);
+      } else {
         maxFamilyNum++;
         let familyCode = `FAM-${year}-${String(maxFamilyNum).padStart(4, "0")}`;
         while (existingFamilyCodesSet.has(familyCode.toUpperCase())) {
@@ -155,6 +159,7 @@ export async function POST(request: Request) {
 
         if (user.parentProfile) {
           activeProfilesList.push(user.parentProfile);
+          recordProfileMap.set(i, user.parentProfile);
         }
       }
     }
@@ -163,7 +168,8 @@ export async function POST(request: Request) {
     const studentsToCreate: any[] = [];
     const backfillMap: { id: string; class: { name: string } }[] = [];
 
-    for (const record of students) {
+    for (let i = 0; i < students.length; i++) {
+      const record = students[i];
       const {
         name,
         dob,
@@ -208,7 +214,7 @@ export async function POST(request: Request) {
       const classKey = `${classNameClean.toUpperCase()}-${sectionClean.toUpperCase()}`;
       const classObj = classMap.get(classKey);
 
-      const parentProfile = findMatchingParentProfile(
+      let parentProfile = findMatchingParentProfile(
         {
           fatherMobile: fatherMobile ? String(fatherMobile).trim() : undefined,
           motherMobile: motherMobile ? String(motherMobile).trim() : undefined,
@@ -219,6 +225,10 @@ export async function POST(request: Request) {
         },
         activeProfilesList
       );
+
+      if (!parentProfile) {
+        parentProfile = recordProfileMap.get(i);
+      }
 
       if (!classObj || !parentProfile) continue;
 
