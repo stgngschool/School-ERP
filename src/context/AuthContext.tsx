@@ -89,6 +89,8 @@ export interface MockDueItem {
   totalPaid?: number;
   totalDiscount?: number;
   fine?: number;
+  isCurrentSession?: boolean;
+  sessionName?: string;
 }
 
 export interface MockAttendance {
