@@ -37,6 +37,7 @@ export default function TeacherDashboard() {
     updateLeaveStatus,
     activeTab,
     setActiveTab,
+    studentsLoaded,
   } = useAuth();
 
   const validTabs = ["attendance", "homework", "leaves", "marks"];
@@ -198,7 +199,23 @@ export default function TeacherDashboard() {
       </div>
 
       {/* ─── Tab Content Area ─── */}
-      {currentTab === "marks" ? (
+      {!studentsLoaded ? (
+        <div className="bg-white border-y sm:border border-slate-200 sm:rounded-2xl shadow-sm p-6 animate-pulse space-y-4">
+          <div className="h-6 bg-slate-200 w-1/3 rounded" />
+          <div className="h-4 bg-slate-100 w-1/4 rounded" />
+          <div className="border-t border-slate-100 pt-4 space-y-3">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="flex justify-between items-center py-2">
+                <div className="flex items-center gap-3 w-1/2">
+                  <div className="h-8 w-8 bg-slate-200 rounded-full" />
+                  <div className="h-4 bg-slate-200 w-3/4 rounded" />
+                </div>
+                <div className="h-6 bg-slate-100 w-12 rounded-full" />
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : currentTab === "marks" ? (
         <MarksFeedingConsole />
       ) : currentTab === "attendance" ? (
         <AttendanceConsole initialClass={selectedClass} />

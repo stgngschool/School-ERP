@@ -122,6 +122,9 @@ export default function ParentDashboard() {
     applyLeave,
     activeTab,
     setActiveTab,
+    studentsLoaded,
+    billingLoaded,
+    attendanceLoaded,
   } = useAuth();
 
   // Filter students belonging to this parent dynamically with robust phone/family matching
@@ -289,6 +292,20 @@ export default function ParentDashboard() {
     : ["Unit-1", "Half Yearly", "Unit-2", "Annual"];
 
   const currentExamTab = selectedExamTab || (availableExams.length > 0 ? availableExams[0] : "");
+
+  if (!studentsLoaded) {
+    return (
+      <div className="sm:mx-0 space-y-4 mobile-edge-grid pb-2 animate-pulse font-sans w-full max-w-full overflow-x-hidden">
+        <div className="bg-white border border-slate-200 sm:rounded-2xl p-6 shadow-sm h-32" />
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="bg-white border border-slate-200 rounded-xl h-24" />
+          ))}
+        </div>
+        <div className="bg-white border border-slate-200 sm:rounded-2xl shadow-sm h-96" />
+      </div>
+    );
+  }
 
   if (!child) {
     return (
@@ -774,6 +791,22 @@ export default function ParentDashboard() {
       )}
 
       {activeTab === "fees" && (
+        !billingLoaded ? (
+          <div className="bg-white border-y sm:border border-slate-200 sm:rounded-2xl p-3 sm:p-6 shadow-sm space-y-4 animate-pulse">
+            <div className="flex items-center justify-between border-b border-slate-200/80 pb-3">
+              <div className="h-4 bg-slate-200 w-48 rounded" />
+              <div className="h-4 bg-slate-200 w-24 rounded" />
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2 space-y-2">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="h-16 bg-slate-50 border border-slate-100 rounded-xl" />
+                ))}
+              </div>
+              <div className="bg-slate-50 border border-slate-150 rounded-2xl h-48" />
+            </div>
+          </div>
+        ) : (
         <div className="space-y-6">
           {/* Outstanding Invoices Billing Desk */}
         <div className="bg-white border-y sm:border border-slate-200 sm:rounded-2xl p-3 sm:p-6 shadow-sm space-y-4">
@@ -905,6 +938,7 @@ export default function ParentDashboard() {
             </div>
           </div>
         </div>
+        )
       )}
 
       {activeTab === "homework" && (
@@ -943,6 +977,19 @@ export default function ParentDashboard() {
       )}
 
       {activeTab === "attendance" && (
+        !attendanceLoaded ? (
+          <div className="bg-white border border-slate-200/80 p-3 sm:p-6 sm:rounded-2xl rounded-xl shadow-sm space-y-4 animate-pulse">
+            <div className="flex items-center justify-between border-b border-slate-200/80 pb-3">
+              <div className="h-4 bg-slate-200 w-48 rounded" />
+              <div className="h-4 bg-slate-200 w-16 rounded" />
+            </div>
+            <div className="grid grid-cols-7 gap-2 max-w-sm">
+              {[...Array(28)].map((_, i) => (
+                <div key={i} className="aspect-square bg-slate-100 rounded-xl" />
+              ))}
+            </div>
+          </div>
+        ) : (
         <div className="bg-white border border-slate-200/80 p-3 sm:p-6 sm:rounded-2xl rounded-xl shadow-sm space-y-4">
           <div className="flex items-center justify-between border-b border-slate-200/80 pb-3">
             <div className="flex items-center gap-2">
@@ -992,6 +1039,7 @@ export default function ParentDashboard() {
             })}
           </div>
         </div>
+        )
       )}
 
       {activeTab === "leave" && (

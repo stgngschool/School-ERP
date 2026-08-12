@@ -142,6 +142,8 @@ export default function AccountantDashboard() {
     activeTab,
     setActiveTab,
     classes,
+    studentsLoaded,
+    billingLoaded,
   } = useAuth();
 
   const validTabs = ["dashboard", "collect", "attendance", "defaulters", "ledger", "structures", "students", "idcards", "audit", "print_marksheets", "marks"];
@@ -585,7 +587,17 @@ export default function AccountantDashboard() {
         <div className="bg-white border-y sm:border border-slate-200 p-2.5 sm:p-6 sm:rounded-2xl shadow-sm">
           {/* TAB 1: Collect Fee Form */}
           {currentTab === "collect" && (
-          <div>
+            !studentsLoaded || !billingLoaded ? (
+              <div className="max-w-2xl mx-auto py-12 px-4 text-center space-y-6 animate-pulse">
+                <div className="inline-flex p-3.5 bg-slate-100 rounded-2xl h-14 w-14" />
+                <div className="space-y-2">
+                  <div className="h-4 bg-slate-200 w-48 mx-auto rounded" />
+                  <div className="h-3 bg-slate-100 w-96 mx-auto rounded" />
+                </div>
+                <div className="h-12 bg-slate-50 border border-slate-200 rounded-xl max-w-lg mx-auto" />
+              </div>
+            ) : (
+            <div>
             {!selectedStudentId ? (
               // SEARCH VIEW (No student selected)
               <div className="max-w-2xl mx-auto py-12 px-4 text-center space-y-6">
@@ -1304,11 +1316,32 @@ export default function AccountantDashboard() {
               </div>
             )
           )}
-          </div>
-        )}
+            </div>
+            )
+          )}
 
         {/* TAB 2: Defaulter / Outstanding Dues Report */}
         {currentTab === "defaulters" && (
+          !studentsLoaded || !billingLoaded ? (
+            <div className="space-y-5 animate-pulse">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
+                <div className="space-y-2">
+                  <div className="h-4 bg-slate-200 w-48 rounded" />
+                  <div className="h-3 bg-slate-100 w-96 rounded" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="h-14 bg-slate-50 border border-slate-100 rounded-xl" />
+                ))}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {[...Array(6)].map((_, i) => (
+                  <div key={i} className="bg-white border border-slate-200 rounded-2xl h-48 shadow-sm" />
+                ))}
+              </div>
+            </div>
+          ) : (
           <div className="space-y-5">
             {alertSuccessMsg && (
               <div className="flex items-center gap-2 bg-green-50 text-green-700 p-2.5 rounded-xl border border-green-100 text-xs font-semibold animate-fade-in">
@@ -1741,6 +1774,7 @@ export default function AccountantDashboard() {
               );
             })()}
           </div>
+          )
         )}
 
         {/* TAB 3: Fee Structures & Fee Heads Config */}
@@ -1935,6 +1969,22 @@ export default function AccountantDashboard() {
 
         {/* TAB 4: Ledger Logs */}
         {currentTab === "ledger" && (
+          !billingLoaded ? (
+            <div className="space-y-6 animate-pulse">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+                <div className="space-y-2">
+                  <div className="h-4 bg-slate-200 w-48 rounded" />
+                  <div className="h-3 bg-slate-100 w-96 rounded" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="h-14 bg-slate-50 border border-slate-100 rounded-2xl" />
+                ))}
+              </div>
+              <div className="bg-white border border-slate-200 rounded-2xl h-96" />
+            </div>
+          ) : (
           <div className="space-y-6">
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
@@ -2206,6 +2256,7 @@ export default function AccountantDashboard() {
               </div>
             )}
           </div>
+          )
         )}
       </div>
 )}
