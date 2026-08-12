@@ -411,8 +411,10 @@ export default function AdminDashboard() {
   const [showJsonBox, setShowJsonBox] = useState(false);
   const [googleStatus, setGoogleStatus] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
-  // Load from localStorage and API on mount
+  // Load Google integration state only when the School settings tab is opened.
   useEffect(() => {
+    if (activeTab !== "school") return;
+
     if (typeof window !== "undefined") {
       setGoogleSpreadsheetId(localStorage.getItem("g_sheet_id") || "");
       setGoogleFolderId(localStorage.getItem("g_drive_folder_id") || "");
@@ -425,7 +427,7 @@ export default function AdminDashboard() {
         }
       })
       .catch(() => {});
-  }, []);
+  }, [activeTab]);
 
   const handleSaveGoogleCredentials = async () => {
     if (!serviceJsonInput.trim()) {

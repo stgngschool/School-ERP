@@ -68,6 +68,8 @@ export async function GET(request: Request) {
     const startYear = parseInt(acYear.split("-")[0]);
     // Fetch charges created from March 1st of the current academic year to cover early assignments
     const sessionStartDate = new Date(`${startYear}-03-01T00:00:00.000Z`);
+    chargesWhere.createdAt = { gte: sessionStartDate };
+    discountsWhere.createdAt = { gte: sessionStartDate };
 
     // Execute all database queries concurrently in parallel
     const [ledger, receipts, charges, discounts] = await Promise.all([
@@ -104,7 +106,6 @@ export async function GET(request: Request) {
       }),
       db.ledgerEntry.findMany({
         where: chargesWhere,
-        take: 1000,
         orderBy: { createdAt: "desc" },
         select: {
           id: true,
@@ -122,7 +123,6 @@ export async function GET(request: Request) {
       }),
       db.ledgerEntry.findMany({
         where: discountsWhere,
-        take: 500,
         orderBy: { createdAt: "desc" },
         select: {
           id: true,
@@ -514,4 +514,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Checkout transaction failed" }, { status: 500 });
   }
 }
-

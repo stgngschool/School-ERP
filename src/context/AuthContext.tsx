@@ -492,28 +492,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const criticalLoads = [
         apiFetch("/api/school", {}, 12000, true).then((data) => { if (data) setSchoolInfo(data); }),
+        apiFetch("/api/classes", {}, 12000, true).then((data) => data && setClasses(data)),
+        apiFetch("/api/fee-config", {}, 12000, true).then((feeData) => {
+          if (feeData) {
+            setFeeHeads(feeData.feeHeads || []);
+            setFeeStructures(feeData.feeStructures || []);
+          }
+        }),
       ];
-      apiFetch("/api/homework").then((data) => data && setHomeworks(data));
-      apiFetch("/api/leave").then((data) => data && setLeaveRequests(data));
-      apiFetch("/api/notice").then((data) => data && setNotices(data));
-      apiFetch("/api/events").then((data) => data && setEventsList(data));
-      apiFetch("/api/classes", {}, 12000, true).then((data) => data && setClasses(data));
-      apiFetch("/api/concessions", {}, 12000, true).then((data) => data && setConcessions(data));
-
-      apiFetch("/api/transport", {}, 12000, true).then((transData) => {
-        if (transData) setTransportStops(transData.map((d: any) => ({ ...d, amount: d.amount / 100 })));
-      });
-
-      apiFetch("/api/fee-config", {}, 12000, true).then((feeData) => {
-        if (feeData) {
-          setFeeHeads(feeData.feeHeads || []);
-          setFeeStructures(feeData.feeStructures || []);
-        }
-      });
 
       if (isStaff) {
-        apiFetch("/api/users").then((data) => data && setUsersList(data));
-        apiFetch("/api/audits").then((data) => data && setAuditLogs(data));
+        criticalLoads.push(
+          apiFetch("/api/transport", {}, 12000, true).then((transData) => {
+            if (transData) setTransportStops(transData.map((d: any) => ({ ...d, amount: d.amount / 100 })));
+          }),
+          apiFetch("/api/concessions", {}, 12000, true).then((data) => data && setConcessions(data))
+        );
       }
 
       await Promise.allSettled(criticalLoads);

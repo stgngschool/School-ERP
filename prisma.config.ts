@@ -1,3 +1,4 @@
+// Prisma configuration file for schema, datasource, and seed settings.
 import "dotenv/config";
 import { defineConfig, env } from "prisma/config";
 

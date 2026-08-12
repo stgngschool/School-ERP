@@ -163,6 +163,10 @@ model Student {
   photoUrl        String?
   marks           Mark[]
   studentSessions StudentSession[]
+
+  @@index([parentProfileId])
+  @@index([classId])
+  @@index([name])
 }
 
 model Attendance {
@@ -176,6 +180,8 @@ model Attendance {
   session   AcademicSession? @relation(fields: [sessionId], references: [id])
   createdAt DateTime         @default(now())
 
+  @@index([studentId])
+  @@index([date])
   @@unique([studentId, date])
 }
 
@@ -297,6 +303,12 @@ model LedgerEntry {
   createdBy    User          @relation("LedgerCreator", fields: [createdById], references: [id])
   createdAt    DateTime      @default(now())
   receiptItems ReceiptItem[]
+
+  @@index([studentId])
+  @@index([entryType])
+  @@index([createdAt])
+  @@index([studentId, entryType])
+  @@index([entryType, createdAt])
 }
 
 model Receipt {
@@ -315,6 +327,10 @@ model Receipt {
   createdBy            User           @relation("ReceiptCreator", fields: [createdById], references: [id])
   createdAt            DateTime       @default(now())
   items                ReceiptItem[]
+
+  @@index([studentId])
+  @@index([parentProfileId])
+  @@index([createdAt])
 }
 
 model ReceiptItem {

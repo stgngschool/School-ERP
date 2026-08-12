@@ -4,7 +4,10 @@ import db from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const authUser = await getAuthUser(request);
+  if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   try {
     let events = await db.calendarEvent.findMany({
 take: 100,

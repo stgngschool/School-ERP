@@ -123,6 +123,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const [showAppsModal, setShowAppsModal] = useState(false);
 
   useEffect(() => {
+    if (!user) return;
+
     fetch("/api/sessions")
       .then(res => res.json())
       .then(data => {
@@ -133,7 +135,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
         }
       })
       .catch(err => console.error("Failed to load sessions", err));
-  }, []);
+  }, [user]);
 
   const megaMenuRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);

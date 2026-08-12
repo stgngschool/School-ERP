@@ -6,7 +6,12 @@ import path from "path";
 
 const credsPath = path.join(process.cwd(), "src/data/google-credentials.json");
 
-export async function GET() {
+export async function GET(request: Request) {
+  const authUser = await getAuthUser(request);
+  if (!authUser || authUser.role !== "ADMIN") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     if (fs.existsSync(credsPath)) {
       const data = fs.readFileSync(credsPath, "utf-8");
