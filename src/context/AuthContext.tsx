@@ -512,6 +512,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       await Promise.allSettled(criticalLoads);
       setCurrentStage("DASHBOARD READY");
+
+      // Trigger background loads asynchronously based on role to avoid blocking render
+      const role = userToFetch.role;
+      if (role === "ADMIN") {
+        apiFetch("/api/students").then((data) => data && setStudents(data)).then(() => setStudentsLoaded(true));
+        apiFetch("/api/billing").then((data) => {
+          if (data) {
+            setLedgerEntries(data.ledgerEntries || []);
+            setReceipts(data.receipts || []);
+            setDueItems(data.dueItems || []);
+            setBillingLoaded(true);
+          }
+        });
+        apiFetch("/api/attendance").then((data) => data && setAttendances(data)).then(() => setAttendanceLoaded(true));
+        apiFetch("/api/homework").then((data) => data && setHomeworks(data));
+        apiFetch("/api/leave").then((data) => data && setLeaveRequests(data));
+        apiFetch("/api/notice").then((data) => data && setNotices(data));
+        apiFetch("/api/events").then((data) => data && setEventsList(data));
+        apiFetch("/api/users").then((data) => data && setUsersList(data));
+        apiFetch("/api/audits").then((data) => data && setAuditLogs(data));
+      } else if (role === "ACCOUNTANT") {
+        apiFetch("/api/students").then((data) => data && setStudents(data)).then(() => setStudentsLoaded(true));
+        apiFetch("/api/billing").then((data) => {
+          if (data) {
+            setLedgerEntries(data.ledgerEntries || []);
+            setReceipts(data.receipts || []);
+            setDueItems(data.dueItems || []);
+            setBillingLoaded(true);
+          }
+        });
+        apiFetch("/api/notice").then((data) => data && setNotices(data));
+        apiFetch("/api/events").then((data) => data && setEventsList(data));
+      } else if (role === "TEACHER") {
+        apiFetch("/api/students").then((data) => data && setStudents(data)).then(() => setStudentsLoaded(true));
+        apiFetch("/api/attendance").then((data) => data && setAttendances(data)).then(() => setAttendanceLoaded(true));
+        apiFetch("/api/homework").then((data) => data && setHomeworks(data));
+        apiFetch("/api/leave").then((data) => data && setLeaveRequests(data));
+        apiFetch("/api/notice").then((data) => data && setNotices(data));
+        apiFetch("/api/events").then((data) => data && setEventsList(data));
+      } else if (role === "PARENT") {
+        apiFetch("/api/students").then((data) => data && setStudents(data)).then(() => setStudentsLoaded(true));
+        apiFetch("/api/billing").then((data) => {
+          if (data) {
+            setLedgerEntries(data.ledgerEntries || []);
+            setReceipts(data.receipts || []);
+            setDueItems(data.dueItems || []);
+            setBillingLoaded(true);
+          }
+        });
+        apiFetch("/api/attendance").then((data) => data && setAttendances(data)).then(() => setAttendanceLoaded(true));
+        apiFetch("/api/homework").then((data) => data && setHomeworks(data));
+        apiFetch("/api/leave").then((data) => data && setLeaveRequests(data));
+        apiFetch("/api/notice").then((data) => data && setNotices(data));
+        apiFetch("/api/events").then((data) => data && setEventsList(data));
+      }
     } catch (err) {
       console.error("[AuthContext] refreshData EXCEPTION:", err);
     }
