@@ -28,6 +28,11 @@ export interface MockUser {
   status: UserStatus;
   email?: string;
   phone?: string;
+  teacherProfile?: {
+    id: string;
+    employeeId: string;
+    classes: { id: string; name: string; section: string }[];
+  } | null;
 }
 
 export interface MockStudent {

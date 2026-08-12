@@ -53,7 +53,16 @@ export async function GET() {
         phone: true,
         status: true,
         parentProfile: { select: { id: true, familyCode: true } },
-        teacherProfile: { select: { id: true, employeeId: true } },
+        teacherProfile: {
+          select: {
+            id: true,
+            employeeId: true,
+            classes: {
+              where: { status: "ACTIVE" },
+              select: { id: true, name: true, section: true }
+            }
+          }
+        },
         accountantProfile: { select: { id: true, employeeId: true } },
       },
     });

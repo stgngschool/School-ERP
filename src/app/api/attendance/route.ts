@@ -16,10 +16,24 @@ export async function GET(request: Request) {
     const startYear = parseInt(acYear.split("-")[0]);
     const sessionStartDate = new Date(`${startYear}-03-01T00:00:00.000Z`);
 
+    let whereClause: any = {
+      date: { gte: sessionStartDate }
+    };
+
+    if (authUser.role === "PARENT") {
+      const parentProfile = await db.parentProfile.findUnique({
+        where: { userId: authUser.userId },
+        include: { students: true }
+      });
+      if (!parentProfile) {
+        return NextResponse.json([]);
+      }
+      const studentIds = parentProfile.students.map((s) => s.id);
+      whereClause.studentId = { in: studentIds };
+    }
+
     const logs = await db.attendance.findMany({
-      where: {
-        date: { gte: sessionStartDate }
-      },
+      where: whereClause,
       orderBy: { date: "desc" },
     });
 

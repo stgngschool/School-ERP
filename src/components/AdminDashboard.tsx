@@ -197,6 +197,7 @@ export default function AdminDashboard() {
     attendances,
     refreshStudents,
     refreshBilling,
+    refreshUsers,
   } = useAuth();
 
   const validTabs = ["dashboard", "collect", "attendance", "marks", "print_marksheets", "defaulters", "ledger", "structures", "students", "users", "idcards", "notices", "school", "audit"];
@@ -375,6 +376,16 @@ export default function AdminDashboard() {
   const [newStaffEmployeeId, setNewStaffEmployeeId] = useState("");
   const [addStaffError, setAddStaffError] = useState("");
   const [addStaffSuccess, setAddStaffSuccess] = useState("");
+  const [newStaffClassId, setNewStaffClassId] = useState("");
+
+  // Assign Class Teacher Modal States
+  const [showAssignClassModal, setShowAssignClassModal] = useState(false);
+  const [assignClassUserId, setAssignClassUserId] = useState("");
+  const [assignClassUserName, setAssignClassUserName] = useState("");
+  const [selectedClassIdForTeacher, setSelectedClassIdForTeacher] = useState("");
+  const [assignClassLoading, setAssignClassLoading] = useState(false);
+  const [assignClassError, setAssignClassError] = useState("");
+  const [assignClassSuccess, setAssignClassSuccess] = useState("");
 
   // itemsPerPage is now state
   
@@ -3828,10 +3839,19 @@ export default function AdminDashboard() {
                                     </div>
                                   </td>
                                   <td className="py-3.5 px-4">
-                                    <span className={`inline-block text-[8px] font-black uppercase px-2 py-0.5 rounded border ${roleColors}`}>
-                                      {usr.role}
-                                    </span>
-                                  </td>
+                                     <div className="space-y-1">
+                                       <span className={`inline-block text-[8px] font-black uppercase px-2 py-0.5 rounded border ${roleColors}`}>
+                                         {usr.role}
+                                       </span>
+                                       {usr.role === "TEACHER" && (
+                                         <div className="text-[10px] text-slate-500 font-semibold leading-tight">
+                                           Class: {usr.teacherProfile?.classes && usr.teacherProfile.classes.length > 0 
+                                             ? `${usr.teacherProfile.classes[0].name}-${usr.teacherProfile.classes[0].section}` 
+                                             : "None"}
+                                         </div>
+                                       )}
+                                     </div>
+                                   </td>
                                   <td className="py-3.5 px-4">
                                     <span
                                       className={`inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
@@ -3898,6 +3918,25 @@ export default function AdminDashboard() {
                                       >
                                         🗑️ Delete
                                       </button>
+
+                                      {/* 4. Assign Class Teacher */}
+                                      {usr.role === "TEACHER" && (
+                                        <button
+                                          onClick={() => {
+                                            setAssignClassUserId(usr.id);
+                                            setAssignClassUserName(usr.name);
+                                            const currentClass = usr.teacherProfile?.classes?.[0]?.id || "";
+                                            setSelectedClassIdForTeacher(currentClass);
+                                            setAssignClassError("");
+                                            setAssignClassSuccess("");
+                                            setShowAssignClassModal(true);
+                                          }}
+                                          title="Assign Class Teacher"
+                                          className="py-1 px-2.5 text-[10px] font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-all cursor-pointer"
+                                        >
+                                          🏫 Class
+                                        </button>
+                                      )}
                                     </div>
                                   </td>
                                 </tr>
@@ -8154,6 +8193,7 @@ export default function AdminDashboard() {
                   setNewStaffPassword("");
                   setNewStaffPhone("");
                   setNewStaffEmployeeId("");
+                  setNewStaffClassId("");
                   setAddStaffError("");
                   setAddStaffSuccess("");
                 }}
@@ -8193,7 +8233,8 @@ export default function AdminDashboard() {
                   role: newStaffRole,
                   password: newStaffPassword,
                   phone: newStaffPhone,
-                  employeeId: newStaffEmployeeId || undefined
+                  employeeId: newStaffEmployeeId || undefined,
+                  classId: newStaffRole === "TEACHER" ? (newStaffClassId || undefined) : undefined
                 });
 
                 if (res.success) {
@@ -8207,6 +8248,7 @@ export default function AdminDashboard() {
                     setNewStaffPassword("");
                     setNewStaffPhone("");
                     setNewStaffEmployeeId("");
+                    setNewStaffClassId("");
                     setAddStaffSuccess("");
                   }, 1500);
                 } else {
@@ -8252,6 +8294,24 @@ export default function AdminDashboard() {
                   />
                 </div>
               </div>
+
+              {newStaffRole === "TEACHER" && (
+                <div>
+                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Assign Class Teacher of (Optional)</label>
+                  <select
+                    value={newStaffClassId}
+                    onChange={(e) => setNewStaffClassId(e.target.value)}
+                    className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 cursor-pointer"
+                  >
+                    <option value="">No Class (Subject Teacher)</option>
+                    {classes.map((cls: any) => (
+                      <option key={cls.id} value={cls.id}>
+                        Class {cls.name}-{cls.section}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div>
                 <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Username (Login ID) *</label>
@@ -8313,6 +8373,7 @@ export default function AdminDashboard() {
                     setNewStaffPassword("");
                     setNewStaffPhone("");
                     setNewStaffEmployeeId("");
+                    setNewStaffClassId("");
                     setAddStaffError("");
                     setAddStaffSuccess("");
                   }}
@@ -8325,6 +8386,130 @@ export default function AdminDashboard() {
                   className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-500/10 cursor-pointer text-center"
                 >
                   Create Account
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Assign Class Teacher Modal */}
+      {showAssignClassModal && (
+        <div className="fixed inset-0 z-45 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-sm w-full p-6 shadow-2xl relative space-y-4 text-left animate-fade-in animate-duration-200">
+            <div className="flex justify-between items-start border-b border-slate-100 pb-3">
+              <div>
+                <h4 className="font-extrabold text-slate-800 text-base">Assign Class Teacher</h4>
+                <p className="text-[10px] text-slate-400 font-bold mt-0.5">Assign class teacher responsibilities for {assignClassUserName}.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAssignClassModal(false);
+                  setAssignClassUserId("");
+                  setAssignClassUserName("");
+                  setSelectedClassIdForTeacher("");
+                  setAssignClassError("");
+                  setAssignClassSuccess("");
+                }}
+                className="text-slate-400 hover:text-slate-600 text-xs font-bold py-1 px-2 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+
+            {assignClassError && (
+              <div className="bg-rose-50 text-rose-700 p-2.5 rounded-lg border border-rose-100 text-[10px] font-bold">
+                ⚠️ {assignClassError}
+              </div>
+            )}
+
+            {assignClassSuccess && (
+              <div className="bg-green-50 text-green-700 p-2.5 rounded-lg border border-green-100 text-[10px] font-bold">
+                ✓ {assignClassSuccess}
+              </div>
+            )}
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setAssignClassLoading(true);
+                setAssignClassError("");
+                setAssignClassSuccess("");
+
+                try {
+                  const res = await fetch("/api/users", {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      userId: assignClassUserId,
+                      action: "ASSIGN_CLASS",
+                      classId: selectedClassIdForTeacher || null
+                    })
+                  });
+
+                  const data = await res.json();
+                  if (res.ok && data.success) {
+                    setAssignClassSuccess("Class assigned successfully!");
+                    if (refreshUsers) {
+                      await refreshUsers();
+                    }
+                    setTimeout(() => {
+                      setShowAssignClassModal(false);
+                      setAssignClassUserId("");
+                      setAssignClassUserName("");
+                      setSelectedClassIdForTeacher("");
+                      setAssignClassSuccess("");
+                    }, 1500);
+                  } else {
+                    setAssignClassError(data.error || "Failed to assign class.");
+                  }
+                } catch (err: any) {
+                  setAssignClassError(err.message || "Failed to assign class.");
+                } finally {
+                  setAssignClassLoading(false);
+                }
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Select Class</label>
+                <select
+                  value={selectedClassIdForTeacher}
+                  onChange={(e) => setSelectedClassIdForTeacher(e.target.value)}
+                  className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 cursor-pointer"
+                >
+                  <option value="">No Class (Subject Teacher)</option>
+                  {classes.map((cls: any) => (
+                    <option key={cls.id} value={cls.id}>
+                      Class {cls.name}-{cls.section}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAssignClassModal(false);
+                    setAssignClassUserId("");
+                    setAssignClassUserName("");
+                    setSelectedClassIdForTeacher("");
+                    setAssignClassError("");
+                    setAssignClassSuccess("");
+                  }}
+                  className="flex-1 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl text-xs font-bold transition-all cursor-pointer text-center"
+                  disabled={assignClassLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-500/10 cursor-pointer text-center"
+                  disabled={assignClassLoading}
+                >
+                  {assignClassLoading ? "Saving..." : "Save Assignment"}
                 </button>
               </div>
             </form>

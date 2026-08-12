@@ -16,6 +16,19 @@ export async function GET(
 
     const { id: studentId } = await params;
 
+    if (authUser.role === "PARENT") {
+      const parentProfile = await db.parentProfile.findUnique({
+        where: { userId: authUser.userId }
+      });
+      const student = await db.student.findUnique({
+        where: { id: studentId },
+        select: { parentProfileId: true }
+      });
+      if (!parentProfile || !student || student.parentProfileId !== parentProfile.id) {
+        return NextResponse.json({ error: "Unauthorized access to this student's marks." }, { status: 403 });
+      }
+    }
+
     const marks = await db.mark.findMany({
       where: {
         studentId,
@@ -39,6 +52,10 @@ export async function POST(
 ) {
   const authUser = await getAuthUser(request);
   if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  if (authUser.role !== "ADMIN" && authUser.role !== "TEACHER" && authUser.role !== "ACCOUNTANT") {
+    return NextResponse.json({ error: "Unauthorized. Only staff can record marks." }, { status: 403 });
+  }
 
   try {
     const { id } = await params;

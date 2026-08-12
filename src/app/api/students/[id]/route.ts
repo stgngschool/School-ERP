@@ -73,6 +73,15 @@ export async function GET(
       return NextResponse.json({ error: "Student not found" }, { status: 404 });
     }
 
+    if (authUser.role === "PARENT") {
+      const parentProfile = await db.parentProfile.findUnique({
+        where: { userId: authUser.userId }
+      });
+      if (!parentProfile || student.parentProfileId !== parentProfile.id) {
+        return NextResponse.json({ error: "Unauthorized access to this student profile." }, { status: 403 });
+      }
+    }
+
     // Format output
     const formatted = {
       id: student.id,

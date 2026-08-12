@@ -11,8 +11,22 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
     }
 
+    let whereClause = {};
+    if (authUser.role === "PARENT") {
+      const parentProfile = await db.parentProfile.findUnique({
+        where: { userId: authUser.userId },
+        include: { students: true }
+      });
+      if (!parentProfile) {
+        return NextResponse.json([]);
+      }
+      const studentIds = parentProfile.students.map((s) => s.id);
+      whereClause = { studentId: { in: studentIds } };
+    }
+
     const leaves = await db.leaveRequest.findMany({
-take: 100,
+      where: whereClause,
+      take: 100,
       include: {
         student: {
           include: {
@@ -89,6 +103,19 @@ export async function POST(request: Request) {
         class: true,
       },
     });
+
+    if (!student) {
+      return NextResponse.json({ error: "Student not found." }, { status: 404 });
+    }
+
+    if (authUser.role === "PARENT") {
+      const parentProfile = await db.parentProfile.findUnique({
+        where: { userId: authUser.userId }
+      });
+      if (!parentProfile || student.parentProfileId !== parentProfile.id) {
+        return NextResponse.json({ error: "Unauthorized access. You can only request leaves for your own children." }, { status: 403 });
+      }
+    }
 
     let teacherId: string | null = null;
     if (student?.class.classTeacherId) {

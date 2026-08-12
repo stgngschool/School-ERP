@@ -58,6 +58,13 @@ export default function AttendanceConsole({ initialClass }: AttendanceConsolePro
     return ["ALL", ...list];
   }, [students]);
 
+  // Sync selected class when initialClass is resolved asynchronously
+  useEffect(() => {
+    if (initialClass) {
+      setSelectedClass(initialClass);
+    }
+  }, [initialClass]);
+
   // Set default class if current selectedClass has no students
   useEffect(() => {
     if (availableClasses.length > 1 && !availableClasses.includes(selectedClass)) {

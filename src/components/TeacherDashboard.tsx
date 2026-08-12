@@ -26,6 +26,7 @@ export default function TeacherDashboard() {
   const [selectedProfileStudentId, setSelectedProfileStudentId] = useState("");
 
   const {
+    user,
     students,
     attendances,
     leaveRequests,
@@ -50,16 +51,24 @@ export default function TeacherDashboard() {
   const [selectedClass, setSelectedClass] = useState("10-A");
   const [studentSearch, setStudentSearch] = useState("");
 
+  // Auto-set teacher's default class when user profile loads
+  React.useEffect(() => {
+    if (user?.teacherProfile?.classes && user.teacherProfile.classes.length > 0) {
+      const tClass = user.teacherProfile.classes[0];
+      setSelectedClass(`${tClass.name}-${tClass.section}`);
+    }
+  }, [user]);
+
   // Auto-select first available class if current class has no students
   React.useEffect(() => {
     if (students.length > 0) {
       const availableClasses = Array.from(new Set(students.map((s) => `${s.class}-${s.section}`)));
       const hasCurrent = students.some((s) => `${s.class}-${s.section}` === selectedClass);
-      if (!hasCurrent && availableClasses.length > 0) {
+      if (!hasCurrent && availableClasses.length > 0 && !user?.teacherProfile?.classes?.length) {
         setSelectedClass(availableClasses[0]);
       }
     }
-  }, [students, selectedClass]);
+  }, [students, selectedClass, user]);
 
   // Homework Form State
   const [hwSubject, setHwSubject] = useState("Mathematics");

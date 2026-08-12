@@ -11,6 +11,16 @@ export async function GET(request: Request) {
     }
 
     const users = await db.user.findMany({
+      include: {
+        teacherProfile: {
+          include: {
+            classes: {
+              where: { status: "ACTIVE" },
+              select: { id: true, name: true, section: true }
+            }
+          }
+        }
+      },
       orderBy: { role: "asc" },
     });
 
@@ -20,6 +30,11 @@ export async function GET(request: Request) {
       name: u.name,
       role: u.role,
       status: u.status,
+      teacherProfile: u.teacherProfile ? {
+        id: u.teacherProfile.id,
+        employeeId: u.teacherProfile.employeeId,
+        classes: u.teacherProfile.classes
+      } : null
     }));
 
     return NextResponse.json(formatted);
@@ -61,6 +76,34 @@ export async function PATCH(request: Request) {
         data: { passwordHash },
       });
       return NextResponse.json({ success: true, message: "Password updated successfully" });
+    }
+
+    if (action === "ASSIGN_CLASS") {
+      const { classId } = body;
+      const teacherProfile = await db.teacherProfile.findUnique({
+        where: { userId: userId }
+      });
+      if (!teacherProfile) {
+        return NextResponse.json({ error: "Teacher profile not found." }, { status: 404 });
+      }
+
+      await db.$transaction(async (tx) => {
+        // Unbind teacher from any classes they currently manage
+        await tx.class.updateMany({
+          where: { classTeacherId: teacherProfile.id },
+          data: { classTeacherId: null }
+        });
+
+        // Bind teacher to the new class if classId is specified
+        if (classId) {
+          await tx.class.update({
+            where: { id: classId },
+            data: { classTeacherId: teacherProfile.id }
+          });
+        }
+      });
+
+      return NextResponse.json({ success: true, message: "Class assigned successfully" });
     }
 
     if (action === "UPDATE_PROFILE") {
@@ -113,7 +156,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Only administrators can create staff accounts." }, { status: 403 });
     }
 
-    const { name, username, email, password, role, phone, employeeId } = await request.json();
+    const { name, username, email, password, role, phone, employeeId, classId } = await request.json();
     if (!name || !username || !email || !password || !role) {
       return NextResponse.json({ error: "Name, username, email, password, and role are required." }, { status: 400 });
     }
@@ -143,12 +186,19 @@ export async function POST(request: Request) {
       });
 
       if (role === "TEACHER") {
-        await tx.teacherProfile.create({
+        const tp = await tx.teacherProfile.create({
           data: {
             userId: u.id,
             employeeId: employeeId || `TCH-${Math.floor(1000 + Math.random() * 9000)}`
           }
         });
+
+        if (classId) {
+          await tx.class.update({
+            where: { id: classId },
+            data: { classTeacherId: tp.id }
+          });
+        }
       } else if (role === "ACCOUNTANT") {
         await tx.accountantProfile.create({
           data: {

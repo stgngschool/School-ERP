@@ -9,8 +9,61 @@ import fs from "fs";
 import path from "path";
 import { getAcademicYear } from "@/lib/generateYearlyCharges";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const authUser = await getAuthUser(request);
+    if (!authUser) {
+      return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
+    }
+
+    if (authUser.role === "TEACHER") {
+      return NextResponse.json({
+        ledgerEntries: [],
+        receipts: [],
+        dueItems: [],
+      });
+    }
+
+    let ledgerWhere: any = {};
+    let receiptWhere: any = {};
+    let chargesWhere: any = { entryType: EntryType.CHARGE };
+    let discountsWhere: any = { entryType: EntryType.DISCOUNT };
+
+    if (authUser.role === "PARENT") {
+      const parentProfile = await db.parentProfile.findUnique({
+        where: { userId: authUser.userId }
+      });
+      if (!parentProfile) {
+        return NextResponse.json({
+          ledgerEntries: [],
+          receipts: [],
+          dueItems: [],
+        });
+      }
+
+      const students = await db.student.findMany({
+        where: { parentProfileId: parentProfile.id },
+        select: { id: true }
+      });
+      const studentIds = students.map((s) => s.id);
+
+      ledgerWhere = { studentId: { in: studentIds } };
+      receiptWhere = { 
+        OR: [
+          { studentId: { in: studentIds } },
+          { parentProfileId: parentProfile.id }
+        ]
+      };
+      chargesWhere = { 
+        entryType: EntryType.CHARGE,
+        studentId: { in: studentIds }
+      };
+      discountsWhere = { 
+        entryType: EntryType.DISCOUNT,
+        studentId: { in: studentIds }
+      };
+    }
+
     const acYear = getAcademicYear();
     const startYear = parseInt(acYear.split("-")[0]);
     // Fetch charges created from March 1st of the current academic year to cover early assignments
@@ -19,10 +72,12 @@ export async function GET() {
     // Execute all database queries concurrently in parallel
     const [ledger, receipts, charges, discounts] = await Promise.all([
       db.ledgerEntry.findMany({
+        where: ledgerWhere,
         take: 300,
         orderBy: { createdAt: "desc" },
       }),
       db.receipt.findMany({
+        where: receiptWhere,
         take: 200,
         include: {
           student: {
@@ -48,9 +103,7 @@ export async function GET() {
         orderBy: { createdAt: "desc" },
       }),
       db.ledgerEntry.findMany({
-        where: { 
-          entryType: EntryType.CHARGE
-        },
+        where: chargesWhere,
         select: {
           id: true,
           studentId: true,
@@ -66,9 +119,7 @@ export async function GET() {
         },
       }),
       db.ledgerEntry.findMany({
-        where: { 
-          entryType: EntryType.DISCOUNT
-        },
+        where: discountsWhere,
         select: {
           id: true,
           studentId: true,

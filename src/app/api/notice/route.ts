@@ -3,10 +3,23 @@ import db from "@/lib/db";
 import { cookies } from "next/headers";
 import { verifyToken, getAuthUser } from "@/lib/auth";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const authUser = await getAuthUser(request);
+    if (!authUser) {
+      return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
+    }
+
+    let whereClause = {};
+    if (authUser.role === "PARENT") {
+      whereClause = { target: { in: ["ALL", "PARENTS"] } };
+    } else if (authUser.role === "TEACHER") {
+      whereClause = { target: { in: ["ALL", "TEACHERS"] } };
+    }
+
     const notices = await db.notice.findMany({
-take: 100,
+      where: whereClause,
+      take: 100,
       orderBy: { createdAt: "desc" },
     });
 

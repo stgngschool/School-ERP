@@ -11,8 +11,22 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
     }
 
+    let whereClause = {};
+    if (authUser.role === "PARENT") {
+      const parentProfile = await db.parentProfile.findUnique({
+        where: { userId: authUser.userId },
+        include: { students: true }
+      });
+      if (!parentProfile) {
+        return NextResponse.json([]);
+      }
+      const classIds = parentProfile.students.map((s) => s.classId);
+      whereClause = { classId: { in: classIds } };
+    }
+
     const homeworks = await db.homework.findMany({
-take: 100,
+      where: whereClause,
+      take: 100,
       include: { class: true },
       orderBy: { createdAt: "desc" },
     });
