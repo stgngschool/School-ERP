@@ -9,6 +9,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    if (authUser.role !== "ADMIN" && authUser.role !== "ACCOUNTANT") {
+      return NextResponse.json({ error: "Forbidden. Only Admin and Accountant can modify marksheet claim status." }, { status: 403 });
+    }
+
     const body = await request.json();
     const { studentId, isMarksheetClaimed } = body;
     

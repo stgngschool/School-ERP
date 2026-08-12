@@ -17,9 +17,11 @@ const EXAM_MONTHS = ["October", "March", "May"];
 function getNormalizedChargeKey(description: string, feeHeadName: string): string {
   const descLower = description.toLowerCase();
   const headLower = feeHeadName.toLowerCase().trim();
+  const yearMatch = description.match(/\d{4}-\d{4}/);
+  const yearSuffix = yearMatch ? `_${yearMatch[0]}` : "";
   for (const month of ACADEMIC_MONTHS) {
     if (descLower.includes(month.toLowerCase())) {
-      return `${headLower}_${month.toLowerCase()}`;
+      return `${headLower}_${month.toLowerCase()}${yearSuffix}`;
     }
   }
   return descLower.replace(/[^a-z0-9]/g, "");
@@ -139,9 +141,12 @@ export async function generateYearlyCharges(
       `${studentId}_${getNormalizedChargeKey(e.description, e.feeHead?.name || "")}`, e
     ])
   );
-  const existingDiscountsSet = new Set(
-    existingEntries.filter(e => e.entryType === EntryType.DISCOUNT).map(e => `${studentId}_${getNormalizedChargeKey(e.description, e.feeHead?.name || "")}`)
+  const existingDiscountsMap = new Map(
+    existingEntries.filter(e => e.entryType === EntryType.DISCOUNT).map(e => [
+      `${studentId}_${getNormalizedChargeKey(e.description, e.feeHead?.name || "")}`, e
+    ])
   );
+  const existingDiscountsSet = new Set(existingDiscountsMap.keys());
 
   let generated = 0;
   let skipped = 0;
@@ -200,6 +205,18 @@ export async function generateYearlyCharges(
       const existingChargeEntry = existingChargesMap.get(keyCharge);
       if (existingChargeEntry && existingChargeEntry.amount !== charge.amount && existingChargeEntry.receiptItems.length === 0) {
         toUpdate.push({ id: existingChargeEntry.id, amount: charge.amount });
+        if (isRte) {
+          const existingDiscountEntry = existingDiscountsMap.get(keyDiscount);
+          if (existingDiscountEntry && existingDiscountEntry.amount !== -charge.amount) {
+            toUpdate.push({ id: existingDiscountEntry.id, amount: -charge.amount });
+          }
+        } else if (concessionDesc && concession) {
+          const existingConcessionEntry = existingDiscountsMap.get(keyConcessionDiscount);
+          const concessionAmount = Math.round((charge.amount * concession.percentage) / 100);
+          if (existingConcessionEntry && existingConcessionEntry.amount !== -concessionAmount) {
+            toUpdate.push({ id: existingConcessionEntry.id, amount: -concessionAmount });
+          }
+        }
       }
 
       const needCharge = !existingChargesMap.has(keyCharge);
@@ -305,9 +322,12 @@ export async function generateYearlyChargesBulk(
     })
   );
   const existingChargesSet = new Set(existingChargesMap.keys());
-  const existingDiscountsSet = new Set(
-    existingEntries.filter(e => e.entryType === EntryType.DISCOUNT).map((e) => `${e.studentId}_${getNormalizedChargeKey(e.description, e.feeHead?.name || "")}`)
+  const existingDiscountsMap = new Map(
+    existingEntries.filter(e => e.entryType === EntryType.DISCOUNT).map((e) => [
+      `${e.studentId}_${getNormalizedChargeKey(e.description, e.feeHead?.name || "")}`, e
+    ])
   );
+  const existingDiscountsSet = new Set(existingDiscountsMap.keys());
 
   // 3. Fetch isRte details for all these students
   const studentDbDetails = await db.student.findMany({
@@ -431,6 +451,18 @@ export async function generateYearlyChargesBulk(
         if (existingChargeEntry && existingChargeEntry.amount !== charge.amount && existingChargeEntry.receiptItems.length === 0) {
           // Unpaid existing charge has a different amount (fee structure was updated), queue update
           toUpdate.push({ id: existingChargeEntry.id, amount: charge.amount });
+          if (isRte) {
+            const existingDiscountEntry = existingDiscountsMap.get(keyDiscount);
+            if (existingDiscountEntry && existingDiscountEntry.amount !== -charge.amount) {
+              toUpdate.push({ id: existingDiscountEntry.id, amount: -charge.amount });
+            }
+          } else if (concessionDesc && concession) {
+            const existingConcessionEntry = existingDiscountsMap.get(keyConcessionDiscount);
+            const concessionAmount = Math.round((charge.amount * concession.percentage) / 100);
+            if (existingConcessionEntry && existingConcessionEntry.amount !== -concessionAmount) {
+              toUpdate.push({ id: existingConcessionEntry.id, amount: -concessionAmount });
+            }
+          }
         }
 
         const needCharge = !existingChargesSet.has(keyCharge);

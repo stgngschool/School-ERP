@@ -224,6 +224,9 @@ interface AuthContextType {
   feeStructures: { name: string; frequency: string; total: number; className: string; items?: { headName: string; amount: number }[] }[];
   classes: { id: string; name: string; section: string }[];
   auditLogs: MockAuditLog[];
+  studentsLoaded: boolean;
+  billingLoaded: boolean;
+  attendanceLoaded: boolean;
   switchRole: (role: Role) => Promise<void>;
   toggleUserStatus: (userId: string) => Promise<void>;
   resetUserPassword: (userId: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
@@ -404,6 +407,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [transportStops, setTransportStops] = useState<{ id: string; name: string; amount: number }[]>([]);
   const [concessions, setConcessions] = useState<{ id: string; name: string; percentage: number; feeHeadName: string }[]>([]);
 
+  const [studentsLoaded, setStudentsLoaded] = useState(false);
+  const [billingLoaded, setBillingLoaded] = useState(false);
+  const [attendanceLoaded, setAttendanceLoaded] = useState(false);
+
 
   const apiFetch = async (url: string, options: RequestInit = {}, timeoutMs = 12000, useCache = false) => {
     if (useCache && typeof window !== 'undefined') {
@@ -473,6 +480,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setEventsList([]);
       setTransportStops([]);
       setConcessions([]);
+      setStudentsLoaded(false);
+      setBillingLoaded(false);
+      setAttendanceLoaded(false);
       return;
     }
 
@@ -482,22 +492,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const criticalLoads = [
         apiFetch("/api/school", {}, 12000, true).then((data) => { if (data) setSchoolInfo(data); }),
-        apiFetch("/api/students").then((data) => {
-          if (data) {
-            setStudents(data);
-            setCurrentStage("STUDENTS FETCH COMPLETE");
-          }
-        }),
-        apiFetch("/api/billing").then((billingData) => {
-          if (billingData) {
-            setLedgerEntries(billingData.ledgerEntries || []);
-            setReceipts(billingData.receipts || []);
-            setDueItems(billingData.dueItems || []);
-          }
-        }),
       ];
-
-      apiFetch("/api/attendance").then((data) => data && setAttendances(data));
       apiFetch("/api/homework").then((data) => data && setHomeworks(data));
       apiFetch("/api/leave").then((data) => data && setLeaveRequests(data));
       apiFetch("/api/notice").then((data) => data && setNotices(data));
@@ -544,7 +539,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshStudents = async () => {
     const data = await apiFetch("/api/students");
-    if (data) setStudents(data);
+    if (data) {
+      setStudents(data);
+      setStudentsLoaded(true);
+    }
   };
 
   const refreshBilling = async () => {
@@ -553,12 +551,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLedgerEntries(data.ledgerEntries || []);
       setReceipts(data.receipts || []);
       setDueItems(data.dueItems || []);
+      setBillingLoaded(true);
     }
   };
 
   const refreshAttendance = async () => {
     const data = await apiFetch("/api/attendance");
-    if (data) setAttendances(data);
+    if (data) {
+      setAttendances(data);
+      setAttendanceLoaded(true);
+    }
   };
 
   const refreshHomework = async () => {
@@ -1350,6 +1352,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         currentStage,
         stageError,
         retryInitSession: initSession,
+        studentsLoaded,
+        billingLoaded,
+        attendanceLoaded,
       }}
     >
       {children}

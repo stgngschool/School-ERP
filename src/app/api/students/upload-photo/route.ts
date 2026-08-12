@@ -16,6 +16,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing studentId or file" }, { status: 400 });
     }
 
+    // Role-based access verification
+    if (authUser.role === "PARENT") {
+      const parentProfile = await db.parentProfile.findUnique({
+        where: { userId: authUser.userId }
+      });
+      const student = await db.student.findUnique({
+        where: { id: studentId },
+        select: { parentProfileId: true }
+      });
+      if (!parentProfile || !student || student.parentProfileId !== parentProfile.id) {
+        return NextResponse.json({ error: "Unauthorized. You can only upload photos for your own children." }, { status: 403 });
+      }
+    }
+
     // Validate format: image format (JPG/PNG/WEBP)
     const isImage = file.type.startsWith("image/") || /\.(jpg|jpeg|png|webp)$/i.test(file.name);
     if (!isImage) {

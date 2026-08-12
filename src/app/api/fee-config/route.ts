@@ -102,6 +102,10 @@ export async function POST(request: Request) {
         await db.feeStructureItem.deleteMany({
           where: { feeStructureId: structure.id },
         });
+        structure = await db.feeStructure.update({
+          where: { id: structure.id },
+          data: { frequency },
+        });
       } else {
         structure = await db.feeStructure.create({
           data: {
@@ -134,30 +138,7 @@ export async function POST(request: Request) {
             },
           });
 
-          // Sync existing unpaid charges for this fee head to the newly updated amount
-          const targetClassStr = className || "All";
-          const classStudents = await db.student.findMany({
-            where: { status: "ACTIVE", ...(targetClassStr !== "All" ? { class: { name: targetClassStr } } : {}) },
-            select: { id: true },
-          });
-          const studentIds = classStudents.map((s) => s.id);
-          if (studentIds.length > 0) {
-            const unpaidCharges = await db.ledgerEntry.findMany({
-              where: {
-                studentId: { in: studentIds },
-                feeHeadId: feeHead.id,
-                entryType: "CHARGE",
-                receiptItems: { none: {} },
-              },
-              select: { id: true },
-            });
-            if (unpaidCharges.length > 0) {
-              await db.ledgerEntry.updateMany({
-                where: { id: { in: unpaidCharges.map((c) => c.id) } },
-                data: { amount: itemAmountPaisa },
-              });
-            }
-          }
+          // Syncing of existing unpaid charges and discounts is handled safely by generateYearlyChargesBulk below.
         }
       }
 

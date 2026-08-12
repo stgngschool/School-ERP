@@ -34,6 +34,7 @@ export async function GET(request: Request) {
 
     const logs = await db.attendance.findMany({
       where: whereClause,
+      take: 2000,
       orderBy: { date: "desc" },
     });
 

@@ -104,6 +104,8 @@ export async function GET(request: Request) {
       }),
       db.ledgerEntry.findMany({
         where: chargesWhere,
+        take: 1000,
+        orderBy: { createdAt: "desc" },
         select: {
           id: true,
           studentId: true,
@@ -120,6 +122,8 @@ export async function GET(request: Request) {
       }),
       db.ledgerEntry.findMany({
         where: discountsWhere,
+        take: 500,
+        orderBy: { createdAt: "desc" },
         select: {
           id: true,
           studentId: true,

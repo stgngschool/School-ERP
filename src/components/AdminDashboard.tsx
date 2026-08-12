@@ -197,15 +197,23 @@ export default function AdminDashboard() {
     attendances,
     refreshStudents,
     refreshBilling,
+    refreshAttendance,
     refreshUsers,
+    studentsLoaded,
+    billingLoaded,
+    attendanceLoaded,
   } = useAuth();
 
   const validTabs = ["dashboard", "collect", "attendance", "marks", "print_marksheets", "defaulters", "ledger", "structures", "students", "users", "idcards", "notices", "school", "audit"];
   React.useEffect(() => {
     if (!validTabs.includes(activeTab)) {
       setActiveTab("dashboard");
+    } else {
+      if (activeTab === "students" && !studentsLoaded) refreshStudents();
+      if (activeTab === "collect" && !billingLoaded) refreshBilling();
+      if (activeTab === "attendance" && !attendanceLoaded) refreshAttendance();
     }
-  }, [activeTab]);
+  }, [activeTab, studentsLoaded, billingLoaded, attendanceLoaded]);
 
   // Notice Form State
   const [noticeTitle, setNoticeTitle] = useState("");
