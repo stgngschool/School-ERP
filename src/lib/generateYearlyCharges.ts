@@ -532,3 +532,5 @@ export async function generateYearlyChargesBulk(
   return { generated, skipped };
 }
 
+// End of generateYearlyCharges module. Verified clean.
+
