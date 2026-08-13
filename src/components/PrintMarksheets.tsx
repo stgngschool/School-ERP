@@ -110,7 +110,7 @@ export default function PrintMarksheets() {
 
   return (
     <div className="-mx-2 sm:mx-0 space-y-4 text-left">
-      <div className="bg-white border-y sm:border border-slate-200/90 sm:rounded-2xl p-3 sm:p-5 shadow-xs text-left no-print">
+      <div className="bg-white border-y sm:border border-slate-200/60 sm:rounded-3xl p-5 sm:p-7 shadow-[0_8px_30px_rgb(0,0,0,0.015)] text-left no-print">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 bg-indigo-50 border border-indigo-100/80 rounded-xl flex items-center justify-center text-indigo-600 shrink-0 shadow-xs">
@@ -246,7 +246,7 @@ export default function PrintMarksheets() {
       </div>
 
       {showDistributionLog && (
-        <div className="bg-white border-y sm:border border-slate-200/90 sm:rounded-2xl p-4 sm:p-5 shadow-xs text-left mb-6 max-w-[210mm] mx-auto no-print">
+        <div className="bg-white border-y sm:border border-slate-200/60 sm:rounded-3xl p-6 sm:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.015)] text-left mb-6 max-w-[210mm] mx-auto no-print">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-sm font-black text-slate-800">Distribution Log</h3>

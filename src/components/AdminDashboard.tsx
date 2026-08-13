@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { formatP, toPaisa, toRupees } from "@/lib/currency";
 import StudentProfileModal from "@/components/StudentProfileModal";
@@ -58,6 +58,9 @@ import {
   X,
   Sparkles,
   Zap,
+  Building2,
+  User,
+  Award,
   Trophy,
   Ghost,
   Gift,
@@ -166,6 +169,42 @@ export default function AdminDashboard() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // Redesigned Dashboard State
+  const [hoveredMonth, setHoveredMonth] = useState<string | null>(null);
+  const [notes, setNotes] = useState<string[]>([]);
+  const [newNoteText, setNewNoteText] = useState("");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("admin_dashboard_notes");
+      if (saved) {
+        try {
+          setNotes(JSON.parse(saved));
+        } catch (e) {
+          console.error("Error loading notes", e);
+        }
+      }
+    }
+  }, []);
+
+  const addNote = () => {
+    if (!newNoteText.trim()) return;
+    const updated = [...notes, newNoteText.trim()];
+    setNotes(updated);
+    setNewNoteText("");
+    if (typeof window !== "undefined") {
+      localStorage.setItem("admin_dashboard_notes", JSON.stringify(updated));
+    }
+  };
+
+  const deleteNote = (index: number) => {
+    const updated = notes.filter((_, i) => i !== index);
+    setNotes(updated);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("admin_dashboard_notes", JSON.stringify(updated));
+    }
+  };
   const {
     user,
     usersList,
@@ -281,7 +320,21 @@ export default function AdminDashboard() {
 
   // Student Directory & Modals States
   const [importMode, setImportMode] = useState<"directory" | "single" | "bulk">("directory");
+
+  // Synchronize student sub-mode from global navigation shortcut (mega-menu)
+  useEffect(() => {
+    if (activeTab === "students") {
+      const mode = localStorage.getItem("students_import_mode") as "directory" | "single" | "bulk";
+      if (mode && (mode === "directory" || mode === "single" || mode === "bulk")) {
+        setImportMode(mode);
+        localStorage.removeItem("students_import_mode");
+      }
+    }
+  }, [activeTab]);
   const [dirSearch, setDirSearch] = useState("");
+  const [debouncedDirSearch, setDebouncedDirSearch] = useState("");
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
+  const dirSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [dirClassFilter, setDirClassFilter] = useState("");
   const [dirSectionFilter, setDirSectionFilter] = useState("");
   const [dirFamilyFilter, setDirFamilyFilter] = useState("");
@@ -680,6 +733,7 @@ export default function AdminDashboard() {
   const [defaulterPage, setDefaulterPage] = useState(1);
   
   // School Customizer Settings Form State
+  const [activeSchoolSubTab, setActiveSchoolSubTab] = useState<"profile" | "admin" | "sync" | "exams">("profile");
 
   // School Customizer Settings Form State
   const [schoolName, setSchoolName] = useState(schoolInfo.name);
@@ -1746,7 +1800,7 @@ export default function AdminDashboard() {
 
   const filteredStudentsMemo = React.useMemo(() => {
     return students.filter((s: any) => {
-      const q = dirSearch.trim().toLowerCase();
+      const q = debouncedDirSearch.trim().toLowerCase();
       const matchesSearch =
         !q ||
         s.name?.toLowerCase().includes(q) ||
@@ -1783,26 +1837,53 @@ export default function AdminDashboard() {
 
       return matchesSearch && matchesClass && matchesSection && matchesFamily && matchesStatus && matchesRte && matchesCategory && matchesDues;
     });
-  }, [students, dirSearch, dirClassFilter, dirSectionFilter, dirFamilyFilter, dirStatusFilter, dirRteFilter, dirCategoryFilter, dirDuesFilter, unpaidStudentIdsSet]);
+  }, [students, debouncedDirSearch, dirClassFilter, dirSectionFilter, dirFamilyFilter, dirStatusFilter, dirRteFilter, dirCategoryFilter, dirDuesFilter, unpaidStudentIdsSet]);
+
+  const classOptions = React.useMemo(() => Array.from(new Set(classes.map((c: any) => c.name))).sort(), [classes]);
+  const sectionOptions = React.useMemo(() => Array.from(new Set(classes.map((c: any) => c.section))).sort(), [classes]);
+  const familyOptions = React.useMemo(() => Array.from(new Set(students.map((s: any) => s.familyCode).filter(Boolean))).sort(), [students]);
+  const activeFilterCount = [dirClassFilter, dirSectionFilter, dirFamilyFilter, dirStatusFilter !== "ALL" ? "1" : "", dirRteFilter !== "ALL" ? "1" : "", dirCategoryFilter !== "ALL" ? "1" : "", dirDuesFilter !== "ALL" ? "1" : ""].filter(Boolean).length;
 
   return (
     <div className="space-y-6 font-sans mobile-edge-grid w-full max-w-full overflow-x-hidden text-left">
-      {/* ─── Header shown only on Dashboard Overview ─── */}
+            {/* ─── Header shown only on Dashboard Overview ─── */}
       {activeTab === "dashboard" && (
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200/80 pb-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5 mb-2">
           <div>
-            <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight">
-              Welcome back, {user?.name || "Admin"} 👋
-            </h2>
-            <p className="text-xs text-slate-400 font-medium mt-0.5">
-              {schoolInfo.name || "School ERP"} • Operations & Finance Control
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                Welcome back, {user?.name || "Admin"} 👋
+              </h2>
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-600 border border-indigo-100">
+                <Sparkles className="w-3 h-3 text-indigo-500 animate-pulse" />
+                Session Active
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 font-semibold mt-1">
+              Manage operations and finance for <span className="font-bold text-slate-700">{schoolInfo.name || "School ERP"}</span>.
             </p>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <div className="text-right hidden sm:block">
+              <p className="text-xs font-bold text-slate-700">
+                {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+              </p>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Operational Control</p>
+            </div>
+            <div className="h-10 w-px bg-slate-200 hidden sm:block"></div>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-full border border-emerald-100">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                System Live
+              </span>
+            </div>
           </div>
         </div>
       )}
 
       {activeTab === "dashboard" ? (
-        <div className="space-y-5 animate-fade-in font-sans">
+        <div className="space-y-6 animate-fade-in font-sans">
           {(() => {
             const girlsFirstNames = ["diya", "anya", "ananya", "kiara", "priya", "sneha", "pooja", "neha", "riya", "simran", "kajal", "preeti", "shalini", "deepika", "kiran", "aisha", "jyoti", "meera", "geeta", "rekha", "sunita", "anita", "kavita", "mamta", "babita", "sapna", "poonam", "usha"];
             const totalStudents = students.length;
@@ -1815,6 +1896,8 @@ export default function AdminDashboard() {
               return girlsFirstNames.includes(firstName);
             }).length;
             const boysCount = totalStudents - girlsCount;
+            const girlsPct = totalStudents > 0 ? Math.round((girlsCount / totalStudents) * 100) : 0;
+            const boysPct = totalStudents > 0 ? 100 - girlsPct : 0;
 
             const newAdmissionsCount = students.filter(s => {
               const idNum = parseInt(s.id.replace("std-id-", ""));
@@ -1825,6 +1908,7 @@ export default function AdminDashboard() {
             const totalEarnings = receipts.reduce((sum, r) => sum + r.amount, 0);
             const totalDues = dueItems.reduce((sum, d) => sum + d.amount, 0);
             const totalSales = totalEarnings + totalDues;
+            const collectionEfficiency = totalSales > 0 ? Math.round((totalEarnings / totalSales) * 100) : 0;
 
             const cashTally = receipts.filter(r => r.method === "CASH").reduce((sum, r) => sum + r.amount, 0);
             const upiTally = receipts.filter(r => r.method === "UPI").reduce((sum, r) => sum + r.amount, 0);
@@ -1861,12 +1945,6 @@ export default function AdminDashboard() {
               collectorStats[collectorName].total += r.amount;
             });
             const collectorsList = Object.values(collectorStats).sort((a, b) => b.total - a.total);
-
-            const classCounts: { [key: string]: number } = {};
-            students.forEach((s) => {
-              classCounts[s.class] = (classCounts[s.class] || 0) + 1;
-            });
-            const classesListSorted = Object.entries(classCounts).map(([className, count]) => ({ className, count })).sort((a,b) => a.className.localeCompare(b.className));
 
             const currentMonth = new Date().getMonth();
             const upcomingBirthdays = students.filter(s => {
@@ -1907,241 +1985,684 @@ export default function AdminDashboard() {
               }
             });
             const monthsOrder = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
+            
+            // Custom SVG Line Chart Coordinates
             const maxRev = Math.max(...Object.values(monthlyRevenue), 1000);
+            const chartWidth = 600;
+            const chartHeight = 220;
+            const paddingLeft = 55;
+            const paddingRight = 20;
+            const paddingTop = 20;
+            const paddingBottom = 30;
+            
+            const activeWidth = chartWidth - paddingLeft - paddingRight;
+            const activeHeight = chartHeight - paddingTop - paddingBottom;
+            
+            const points = monthsOrder.map((m, idx) => {
+              const val = monthlyRevenue[m] || 0;
+              const x = paddingLeft + (idx / (monthsOrder.length - 1)) * activeWidth;
+              const y = chartHeight - paddingBottom - (val / maxRev) * activeHeight;
+              return { x, y, month: m, val };
+            });
+            
+            let linePath = "";
+            let areaPath = "";
+            if (points.length > 0) {
+              linePath = `M ${points[0].x} ${points[0].y} ` + points.slice(1).map(p => `L ${p.x} ${p.y}`).join(" ");
+              areaPath = `${linePath} L ${points[points.length - 1].x} ${chartHeight - paddingBottom} L ${points[0].x} ${chartHeight - paddingBottom} Z`;
+            }
+
+            // Doughnut Chart Setup
+            const doughnutRadius = 45;
+            const doughnutCirc = 2 * Math.PI * doughnutRadius;
+            const doughnutOffset = doughnutCirc - (collectionEfficiency / 100) * doughnutCirc;
+
+            // Recent Transactions
+            const recentReceipts = [...receipts]
+              .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))
+              .slice(0, 5);
+
+            // Class-wise collections
+            const classCollections: { [key: string]: { collected: number; dues: number; count: number } } = {};
+            if (classes && Array.isArray(classes)) {
+              classes.forEach(c => {
+                classCollections[c.name] = { collected: 0, dues: 0, count: 0 };
+              });
+            }
+            if (students && Array.isArray(students)) {
+              students.forEach(s => {
+                if (s.class) {
+                  if (!classCollections[s.class]) {
+                    classCollections[s.class] = { collected: 0, dues: 0, count: 0 };
+                  }
+                  classCollections[s.class].count += 1;
+                }
+              });
+            }
+            if (receipts && Array.isArray(receipts)) {
+              receipts.forEach(r => {
+                let cls = "";
+                if (r.studentId && students && Array.isArray(students)) {
+                  const s = students.find(std => std.id === r.studentId);
+                  if (s) cls = s.class;
+                }
+                if (!cls && r.classSection) {
+                  const match = r.classSection.match(/(?:Class\s+)?([^\s-]+)/i);
+                  if (match) cls = match[1];
+                }
+                if (cls) {
+                  if (!classCollections[cls]) {
+                    classCollections[cls] = { collected: 0, dues: 0, count: 0 };
+                  }
+                  classCollections[cls].collected += r.amount || 0;
+                }
+              });
+            }
+            if (dueItems && Array.isArray(dueItems)) {
+              dueItems.forEach(d => {
+                let cls = "";
+                if (d.studentId && students && Array.isArray(students)) {
+                  const s = students.find(std => std.id === d.studentId);
+                  if (s) cls = s.class;
+                }
+                if (cls) {
+                  if (!classCollections[cls]) {
+                    classCollections[cls] = { collected: 0, dues: 0, count: 0 };
+                  }
+                  classCollections[cls].dues += d.amount || 0;
+                }
+              });
+            }
+            const classCollectionsList = Object.entries(classCollections)
+              .map(([className, stats]) => {
+                const total = stats.collected + stats.dues;
+                return {
+                  className,
+                  collected: stats.collected,
+                  dues: stats.dues,
+                  count: stats.count,
+                  total,
+                  efficiency: total > 0 ? Math.round((stats.collected / total) * 100) : 0
+                };
+              })
+              .sort((a, b) => b.collected - a.collected)
+              .slice(0, 5);
+
+            // Doughnut sizes helper
+            const rSize = 140;
+            const radius = 50;
+            const strokeW = 12;
+            const center = rSize / 2;
+            const circ = doughnutCirc;
 
             return (
               <div className="space-y-6">
-                {/* ─── Header Section ─── */}
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                  <div>
-                    <h2 className="text-2xl font-bold text-slate-800">Dashboard Overview</h2>
-                    <p className="text-sm text-slate-500 mt-1">Key metrics and quick actions for your school.</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-full border border-emerald-100">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                      System Online
-                    </span>
-                  </div>
-                </div>
-
+                
                 {/* ─── Metric Cards Grid ─── */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                   {/* Revenue Card */}
-                  <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="text-sm font-medium text-slate-500">Total Revenue</p>
-                        <h3 className="text-2xl font-bold text-slate-800 mt-1">{formatP(totalEarnings)}</h3>
+                  <div className="bg-white rounded-3xl border border-slate-200/60 p-6 shadow-[0_8px_30px_rgb(0,0,0,0.015)] transition-all hover:shadow-[0_8px_30px_rgb(0,0,0,0.035)] flex flex-col justify-between">
+                    <div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Collected Revenue</span>
+                        <span className="p-2.5 bg-indigo-50 text-indigo-600 rounded-2xl">
+                          <TrendingUp className="w-5 h-5" />
+                        </span>
                       </div>
-                      <div className="p-2 bg-indigo-50 rounded-lg">
-                        <TrendingUp className="w-5 h-5 text-indigo-600" />
-                      </div>
+                      <h3 className="text-2xl font-black text-slate-800 tracking-tight mt-4">{formatP(totalEarnings)}</h3>
                     </div>
-                    <div className="mt-4 pt-4 border-t border-slate-100 flex items-center text-xs">
-                      <span className="text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded">+{formatP(monthlyTotal)}</span>
-                      <span className="text-slate-500 ml-2">this month</span>
+                    <div className="mt-5 pt-4 border-t border-slate-100/80">
+                      <div className="flex items-center justify-between text-xs mb-1.5">
+                        <span className="text-slate-400 font-semibold">Collected Ratio</span>
+                        <span className="text-indigo-600 font-black">{collectionEfficiency}%</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-indigo-600 rounded-full" style={{ width: `${collectionEfficiency}%` }}></div>
+                      </div>
+                      <div className="flex items-center justify-between mt-2.5 text-[10px] text-slate-400 font-medium">
+                        <span>This month: <strong className="text-slate-600">+{formatP(monthlyTotal)}</strong></span>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Students Card */}
-                  <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="text-sm font-medium text-slate-500">Total Enrolled</p>
-                        <h3 className="text-2xl font-bold text-slate-800 mt-1">{totalStudents}</h3>
+                  {/* Enrolled Card */}
+                  <div className="bg-white rounded-3xl border border-slate-200/60 p-6 shadow-[0_8px_30px_rgb(0,0,0,0.015)] transition-all hover:shadow-[0_8px_30px_rgb(0,0,0,0.035)] flex flex-col justify-between">
+                    <div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Students</span>
+                        <span className="p-2.5 bg-blue-50 text-blue-600 rounded-2xl">
+                          <Users className="w-5 h-5" />
+                        </span>
                       </div>
-                      <div className="p-2 bg-blue-50 rounded-lg">
-                        <Users className="w-5 h-5 text-blue-600" />
-                      </div>
+                      <h3 className="text-2xl font-black text-slate-800 tracking-tight mt-4">{totalStudents}</h3>
                     </div>
-                    <div className="mt-4 pt-4 border-t border-slate-100 flex items-center text-xs">
-                      <span className="text-slate-600 font-medium">{boysCount} Boys</span>
-                      <span className="text-slate-300 mx-2">•</span>
-                      <span className="text-slate-600 font-medium">{girlsCount} Girls</span>
+                    <div className="mt-5 pt-4 border-t border-slate-100/80">
+                      <div className="flex justify-between items-center text-xs mb-1.5 font-semibold">
+                        <span className="text-blue-600">{boysCount} Boys ({boysPct}%)</span>
+                        <span className="text-pink-500">{girlsCount} Girls ({girlsPct}%)</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-slate-100 rounded-full flex overflow-hidden">
+                        <div className="h-full bg-blue-500" style={{ width: `${boysPct}%` }}></div>
+                        <div className="h-full bg-pink-400" style={{ width: `${girlsPct}%` }}></div>
+                      </div>
+                      <div className="flex items-center justify-between mt-2.5 text-[10px] text-slate-400 font-medium">
+                        <span>New admissions: <strong className="text-slate-600">{newAdmissionsCount}</strong></span>
+                      </div>
                     </div>
                   </div>
 
                   {/* Dues Card */}
-                  <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="text-sm font-medium text-slate-500">Pending Dues</p>
-                        <h3 className="text-2xl font-bold text-rose-600 mt-1">{formatP(totalDues)}</h3>
+                  <div className="bg-white rounded-3xl border border-slate-200/60 p-6 shadow-[0_8px_30px_rgb(0,0,0,0.015)] transition-all hover:shadow-[0_8px_30px_rgb(0,0,0,0.035)] flex flex-col justify-between">
+                    <div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pending Dues</span>
+                        <span className="p-2.5 bg-rose-50 text-rose-600 rounded-2xl">
+                          <AlertTriangle className="w-5 h-5" />
+                        </span>
                       </div>
-                      <div className="p-2 bg-rose-50 rounded-lg">
-                        <AlertTriangle className="w-5 h-5 text-rose-600" />
-                      </div>
+                      <h3 className="text-2xl font-black text-rose-600 tracking-tight mt-4">{formatP(totalDues)}</h3>
                     </div>
-                    <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between text-xs">
-                      <span className="text-slate-500">{dueItems.filter(d => d.status === "UNPAID").length} invoices</span>
-                      <button onClick={() => setActiveTab("defaulters")} className="text-indigo-600 font-semibold hover:underline cursor-pointer">View All</button>
+                    <div className="mt-5 pt-4 border-t border-slate-100/80">
+                      <div className="flex items-center justify-between text-xs mb-1.5">
+                        <span className="text-slate-400 font-semibold">Pending Ratio</span>
+                        <span className="text-rose-600 font-black">{100 - collectionEfficiency}%</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-rose-500 rounded-full" style={{ width: `${100 - collectionEfficiency}%` }} />
+                      </div>
+                      <div className="flex items-center justify-between mt-2.5 text-[10px] text-slate-400 font-medium">
+                        <span>Invoices: <strong className="text-slate-600">{dueItems.filter(d => d.status === "UNPAID").length} unpaid</strong></span>
+                        <button onClick={() => setActiveTab("defaulters")} className="text-indigo-600 hover:underline font-bold cursor-pointer">View List</button>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Staff Card */}
-                  <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="text-sm font-medium text-slate-500">Active Staff</p>
-                        <h3 className="text-2xl font-bold text-slate-800 mt-1">{staffUsersCount}</h3>
+                  {/* Attendance Card */}
+                  <div className="bg-white rounded-3xl border border-slate-200/60 p-6 shadow-[0_8px_30px_rgb(0,0,0,0.015)] transition-all hover:shadow-[0_8px_30px_rgb(0,0,0,0.035)] flex flex-col justify-between">
+                    <div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Attendance Rate</span>
+                        <span className="p-2.5 bg-emerald-50 text-emerald-600 rounded-2xl">
+                          <UserCheck className="w-5 h-5" />
+                        </span>
                       </div>
-                      <div className="p-2 bg-emerald-50 rounded-lg">
-                        <UserCheck className="w-5 h-5 text-emerald-600" />
-                      </div>
+                      <h3 className="text-2xl font-black text-emerald-600 tracking-tight mt-4">{attendanceRate}%</h3>
                     </div>
-                    <div className="mt-4 pt-4 border-t border-slate-100 flex items-center text-xs">
-                      <span className="text-slate-600 font-semibold">{attendanceRate}% attendance</span>
+                    <div className="mt-5 pt-4 border-t border-slate-100/80">
+                      <div className="grid grid-cols-4 gap-1 text-center text-[10px] font-bold text-slate-500">
+                        <div className="bg-emerald-50 text-emerald-700 py-1 rounded">
+                          <p className="text-[8px] uppercase">Pres</p>
+                          <p>{presentCount}</p>
+                        </div>
+                        <div className="bg-rose-50 text-rose-700 py-1 rounded">
+                          <p className="text-[8px] uppercase">Abs</p>
+                          <p>{absentCount}</p>
+                        </div>
+                        <div className="bg-amber-50 text-amber-700 py-1 rounded">
+                          <p className="text-[8px] uppercase">Late</p>
+                          <p>{lateCount}</p>
+                        </div>
+                        <div className="bg-blue-50 text-blue-700 py-1 rounded">
+                          <p className="text-[8px] uppercase">Lv</p>
+                          <p>{leaveCount}</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
 
+                {/* ─── Visualizations Section (SVG Charts) ─── */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  {/* Chart Section */}
-                  <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col">
-                    <div className="flex justify-between items-start mb-6">
+                  {/* Revenue Curve Chart (SVG Area Chart) */}
+                  <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.015)] p-6 relative flex flex-col justify-between">
+                    <div className="flex justify-between items-center mb-4">
                       <div>
-                        <h3 className="text-base font-bold text-slate-800">Revenue Overview</h3>
-                        <p className="text-xs text-slate-500 mt-1">Session 2026-27</p>
+                        <h4 className="text-sm font-black text-slate-800 tracking-tight">Collection Revenue Trend</h4>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Session 2026-27</p>
                       </div>
+                      <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md">Line Chart</span>
                     </div>
-                    <div className="flex-1 min-h-[200px] flex items-end justify-between gap-2 relative mt-4">
-                      {/* Grid Lines */}
-                      <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
-                        {[...Array(5)].map((_, i) => (
-                          <div key={i} className="w-full h-px bg-slate-100" />
-                        ))}
-                      </div>
-                      {monthsOrder.map((m) => {
-                        const val = monthlyRevenue[m] || 0;
-                        const pct = maxRev > 0 ? (val / maxRev) * 100 : 0;
+
+                    <div className="relative w-full h-[180px] mt-2">
+                      {/* Tooltip Overlay */}
+                      {hoveredMonth && (() => {
+                        const p = points.find(pt => pt.month === hoveredMonth);
+                        if (!p) return null;
                         return (
-                          <div key={m} className="flex-1 flex flex-col items-center gap-2 group relative z-10 h-full justify-end">
-                            <div className="absolute bottom-full mb-2 opacity-0 group-hover:opacity-100 bg-slate-800 text-white text-[10px] font-medium py-1 px-2 rounded shadow-sm whitespace-nowrap pointer-events-none transition-opacity">
-                              {formatP(val)}
-                            </div>
-                            <div className="w-full max-w-[32px] bg-indigo-50 rounded-t-md h-full relative flex items-end overflow-hidden">
-                              <div 
-                                className="w-full bg-indigo-500 group-hover:bg-indigo-600 transition-colors rounded-t-md" 
-                                style={{ height: `${Math.max(pct, 2)}%` }} 
-                              />
-                            </div>
-                            <span className="text-[10px] text-slate-500 font-medium uppercase">{m}</span>
+                          <div 
+                            className="absolute bg-slate-900/95 text-white text-[10px] font-bold py-1.5 px-2.5 rounded-xl shadow-lg border border-slate-800 pointer-events-none transition-all duration-150 z-20"
+                            style={{ 
+                              left: `${(p.x / chartWidth) * 100}%`, 
+                              top: `${(p.y / chartHeight) * 100 - 30}%`,
+                              transform: 'translateX(-50%)'
+                            }}
+                          >
+                            <p className="text-slate-400 font-medium uppercase tracking-wider text-[8px]">{p.month}</p>
+                            <p className="text-white mt-0.5">{formatP(p.val)}</p>
                           </div>
                         );
-                      })}
+                      })()}
+
+                      <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full h-full overflow-visible">
+                        <defs>
+                          <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#4f46e5" stopOpacity="0.18" />
+                            <stop offset="100%" stopColor="#4f46e5" stopOpacity="0.0" />
+                          </linearGradient>
+                        </defs>
+                        
+                        {/* Grid Lines */}
+                        {[0, 0.25, 0.5, 0.75, 1].map((ratio, index) => {
+                          const y = paddingTop + ratio * activeHeight;
+                          const gridVal = maxRev - ratio * maxRev;
+                          return (
+                            <g key={index}>
+                              <line 
+                                x1={paddingLeft} 
+                                y1={y} 
+                                x2={chartWidth - paddingRight} 
+                                y2={y} 
+                                stroke="#f1f5f9" 
+                                strokeWidth="1" 
+                              />
+                              <text 
+                                x={paddingLeft - 8} 
+                                y={y + 3} 
+                                fill="#94a3b8" 
+                                fontSize="9" 
+                                fontWeight="bold" 
+                                textAnchor="end"
+                              >
+                                {gridVal >= 100000 ? `${Math.round(gridVal/1000)}k` : Math.round(gridVal)}
+                              </text>
+                            </g>
+                          );
+                        })}
+
+                        {/* Chart Paths */}
+                        <path d={areaPath} fill="url(#chartGradient)" />
+                        <path 
+                          d={linePath} 
+                          fill="none" 
+                          stroke="#4f46e5" 
+                          strokeWidth="3" 
+                          strokeLinecap="round" 
+                          strokeLinejoin="round" 
+                        />
+
+                        {/* Month Axis Labels */}
+                        {points.map((p, idx) => (
+                          <text 
+                            key={idx} 
+                            x={p.x} 
+                            y={chartHeight - 8} 
+                            fill="#94a3b8" 
+                            fontSize="9" 
+                            fontWeight="black" 
+                            textAnchor="middle"
+                          >
+                            {p.month}
+                          </text>
+                        ))}
+
+                        {/* Interactive Dot & Lines */}
+                        {points.map((p, idx) => {
+                          const isHovered = hoveredMonth === p.month;
+                          return (
+                            <g key={idx}>
+                              {isHovered && (
+                                <>
+                                  <line 
+                                    x1={p.x} 
+                                    y1={paddingTop} 
+                                    x2={p.x} 
+                                    y2={chartHeight - paddingBottom} 
+                                    stroke="#4f46e5" 
+                                    strokeDasharray="3 3" 
+                                    strokeWidth="1.5" 
+                                  />
+                                  <circle cx={p.x} cy={p.y} r="7" fill="#4f46e5" opacity="0.3" className="animate-ping" />
+                                  <circle cx={p.x} cy={p.y} r="5" fill="#ffffff" stroke="#4f46e5" strokeWidth="3" />
+                                </>
+                              )}
+                              <circle 
+                                cx={p.x} 
+                                cy={p.y} 
+                                r="3.5" 
+                                fill="#4f46e5" 
+                                className="transition-all duration-200 hover:scale-125" 
+                              />
+                            </g>
+                          );
+                        })}
+
+                        {/* Hover Zones */}
+                        {points.map((p, idx) => {
+                          const colWidth = activeWidth / monthsOrder.length;
+                          return (
+                            <rect
+                              key={idx}
+                              x={p.x - colWidth / 2}
+                              y={0}
+                              width={colWidth}
+                              height={chartHeight}
+                              fill="transparent"
+                              className="cursor-pointer pointer-events-auto"
+                              onMouseEnter={() => setHoveredMonth(p.month)}
+                              onMouseLeave={() => setHoveredMonth(null)}
+                            />
+                          );
+                        })}
+                      </svg>
                     </div>
                   </div>
 
-                  {/* Quick Actions */}
-                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
-                    <div className="p-5 border-b border-slate-100 bg-slate-50/50">
-                      <h3 className="text-base font-bold text-slate-800">Quick Actions</h3>
-                      <p className="text-xs text-slate-500 mt-1">Frequently used shortcuts</p>
+                  {/* Collection efficiency Doughnut */}
+                  <div className="bg-white rounded-3xl border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.015)] p-6 flex flex-col justify-between">
+                    <div>
+                      <h4 className="text-sm font-black text-slate-800 tracking-tight">Collection Efficiency</h4>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Collected vs Pending Target</p>
                     </div>
-                    <div className="p-4 flex-1 grid grid-cols-2 gap-3 bg-white">
-                      {[
-                        { tab: "collect", icon: CreditCard, title: "Collect Fees" },
-                        { tab: "students", icon: PlusCircle, title: "Add Student" },
-                        { tab: "marks", icon: BookOpen, title: "Feed Marks" },
-                        { tab: "print_marksheets", icon: Printer, title: "Print Marksheets" },
-                        { tab: "defaulters", icon: AlertTriangle, title: "Fee Dues" },
-                        { tab: "notices", icon: Bell, title: "Post Notice" },
-                        { tab: "idcards", icon: FileText, title: "ID Cards" },
-                      ].map((btn, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => setActiveTab(btn.tab)}
-                          className="flex flex-col items-center justify-center gap-2 p-3 rounded-xl border border-slate-100 bg-slate-50 hover:bg-white hover:border-indigo-200 hover:shadow-sm hover:text-indigo-600 text-slate-600 transition-all cursor-pointer"
-                        >
-                          <btn.icon className="w-5 h-5" />
-                          <span className="text-xs font-semibold">{btn.title}</span>
-                        </button>
-                      ))}
+
+                    <div className="flex items-center justify-center my-4 relative">
+                      <svg width={rSize} height={rSize} viewBox={`0 0 ${rSize} ${rSize}`} className="transform -rotate-90">
+                        {/* Track circle */}
+                        <circle 
+                          cx={center} 
+                          cy={center} 
+                          r={radius} 
+                          fill="transparent" 
+                          stroke="#f1f5f9" 
+                          strokeWidth={strokeW} 
+                        />
+                        {/* Progress circle */}
+                        <circle 
+                          cx={center} 
+                          cy={center} 
+                          r={radius} 
+                          fill="transparent" 
+                          stroke="#4f46e5" 
+                          strokeWidth={strokeW} 
+                          strokeDasharray={doughnutCirc}
+                          strokeDashoffset={doughnutOffset}
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                      {/* Percent Center Label */}
+                      <div className="absolute text-center">
+                        <p className="text-2xl font-black text-slate-800 tracking-tight">{collectionEfficiency}%</p>
+                        <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Collected</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 border-t border-slate-100/80 pt-4 text-xs font-semibold">
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 block" />
+                          <span className="text-slate-505">Collected Revenue</span>
+                        </div>
+                        <span className="text-slate-800 font-black">{formatP(totalEarnings)}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-rose-505 block" />
+                          <span className="text-slate-505">Outstanding Dues</span>
+                        </div>
+                        <span className="text-rose-600 font-black">{formatP(totalDues)}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
 
+                {/* ─── Collection & Activities Feed ─── */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  {/* Daily Tally */}
-                  <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-                    <h3 className="text-base font-bold text-slate-800 mb-4">Today's Collection</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-                      <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/80">
-                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Cash</p>
-                        <p className="text-xl font-bold text-slate-800">{formatP(todayCash)}</p>
+                  {/* Recent Collections Table */}
+                  <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.015)] overflow-hidden flex flex-col justify-between">
+                    <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+                      <div>
+                        <h4 className="text-sm font-black text-slate-800 tracking-tight">Recent Fee Collections</h4>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Last 5 counter payments</p>
                       </div>
-                      <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/80">
-                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">UPI</p>
-                        <p className="text-xl font-bold text-slate-800">{formatP(todayUpi)}</p>
-                      </div>
-                      <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/80">
-                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Bank</p>
-                        <p className="text-xl font-bold text-slate-800">{formatP(todayBank)}</p>
-                      </div>
+                      <button onClick={() => setActiveTab("ledger")} className="text-xs font-bold text-indigo-600 hover:underline cursor-pointer">All Vouchers</button>
                     </div>
-                    <div className="flex items-center justify-between p-4 rounded-xl bg-indigo-50 border border-indigo-100">
-                      <span className="text-sm font-semibold text-indigo-900">Total Today</span>
-                      <span className="text-2xl font-bold text-indigo-700">{formatP(todayTotal)}</span>
+
+                    <div className="overflow-x-auto flex-1">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-slate-50/75 border-b border-slate-200/50 text-[9px] font-bold uppercase text-slate-400 tracking-wider">
+                            <th className="py-3 px-6">Voucher</th>
+                            <th className="py-3 px-6">Student</th>
+                            <th className="py-3 px-6">Date</th>
+                            <th className="py-3 px-6">Mode</th>
+                            <th className="py-3 px-6 text-right">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100/80 text-xs font-semibold text-slate-700">
+                          {recentReceipts.map((rec) => (
+                            <tr key={rec.id} className="hover:bg-slate-50/40 transition-colors">
+                              <td className="py-3.5 px-6 font-black text-indigo-600">{rec.receiptNo}</td>
+                              <td className="py-3.5 px-6">
+                                <p className="font-extrabold text-slate-800">{rec.studentName}</p>
+                                <p className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">{rec.classSection}</p>
+                              </td>
+                              <td className="py-3.5 px-6 text-slate-555 text-[10px] font-bold">{rec.createdAt}</td>
+                              <td className="py-3.5 px-6">
+                                <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-lg border ${
+                                  rec.method === "CASH"
+                                    ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+                                    : "bg-blue-50 text-blue-700 border-blue-100"
+                                }`}>
+                                  {rec.method}
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-6 text-right font-black text-slate-900">
+                                {formatP(rec.amount)}
+                              </td>
+                            </tr>
+                          ))}
+                          {recentReceipts.length === 0 && (
+                            <tr>
+                              <td colSpan={5} className="py-8 text-center text-[10px] text-slate-400 font-semibold italic">
+                                No collection receipts found.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
 
-                  {/* Top Collectors */}
-                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col h-[340px]">
-                    <div className="p-5 border-b border-slate-100 bg-slate-50/50 shrink-0">
-                      <h3 className="text-base font-bold text-slate-800">Top Collectors</h3>
+                  {/* Today's Collection summary */}
+                  <div className="bg-white rounded-3xl border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.015)] p-6 flex flex-col justify-between">
+                    <div>
+                      <h4 className="text-sm font-black text-slate-800 tracking-tight">Today's Collections</h4>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Tally by payment modes</p>
                     </div>
-                    <div className="flex-1 overflow-y-auto p-3 space-y-2">
+
+                    <div className="space-y-3.5 my-5">
+                      <div className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-100 bg-slate-50/50">
+                        <div className="flex items-center gap-3">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 block" />
+                          <span className="text-xs font-semibold text-slate-600">Cash Counter</span>
+                        </div>
+                        <span className="text-sm font-black text-slate-855">{formatP(todayCash)}</span>
+                      </div>
+                      <div className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-100 bg-slate-50/50">
+                        <div className="flex items-center gap-3">
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-500 block" />
+                          <span className="text-xs font-semibold text-slate-600">UPI Smart Pay</span>
+                        </div>
+                        <span className="text-sm font-black text-slate-855">{formatP(todayUpi)}</span>
+                      </div>
+                      <div className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-100 bg-slate-50/50">
+                        <div className="flex items-center gap-3">
+                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 block" />
+                          <span className="text-xs font-semibold text-slate-600">Bank / Online / Cheques</span>
+                        </div>
+                        <span className="text-sm font-black text-slate-855">{formatP(todayBank)}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between p-4 rounded-2xl bg-indigo-50/75 border border-indigo-100/50">
+                      <span className="text-xs font-bold text-indigo-900 uppercase tracking-wide">Total Collected Today</span>
+                      <span className="text-xl font-black text-indigo-700">{formatP(todayTotal)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ─── Detailed analytics (Class breakdown + Top Collectors + Notes) ─── */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  
+                  {/* Class breakdown */}
+                  <div className="bg-white rounded-3xl border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.015)] p-6 flex flex-col justify-between">
+                    <div>
+                      <h4 className="text-sm font-black text-slate-800 tracking-tight">Class-wise Revenue</h4>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Top 5 classes by collection</p>
+                    </div>
+
+                    <div className="space-y-4 my-5 flex-1 justify-center flex flex-col">
+                      {classCollectionsList.map((item, idx) => (
+                        <div key={idx} className="space-y-1.5">
+                          <div className="flex justify-between items-center text-xs font-semibold">
+                            <span className="text-slate-700">Class {item.className} <span className="text-[10px] text-slate-400 font-medium">({item.count} std)</span></span>
+                            <span className="text-slate-855 font-black">{formatP(item.collected)} <span className="text-[9px] text-rose-500 font-medium ml-1">({formatP(item.dues)} due)</span></span>
+                          </div>
+                          <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden flex">
+                            <div className="bg-indigo-505 h-full rounded-l-full" style={{ width: `${item.efficiency}%` }} />
+                            <div className="bg-rose-200 h-full rounded-r-full" style={{ width: `${100 - item.efficiency}%` }} />
+                          </div>
+                        </div>
+                      ))}
+                      {classCollectionsList.length === 0 && (
+                        <p className="text-center text-xs text-slate-400 py-6 italic">No classes available.</p>
+                      )}
+                    </div>
+
+                    <button onClick={() => setActiveTab("structures")} className="w-full text-center text-xs font-bold text-indigo-600 hover:underline border-t border-slate-100 pt-4 cursor-pointer">Fee Structures & Classes</button>
+                  </div>
+
+                  {/* Top collectors */}
+                  <div className="bg-white rounded-3xl border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.015)] p-6 flex flex-col justify-between">
+                    <div>
+                      <h4 className="text-sm font-black text-slate-800 tracking-tight">Staff Collectors Ledger</h4>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Aggregate logs by users</p>
+                    </div>
+
+                    <div className="divide-y divide-slate-100 flex-1 overflow-y-auto max-h-[220px] pr-1 scrollbar-thin my-4 space-y-1">
                       {collectorsList.map((col, idx) => (
-                        <div key={idx} className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-100 transition-colors">
+                        <div key={idx} className="flex items-center justify-between py-3.5 hover:bg-slate-50/50 rounded-xl px-2 transition-colors">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-sm">
+                            <div className="w-9 h-9 rounded-2xl bg-slate-100 text-slate-600 flex items-center justify-center font-black text-xs border border-slate-200/40">
                               {col.name.charAt(0).toUpperCase()}
                             </div>
                             <div>
-                              <p className="text-sm font-bold text-slate-800">{col.name}</p>
-                              <p className="text-[10px] font-semibold text-slate-400 uppercase">{col.role}</p>
+                              <p className="text-xs font-black text-slate-800">
+                                {col.name}
+                              </p>
+                              <p className="text-[9px] font-bold text-slate-400 uppercase mt-0.5">{col.role}</p>
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="text-sm font-bold text-slate-800">{formatP(col.total)}</p>
-                            <p className="text-xs text-slate-500">{col.count} receipts</p>
+                            <p className="text-xs font-black text-slate-855">{formatP(col.total)}</p>
+                            <p className="text-[9px] text-slate-400 font-bold mt-0.5">{col.count} Vouchers</p>
                           </div>
                         </div>
                       ))}
                       {collectorsList.length === 0 && (
-                        <div className="p-6 text-center text-sm text-slate-400">No collections today.</div>
+                        <div className="py-8 text-center text-xs text-slate-400 italic">No collectors recorded today.</div>
                       )}
+                    </div>
+
+                    <div className="border-t border-slate-100 pt-4">
+                      <button onClick={() => setActiveTab("users")} className="w-full text-center text-xs font-bold text-indigo-600 hover:underline cursor-pointer">Manage Staff Accounts</button>
+                    </div>
+                  </div>
+
+                  {/* Notes Scratchpad */}
+                  <div className="bg-white rounded-3xl border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.015)] p-6 flex flex-col justify-between">
+                    <div>
+                      <h4 className="text-sm font-black text-slate-800 tracking-tight">Admin Scratchpad</h4>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Quick reminders & reminders</p>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto max-h-[160px] my-4 pr-1 scrollbar-thin space-y-2">
+                      {notes.map((note, index) => (
+                        <div key={index} className="flex justify-between items-start gap-2 p-2.5 rounded-2xl border border-amber-100 bg-amber-50/40 text-xs font-semibold text-slate-700 shadow-[0_1px_2px_rgba(0,0,0,0.01)]">
+                          <p className="flex-1 leading-relaxed">{note}</p>
+                          <button 
+                            onClick={() => deleteNote(index)}
+                            className="p-1 hover:bg-amber-100 rounded-lg text-slate-400 hover:text-slate-600 transition-colors cursor-pointer shrink-0"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                      {notes.length === 0 && (
+                        <div className="py-8 text-center text-xs text-slate-400 italic">
+                          No notes. Write reminders below!
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="border-t border-slate-100 pt-4 flex gap-2">
+                      <input 
+                        type="text" 
+                        placeholder="Add quick reminder..." 
+                        value={newNoteText}
+                        onChange={(e) => setNewNoteText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") addNote();
+                        }}
+                        className="flex-1 text-xs px-3.5 py-2.5 rounded-2xl border border-slate-200 focus:outline-none focus:border-indigo-500 font-semibold text-slate-700 bg-slate-50/50"
+                      />
+                      <button 
+                        onClick={addNote}
+                        className="px-3 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl transition-colors cursor-pointer text-xs font-bold shrink-0"
+                      >
+                        Add
+                      </button>
                     </div>
                   </div>
                 </div>
 
-                {/* Birthdays */}
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-                  <h3 className="text-base font-bold text-slate-800 mb-4">Upcoming Birthdays</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* ─── Upcoming Birthdays Section ─── */}
+                <div className="bg-white rounded-3xl border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.015)] p-6">
+                  <div className="flex justify-between items-center mb-5">
+                    <div>
+                      <h4 className="text-sm font-black text-slate-800 tracking-tight">Upcoming Birthdays</h4>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Students born in {new Date().toLocaleString("default", { month: "long" })}</p>
+                    </div>
+                    <span className="p-2 bg-pink-50 text-pink-500 rounded-2xl">
+                      <Gift className="w-5 h-5 animate-bounce" />
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
                     {upcomingBirthdays.map((s) => (
-                      <div key={s.id} className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 hover:border-slate-200 bg-slate-50 transition-colors">
-                        <div className="w-10 h-10 rounded-full bg-white border border-slate-200 text-slate-700 flex items-center justify-center font-bold shadow-sm">
-                          {s.day}
+                      <div key={s.id} className="flex items-center gap-3.5 p-3 rounded-2xl border border-slate-100 bg-slate-50/50 hover:bg-white hover:border-pink-100 hover:shadow-sm transition-all group">
+                        <div className="w-10 h-10 rounded-2xl bg-white border border-slate-200/60 text-slate-800 flex flex-col items-center justify-center font-black shadow-sm group-hover:border-pink-200/50 transition-colors">
+                          <span className="text-xs">{s.day}</span>
+                          <span className="text-[8px] text-pink-500 uppercase font-black">{s.month}</span>
                         </div>
-                        <div>
-                          <p className="text-sm font-bold text-slate-800">{s.name}</p>
-                          <p className="text-xs text-slate-500 font-medium">Class {s.classSection}</p>
+                        <div className="overflow-hidden">
+                          <p className="text-xs font-black text-slate-855 truncate group-hover:text-pink-600 transition-colors">{s.name}</p>
+                          <p className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">{s.classSection}</p>
                         </div>
                       </div>
                     ))}
                     {upcomingBirthdays.length === 0 && (
-                      <p className="col-span-full py-6 text-center text-sm text-slate-400">No birthdays this month.</p>
+                      <p className="col-span-full py-8 text-center text-xs text-slate-400 font-semibold italic">No birthdays this month.</p>
                     )}
                   </div>
                 </div>
+
               </div>
             );
           })()}
         </div>
+
       ) : (
-        <div className="bg-white border-y sm:border border-slate-200/80 p-3 sm:p-6 sm:rounded-2xl shadow-sm">
+        <div className="bg-white border-y sm:border border-slate-200/60 p-4 sm:p-8 sm:rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)]">
 
           {/* TAB: Collect Fees (Offline Counter Payment) */}
           {activeTab === "collect" && (
@@ -3992,7 +4513,7 @@ export default function AdminDashboard() {
                 if (totalPages <= 1) return null;
 
                 return (
-                  <div className="flex flex-col sm:flex-row items-center justify-between bg-white border border-slate-200 p-4 rounded-2xl shadow-sm mt-3 text-xs font-bold text-slate-500 gap-3">
+                  <div className="flex flex-col sm:flex-row items-center justify-between bg-white border border-slate-200/60 p-4 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.015)] mt-4 text-xs font-bold text-slate-500 gap-3">
                     <div>
                       Showing <span className="text-slate-800 font-extrabold">{((parentsCurrentPage - 1) * itemsPerPageLocal) + 1}</span> to{" "}
                       <span className="text-slate-800 font-extrabold">
@@ -4050,9 +4571,9 @@ export default function AdminDashboard() {
                               onClick={() => {
                                 setParentsCurrentPage(Number(item));
                               }}
-                              className={`h-7 w-7 flex items-center justify-center rounded-lg border transition-all cursor-pointer ${
+                              className={`h-7 w-7 flex items-center justify-center rounded-xl border transition-all cursor-pointer ${
                                 parentsCurrentPage === item
-                                  ? "bg-indigo-600 border-indigo-600 text-white font-extrabold shadow-md shadow-indigo-500/10"
+                                  ? "bg-indigo-600 border-indigo-600 text-white font-extrabold shadow-[0_4px_12px_rgba(79,70,229,0.2)]"
                                   : "bg-white border-slate-200 hover:bg-slate-50 text-slate-650"
                               }`}
                             >
@@ -4169,37 +4690,28 @@ export default function AdminDashboard() {
           {activeTab === "students" && (
             <div className="space-y-6">
               {/* Header Selector: Directory vs Single vs Bulk */}
-              <div className="flex border-b border-slate-200 mb-4 gap-2">
-                <button
-                  onClick={() => setImportMode("directory")}
-                  className={`py-2 px-4 text-xs font-black uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
-                    importMode === "directory"
-                      ? "border-indigo-600 text-indigo-600"
-                      : "border-transparent text-slate-400 hover:text-slate-600"
-                  }`}
-                >
-                  Student Directory
-                </button>
-                <button
-                  onClick={() => setImportMode("single")}
-                  className={`py-2 px-4 text-xs font-black uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
-                    importMode === "single"
-                      ? "border-indigo-600 text-indigo-600"
-                      : "border-transparent text-slate-400 hover:text-slate-600"
-                  }`}
-                >
-                  Single Registration
-                </button>
-                <button
-                  onClick={() => setImportMode("bulk")}
-                  className={`py-2 px-4 text-xs font-black uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
-                    importMode === "bulk"
-                      ? "border-indigo-600 text-indigo-600"
-                      : "border-transparent text-slate-400 hover:text-slate-600"
-                  }`}
-                >
-                  Bulk CSV Import
-                </button>
+              <div className="flex flex-wrap gap-2 border-b border-slate-200/60 pb-3 no-print">
+                {[
+                  { id: "directory", label: "Student Directory", icon: Users, activeClass: "bg-indigo-50 border-indigo-150 text-indigo-700 shadow-2xs" },
+                  { id: "single", label: "Single Registration", icon: PlusCircle, activeClass: "bg-emerald-50 border-emerald-150 text-emerald-700 shadow-2xs" },
+                  { id: "bulk", label: "Bulk CSV Import", icon: UploadCloud, activeClass: "bg-amber-50 border-amber-150 text-amber-700 shadow-2xs" },
+                ].map((subTab) => {
+                  const Icon = subTab.icon;
+                  const isActive = importMode === subTab.id;
+                  return (
+                    <button
+                      key={subTab.id}
+                      type="button"
+                      onClick={() => setImportMode(subTab.id as any)}
+                      className={`flex items-center gap-1.5 px-4 py-2 border rounded-2xl text-xs font-black transition-all cursor-pointer ${
+                        isActive ? subTab.activeClass : "bg-white border-slate-200/60 text-slate-500 hover:text-slate-700 hover:bg-slate-50/50"
+                      }`}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      {subTab.label}
+                    </button>
+                  );
+                })}
               </div>
 
               {importMode === "directory" ? (
@@ -4216,28 +4728,32 @@ export default function AdminDashboard() {
                 ) : (
                   <div className="space-y-4 animate-fade-in">
                     {/* ENHANCED MULTI-FACTOR FILTERS TOOLBAR */}
-                    <div className="bg-white border border-slate-200/80 p-4 sm:p-5 rounded-2xl shadow-sm space-y-4">
+                    <div className="bg-white border border-slate-200/60 p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] space-y-5">
                       {/* Top Row: Search Input + Clear All Button */}
                       <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
                         <div className="relative w-full sm:max-w-md">
                           <Search className="absolute left-3.5 top-2.5 h-4 w-4 text-slate-400" />
                           <input
                             type="text"
-                            placeholder="Search Student Name, ADM No, Roll, Family ID, Phone, Aadhaar..."
+                            placeholder="Search name, ADM No, roll, phone..."
                             value={dirSearch}
                             onChange={(e) => {
-                              setDirSearch(e.target.value);
+                              const val = e.target.value;
+                              setDirSearch(val);
                               setCurrentPage(1);
+                              if (dirSearchTimerRef.current) clearTimeout(dirSearchTimerRef.current);
+                              dirSearchTimerRef.current = setTimeout(() => setDebouncedDirSearch(val), 250);
                             }}
-                            className="w-full text-xs font-semibold py-2.5 pl-10 pr-8 border border-slate-200 rounded-xl outline-none bg-slate-50/70 focus:bg-white focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/10 transition-all shadow-inner"
+                            className="w-full text-xs font-extrabold py-3 pl-11 pr-9 border border-slate-200/60 rounded-2xl outline-none bg-slate-50/50 hover:bg-slate-50 hover:border-slate-350 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-500/5 transition-all shadow-2xs text-slate-800 placeholder-slate-400"
                           />
                           {dirSearch && (
                             <button
                               onClick={() => {
                                 setDirSearch("");
+                                setDebouncedDirSearch("");
                                 setCurrentPage(1);
                               }}
-                              className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-100"
+                              className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100"
                             >
                               <X className="h-3.5 w-3.5" />
                             </button>
@@ -4250,6 +4766,7 @@ export default function AdminDashboard() {
                               type="button"
                               onClick={() => {
                                 setDirSearch("");
+                                setDebouncedDirSearch("");
                                 setDirClassFilter("");
                                 setDirSectionFilter("");
                                 setDirFamilyFilter("");
@@ -4267,21 +4784,38 @@ export default function AdminDashboard() {
                         </div>
                       </div>
 
+                      {/* Mobile: Filter toggle button */}
+                      <div className="flex sm:hidden items-center gap-2 border-t border-slate-200/60 pt-3">
+                        <button
+                          type="button"
+                          onClick={() => setShowMobileFilters((prev) => !prev)}
+                          className={"flex items-center gap-2 px-4 py-2.5 border rounded-2xl text-xs font-black transition-all cursor-pointer flex-1 justify-center " + (showMobileFilters ? "bg-indigo-50 border-indigo-200 text-indigo-700" : "bg-slate-50 border-slate-200/60 text-slate-600")}
+                        >
+                          <Filter className="h-3.5 w-3.5" />
+                          {showMobileFilters ? "Hide Filters" : "Show Filters"}
+                          {activeFilterCount > 0 && (
+                            <span className="bg-indigo-600 text-white text-[9px] font-black rounded-full h-4 w-4 flex items-center justify-center shrink-0">
+                              {activeFilterCount}
+                            </span>
+                          )}
+                        </button>
+                      </div>
+
                       {/* Filter Grid (Class, Section, Family ID, Status, Billing Type, Caste Category, Dues Status) */}
-                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2.5 pt-1 border-t border-slate-100">
+                      <div className={"grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 pt-4 border-t border-slate-200/60 " + (showMobileFilters ? "" : "hidden sm:grid")}>
                         {/* 1. Class Filter */}
                         <div>
-                          <label className="text-[9px] font-extrabold uppercase text-slate-400 block mb-1 tracking-wider">Class</label>
+                          <label className="text-[9px] font-black uppercase text-slate-400 block mb-1.5 tracking-wider">Class</label>
                           <select
                             value={dirClassFilter}
                             onChange={(e) => {
                               setDirClassFilter(e.target.value);
                               setCurrentPage(1);
                             }}
-                            className="w-full text-xs font-bold py-2 px-2.5 border border-slate-200 rounded-xl outline-none bg-slate-50/70 focus:bg-white focus:border-indigo-600 cursor-pointer"
+                            className="w-full text-[11px] font-extrabold py-2.5 px-3 border border-slate-200/60 rounded-2xl outline-none bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300 focus:bg-white focus:border-indigo-600 text-slate-700 transition-all cursor-pointer shadow-2xs"
                           >
                             <option value="">All Classes</option>
-                            {Array.from(new Set(classes.map((c: any) => c.name))).sort().map((className: any) => (
+                            {classOptions.map((className: any) => (
                               <option key={className} value={className}>Class {className}</option>
                             ))}
                           </select>
@@ -4289,17 +4823,17 @@ export default function AdminDashboard() {
 
                         {/* 2. Section Filter */}
                         <div>
-                          <label className="text-[9px] font-extrabold uppercase text-slate-400 block mb-1 tracking-wider">Section</label>
+                          <label className="text-[9px] font-black uppercase text-slate-400 block mb-1.5 tracking-wider">Section</label>
                           <select
                             value={dirSectionFilter}
                             onChange={(e) => {
                               setDirSectionFilter(e.target.value);
                               setCurrentPage(1);
                             }}
-                            className="w-full text-xs font-bold py-2 px-2.5 border border-slate-200 rounded-xl outline-none bg-slate-50/70 focus:bg-white focus:border-indigo-600 cursor-pointer"
+                            className="w-full text-[11px] font-extrabold py-2.5 px-3 border border-slate-200/60 rounded-2xl outline-none bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300 focus:bg-white focus:border-indigo-600 text-slate-700 transition-all cursor-pointer shadow-2xs"
                           >
                             <option value="">All Sections</option>
-                            {Array.from(new Set(classes.map((c: any) => c.section))).sort().map((sec: any) => (
+                            {sectionOptions.map((sec: any) => (
                               <option key={sec} value={sec}>Section {sec}</option>
                             ))}
                           </select>
@@ -4307,17 +4841,17 @@ export default function AdminDashboard() {
 
                         {/* 3. Family ID Filter */}
                         <div>
-                          <label className="text-[9px] font-extrabold uppercase text-indigo-600 block mb-1 tracking-wider">Family ID</label>
+                          <label className="text-[9px] font-black uppercase text-slate-400 block mb-1.5 tracking-wider">Family ID</label>
                           <select
                             value={dirFamilyFilter}
                             onChange={(e) => {
                               setDirFamilyFilter(e.target.value);
                               setCurrentPage(1);
                             }}
-                            className="w-full text-xs font-bold py-2 px-2.5 border border-indigo-200 rounded-xl outline-none bg-indigo-50/40 focus:bg-white focus:border-indigo-600 cursor-pointer text-indigo-900"
+                            className="w-full text-[11px] font-extrabold py-2.5 px-3 border border-slate-200/60 rounded-2xl outline-none bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300 focus:bg-white focus:border-indigo-600 text-slate-700 transition-all cursor-pointer shadow-2xs"
                           >
                             <option value="">All Family IDs</option>
-                            {Array.from(new Set(students.map((s: any) => s.familyCode).filter(Boolean))).sort().map((fCode: any) => (
+                            {familyOptions.map((fCode: any) => (
                               <option key={fCode} value={fCode}>{fCode}</option>
                             ))}
                           </select>
@@ -4325,14 +4859,14 @@ export default function AdminDashboard() {
 
                         {/* 4. Account Status */}
                         <div>
-                          <label className="text-[9px] font-extrabold uppercase text-slate-400 block mb-1 tracking-wider">Status</label>
+                          <label className="text-[9px] font-black uppercase text-slate-400 block mb-1.5 tracking-wider">Status</label>
                           <select
                             value={dirStatusFilter}
                             onChange={(e) => {
                               setDirStatusFilter(e.target.value);
                               setCurrentPage(1);
                             }}
-                            className="w-full text-xs font-bold py-2 px-2.5 border border-slate-200 rounded-xl outline-none bg-slate-50/70 focus:bg-white focus:border-indigo-600 cursor-pointer"
+                            className="w-full text-[11px] font-extrabold py-2.5 px-3 border border-slate-200/60 rounded-2xl outline-none bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300 focus:bg-white focus:border-indigo-600 text-slate-700 transition-all cursor-pointer shadow-2xs"
                           >
                             <option value="ALL">All Statuses</option>
                             <option value="ACTIVE">Active Only</option>
@@ -4343,14 +4877,14 @@ export default function AdminDashboard() {
 
                         {/* 5. Billing / RTE Filter */}
                         <div>
-                          <label className="text-[9px] font-extrabold uppercase text-slate-400 block mb-1 tracking-wider">Billing Type</label>
+                          <label className="text-[9px] font-black uppercase text-slate-400 block mb-1.5 tracking-wider">Billing Type</label>
                           <select
                             value={dirRteFilter}
                             onChange={(e) => {
                               setDirRteFilter(e.target.value);
                               setCurrentPage(1);
                             }}
-                            className="w-full text-xs font-bold py-2 px-2.5 border border-slate-200 rounded-xl outline-none bg-slate-50/70 focus:bg-white focus:border-indigo-600 cursor-pointer"
+                            className="w-full text-[11px] font-extrabold py-2.5 px-3 border border-slate-200/60 rounded-2xl outline-none bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300 focus:bg-white focus:border-indigo-600 text-slate-700 transition-all cursor-pointer shadow-2xs"
                           >
                             <option value="ALL">All Billing Types</option>
                             <option value="RTE">RTE Waiver (100%)</option>
@@ -4361,14 +4895,14 @@ export default function AdminDashboard() {
 
                         {/* 6. Caste Category */}
                         <div>
-                          <label className="text-[9px] font-extrabold uppercase text-slate-400 block mb-1 tracking-wider">Category</label>
+                          <label className="text-[9px] font-black uppercase text-slate-400 block mb-1.5 tracking-wider">Category</label>
                           <select
                             value={dirCategoryFilter}
                             onChange={(e) => {
                               setDirCategoryFilter(e.target.value);
                               setCurrentPage(1);
                             }}
-                            className="w-full text-xs font-bold py-2 px-2.5 border border-slate-200 rounded-xl outline-none bg-slate-50/70 focus:bg-white focus:border-indigo-600 cursor-pointer"
+                            className="w-full text-[11px] font-extrabold py-2.5 px-3 border border-slate-200/60 rounded-2xl outline-none bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300 focus:bg-white focus:border-indigo-600 text-slate-700 transition-all cursor-pointer shadow-2xs"
                           >
                             <option value="ALL">All Categories</option>
                             <option value="General">General</option>
@@ -4380,14 +4914,14 @@ export default function AdminDashboard() {
 
                         {/* 7. Fee Dues Status */}
                         <div>
-                          <label className="text-[9px] font-extrabold uppercase text-slate-400 block mb-1 tracking-wider">Fee Dues</label>
+                          <label className="text-[9px] font-black uppercase text-slate-400 block mb-1.5 tracking-wider">Fee Dues</label>
                           <select
                             value={dirDuesFilter}
                             onChange={(e) => {
                               setDirDuesFilter(e.target.value);
                               setCurrentPage(1);
                             }}
-                            className="w-full text-xs font-bold py-2 px-2.5 border border-slate-200 rounded-xl outline-none bg-slate-50/70 focus:bg-white focus:border-indigo-600 cursor-pointer"
+                            className="w-full text-[11px] font-extrabold py-2.5 px-3 border border-slate-200/60 rounded-2xl outline-none bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300 focus:bg-white focus:border-indigo-600 text-slate-700 transition-all cursor-pointer shadow-2xs"
                           >
                             <option value="ALL">All Fee Status</option>
                             <option value="HAS_DUES">Pending Dues</option>
@@ -4401,51 +4935,51 @@ export default function AdminDashboard() {
                         <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 text-[11px] font-bold">
                           <span className="text-slate-400 font-extrabold uppercase text-[9px] tracking-wider">Active Filters:</span>
                           {dirSearch && (
-                            <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-0.5 rounded-lg border border-slate-200">
+                            <span className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 px-3 py-1 rounded-xl border border-slate-200 text-xs font-bold">
                               Search: "{dirSearch}"
-                              <button onClick={() => setDirSearch("")} className="hover:text-slate-900"><X className="h-3 w-3" /></button>
+                              <button onClick={() => { setDirSearch(""); setDebouncedDirSearch(""); }} className="p-0.5 hover:text-slate-900 cursor-pointer"><X className="h-3.5 w-3.5" /></button>
                             </span>
                           )}
                           {dirClassFilter && (
-                            <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-0.5 rounded-lg border border-slate-200">
+                            <span className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 px-3 py-1 rounded-xl border border-slate-200 text-xs font-bold">
                               Class: {dirClassFilter}
-                              <button onClick={() => setDirClassFilter("")} className="hover:text-slate-900"><X className="h-3 w-3" /></button>
+                              <button onClick={() => setDirClassFilter("")} className="p-0.5 hover:text-slate-900 cursor-pointer"><X className="h-3.5 w-3.5" /></button>
                             </span>
                           )}
                           {dirSectionFilter && (
-                            <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-0.5 rounded-lg border border-slate-200">
+                            <span className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 px-3 py-1 rounded-xl border border-slate-200 text-xs font-bold">
                               Section: {dirSectionFilter}
-                              <button onClick={() => setDirSectionFilter("")} className="hover:text-slate-900"><X className="h-3 w-3" /></button>
+                              <button onClick={() => setDirSectionFilter("")} className="p-0.5 hover:text-slate-900 cursor-pointer"><X className="h-3.5 w-3.5" /></button>
                             </span>
                           )}
                           {dirFamilyFilter && (
-                            <span className="inline-flex items-center gap-1 bg-purple-50 text-purple-700 px-2.5 py-0.5 rounded-lg border border-purple-200 font-black">
+                            <span className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 px-3 py-1 rounded-xl border border-slate-200 text-xs font-bold">
                               Family ID: {dirFamilyFilter}
-                              <button onClick={() => setDirFamilyFilter("")} className="hover:text-purple-900"><X className="h-3 w-3" /></button>
+                              <button onClick={() => setDirFamilyFilter("")} className="p-0.5 hover:text-slate-900 cursor-pointer"><X className="h-3.5 w-3.5" /></button>
                             </span>
                           )}
                           {dirStatusFilter !== "ALL" && (
-                            <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-0.5 rounded-lg border border-slate-200">
+                            <span className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 px-3 py-1 rounded-xl border border-slate-200 text-xs font-bold">
                               Status: {dirStatusFilter}
-                              <button onClick={() => setDirStatusFilter("ALL")} className="hover:text-slate-900"><X className="h-3 w-3" /></button>
+                              <button onClick={() => setDirStatusFilter("ALL")} className="p-0.5 hover:text-slate-900 cursor-pointer"><X className="h-3.5 w-3.5" /></button>
                             </span>
                           )}
                           {dirRteFilter !== "ALL" && (
-                            <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-0.5 rounded-lg border border-slate-200">
+                            <span className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 px-3 py-1 rounded-xl border border-slate-200 text-xs font-bold">
                               Billing: {dirRteFilter}
-                              <button onClick={() => setDirRteFilter("ALL")} className="hover:text-slate-900"><X className="h-3 w-3" /></button>
+                              <button onClick={() => setDirRteFilter("ALL")} className="p-0.5 hover:text-slate-900 cursor-pointer"><X className="h-3.5 w-3.5" /></button>
                             </span>
                           )}
                           {dirCategoryFilter !== "ALL" && (
-                            <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-0.5 rounded-lg border border-slate-200">
+                            <span className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 px-3 py-1 rounded-xl border border-slate-200 text-xs font-bold">
                               Category: {dirCategoryFilter}
-                              <button onClick={() => setDirCategoryFilter("ALL")} className="hover:text-slate-900"><X className="h-3 w-3" /></button>
+                              <button onClick={() => setDirCategoryFilter("ALL")} className="p-0.5 hover:text-slate-900 cursor-pointer"><X className="h-3.5 w-3.5" /></button>
                             </span>
                           )}
                           {dirDuesFilter !== "ALL" && (
-                            <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-0.5 rounded-lg border border-slate-200">
+                            <span className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 px-3 py-1 rounded-xl border border-slate-200 text-xs font-bold">
                               Dues: {dirDuesFilter}
-                              <button onClick={() => setDirDuesFilter("ALL")} className="hover:text-slate-900"><X className="h-3 w-3" /></button>
+                              <button onClick={() => setDirDuesFilter("ALL")} className="p-0.5 hover:text-slate-900 cursor-pointer"><X className="h-3.5 w-3.5" /></button>
                             </span>
                           )}
                         </div>
@@ -4454,14 +4988,15 @@ export default function AdminDashboard() {
 
                   {/* BULK ACTIONS FLOATING BAR */}
                   {selectedStudentIds.length > 0 && (
-                    <div className="bg-indigo-50 border border-indigo-200/80 p-3 rounded-2xl flex items-center justify-between text-xs font-black text-indigo-900 animate-fade-in gap-3 shadow-[0_4px_12px_rgba(79,70,229,0.06)] bg-indigo-50/90 backdrop-blur-sm">
+                    <div className="bg-indigo-50/90 border border-indigo-200/80 p-3 rounded-2xl flex items-center justify-between text-xs font-black text-indigo-900 animate-fade-in gap-2 shadow-[0_4px_12px_rgba(79,70,229,0.06)] backdrop-blur-sm">
                       <div className="flex items-center gap-2">
                         <span className="bg-indigo-600 text-white rounded-full h-5 w-5 flex items-center justify-center font-extrabold text-[10px]">
                           {selectedStudentIds.length}
                         </span>
-                        <span>Students Selected</span>
+                        <span className="hidden sm:inline">Students Selected</span>
+                        <span className="inline sm:hidden">Selected</span>
                       </div>
-                      <div className="flex gap-2 flex-wrap">
+                      <div className="flex gap-1.5 flex-wrap justify-end">
                         <button
                           type="button"
                           onClick={() => {
@@ -4469,9 +5004,9 @@ export default function AdminDashboard() {
                             setPromoteSection("A");
                             setShowBulkPromoteModal(true);
                           }}
-                          className="py-1.5 px-3 bg-white border border-indigo-200 hover:bg-indigo-100 text-indigo-700 rounded-lg font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
+                          className="py-2 px-2.5 sm:px-3 bg-white border border-indigo-200 hover:bg-indigo-100 text-indigo-700 rounded-xl font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-sm active:scale-95"
                         >
-                          <ArrowUpRight className="h-3.5 w-3.5" /> Bulk Promote
+                          <ArrowUpRight className="h-3.5 w-3.5" /><span className="hidden sm:inline">Bulk Promote</span><span className="inline sm:hidden">Promote</span>
                         </button>
                         <button
                           type="button"
@@ -4481,9 +5016,9 @@ export default function AdminDashboard() {
                               setSelectedStudentIds([]);
                             }
                           }}
-                          className="py-1.5 px-3 bg-white border border-amber-200 hover:bg-amber-50 text-amber-700 rounded-lg font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
+                          className="py-2 px-2.5 sm:px-3 bg-white border border-amber-200 hover:bg-amber-50 text-amber-700 rounded-xl font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-sm active:scale-95"
                         >
-                          <UserMinus className="h-3.5 w-3.5" /> Bulk Suspend
+                          <UserMinus className="h-3.5 w-3.5" /><span className="hidden sm:inline">Bulk Suspend</span><span className="inline sm:hidden">Suspend</span>
                         </button>
                         <button
                           type="button"
@@ -4493,16 +5028,16 @@ export default function AdminDashboard() {
                               setSelectedStudentIds([]);
                             }
                           }}
-                          className="py-1.5 px-3 bg-white border border-rose-200 hover:bg-rose-50 text-rose-700 rounded-lg font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
+                          className="py-2 px-2.5 sm:px-3 bg-white border border-rose-200 hover:bg-rose-50 text-rose-700 rounded-xl font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-sm active:scale-95"
                         >
-                          <Trash2 className="h-3.5 w-3.5" /> Bulk Left (TC)
+                          <Trash2 className="h-3.5 w-3.5" /><span className="hidden sm:inline">Bulk Left (TC)</span><span className="inline sm:hidden">Left</span>
                         </button>
                         <button
                           type="button"
                           onClick={() => setSelectedStudentIds([])}
-                          className="py-1.5 px-2.5 text-slate-400 hover:text-slate-650 font-bold cursor-pointer"
+                          className="py-2 px-2 text-slate-400 hover:text-slate-600 font-bold cursor-pointer active:scale-95"
                         >
-                          Deselect
+                          <X className="h-4 w-4" />
                         </button>
                       </div>
                     </div>
@@ -4519,7 +5054,7 @@ export default function AdminDashboard() {
 
                     return (
                       <>
-                        <div className="bg-white border border-slate-200/80 rounded-xl sm:rounded-2xl overflow-hidden shadow-sm">
+                        <div className="bg-white border border-slate-200/60 rounded-3xl overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.015)]">
 
                           {/* ── MOBILE: Select All Bar ── */}
                           <div className="flex sm:hidden items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-700">
@@ -4598,7 +5133,7 @@ export default function AdminDashboard() {
                                     <button
                                       type="button"
                                       onClick={() => { setSelectedStudent(std); setShowDetailModal(true); }}
-                                      className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg press-scale"
+                                      className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl active:scale-90 transition-transform shadow-2xs border border-indigo-100/50"
                                     >
                                       <Eye className="h-4 w-4" />
                                     </button>
@@ -4724,7 +5259,7 @@ export default function AdminDashboard() {
                                                 className="fixed inset-0 z-30 cursor-default" 
                                                 onClick={() => setActiveMenuStudentId(null)}
                                               />
-                                              <div className="absolute right-4 mt-1 w-40 bg-white border border-slate-200 rounded-xl shadow-lg z-40 py-1 divide-y divide-slate-100 animate-fade-in text-left">
+                                              <div className="absolute right-4 mt-1 w-40 bg-white border border-slate-200/60 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.02)] z-40 py-1 divide-y divide-slate-100 animate-fade-in text-left">
                                                 <button
                                                   type="button"
                                                   onClick={() => {
@@ -4846,7 +5381,7 @@ export default function AdminDashboard() {
 
                         {/* PAGINATION CONTROLS */}
                         {totalPages > 1 && (
-                          <div className="flex flex-col sm:flex-row items-center justify-between bg-white border border-slate-200/80 p-3 sm:p-4 rounded-xl sm:rounded-2xl shadow-sm mt-3 text-xs font-bold text-slate-500 gap-4">
+                          <div className="flex flex-col sm:flex-row items-center justify-between bg-white border border-slate-200/60 p-4 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.015)] mt-4 text-xs font-bold text-slate-500 gap-4">
                             
                             {/* Mobile Pagination */}
                             <div className="flex sm:hidden w-full items-center justify-between">
@@ -4893,10 +5428,10 @@ export default function AdminDashboard() {
                                     key={pageNum}
                                     type="button"
                                     onClick={() => setCurrentPage(pageNum)}
-                                    className={`h-8 w-8 flex items-center justify-center rounded-lg border transition-all cursor-pointer ${
+                                    className={`h-8 w-8 flex items-center justify-center rounded-xl border transition-all cursor-pointer ${
                                       activePage === pageNum
-                                        ? "bg-indigo-600 border-indigo-600 text-white font-extrabold shadow-md shadow-indigo-500/10"
-                                        : "bg-white border-slate-200 hover:bg-slate-50 text-slate-600"
+                                        ? "bg-indigo-600 border-indigo-600 text-white font-extrabold shadow-[0_4px_12px_rgba(79,70,229,0.2)]"
+                                        : "bg-white border-slate-200 hover:bg-slate-50 text-slate-650"
                                     }`}
                                   >
                                     {pageNum}
@@ -4912,12 +5447,12 @@ export default function AdminDashboard() {
                 </div>
               )
             ) : importMode === "single" ? (
-                <div className="max-w-4xl mx-auto space-y-4 bg-white border border-slate-200/80 p-3 sm:p-6 sm:rounded-3xl rounded-xl shadow-sm">
+                <div className="max-w-3xl mx-auto space-y-5 bg-white border border-slate-200/60 p-6 sm:p-8 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] animate-scale-in">
                     <div>
-                      <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider">
-                        Register Student Profile
+                      <h3 className="text-xs font-black uppercase text-emerald-700 bg-emerald-50 border border-emerald-100/50 px-3 py-1 rounded-xl inline-flex items-center gap-1.5 tracking-wider">
+                        <PlusCircle className="h-3.5 w-3.5" /> Register Student Profile
                       </h3>
-                      <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
+                      <p className="text-[10px] text-slate-400 font-semibold mt-1.5">
                         Fill details accurately. Parent accounts are auto-linked or created.
                       </p>
                     </div>
@@ -4943,7 +5478,7 @@ export default function AdminDashboard() {
                               value={stdName}
                               onChange={(e) => setStdName(e.target.value)}
                               placeholder="Full Name"
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
+                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
                             />
                           </div>
                           <div>
@@ -4953,7 +5488,7 @@ export default function AdminDashboard() {
                               required
                               value={stdDob}
                               onChange={(e) => setStdDob(e.target.value)}
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
+                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
                             />
                           </div>
                         </div>
@@ -4966,7 +5501,7 @@ export default function AdminDashboard() {
                               value={stdAdmissionNo}
                               onChange={(e) => setStdAdmissionNo(e.target.value)}
                               placeholder="e.g. ADM-2026-0001 (Optional)"
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
+                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
                             />
                           </div>
                           <div>
@@ -4976,7 +5511,7 @@ export default function AdminDashboard() {
                               value={stdRollNo}
                               onChange={(e) => setStdRollNo(e.target.value)}
                               placeholder="e.g. 10-A-01 (Optional)"
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
+                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
                             />
                           </div>
                           <div>
@@ -4984,7 +5519,7 @@ export default function AdminDashboard() {
                             <select
                               value={stdGender}
                               onChange={(e) => setStdGender(e.target.value)}
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 cursor-pointer"
+                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5 cursor-pointer"
                             >
                               <option value="">Select Gender</option>
                               <option value="MALE">Male</option>
@@ -5003,7 +5538,7 @@ export default function AdminDashboard() {
                               value={stdAadhaar}
                               onChange={(e) => setStdAadhaar(e.target.value.replace(/\D/g, ""))}
                               placeholder="12-digit number"
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
+                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
                             />
                           </div>
                           <div>
@@ -5011,7 +5546,7 @@ export default function AdminDashboard() {
                             <select
                               value={stdCategory}
                               onChange={(e) => setStdCategory(e.target.value)}
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
+                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
                             >
                               <option value="General">General</option>
                               <option value="OBC">OBC</option>
@@ -5026,7 +5561,7 @@ export default function AdminDashboard() {
                               value={stdReligion}
                               onChange={(e) => setStdReligion(e.target.value)}
                               placeholder="e.g. Hinduism, Islam..."
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
+                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
                             />
                           </div>
                           <div>
@@ -5034,7 +5569,7 @@ export default function AdminDashboard() {
                             <select
                               value={stdDisability}
                               onChange={(e) => setStdDisability(e.target.value)}
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
+                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
                             >
                               <option value="No">No</option>
                               <option value="Yes (Visual)">Yes (Visual)</option>
@@ -5053,7 +5588,7 @@ export default function AdminDashboard() {
                               value={stdMotherTongue}
                               onChange={(e) => setStdMotherTongue(e.target.value)}
                               placeholder="e.g. Hindi, English..."
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
+                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
                             />
                           </div>
                           <div>
@@ -5063,7 +5598,7 @@ export default function AdminDashboard() {
                               value={stdNationality}
                               onChange={(e) => setStdNationality(e.target.value)}
                               placeholder="e.g. Indian..."
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
+                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
                             />
                           </div>
                           <div>
@@ -5071,7 +5606,7 @@ export default function AdminDashboard() {
                             <select
                               value={stdIsRte ? "Yes" : "No"}
                               onChange={(e) => setStdIsRte(e.target.value === "Yes")}
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
+                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
                             >
                               <option value="No">No (Standard Billing)</option>
                               <option value="Yes">Yes (RTE 100% Fee Waiver)</option>
@@ -5098,7 +5633,7 @@ export default function AdminDashboard() {
                                   setStdSection(matched.section);
                                 }
                               }}
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
+                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
                             >
                               <option value="">Select Class</option>
                               {Array.from(new Set(classes.map(c => c.name))).map((className) => (
@@ -5111,7 +5646,7 @@ export default function AdminDashboard() {
                             <select
                               value={stdSection}
                               onChange={(e) => setStdSection(e.target.value)}
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
+                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
                             >
                               <option value="">Select Section</option>
                               {classes.filter(c => c.name === stdClass).map((cls) => (
@@ -5125,7 +5660,7 @@ export default function AdminDashboard() {
                               type="date"
                               value={stdAdmissionDate}
                               onChange={(e) => setStdAdmissionDate(e.target.value)}
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
+                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
                             />
                           </div>
                           <div>
@@ -5135,7 +5670,7 @@ export default function AdminDashboard() {
                               value={stdBoardRegNo}
                               onChange={(e) => setStdBoardRegNo(e.target.value)}
                               placeholder="CBSE / Board ID"
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
+                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
                             />
                           </div>
                         </div>
@@ -5260,7 +5795,7 @@ export default function AdminDashboard() {
                               value={stdFatherName}
                               onChange={(e) => setStdFatherName(e.target.value)}
                               placeholder="Father Name"
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 disabled:opacity-75 disabled:bg-slate-100"
+                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5 disabled:opacity-75 disabled:bg-slate-100"
                             />
                           </div>
                           <div>
@@ -5271,7 +5806,7 @@ export default function AdminDashboard() {
                               value={stdMotherName}
                               onChange={(e) => setStdMotherName(e.target.value)}
                               placeholder="Mother Name"
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 disabled:opacity-75 disabled:bg-slate-100"
+                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5 disabled:opacity-75 disabled:bg-slate-100"
                             />
                           </div>
                         </div>
@@ -5287,7 +5822,7 @@ export default function AdminDashboard() {
                               value={stdFatherMobile}
                               onChange={(e) => setStdFatherMobile(e.target.value.replace(/\D/g, ""))}
                               placeholder="10-digit number"
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 disabled:opacity-75 disabled:bg-slate-100"
+                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5 disabled:opacity-75 disabled:bg-slate-100"
                             />
                           </div>
                           <div>
@@ -5299,7 +5834,7 @@ export default function AdminDashboard() {
                               value={stdMotherMobile}
                               onChange={(e) => setStdMotherMobile(e.target.value.replace(/\D/g, ""))}
                               placeholder="10-digit number"
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 disabled:opacity-75 disabled:bg-slate-100"
+                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5 disabled:opacity-75 disabled:bg-slate-100"
                             />
                           </div>
                           <div>
@@ -5311,7 +5846,7 @@ export default function AdminDashboard() {
                               value={stdFatherAadhaar}
                               onChange={(e) => setStdFatherAadhaar(e.target.value.replace(/\D/g, ""))}
                               placeholder="12-digit number"
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 disabled:opacity-75 disabled:bg-slate-100"
+                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5 disabled:opacity-75 disabled:bg-slate-100"
                             />
                           </div>
                         </div>
@@ -5326,7 +5861,7 @@ export default function AdminDashboard() {
                               value={stdMotherAadhaar}
                               onChange={(e) => setStdMotherAadhaar(e.target.value.replace(/\D/g, ""))}
                               placeholder="12-digit number"
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 disabled:opacity-75 disabled:bg-slate-100"
+                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5 disabled:opacity-75 disabled:bg-slate-100"
                             />
                           </div>
                           <div>
@@ -5337,7 +5872,7 @@ export default function AdminDashboard() {
                               value={stdParentOccupation}
                               onChange={(e) => setStdParentOccupation(e.target.value)}
                               placeholder="e.g. Service, Business, Farmer..."
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 disabled:opacity-75 disabled:bg-slate-100"
+                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5 disabled:opacity-75 disabled:bg-slate-100"
                             />
                           </div>
                           <div>
@@ -5348,7 +5883,7 @@ export default function AdminDashboard() {
                               value={stdFamilyIncome}
                               onChange={(e) => setStdFamilyIncome(e.target.value)}
                               placeholder="Annual salary/earnings"
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 disabled:opacity-75 disabled:bg-slate-100"
+                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5 disabled:opacity-75 disabled:bg-slate-100"
                             />
                           </div>
                         </div>
@@ -5362,7 +5897,7 @@ export default function AdminDashboard() {
                               value={stdParentEmail}
                               onChange={(e) => setStdParentEmail(e.target.value)}
                               placeholder="parent@email.com"
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 disabled:opacity-75 disabled:bg-slate-100"
+                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5 disabled:opacity-75 disabled:bg-slate-100"
                             />
                           </div>
                           <div className="md:col-span-2">
@@ -5374,7 +5909,7 @@ export default function AdminDashboard() {
                               value={stdAddress}
                               onChange={(e) => setStdAddress(e.target.value)}
                               placeholder="House No, Street, Landmark..."
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 disabled:opacity-75 disabled:bg-slate-100"
+                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5 disabled:opacity-75 disabled:bg-slate-100"
                             />
                           </div>
                         </div>
@@ -5417,7 +5952,7 @@ export default function AdminDashboard() {
                             <select
                               value={stdTransportMode}
                               onChange={(e) => setStdTransportMode(e.target.value)}
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
+                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
                             >
                               <option value="Self">Self / Walk</option>
                               <option value="School Bus">School Bus</option>
@@ -5434,7 +5969,7 @@ export default function AdminDashboard() {
                                   value={stdBusRoute}
                                   onChange={(e) => setStdBusRoute(e.target.value)}
                                   placeholder="e.g. Route-B"
-                                  className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
+                                  className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
                                 />
                               </div>
                               <div>
@@ -5444,7 +5979,7 @@ export default function AdminDashboard() {
                                   value={stdBusStop}
                                   onChange={(e) => setStdBusStop(e.target.value)}
                                   placeholder="e.g. Sector-15 Crossing"
-                                  className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
+                                  className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
                                 />
                               </div>
                             </>
@@ -5494,21 +6029,22 @@ export default function AdminDashboard() {
                 </div>
               ) : (
                 // Bulk import mode panel
-                <div className="space-y-6 max-w-4xl bg-white border border-slate-200/80 p-3 sm:p-6 sm:rounded-2xl rounded-xl shadow-sm">
-                  <div className="flex justify-between items-start border-b border-slate-100 pb-4">
+                <div className="space-y-6 max-w-2xl bg-white border border-slate-200/60 p-6 sm:p-8 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] animate-scale-in">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
                     <div>
-                      <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider">
-                        Bulk Import Students via CSV
+                      <h3 className="text-xs font-black uppercase text-amber-700 bg-amber-50 border border-amber-100/50 px-3 py-1 rounded-xl inline-flex items-center gap-1.5 tracking-wider">
+                        <UploadCloud className="h-3.5 w-3.5" /> Bulk Import Students via CSV
                       </h3>
-                      <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
+                      <p className="text-[10px] text-slate-400 font-semibold mt-1.5">
                         Download the standardized CSV template, fill the details, and upload them in bulk.
                       </p>
                     </div>
                     <button
+                      type="button"
                       onClick={handleDownloadCSVTemplate}
-                      className="py-2 px-3 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-sm"
+                      className="py-2 px-3.5 bg-white border border-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-sm hover:bg-slate-50 active:scale-95 transition-all shrink-0"
                     >
-                      <Download className="h-4 w-4" /> Download CSV Template
+                      <Download className="h-4 w-4 text-slate-500" /> Download CSV Template
                     </button>
                   </div>
 
@@ -5843,679 +6379,626 @@ export default function AdminDashboard() {
 
           {/* TAB 4: School Setup */}
           {activeTab === "school" && (
-            <div className="space-y-8 animate-fade-in">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-                {/* Left Column: School Profile */}
-                <div className="bg-white border border-slate-200/60 p-3 sm:p-6 sm:rounded-2xl rounded-xl shadow-sm space-y-4 text-left">
-                  <div>
-                    <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider">
-                      School Profile customizer
-                    </h3>
-                    <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
-                      Update primary contact variables displayed across ledger invoice receipts.
-                    </p>
-                  </div>
-
-                  {schoolSuccess && (
-                    <div className="flex items-center gap-2 bg-green-50 text-green-700 p-2 rounded border border-green-100 text-[11px] font-semibold">
-                      <CheckCircle className="h-4 w-4" /> Institutional details updated!
-                    </div>
-                  )}
-
-                  <form onSubmit={handleUpdateSchool} className="space-y-4">
-                    <div>
-                      <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">School Name</label>
-                      <input
-                        type="text"
-                        required
-                        value={schoolName}
-                        onChange={(e) => setSchoolName(e.target.value)}
-                        className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Institutional Address</label>
-                      <input
-                        type="text"
-                        required
-                        value={schoolAddress}
-                        onChange={(e) => setSchoolAddress(e.target.value)}
-                        className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
-                      <div>
-                        <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Contact Phone</label>
-                        <input
-                          type="text"
-                          required
-                          value={schoolPhone}
-                          onChange={(e) => setSchoolPhone(e.target.value)}
-                          className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Accounts Email</label>
-                        <input
-                          type="email"
-                          required
-                          value={schoolEmail}
-                          onChange={(e) => setSchoolEmail(e.target.value)}
-                          className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">School UDISE Code</label>
-                        <input
-                          type="text"
-                          required
-                          placeholder="e.g. 09300302001"
-                          value={schoolUdiseCode}
-                          onChange={(e) => setSchoolUdiseCode(e.target.value)}
-                          className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 font-mono"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3 border-t border-slate-100 pt-3">
-                      <div>
-                        <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">School UPI ID (VPA)</label>
-                        <input
-                          type="text"
-                          placeholder="e.g. gngschool@icici"
-                          value={schoolUpiId}
-                          onChange={(e) => setSchoolUpiId(e.target.value)}
-                          className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">UPI Merchant/Payee Name</label>
-                        <input
-                          type="text"
-                          placeholder="e.g. St GNG School"
-                          value={schoolUpiMerchantName}
-                          onChange={(e) => setSchoolUpiMerchantName(e.target.value)}
-                          className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                        />
-                      </div>
-                    </div>
-
-                    <button type="submit" className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-500/10 cursor-pointer">
-                      Save Institutional Settings
+            <div className="space-y-6 animate-fade-in text-left">
+              {/* Settings Category Selector */}
+              <div className="flex flex-wrap gap-2 border-b border-slate-200/60 pb-3 no-print">
+                {[
+                  { id: "profile", label: "School Profile", icon: Building2, activeClass: "bg-indigo-50 border-indigo-150 text-indigo-700 shadow-2xs" },
+                  { id: "admin", label: "Admin Credentials", icon: User, activeClass: "bg-emerald-50 border-emerald-150 text-emerald-700 shadow-2xs" },
+                  { id: "sync", label: "Google Cloud Sync", icon: Database, activeClass: "bg-amber-50 border-amber-150 text-amber-700 shadow-2xs" },
+                  { id: "exams", label: "Exams & Grading", icon: Award, activeClass: "bg-rose-50 border-rose-150 text-rose-700 shadow-2xs" },
+                ].map((subTab) => {
+                  const Icon = subTab.icon;
+                  const isActive = activeSchoolSubTab === subTab.id;
+                  return (
+                    <button
+                      key={subTab.id}
+                      type="button"
+                      onClick={() => setActiveSchoolSubTab(subTab.id as any)}
+                      className={`flex items-center gap-1.5 px-4 py-2 border rounded-2xl text-xs font-black transition-all cursor-pointer ${
+                        isActive ? subTab.activeClass : "bg-white border-slate-200/60 text-slate-500 hover:text-slate-700 hover:bg-slate-50/50"
+                      }`}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      {subTab.label}
                     </button>
-                  </form>
-                </div>
-
-                {/* Right Column: Admin Profile Settings */}
-                <div className="bg-white border border-slate-200/60 p-3 sm:p-6 sm:rounded-2xl rounded-xl shadow-sm space-y-4 text-left">
-                  <div>
-                    <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider">
-                      Admin Profile Settings
-                    </h3>
-                    <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
-                      Update your system login profile name, username, email address, and phone number.
-                    </p>
-                  </div>
-
-                  {adminProfileSuccess && (
-                    <div className="flex items-center gap-2 bg-green-50 text-green-700 p-2.5 rounded-lg border border-green-100 text-[10px] font-bold">
-                      ✓ {adminProfileSuccess}
-                    </div>
-                  )}
-
-                  {adminProfileError && (
-                    <div className="flex items-center gap-2 bg-rose-50 text-rose-700 p-2.5 rounded-lg border border-rose-100 text-[10px] font-bold">
-                      ⚠️ {adminProfileError}
-                    </div>
-                  )}
-
-                  <form
-                    onSubmit={async (e) => {
-                      e.preventDefault();
-                      setAdminProfileError("");
-                      setAdminProfileSuccess("");
-                      if (!user) return;
-
-                      const res = await updateAdminProfile(user.id, {
-                        name: adminFormName,
-                        username: adminFormUsername,
-                        email: adminFormEmail,
-                        phone: adminFormPhone,
-                      });
-
-                      if (res.success) {
-                        setAdminProfileSuccess("Admin profile details updated successfully!");
-                      } else {
-                        setAdminProfileError(res.error || "Failed to update profile details.");
-                      }
-                    }}
-                    className="space-y-4"
-                  >
-                    <div>
-                      <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Full Name</label>
-                      <input
-                        type="text"
-                        required
-                        value={adminFormName}
-                        onChange={(e) => setAdminFormName(e.target.value)}
-                        className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Username (Login ID)</label>
-                      <input
-                        type="text"
-                        required
-                        value={adminFormUsername}
-                        onChange={(e) => setAdminFormUsername(e.target.value)}
-                        className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Email Address</label>
-                        <input
-                          type="email"
-                          required
-                          value={adminFormEmail}
-                          onChange={(e) => setAdminFormEmail(e.target.value)}
-                          className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Contact Phone</label>
-                        <input
-                          type="text"
-                          value={adminFormPhone}
-                          onChange={(e) => setAdminFormPhone(e.target.value)}
-                          className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                        />
-                      </div>
-                    </div>
-
-                    <button type="submit" className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-500/10 cursor-pointer">
-                      Save Profile Details
-                    </button>
-                  </form>
-                </div>
+                  );
+                })}
               </div>
 
-              {/* Google Cloud Integration Panel */}
-              <div className="bg-white border border-slate-200/60 p-3 sm:p-6 sm:rounded-2xl rounded-xl shadow-sm space-y-4 text-left">
-                <div>
-                  <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider flex items-center gap-1.5">
-                    <Database className="h-4 w-4 text-indigo-600" /> Google Cloud Integration Panel
-                  </h3>
-                  <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
-                    Connect Google Sheets to automatically export live student profiles and financial ledger records. Share your Google Sheet with the Service Account email.
-                  </p>
-                </div>
+              {/* Sub-tab Panels */}
+              <div className="max-w-2xl w-full">
+                {activeSchoolSubTab === "profile" && (
+                  <div className="bg-white border border-slate-200/60 p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] space-y-5 animate-scale-in">
+                    <div>
+                      <h3 className="text-xs font-black uppercase text-indigo-700 bg-indigo-50 border border-indigo-100/50 px-3 py-1 rounded-xl inline-flex items-center gap-1.5 tracking-wider">
+                        <Building2 className="h-3.5 w-3.5" /> School Institutional Profile
+                      </h3>
+                      <p className="text-[10px] text-slate-400 font-semibold mt-1.5">
+                        Update primary contact variables displayed across ledger invoice receipts.
+                      </p>
+                    </div>
 
-                {googleStatus && (
-                  <div className={`flex items-center gap-2 p-2.5 rounded-lg border text-[10px] font-bold ${
-                    googleStatus.type === "success" 
-                      ? "bg-green-50 text-green-700 border-green-100" 
-                      : "bg-rose-50 text-rose-700 border-rose-100"
-                  }`}>
-                    {googleStatus.type === "success" ? <CheckCircle className="h-4 w-4 shrink-0" /> : <AlertTriangle className="h-4 w-4 shrink-0" />}
-                    <span>{googleStatus.msg}</span>
+                    {schoolSuccess && (
+                      <div className="flex items-center gap-2 bg-emerald-50 text-emerald-700 p-2.5 rounded-xl border border-emerald-100 text-[11px] font-bold">
+                        <CheckCircle className="h-4 w-4 shrink-0" /> Institutional details updated successfully!
+                      </div>
+                    )}
+
+                    <form onSubmit={handleUpdateSchool} className="space-y-4">
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">School Name</label>
+                        <input
+                          type="text"
+                          required
+                          value={schoolName}
+                          onChange={(e) => setSchoolName(e.target.value)}
+                          className="w-full text-xs font-bold py-2.5 px-3.5 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 shadow-2xs"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Institutional Address</label>
+                        <input
+                          type="text"
+                          required
+                          value={schoolAddress}
+                          onChange={(e) => setSchoolAddress(e.target.value)}
+                          className="w-full text-xs font-bold py-2.5 px-3.5 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 shadow-2xs"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Contact Phone</label>
+                          <input
+                            type="text"
+                            required
+                            value={schoolPhone}
+                            onChange={(e) => setSchoolPhone(e.target.value)}
+                            className="w-full text-xs font-bold py-2.5 px-3.5 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 shadow-2xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Accounts Email</label>
+                          <input
+                            type="email"
+                            required
+                            value={schoolEmail}
+                            onChange={(e) => setSchoolEmail(e.target.value)}
+                            className="w-full text-xs font-bold py-2.5 px-3.5 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 shadow-2xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">School UDISE Code</label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="e.g. 09300302001"
+                            value={schoolUdiseCode}
+                            onChange={(e) => setSchoolUdiseCode(e.target.value)}
+                            className="w-full text-xs font-bold py-2.5 px-3.5 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 font-mono shadow-2xs"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 border-t border-slate-100 pt-4">
+                        <div>
+                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">School UPI ID (VPA)</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. gngschool@icici"
+                            value={schoolUpiId}
+                            onChange={(e) => setSchoolUpiId(e.target.value)}
+                            className="w-full text-xs font-bold py-2.5 px-3.5 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 shadow-2xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">UPI Merchant/Payee Name</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. St GNG School"
+                            value={schoolUpiMerchantName}
+                            onChange={(e) => setSchoolUpiMerchantName(e.target.value)}
+                            className="w-full text-xs font-bold py-2.5 px-3.5 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 shadow-2xs"
+                          />
+                        </div>
+                      </div>
+
+                      <button type="submit" className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-extrabold transition-all shadow-md shadow-indigo-500/25 active:scale-98 cursor-pointer mt-2">
+                        Save Institutional Settings
+                      </button>
+                    </form>
                   </div>
                 )}
 
-                {/* Service Account JSON Credentials Customizer Box */}
-                <div className="bg-indigo-50/50 border border-indigo-100/90 rounded-2xl p-4 space-y-3">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                {activeSchoolSubTab === "admin" && (
+                  <div className="bg-white border border-slate-200/60 p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] space-y-5 animate-scale-in">
                     <div>
-                      <h4 className="text-xs font-black uppercase text-slate-800 tracking-wider flex items-center gap-1.5">
-                        <Key className="h-3.5 w-3.5 text-indigo-600" />
-                        Google Service Account Credentials (JSON)
-                      </h4>
-                      <p className="text-[10px] text-slate-500 font-medium mt-0.5">
-                        {savedClientEmail ? (
-                          <span className="text-emerald-700 font-mono font-bold">✓ Active Bot: {savedClientEmail}</span>
-                        ) : (
-                          "Paste downloaded credentials.json file content from Google Cloud Console."
-                        )}
+                      <h3 className="text-xs font-black uppercase text-emerald-700 bg-emerald-50 border border-emerald-100/50 px-3 py-1 rounded-xl inline-flex items-center gap-1.5 tracking-wider">
+                        <User className="h-3.5 w-3.5" /> Administrator Profile Settings
+                      </h3>
+                      <p className="text-[10px] text-slate-400 font-semibold mt-1.5">
+                        Update your system login profile name, username, email address, and phone number.
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setShowJsonBox(!showJsonBox)}
-                      className="text-[10px] font-black uppercase tracking-wider text-indigo-600 hover:text-indigo-700 bg-white border border-indigo-200 px-3 py-1 rounded-xl shadow-2xs cursor-pointer shrink-0 transition-all"
-                    >
-                      {showJsonBox ? "Close" : savedClientEmail ? "🔑 Update JSON Key" : "🔑 Paste JSON Key"}
-                    </button>
-                  </div>
 
-                  {showJsonBox && (
-                    <div className="space-y-2 pt-1 animate-fade-in">
-                      <textarea
-                        rows={5}
-                        placeholder='Paste full downloaded credentials.json text here e.g. { "type": "service_account", "private_key": "...", ... }'
-                        value={serviceJsonInput}
-                        onChange={(e) => setServiceJsonInput(e.target.value)}
-                        className="w-full text-xs font-mono p-3 border border-slate-200 rounded-xl outline-none bg-white focus:border-indigo-600 shadow-inner"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleSaveGoogleCredentials}
-                        disabled={savingJsonLoading}
-                        className="py-1.5 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-all shadow-sm shadow-indigo-600/20"
-                      >
-                        {savingJsonLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
-                        Save Service Account Key
-                      </button>
-                    </div>
-                  )}
-                </div>
+                    {adminProfileSuccess && (
+                      <div className="flex items-center gap-2 bg-emerald-50 text-emerald-700 p-2.5 rounded-xl border border-emerald-100 text-[10px] font-bold">
+                        ✓ {adminProfileSuccess}
+                      </div>
+                    )}
 
-                <div className="pt-2">
-                  {/* Google Sheets Sync Box */}
-                  <div className="border border-slate-100 bg-slate-50/30 rounded-xl p-4.5 space-y-3.5">
-                    <div>
-                      <h4 className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">Google Sheets Data Synchronization</h4>
-                      <p className="text-[9px] text-slate-400 font-semibold mt-0.5">Appends ledger entries and detailed student profiles directly into Google Sheets tabs.</p>
-                    </div>
-                    
-                    <div>
-                      <label className="text-[8px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Google Spreadsheet ID (from URL)</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. 1aBCdEfGhIjKlMnOpQrStUvWxYz1234567890"
-                        value={googleSpreadsheetId}
-                        onChange={(e) => handleSpreadsheetIdChange(e.target.value)}
-                        className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-white focus:border-indigo-600"
-                      />
-                    </div>
+                    {adminProfileError && (
+                      <div className="flex items-center gap-2 bg-rose-50 text-rose-700 p-2.5 rounded-xl border border-rose-100 text-[10px] font-bold">
+                        ⚠️ {adminProfileError}
+                      </div>
+                    )}
 
-                    <div className="flex flex-col sm:flex-row gap-2 pt-1">
-                      <button
-                        onClick={triggerSyncStudents}
-                        disabled={syncingStudents}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer"
-                      >
-                        {syncingStudents ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileSpreadsheet className="h-3.5 w-3.5" />}
-                        Sync Students
-                      </button>
-                      <button
-                        onClick={triggerSyncLedger}
-                        disabled={syncingLedger}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer"
-                      >
-                        {syncingLedger ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <TrendingUp className="h-3.5 w-3.5" />}
-                        Sync Financials
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
+                    <form
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        setAdminProfileError("");
+                        setAdminProfileSuccess("");
+                        if (!user) return;
 
-              {/* Dynamic Exam Configuration Panel */}
-              <div className="bg-white border border-slate-200/60 p-3 sm:p-6 sm:rounded-2xl rounded-xl shadow-sm space-y-4 text-left">
-                <div>
-                  <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider">
-                    Academic Examination Customizer
-                  </h3>
-                  <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
-                    Configure custom exam terms (e.g. Unit-1, Half Yearly, Annual) used for student grading.
-                  </p>
-                </div>
+                        const res = await updateAdminProfile(user.id, {
+                          name: adminFormName,
+                          username: adminFormUsername,
+                          email: adminFormEmail,
+                          phone: adminFormPhone,
+                        });
 
-                <div className="space-y-4">
-                  {/* Add New Exam Inline Form */}
-                  <div className="flex gap-2 items-end max-w-md">
-                    <div className="flex-1">
-                      <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                        Exam Title
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Unit-3, Weekly Test 1"
-                        value={newExamInput}
-                        onChange={(e) => setNewExamInput(e.target.value)}
-                        className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const trimmed = newExamInput.trim();
-                        if (trimmed && !schoolExams.includes(trimmed)) {
-                          setSchoolExams((prev) => [...prev, trimmed]);
-                          setSchoolExamConfig((prev: any) => ({
-                            ...prev,
-                            [trimmed]: { isSplit: false, maxMarks: 100, components: [] }
-                          }));
-                          setSelectedConfigExam(trimmed);
-                          setNewExamInput("");
+                        if (res.success) {
+                          setAdminProfileSuccess("Admin profile details updated successfully!");
+                        } else {
+                          setAdminProfileError(res.error || "Failed to update profile details.");
                         }
                       }}
-                      className="px-4 py-2 bg-slate-105 hover:bg-slate-200 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                      className="space-y-4"
                     >
-                      Add Exam
-                    </button>
-                  </div>
-
-                  {/* List of current Exams */}
-                  <div className="space-y-2">
-                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">
-                      Configured Exams (Select an exam to configure its grading parameters)
-                    </label>
-                    {schoolExams.length > 0 ? (
-                      <div className="flex flex-wrap gap-2">
-                        {schoolExams.map((exam, idx) => {
-                          const isActive = selectedConfigExam === exam;
-                          return (
-                            <div
-                              key={idx}
-                              onClick={() => setSelectedConfigExam(exam)}
-                              className={`flex items-center gap-1.5 border rounded-xl pl-3 pr-2 py-1 text-xs font-bold shadow-sm cursor-pointer transition-all ${
-                                isActive
-                                  ? "bg-indigo-50 border-indigo-500 text-indigo-700"
-                                  : "bg-slate-50 border-slate-200/60 text-slate-700 hover:bg-slate-100"
-                              }`}
-                            >
-                              <span>{exam}</span>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSchoolExams((prev) =>
-                                    prev.filter((_, i) => i !== idx)
-                                  );
-                                  if (selectedConfigExam === exam) {
-                                    setSelectedConfigExam("");
-                                  }
-                                }}
-                                className="text-slate-400 hover:text-rose-500 font-extrabold text-sm ml-1 focus:outline-none transition-colors"
-                                title="Delete Exam"
-                              >
-                                &times;
-                              </button>
-                            </div>
-                          );
-                        })}
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Full Name</label>
+                        <input
+                          type="text"
+                          required
+                          value={adminFormName}
+                          onChange={(e) => setAdminFormName(e.target.value)}
+                          className="w-full text-xs font-bold py-2.5 px-3.5 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs"
+                        />
                       </div>
-                    ) : (
-                      <p className="text-xs text-slate-400 italic font-medium">
-                        No custom exam types configured. Standard default exams will be active.
-                      </p>
-                    )}
-                  </div>
 
-                  {/* Selected Exam Settings Sub-panel */}
-                  {selectedConfigExam && (() => {
-                    const config = schoolExamConfig[selectedConfigExam] || { isSplit: false, maxMarks: 100, components: [] };
-                    return (
-                      <div className="bg-slate-50/50 border border-slate-200/80 p-4 rounded-xl space-y-4">
-                        <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-                          <h4 className="text-xs font-black text-slate-800 uppercase tracking-wide">
-                            Grading Parameters for: {selectedConfigExam}
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Username (Login ID)</label>
+                        <input
+                          type="text"
+                          required
+                          value={adminFormUsername}
+                          onChange={(e) => setAdminFormUsername(e.target.value)}
+                          className="w-full text-xs font-bold py-2.5 px-3.5 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Email Address</label>
+                          <input
+                            type="email"
+                            required
+                            value={adminFormEmail}
+                            onChange={(e) => setAdminFormEmail(e.target.value)}
+                            className="w-full text-xs font-bold py-2.5 px-3.5 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Contact Phone</label>
+                          <input
+                            type="text"
+                            value={adminFormPhone}
+                            onChange={(e) => setAdminFormPhone(e.target.value)}
+                            className="w-full text-xs font-bold py-2.5 px-3.5 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs"
+                          />
+                        </div>
+                      </div>
+
+                      <button type="submit" className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold transition-all shadow-md shadow-emerald-500/25 active:scale-98 cursor-pointer mt-2">
+                        Save Profile Details
+                      </button>
+                    </form>
+                  </div>
+                )}
+
+                {activeSchoolSubTab === "sync" && (
+                  <div className="bg-white border border-slate-200/60 p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] space-y-5 animate-scale-in">
+                    <div>
+                      <h3 className="text-xs font-black uppercase text-amber-700 bg-amber-50 border border-amber-100/50 px-3 py-1 rounded-xl inline-flex items-center gap-1.5 tracking-wider">
+                        <Database className="h-3.5 w-3.5" /> Google Cloud Integration Panel
+                      </h3>
+                      <p className="text-[10px] text-slate-400 font-semibold mt-1.5">
+                        Connect Google Sheets to automatically export live student profiles and financial ledger records. Share your Google Sheet with the Service Account email.
+                      </p>
+                    </div>
+
+                    {googleStatus && (
+                      <div className={`flex items-center gap-2 p-2.5 rounded-xl border text-[10px] font-bold ${
+                        googleStatus.type === "success" 
+                          ? "bg-green-50 text-green-700 border-green-100" 
+                          : "bg-rose-50 text-rose-700 border-rose-100"
+                      }`}>
+                        {googleStatus.type === "success" ? <CheckCircle className="h-4 w-4 shrink-0" /> : <AlertTriangle className="h-4 w-4 shrink-0" />}
+                        <span>{googleStatus.msg}</span>
+                      </div>
+                    )}
+
+                    {/* Credentials JSON Pastbox */}
+                    <div className="bg-slate-50/50 border border-slate-200/60 rounded-2xl p-4 space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                          <h4 className="text-xs font-black uppercase text-slate-800 tracking-wider flex items-center gap-1.5">
+                            <Key className="h-3.5 w-3.5 text-amber-600" />
+                            Google Service Account Key (JSON)
                           </h4>
-                          <span className="text-[9px] font-black uppercase tracking-wider text-slate-450">
-                            Total Max Marks: {config.isSplit 
-                              ? (config.components || []).reduce((sum: number, c: any) => sum + (c.max || 0), 0) 
-                              : (config.maxMarks || 100)}
-                          </span>
+                          <p className="text-[10px] text-slate-500 font-medium mt-0.5">
+                            {savedClientEmail ? (
+                              <span className="text-emerald-700 font-mono font-bold">✓ Active Bot: {savedClientEmail}</span>
+                            ) : (
+                              "Paste downloaded credentials.json file content from Google Cloud Console."
+                            )}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowJsonBox(!showJsonBox)}
+                          className="text-[10px] font-black uppercase tracking-wider text-amber-700 hover:text-amber-800 bg-white border border-amber-200/60 px-3 py-1.5 rounded-xl shadow-2xs cursor-pointer shrink-0 transition-all active:scale-95"
+                        >
+                          {showJsonBox ? "Close" : savedClientEmail ? "🔑 Update JSON Key" : "🔑 Paste JSON Key"}
+                        </button>
+                      </div>
+
+                      {showJsonBox && (
+                        <div className="space-y-2 pt-1 animate-fade-in">
+                          <textarea
+                            rows={5}
+                            placeholder='Paste credentials.json text here e.g. { "type": "service_account", "private_key": "...", ... }'
+                            value={serviceJsonInput}
+                            onChange={(e) => setServiceJsonInput(e.target.value)}
+                            className="w-full text-xs font-mono p-3 border border-slate-200 rounded-xl outline-none bg-white focus:border-amber-500 shadow-inner"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleSaveGoogleCredentials}
+                            disabled={savingJsonLoading}
+                            className="py-2 px-4 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-all shadow-sm active:scale-95"
+                          >
+                            {savingJsonLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
+                            Save Service Account Key
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="pt-1">
+                      {/* Google Sheets Sync Box */}
+                      <div className="border border-slate-200/60 bg-slate-50/20 rounded-2xl p-4.5 space-y-3">
+                        <div>
+                          <h4 className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wide">Google Sheets Data Synchronization</h4>
+                          <p className="text-[9px] text-slate-400 font-semibold mt-0.5">Appends ledger entries and detailed student profiles directly into Google Sheets tabs.</p>
+                        </div>
+                        
+                        <div>
+                          <label className="text-[8.5px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Google Spreadsheet ID (from URL)</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. 1aBCdEfGhIjKlMnOpQrStUvWxYz1234567890"
+                            value={googleSpreadsheetId}
+                            onChange={(e) => handleSpreadsheetIdChange(e.target.value)}
+                            className="w-full text-xs font-bold py-2.5 px-3.5 border border-slate-200 rounded-xl outline-none bg-white focus:border-amber-600 shadow-2xs"
+                          />
                         </div>
 
-                        {/* Split assessment Toggle */}
-                        <div className="flex items-center gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={triggerSyncStudents}
+                            disabled={syncingStudents}
+                            className="flex items-center justify-center gap-1.5 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-sm active:scale-95"
+                          >
+                            {syncingStudents ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileSpreadsheet className="h-3.5 w-3.5" />}
+                            Sync Students
+                          </button>
+                          <button
+                            type="button"
+                            onClick={triggerSyncLedger}
+                            disabled={syncingLedger}
+                            className="flex items-center justify-center gap-1.5 py-2.5 bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-sm active:scale-95"
+                          >
+                            {syncingLedger ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <TrendingUp className="h-3.5 w-3.5" />}
+                            Sync Financials
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeSchoolSubTab === "exams" && (
+                  <div className="bg-white border border-slate-200/60 p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] space-y-5 animate-scale-in">
+                    <div>
+                      <h3 className="text-xs font-black uppercase text-rose-700 bg-rose-50 border border-rose-100/50 px-3 py-1 rounded-xl inline-flex items-center gap-1.5 tracking-wider">
+                        <Award className="h-3.5 w-3.5" /> Academic Examination Customizer
+                      </h3>
+                      <p className="text-[10px] text-slate-400 font-semibold mt-1.5">
+                        Configure custom exam terms (e.g. Unit-1, Half Yearly, Annual) used for student grading.
+                      </p>
+                    </div>
+
+                    <div className="space-y-4">
+                      {/* Add New Exam Inline Form */}
+                      <div className="flex gap-2 items-end">
+                        <div className="flex-1">
+                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                            New Exam Title
+                          </label>
                           <input
-                            type="checkbox"
-                            id="isSplitToggle"
-                            checked={config.isSplit || false}
-                            onChange={(e) => {
-                              const checked = e.target.checked;
-                              const isUnit = selectedConfigExam.includes("Unit");
-                              const defaultComps = isUnit 
-                                ? [
-                                    { name: "Note Book", max: 5 },
-                                    { name: "Sub. Enrich.", max: 5 },
-                                    { name: "Pr. Act.", max: 10 }
-                                  ]
-                                : [
-                                    { name: "Written Exam", max: 80 }
-                                  ];
+                            type="text"
+                            placeholder="e.g. Unit-3, Weekly Test 1"
+                            value={newExamInput}
+                            onChange={(e) => setNewExamInput(e.target.value)}
+                            className="w-full text-xs font-bold py-2.5 px-3.5 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-rose-600 shadow-2xs"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const trimmed = newExamInput.trim();
+                            if (trimmed && !schoolExams.includes(trimmed)) {
+                              setSchoolExams((prev) => [...prev, trimmed]);
                               setSchoolExamConfig((prev: any) => ({
                                 ...prev,
-                                [selectedConfigExam]: {
-                                  ...prev[selectedConfigExam],
-                                  isSplit: checked,
-                                  components: checked ? defaultComps : [],
-                                  maxMarks: checked ? (isUnit ? 20 : 80) : (isUnit ? 20 : 80)
-                                }
+                                [trimmed]: { isSplit: false, maxMarks: 100, components: [] }
                               }));
-                            }}
-                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
-                          />
-                          <label htmlFor="isSplitToggle" className="text-xs font-bold text-slate-700 cursor-pointer">
-                            Enable split assessment (CBSE-style internal + written breakdown)
-                          </label>
-                        </div>
+                              setSelectedConfigExam(trimmed);
+                              setNewExamInput("");
+                            }
+                          }}
+                          className="px-4 py-2.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-95"
+                        >
+                          Add Exam
+                        </button>
+                      </div>
 
-                        {/* If not split: edit maxMarks */}
-                        {!config.isSplit ? (
-                          <div className="max-w-xs">
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                              Maximum Marks
-                            </label>
-                            <input
-                              type="number"
-                              min="1"
-                              value={config.maxMarks || 100}
-                              onChange={(e) => {
-                                const val = parseInt(e.target.value) || 0;
-                                setSchoolExamConfig((prev: any) => ({
-                                  ...prev,
-                                  [selectedConfigExam]: {
-                                    ...prev[selectedConfigExam],
-                                    maxMarks: val
-                                  }
-                                }));
-                              }}
-                              className="w-full text-xs font-semibold py-1.5 px-3 border border-slate-200 rounded-lg outline-none bg-white focus:border-indigo-600"
-                            />
+                      {/* List of current Exams */}
+                      <div className="space-y-2 pt-1">
+                        <label className="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                          Configured Exams (Select an exam to configure its parameters)
+                        </label>
+                        {schoolExams.length > 0 ? (
+                          <div className="flex flex-wrap gap-2">
+                            {schoolExams.map((exam, idx) => {
+                              const isActive = selectedConfigExam === exam;
+                              return (
+                                <div key={exam} className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedConfigExam(exam)}
+                                    className={`px-3 py-1.5 rounded-xl text-[10px] font-black border uppercase tracking-wider transition-all cursor-pointer ${
+                                      isActive 
+                                        ? "bg-rose-600 border-rose-600 text-white shadow-sm" 
+                                        : "bg-white border-slate-200 hover:bg-slate-50 text-slate-600"
+                                    }`}
+                                  >
+                                    {exam}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSchoolExams((prev) => prev.filter((e) => e !== exam));
+                                      setSchoolExamConfig((prev: any) => {
+                                        const next = { ...prev };
+                                        delete next[exam];
+                                        return next;
+                                      });
+                                      if (selectedConfigExam === exam) {
+                                        setSelectedConfigExam("");
+                                      }
+                                    }}
+                                    className="p-1.5 bg-rose-50 text-rose-600 border border-rose-150 rounded-xl hover:bg-rose-100 transition-all cursor-pointer"
+                                    title="Delete Exam"
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </button>
+                                </div>
+                              );
+                            })}
                           </div>
                         ) : (
-                          // If split: render components list and form
-                          <div className="space-y-4 text-xs font-semibold text-slate-700">
-                            <div className="space-y-2">
-                              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">
-                                Assessment Components
+                          <p className="text-[10px] font-bold text-slate-400 italic">No exams configured yet.</p>
+                        )}
+                      </div>
+
+                      {/* Active Exam Parameters Configurator */}
+                      {selectedConfigExam && (() => {
+                        const config = schoolExamConfig[selectedConfigExam] || { isSplit: false, maxMarks: 100, components: [] };
+                        return (
+                          <div className="border border-slate-200/60 rounded-2xl p-4 bg-slate-50/30 space-y-4 animate-scale-in">
+                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                              <h4 className="text-xs font-black uppercase text-slate-800">
+                                Configuration for {selectedConfigExam}
+                              </h4>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] text-slate-400 font-bold uppercase">Total Marks:</span>
+                                <span className="bg-rose-50 border border-rose-100 text-rose-700 px-2 py-0.5 rounded-lg text-xs font-black">
+                                  {config.maxMarks}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="checkbox"
+                                id="isSplitCheckbox"
+                                checked={config.isSplit}
+                                onChange={(e) => {
+                                  setSchoolExamConfig((prev: any) => ({
+                                    ...prev,
+                                    [selectedConfigExam]: {
+                                      ...config,
+                                      isSplit: e.target.checked,
+                                      components: e.target.checked ? config.components : []
+                                    }
+                                  }));
+                                }}
+                                className="h-4 w-4 text-rose-600 border-slate-300 rounded focus:ring-rose-500"
+                              />
+                              <label htmlFor="isSplitCheckbox" className="text-xs font-extrabold text-slate-700 cursor-pointer">
+                                Enable Marks Breakdown/Split (e.g. Written, Practical, Notebook)
                               </label>
-                              <div className="border border-slate-200 rounded-lg overflow-hidden bg-white">
-                                <table className="w-full text-left border-collapse">
-                                  <thead>
-                                    <tr className="bg-slate-50 border-b border-slate-100 font-bold text-slate-400 text-[10px] uppercase">
-                                      <th className="p-2">Component Name</th>
-                                      <th className="p-2 text-center w-24">Max Marks</th>
-                                      <th className="p-2 text-center w-16">Action</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody className="divide-y divide-slate-100">
-                                    {(config.components || []).map((comp: any, cIdx: number) => (
-                                      <tr key={cIdx}>
-                                        <td className="p-2">
-                                          <input
-                                            type="text"
-                                            value={comp.name}
-                                            onChange={(e) => {
-                                              const newName = e.target.value;
-                                              setSchoolExamConfig((prev: any) => {
-                                                const comps = [...prev[selectedConfigExam].components];
-                                                comps[cIdx] = { ...comps[cIdx], name: newName };
-                                                return {
-                                                  ...prev,
-                                                  [selectedConfigExam]: {
-                                                    ...prev[selectedConfigExam],
-                                                    components: comps
-                                                  }
-                                                };
-                                              });
-                                            }}
-                                            className="w-full font-bold outline-none border-b border-transparent focus:border-indigo-600"
-                                          />
-                                        </td>
-                                        <td className="p-2 text-center">
-                                          <input
-                                            type="number"
-                                            min="0"
-                                            value={comp.max}
-                                            onChange={(e) => {
-                                              const newMax = parseFloat(e.target.value) || 0;
-                                              setSchoolExamConfig((prev: any) => {
-                                                const comps = [...prev[selectedConfigExam].components];
-                                                comps[cIdx] = { ...comps[cIdx], max: newMax };
-                                                const total = comps.reduce((sum: number, c: any) => sum + (c.max || 0), 0);
-                                                return {
-                                                  ...prev,
-                                                  [selectedConfigExam]: {
-                                                    ...prev[selectedConfigExam],
-                                                    components: comps,
-                                                    maxMarks: total
-                                                  }
-                                                };
-                                              });
-                                            }}
-                                            className="w-16 text-center font-bold outline-none border-b border-transparent focus:border-indigo-600"
-                                          />
-                                        </td>
-                                        <td className="p-2 text-center">
+                            </div>
+
+                            {!config.isSplit ? (
+                              <div className="max-w-xs space-y-1">
+                                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Max Examination Marks</label>
+                                <input
+                                  type="number"
+                                  placeholder="100"
+                                  value={config.maxMarks}
+                                  onChange={(e) => {
+                                    const val = parseFloat(e.target.value) || 0;
+                                    setSchoolExamConfig((prev: any) => ({
+                                      ...prev,
+                                      [selectedConfigExam]: { ...config, maxMarks: val }
+                                    }));
+                                  }}
+                                  className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-white focus:border-rose-500 shadow-2xs"
+                                />
+                              </div>
+                            ) : (
+                              <div className="space-y-3">
+                                {/* Component List */}
+                                <div className="space-y-1.5">
+                                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Configured Components</label>
+                                  {config.components && config.components.length > 0 ? (
+                                    <div className="divide-y divide-slate-100 bg-white border border-slate-200/60 rounded-xl overflow-hidden shadow-2xs">
+                                      {config.components.map((comp: any, idx: number) => (
+                                        <div key={idx} className="flex items-center justify-between p-2.5 hover:bg-slate-50">
+                                          <div>
+                                            <span className="text-xs font-extrabold text-slate-800">{comp.name}</span>
+                                            <span className="text-[10px] text-slate-400 font-bold ml-1.5">(Weight: {comp.max} marks)</span>
+                                          </div>
                                           <button
                                             type="button"
                                             onClick={() => {
                                               setSchoolExamConfig((prev: any) => {
-                                                const comps = prev[selectedConfigExam].components.filter((_: any, i: number) => i !== cIdx);
+                                                const comps = (config.components || []).filter((_: any, i: number) => i !== idx);
                                                 const total = comps.reduce((sum: number, c: any) => sum + (c.max || 0), 0);
                                                 return {
                                                   ...prev,
-                                                  [selectedConfigExam]: {
-                                                    ...prev[selectedConfigExam],
-                                                    components: comps,
-                                                    maxMarks: total
-                                                  }
+                                                  [selectedConfigExam]: { ...config, components: comps, maxMarks: total }
                                                 };
                                               });
                                             }}
-                                            className="text-rose-600 hover:text-rose-700 font-bold cursor-pointer"
+                                            className="p-1 text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+                                            title="Delete Component"
                                           >
-                                            Delete
+                                            <Trash2 className="h-3.5 w-3.5" />
                                           </button>
-                                        </td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                                {/* Mobile Card List */}
-                                <div className="sm:hidden divide-y divide-slate-100">
-                                  {(config.components || []).map((comp: any, cIdx: number) => (
-                                    <div key={cIdx} className="p-3 space-y-2">
-                                      <div className="flex justify-between items-center">
-                                        <span className="font-bold text-slate-800">{comp.name}</span>
-                                        <button type="button" onClick={() => { /* logic same as above */ }} className="text-rose-600 text-[10px] font-bold">Delete</button>
-                                      </div>
-                                      <div className="flex items-center gap-2">
-                                        <label className="text-[9px] font-bold text-slate-400">Max Marks:</label>
-                                        <input type="number" value={comp.max} readOnly className="w-16 text-xs font-bold border-b" />
-                                      </div>
+                                        </div>
+                                      ))}
                                     </div>
-                                  ))}
+                                  ) : (
+                                    <p className="text-[10px] font-bold text-slate-400 italic">No breakdown components added yet.</p>
+                                  )}
+                                </div>
+
+                                {/* Add Component inline */}
+                                <div className="flex gap-2 items-end pt-1 bg-white p-3 rounded-xl border border-slate-200/60">
+                                  <div className="flex-1">
+                                    <label className="text-[8.5px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
+                                      Component Name
+                                    </label>
+                                    <input
+                                      type="text"
+                                      placeholder="e.g. Notebook, Practical"
+                                      value={newCompName}
+                                      onChange={(e) => setNewCompName(e.target.value)}
+                                      className="w-full text-xs font-semibold py-1.5 px-2 border border-slate-200 rounded-lg outline-none focus:border-rose-500"
+                                    />
+                                  </div>
+                                  <div className="w-24">
+                                    <label className="text-[8.5px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
+                                      Max Marks
+                                    </label>
+                                    <input
+                                      type="number"
+                                      placeholder="10"
+                                      value={newCompMax}
+                                      onChange={(e) => setNewCompMax(e.target.value)}
+                                      className="w-full text-xs font-semibold py-1.5 px-2 border border-slate-200 rounded-lg outline-none focus:border-rose-500"
+                                    />
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const name = newCompName.trim();
+                                      const maxVal = parseFloat(newCompMax) || 0;
+                                      if (name && maxVal > 0) {
+                                        setSchoolExamConfig((prev: any) => {
+                                          const current = prev[selectedConfigExam] || { components: [] };
+                                          const comps = [...(current.components || []), { name, max: maxVal }];
+                                          const total = comps.reduce((sum: number, c: any) => sum + (c.max || 0), 0);
+                                          return {
+                                            ...prev,
+                                            [selectedConfigExam]: {
+                                              ...current,
+                                              components: comps,
+                                              maxMarks: total
+                                            }
+                                          };
+                                        });
+                                        setNewCompName("");
+                                        setNewCompMax("");
+                                      }
+                                    }}
+                                    className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                                  >
+                                    Add
+                                  </button>
                                 </div>
                               </div>
-                            </div>
-
-                            {/* Add Component Form */}
-                            <div className="flex gap-2 items-end bg-white border border-slate-200/70 p-3 rounded-lg max-w-md">
-                              <div className="flex-1">
-                                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
-                                  New Component Name
-                                </label>
-                                <input
-                                  type="text"
-                                  placeholder="e.g. Oral test"
-                                  value={newCompName}
-                                  onChange={(e) => setNewCompName(e.target.value)}
-                                  className="w-full text-xs font-semibold py-1 px-2 border border-slate-200 rounded outline-none focus:border-indigo-600"
-                                />
-                              </div>
-                              <div className="w-20">
-                                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
-                                  Max Marks
-                                </label>
-                                <input
-                                  type="number"
-                                  placeholder="10"
-                                  value={newCompMax}
-                                  onChange={(e) => setNewCompMax(e.target.value)}
-                                  className="w-full text-xs font-semibold py-1 px-2 border border-slate-200 rounded outline-none focus:border-indigo-600"
-                                />
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const name = newCompName.trim();
-                                  const maxVal = parseFloat(newCompMax) || 0;
-                                  if (name && maxVal > 0) {
-                                    setSchoolExamConfig((prev: any) => {
-                                      const current = prev[selectedConfigExam] || { components: [] };
-                                      const comps = [...(current.components || []), { name, max: maxVal }];
-                                      const total = comps.reduce((sum: number, c: any) => sum + (c.max || 0), 0);
-                                      return {
-                                        ...prev,
-                                        [selectedConfigExam]: {
-                                          ...current,
-                                          components: comps,
-                                          maxMarks: total
-                                        }
-                                      };
-                                    });
-                                    setNewCompName("");
-                                    setNewCompMax("");
-                                  }
-                                }}
-                                className="px-3 py-1 bg-slate-105 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded text-xs font-bold transition-all cursor-pointer animate-fade-in"
-                              >
-                                Add
-                              </button>
-                            </div>
+                            )}
                           </div>
-                        )}
-                      </div>
-                    );
-                  })()}
+                        );
+                      })()}
 
-                  {/* Save button */}
-                  <div className="border-t border-slate-100 pt-4 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        setSavingExams(true);
-                        try {
-                          await updateSchoolInfo({
-                            ...schoolInfo,
-                            exams: schoolExams,
-                            examConfig: schoolExamConfig,
-                          });
-                          setSchoolSuccess(true);
-                          setTimeout(() => setSchoolSuccess(false), 3000);
-                        } catch (err) {
-                          console.error(err);
-                        } finally {
-                          setSavingExams(false);
-                        }
-                      }}
-                      disabled={savingExams}
-                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-500/10 cursor-pointer disabled:opacity-55"
-                    >
-                      {savingExams ? "Saving..." : "Save Exam Configuration"}
-                    </button>
+                      {/* Save button */}
+                      <div className="border-t border-slate-100 pt-4 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            setSavingExams(true);
+                            try {
+                              await updateSchoolInfo({
+                                ...schoolInfo,
+                                exams: schoolExams,
+                                examConfig: schoolExamConfig,
+                              });
+                              setSchoolSuccess(true);
+                              setTimeout(() => setSchoolSuccess(false), 3000);
+                            } catch (err) {
+                              console.error(err);
+                            } finally {
+                              setSavingExams(false);
+                            }
+                          }}
+                          disabled={savingExams}
+                          className="px-4 py-2.5 bg-rose-600 hover:bg-rose-750 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-rose-500/20 cursor-pointer disabled:opacity-55 active:scale-95"
+                        >
+                          {savingExams ? "Saving..." : "Save Exam Configuration"}
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
           )}
@@ -7580,11 +8063,13 @@ export default function AdminDashboard() {
       {/* 2. Edit Profile Modal */}
       {showEditModal && selectedStudent && (
         <div className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative space-y-4 max-h-[85vh] overflow-y-auto text-left">
-            <div className="flex justify-between items-start border-b border-slate-100 pb-3">
+          <div className="bg-white border border-slate-200/60 rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.015)] relative space-y-5 max-h-[85vh] overflow-y-auto text-left animate-scale-in">
+            <div className="flex justify-between items-center border-b border-slate-200/60 pb-4">
               <div>
-                <h4 className="font-extrabold text-slate-800 text-base">Edit Student: {selectedStudent.name}</h4>
-                <p className="text-[10px] text-slate-400 font-bold mt-0.5">Update details and save to system database</p>
+                <h3 className="text-xs font-black uppercase text-indigo-700 bg-indigo-50 border border-indigo-100/50 px-3 py-1 rounded-xl inline-flex items-center gap-1.5 tracking-wider">
+                  <Edit className="h-3.5 w-3.5" /> Edit Student Account: {selectedStudent.name}
+                </h3>
+                <p className="text-[10px] text-slate-400 font-semibold mt-1.5">Update details and save to system database</p>
               </div>
               <button
                 type="button"
@@ -7592,9 +8077,9 @@ export default function AdminDashboard() {
                   setShowEditModal(false);
                   setSelectedStudent(null);
                 }}
-                className="text-slate-400 hover:text-slate-600 text-xs font-bold py-1 px-2 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer"
+                className="h-8 w-8 bg-slate-50 border border-slate-200/60 text-slate-500 rounded-xl hover:bg-slate-100 hover:text-slate-700 transition-all flex items-center justify-center shrink-0 shadow-2xs active:scale-90 cursor-pointer"
               >
-                Cancel
+                <X className="h-4 w-4" />
               </button>
             </div>
 
@@ -7908,11 +8393,13 @@ export default function AdminDashboard() {
       {/* 3. Promote Student Modal */}
       {showPromoteModal && selectedStudent && (
         <div className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-sm w-full p-6 shadow-2xl relative space-y-4 text-left animate-fade-in">
-            <div className="flex justify-between items-start border-b border-slate-100 pb-3">
+          <div className="bg-white border border-slate-200/60 rounded-3xl max-w-sm w-full p-6 sm:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.015)] relative space-y-5 text-left animate-scale-in">
+            <div className="flex justify-between items-center border-b border-slate-200/60 pb-4">
               <div>
-                <h4 className="font-extrabold text-slate-800 text-base">Promote Student</h4>
-                <p className="text-[10px] text-slate-400 font-bold mt-0.5">Move pupil to next Academic Class/Section</p>
+                <h3 className="text-xs font-black uppercase text-indigo-700 bg-indigo-50 border border-indigo-100/50 px-3 py-1 rounded-xl inline-flex items-center gap-1.5 tracking-wider">
+                  <ArrowUpRight className="h-3.5 w-3.5" /> Promote Student
+                </h3>
+                <p className="text-[10px] text-slate-400 font-semibold mt-1.5">Move pupil to next Academic Class/Section</p>
               </div>
               <button
                 type="button"
@@ -7920,9 +8407,9 @@ export default function AdminDashboard() {
                   setShowPromoteModal(false);
                   setSelectedStudent(null);
                 }}
-                className="text-slate-400 hover:text-slate-600 text-xs font-bold py-1 px-2 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer"
+                className="h-8 w-8 bg-slate-50 border border-slate-200/60 text-slate-500 rounded-xl hover:bg-slate-100 hover:text-slate-700 transition-all flex items-center justify-center shrink-0 shadow-2xs active:scale-90 cursor-pointer"
               >
-                Cancel
+                <X className="h-4 w-4" />
               </button>
             </div>
 
@@ -7995,7 +8482,7 @@ export default function AdminDashboard() {
       {/* 4. Bulk Promote Students Modal */}
       {showBulkPromoteModal && selectedStudentIds.length > 0 && (
         <div className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-sm w-full p-6 shadow-2xl relative space-y-4 text-left animate-fade-in">
+          <div className="bg-white border border-slate-200/60 rounded-3xl max-w-sm w-full p-6 sm:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.015)] relative space-y-5 text-left animate-scale-in">
             <div className="flex justify-between items-start border-b border-slate-100 pb-3">
               <div>
                 <h4 className="font-extrabold text-slate-800 text-base">Bulk Promote Class</h4>

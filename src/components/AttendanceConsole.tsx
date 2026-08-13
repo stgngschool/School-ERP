@@ -216,7 +216,7 @@ export default function AttendanceConsole({ initialClass }: AttendanceConsolePro
   return (
     <div className="-mx-2 sm:mx-0 space-y-3 pb-24 md:pb-6 font-sans select-none">
       {/* ─── FULL-WIDTH FLAT HEADER (ZERO WASTED MARGINS) ─── */}
-      <div className="bg-white border-y sm:border border-slate-200 p-3 sm:p-4 space-y-2.5 sm:rounded-2xl shadow-2xs">
+      <div className="bg-white border-y sm:border border-slate-200/60 p-4 sm:p-6 space-y-2.5 sm:rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)]">
         {/* Row 1: Title, Class, Date & View Toggle */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
           <div className="flex items-center gap-2 min-w-0">
@@ -226,7 +226,7 @@ export default function AttendanceConsole({ initialClass }: AttendanceConsolePro
             <select
               value={selectedClass}
               onChange={(e) => setSelectedClass(e.target.value)}
-              className="bg-slate-100 border border-slate-200 text-slate-800 text-xs font-bold py-1 px-2.5 rounded-lg outline-none cursor-pointer"
+              className="bg-slate-50 border border-slate-200/60 text-slate-800 text-xs font-bold py-1.5 px-3 rounded-2xl outline-none cursor-pointer"
             >
               {availableClasses.map((cls) => (
                 <option key={cls} value={cls}>
@@ -241,7 +241,7 @@ export default function AttendanceConsole({ initialClass }: AttendanceConsolePro
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="bg-slate-100 border border-slate-200 text-slate-800 text-xs font-bold py-1 px-2.5 rounded-lg outline-none cursor-pointer"
+              className="bg-slate-50 border border-slate-200/60 text-slate-800 text-xs font-bold py-1.5 px-3 rounded-2xl outline-none cursor-pointer"
             />
 
             <div className="inline-flex p-0.5 bg-slate-100 rounded-lg border border-slate-200 text-[11px] font-bold">
@@ -317,7 +317,7 @@ export default function AttendanceConsole({ initialClass }: AttendanceConsolePro
 
       {/* ─── FULL-WIDTH ROSTER LIST (ZERO SIDE PADDING WASTE) ─── */}
       {activeView === "ROSTER" && (
-        <div className="bg-white border-y sm:border border-slate-200 divide-y divide-slate-100 sm:rounded-2xl shadow-2xs">
+        <div className="bg-white border-y sm:border border-slate-200/60 divide-y divide-slate-100 sm:rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)]">
           {filteredStudents.length === 0 ? (
             <div className="text-center py-8 text-slate-400">
               <Users className="h-8 w-8 mx-auto mb-1 opacity-40" />
@@ -372,7 +372,7 @@ export default function AttendanceConsole({ initialClass }: AttendanceConsolePro
 
       {/* ─── MONTHLY REGISTER VIEW ─── */}
       {activeView === "MONTHLY" && (
-        <div className="bg-white border-y sm:border border-slate-200 p-3 sm:p-4 sm:rounded-2xl shadow-2xs space-y-3">
+        <div className="bg-white border-y sm:border border-slate-200/60 p-4 sm:p-6 sm:rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] space-y-3">
           <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
             <div>
               <h3 className="text-xs font-extrabold text-slate-900">Monthly Attendance Register</h3>

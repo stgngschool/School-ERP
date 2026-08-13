@@ -442,45 +442,45 @@ export default function ParentDashboard() {
 
       {/* 2. Dynamic Views based on activeTab */}
       {activeTab === "dashboard" && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
           {/* Card 1: Attendance Rate */}
-          <div className="bg-white border border-slate-200/80 p-3 sm:p-5 sm:rounded-2xl rounded-xl shadow-sm flex items-start justify-between hover:border-indigo-300 transition-all duration-300 relative overflow-hidden group">
+          <div className="bg-white border border-slate-200/60 p-5 sm:rounded-3xl rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.015)] flex items-start justify-between hover:border-indigo-200 transition-all duration-300 relative overflow-hidden group">
             <div className="space-y-3">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Attendance Rate</span>
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Attendance Rate</span>
               <div>
                 <h3 className="text-2xl font-black text-slate-900 tracking-tight">{attendanceRate}%</h3>
-                <p className="text-[10px] text-slate-400 font-bold mt-1">July 2026 Academic Cycle</p>
+                <p className="text-[10px] text-slate-400 font-semibold mt-1">July 2026 Academic Cycle</p>
               </div>
             </div>
-            <div className="h-10 w-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 border border-indigo-100 shrink-0">
+            <div className="h-10 w-10 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 border border-indigo-100/50 shrink-0">
               <CalendarIcon className="h-5 w-5" />
             </div>
           </div>
 
           {/* Card 2: Active Homework */}
-          <div className="bg-white border border-slate-200/80 p-3 sm:p-5 sm:rounded-2xl rounded-xl shadow-sm flex items-start justify-between hover:border-indigo-300 transition-all duration-300 relative overflow-hidden group">
+          <div className="bg-white border border-slate-200/60 p-5 sm:rounded-3xl rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.015)] flex items-start justify-between hover:border-indigo-200 transition-all duration-300 relative overflow-hidden group">
             <div className="space-y-3">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Active Homework</span>
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Active Homework</span>
               <div>
                 <h3 className="text-2xl font-black text-slate-900 tracking-tight">{childHomework.length} Pending</h3>
-                <p className="text-[10px] text-slate-400 font-bold mt-1">Due by end of this week</p>
+                <p className="text-[10px] text-slate-400 font-semibold mt-1">Due by end of this week</p>
               </div>
             </div>
-            <div className="h-10 w-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-700 border border-emerald-100 shrink-0">
+            <div className="h-10 w-10 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-700 border border-emerald-100/50 shrink-0">
               <BookOpen className="h-5 w-5" />
             </div>
           </div>
 
           {/* Card 3: Outstanding Dues */}
-          <div className="bg-white border border-slate-200/80 p-3 sm:p-5 sm:rounded-2xl rounded-xl shadow-sm flex items-start justify-between hover:border-indigo-300 transition-all duration-300 relative overflow-hidden group">
+          <div className="bg-white border border-slate-200/60 p-5 sm:rounded-3xl rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.015)] flex items-start justify-between hover:border-indigo-200 transition-all duration-300 relative overflow-hidden group">
             <div className="space-y-3">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Outstanding Dues</span>
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Outstanding Dues</span>
               <div>
                 <h3 className="text-2xl font-black text-rose-600 tracking-tight">{formatP(childBalance)}</h3>
-                <p className="text-[10px] text-slate-400 font-bold mt-1">Clear via "Pay Fees" tab</p>
+                <p className="text-[10px] text-slate-400 font-semibold mt-1">Clear via "Pay Fees" tab</p>
               </div>
             </div>
-            <div className="h-10 w-10 bg-rose-50 rounded-xl flex items-center justify-center text-rose-600 border border-rose-100 shrink-0">
+            <div className="h-10 w-10 bg-rose-50 rounded-2xl flex items-center justify-center text-rose-600 border border-rose-100/50 shrink-0">
               <CreditCard className="h-5 w-5" />
             </div>
           </div>

@@ -438,34 +438,28 @@ export default function MarksFeedingConsole() {
   return (
     <div className="-mx-2 sm:mx-0 space-y-4 text-left">
       {/* ─── Clean Header & Filter Control Console ─── */}
-      <div className="bg-white border-y sm:border border-slate-200/90 sm:rounded-2xl p-3 sm:p-5 shadow-xs text-left">
+      <div className="bg-white border-y sm:border border-slate-200/60 sm:rounded-3xl p-5 sm:p-7 shadow-[0_8px_30px_rgb(0,0,0,0.015)] text-left">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 bg-indigo-50 border border-indigo-100/80 rounded-xl flex items-center justify-center text-indigo-600 shrink-0 shadow-xs">
-              <BookOpen className="h-5 w-5" />
-            </div>
-            <div>
-              <h3 className="text-base font-extrabold text-slate-800 tracking-tight">
-                Feed Student Marks & Marksheets
-              </h3>
-              <p className="text-xs text-slate-400 font-medium mt-0.5">
-                Select class & exam to enter student marks, track average scores, and view live report cards.
-              </p>
-            </div>
+          <div>
+            <h3 className="text-xs font-black uppercase text-indigo-700 bg-indigo-50 border border-indigo-100/50 px-3 py-1 rounded-xl inline-flex items-center gap-1.5 tracking-wider">
+              <BookOpen className="h-3.5 w-3.5" /> Marks Entry & Exam Roster
+            </h3>
+            <p className="text-[10px] text-slate-400 font-semibold mt-1.5">
+              Select class and examination scope to feed academic scores and generate reports.
+            </p>
           </div>
-
-          </div>
+        </div>
 
         {/* Filters Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mt-4">
           <div>
-            <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider block mb-1">
+            <label className="text-[9px] font-black uppercase text-slate-400 block mb-1.5 tracking-wider">
               Class Section
             </label>
             <select
               value={selectedClass}
               onChange={(e) => setSelectedClass(e.target.value)}
-              className="w-full text-xs sm:text-sm font-bold py-2.5 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 text-slate-700 cursor-pointer shadow-2xs transition-all"
+              className="w-full text-[11px] font-extrabold py-2.5 px-3 border border-slate-200/60 rounded-2xl outline-none bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300 focus:bg-white focus:border-indigo-600 text-slate-700 transition-all cursor-pointer shadow-2xs"
             >
               {availableClasses.map((cls) => (
                 <option key={cls} value={cls}>
@@ -476,13 +470,13 @@ export default function MarksFeedingConsole() {
           </div>
 
           <div>
-            <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider block mb-1">
+            <label className="text-[9px] font-black uppercase text-slate-400 block mb-1.5 tracking-wider">
               Examination Scope
             </label>
             <select
               value={selectedExam}
               onChange={(e) => setSelectedExam(e.target.value)}
-              className="w-full text-xs sm:text-sm font-bold py-2.5 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 text-slate-700 cursor-pointer shadow-2xs transition-all"
+              className="w-full text-[11px] font-extrabold py-2.5 px-3 border border-slate-200/60 rounded-2xl outline-none bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300 focus:bg-white focus:border-indigo-600 text-slate-700 transition-all cursor-pointer shadow-2xs"
             >
               {availableExams.map((ex) => (
                 <option key={ex} value={ex}>
@@ -493,14 +487,14 @@ export default function MarksFeedingConsole() {
           </div>
 
           <div>
-            <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider block mb-1">
+            <label className="text-[9px] font-black uppercase text-slate-400 block mb-1.5 tracking-wider">
               Subject Name
             </label>
             {!isCustomSubjectMode ? (
               <select
                 value={selectedSubject}
                 onChange={(e) => handleSubjectChange(e.target.value)}
-                className="w-full text-xs sm:text-sm font-bold py-2.5 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 text-slate-700 cursor-pointer shadow-2xs transition-all"
+                className="w-full text-[11px] font-extrabold py-2.5 px-3 border border-slate-200/60 rounded-2xl outline-none bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300 focus:bg-white focus:border-indigo-600 text-slate-700 transition-all cursor-pointer shadow-2xs"
               >
                 <option value="Mathematics">Mathematics</option>
                 <option value="Science">Science</option>
@@ -531,7 +525,7 @@ export default function MarksFeedingConsole() {
           </div>
 
           <div>
-            <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider block mb-1">
+            <label className="text-[9px] font-black uppercase text-slate-400 block mb-1.5 tracking-wider">
               Max Marks
             </label>
             <input
@@ -542,7 +536,7 @@ export default function MarksFeedingConsole() {
               disabled={isEditMode || isSplitExam}
               value={maxMarks}
               onChange={(e) => setMaxMarks(e.target.value)}
-              className="w-full text-xs sm:text-sm font-bold py-2.5 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 text-slate-700 disabled:opacity-60 disabled:cursor-not-allowed shadow-2xs transition-all"
+              className="w-full text-[11px] font-extrabold py-2.5 px-3 border border-slate-200/60 rounded-2xl outline-none bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300 focus:bg-white focus:border-indigo-600 text-slate-700 disabled:opacity-60 disabled:cursor-not-allowed shadow-2xs transition-all"
             />
           </div>
         </div>
@@ -552,7 +546,7 @@ export default function MarksFeedingConsole() {
             type="button"
             disabled={loadingRoster || isRosterLoaded}
             onClick={loadRoster}
-            className={`w-full py-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 transition-all ${isRosterLoaded ? 'bg-emerald-50 text-emerald-600 border border-emerald-200 cursor-default' : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-500/20 cursor-pointer'}`}
+            className={`w-full py-3.5 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all active:scale-98 cursor-pointer ${isRosterLoaded ? 'bg-emerald-50 text-emerald-600 border border-emerald-200 cursor-default' : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-500/10'}`}
           >
             {loadingRoster ? <Loader2 className="h-4 w-4 animate-spin" /> : isRosterLoaded ? <CheckCircle2 className="h-4 w-4" /> : <Layers className="h-4 w-4" />} 
             {isRosterLoaded ? "Roster Data Loaded" : "Load Roster"}
@@ -568,55 +562,55 @@ export default function MarksFeedingConsole() {
       ) : (
         <>
           {/* ─── Class Performance Overview Strip ─── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-left">
-        <div className="bg-white border border-slate-200/90 p-3 sm:p-3.5 rounded-xl sm:rounded-2xl shadow-2xs flex items-center gap-3">
-          <div className="h-10 w-10 bg-indigo-50 border border-indigo-100 rounded-xl flex items-center justify-center text-indigo-600 shrink-0">
-            <Users className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Class Roster</p>
-            <h4 className="text-sm font-black text-slate-800 mt-0.5">
-              {enteredCount} / {classStudents.length} <span className="text-[10px] text-slate-400 font-semibold">Entered</span>
-            </h4>
-          </div>
-        </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-left">
+            <div className="bg-white border border-slate-200/60 p-4 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.015)] flex items-center gap-3">
+              <div className="h-10 w-10 bg-indigo-50 border border-indigo-100/50 rounded-2xl flex items-center justify-center text-indigo-600 shrink-0">
+                <Users className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Class Roster</p>
+                <h4 className="text-sm font-black text-slate-800 mt-0.5">
+                  {enteredCount} / {classStudents.length} <span className="text-[10px] text-slate-400 font-semibold">Entered</span>
+                </h4>
+              </div>
+            </div>
 
-        <div className="bg-white border border-slate-200/90 p-3 sm:p-3.5 rounded-xl sm:rounded-2xl shadow-2xs flex items-center gap-3">
-          <div className="h-10 w-10 bg-emerald-50 border border-emerald-100 rounded-xl flex items-center justify-center text-emerald-600 shrink-0">
-            <TrendingUp className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Class Average</p>
-            <h4 className="text-sm font-black text-slate-800 mt-0.5">
-              {classAvgScore} <span className="text-[10px] text-slate-400 font-semibold">/ {maxMarks}</span>
-            </h4>
-          </div>
-        </div>
+            <div className="bg-white border border-slate-200/60 p-4 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.015)] flex items-center gap-3">
+              <div className="h-10 w-10 bg-emerald-50 border border-emerald-100/50 rounded-2xl flex items-center justify-center text-emerald-600 shrink-0">
+                <TrendingUp className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Class Average</p>
+                <h4 className="text-sm font-black text-slate-800 mt-0.5">
+                  {classAvgScore} <span className="text-[10px] text-slate-400 font-semibold">/ {maxMarks}</span>
+                </h4>
+              </div>
+            </div>
 
-        <div className="bg-white border border-slate-200/90 p-3 sm:p-3.5 rounded-xl sm:rounded-2xl shadow-2xs flex items-center gap-3">
-          <div className="h-10 w-10 bg-amber-50 border border-amber-100 rounded-xl flex items-center justify-center text-amber-600 shrink-0">
-            <Award className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Top Performer</p>
-            <h4 className="text-xs font-black text-slate-800 mt-0.5 truncate max-w-[110px]" title={topScorerName}>
-              {topScorerName !== "--" ? `${highestScore} pts (${topScorerName.split(" ")[0]})` : "--"}
-            </h4>
-          </div>
-        </div>
+            <div className="bg-white border border-slate-200/60 p-4 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.015)] flex items-center gap-3">
+              <div className="h-10 w-10 bg-amber-50 border border-amber-100/50 rounded-2xl flex items-center justify-center text-amber-655 shrink-0">
+                <Award className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Top Performer</p>
+                <h4 className="text-xs font-black text-slate-800 mt-0.5 truncate max-w-[110px]" title={topScorerName}>
+                  {topScorerName !== "--" ? `${highestScore} pts (${topScorerName.split(" ")[0]})` : "--"}
+                </h4>
+              </div>
+            </div>
 
-        <div className="bg-white border border-slate-200/90 p-3 sm:p-3.5 rounded-xl sm:rounded-2xl shadow-2xs flex items-center gap-3">
-          <div className="h-10 w-10 bg-teal-50 border border-teal-100 rounded-xl flex items-center justify-center text-teal-600 shrink-0">
-            <CheckCircle2 className="h-5 w-5" />
+            <div className="bg-white border border-slate-200/60 p-4 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.015)] flex items-center gap-3">
+              <div className="h-10 w-10 bg-teal-50 border border-teal-100/50 rounded-2xl flex items-center justify-center text-teal-655 shrink-0">
+                <CheckCircle2 className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Pass Rate (≥33%)</p>
+                <h4 className="text-sm font-black text-slate-800 mt-0.5">
+                  {passPercentage}% <span className="text-[10px] text-emerald-600 font-bold">({passCount} Passed)</span>
+                </h4>
+              </div>
+            </div>
           </div>
-          <div>
-            <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Pass Rate (≥33%)</p>
-            <h4 className="text-sm font-black text-slate-800 mt-0.5">
-              {passPercentage}% <span className="text-[10px] text-emerald-600 font-bold">({passCount} Passed)</span>
-            </h4>
-          </div>
-        </div>
-      </div>
 
       {/* ─── Search & Status Row ─── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 sm:p-3.5 sm:rounded-2xl rounded-xl border-y sm:border border-slate-200/90 shadow-2xs text-left">
@@ -638,13 +632,13 @@ export default function MarksFeedingConsole() {
         </div>
 
         <div className="relative flex-1 sm:flex-none">
-          <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400/80" />
           <input
             type="text"
             placeholder="Search student name or roll..."
             value={studentSearch}
             onChange={(e) => setStudentSearch(e.target.value)}
-            className="pl-9 pr-3 py-2 text-xs sm:text-sm font-semibold border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 w-full sm:w-64 transition-all"
+            className="w-full sm:w-64 text-xs font-extrabold py-2.5 pl-10 pr-4 border border-slate-200/60 rounded-2xl outline-none bg-slate-50/50 hover:bg-slate-50 hover:border-slate-350 focus:bg-white focus:border-indigo-600 transition-all shadow-2xs text-slate-800 placeholder-slate-400"
           />
         </div>
       </div>
@@ -666,7 +660,7 @@ export default function MarksFeedingConsole() {
       {/* ─── Student Roster Section ─── */}
       <div className="text-left">
         {/* Roster Header & Save Action Bar */}
-        <div className="p-3 sm:p-3.5 bg-white border-y sm:border border-slate-200/90 sm:rounded-2xl shadow-xs mb-3 flex items-center justify-between">
+        <div className="p-4 bg-white border border-slate-200/60 sm:rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.015)] mb-4 flex items-center justify-between">
           <div>
             <h3 className="text-xs font-black uppercase tracking-wider text-slate-700">
               Class Roster ({filteredStudents.length} Students)
@@ -676,7 +670,7 @@ export default function MarksFeedingConsole() {
           <button
             onClick={handleSaveAll}
             disabled={saving || hasValidationError || classStudents.length === 0}
-            className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-extrabold transition-all shadow-md shadow-indigo-500/10 disabled:opacity-50 cursor-pointer"
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-indigo-500/15 disabled:opacity-50 cursor-pointer"
           >
             <Save className="h-4 w-4" />
             {saving ? "Saving..." : "Save Roster"}
@@ -860,8 +854,9 @@ export default function MarksFeedingConsole() {
         </div>
 
         {/* 💻 DESKTOP VIEW: Full Data Table */}
-        <div className="hidden sm:block overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+        <div className="hidden sm:block bg-white border border-slate-200/60 sm:rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
             <thead>
               {isSplitExam ? (
                 <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-black uppercase text-slate-400 tracking-wider">
@@ -1040,13 +1035,14 @@ export default function MarksFeedingConsole() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
 
-        <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
+        <div className="p-5 bg-slate-50/50 border-t border-slate-200/60 flex justify-end rounded-b-3xl">
           <button
             onClick={handleSaveAll}
             disabled={saving || hasValidationError || classStudents.length === 0}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 py-3 px-6 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-extrabold shadow-md shadow-indigo-500/10 disabled:opacity-50 cursor-pointer"
+            className="w-full sm:w-auto flex items-center justify-center gap-2 py-3 px-6 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-indigo-500/15 disabled:opacity-50 cursor-pointer"
           >
             <Save className="h-4 w-4" />
             {saving ? "Saving Roster..." : "Save Marks Roster"}

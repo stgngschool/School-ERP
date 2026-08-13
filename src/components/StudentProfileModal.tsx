@@ -272,12 +272,12 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
 
   return (
     <div className={isInline ? "w-full bg-white border border-slate-200 rounded-3xl shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex flex-col overflow-hidden" : "fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-end sm:items-center justify-center sm:p-4"}>
-      <div className={isInline ? "w-full flex flex-col overflow-hidden" : "bg-white w-full sm:rounded-3xl sm:max-w-2xl lg:max-w-5xl sm:h-[85vh] h-[94vh] rounded-t-3xl flex flex-col shadow-2xl overflow-hidden border border-slate-100 modal-fullscreen-mobile pb-[env(safe-area-inset-bottom,0px)]"}>
+      <div className={isInline ? "w-full flex flex-col overflow-hidden" : "bg-white w-full sm:rounded-3xl sm:max-w-2xl lg:max-w-5xl sm:h-[85vh] h-[94vh] rounded-t-3xl flex flex-col shadow-2xl overflow-hidden border border-slate-200/60 modal-fullscreen-mobile pb-[env(safe-area-inset-bottom,0px)]"}>
         
         {/* Header Section */}
-        <div className="bg-gradient-to-r from-indigo-600 via-indigo-700 to-indigo-800 px-4 sm:px-6 py-4 sm:py-5 text-white flex items-center justify-between shrink-0 shadow-md">
+        <div className="bg-white border-b border-slate-200/60 px-4 sm:px-6 py-4 sm:py-5 text-slate-800 flex items-center justify-between shrink-0 shadow-[0_2px_12px_rgba(0,0,0,0.015)]">
           <div className="flex items-center space-x-3 sm:space-x-4 min-w-0 flex-1">
-            <div className="h-12 w-12 sm:h-14 sm:w-14 rounded-2xl bg-white/15 border border-white/20 flex items-center justify-center font-bold text-lg sm:text-xl tracking-wider text-white uppercase shadow-inner overflow-hidden shrink-0">
+            <div className="h-12 w-12 sm:h-14 sm:w-14 rounded-2xl bg-slate-50 border border-slate-200/60 flex items-center justify-center font-bold text-lg sm:text-xl tracking-wider text-slate-700 uppercase shadow-inner overflow-hidden shrink-0">
               {data?.photoUrl ? (
                 <img src={data.photoUrl} alt={data.name} className="h-full w-full object-cover" />
               ) : (
@@ -286,30 +286,30 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base sm:text-xl font-bold tracking-tight truncate">{data?.name || "Student Profile"}</h2>
+                <h2 className="text-base sm:text-xl font-black text-slate-900 tracking-tight truncate">{data?.name || "Student Profile"}</h2>
                 {data?.isRte && (
-                  <span className="bg-amber-400/20 text-amber-200 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border border-amber-300/30 shrink-0">
+                  <span className="bg-amber-50 text-amber-700 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border border-amber-200/50 shrink-0">
                     RTE
                   </span>
                 )}
               </div>
-              <p className="text-[10px] sm:text-xs text-indigo-100 mt-0.5 truncate">
-                Cl {data?.class?.name}-{data?.class?.section} • {data?.rollNo || "N/A"} • {data?.admissionNo || "N/A"}
+              <p className="text-[10px] sm:text-xs text-slate-400 font-bold mt-0.5 truncate">
+                Class {data?.class?.name}-{data?.class?.section} • Roll {data?.rollNo || "N/A"} • Adm No: {data?.admissionNo || "N/A"}
               </p>
             </div>
           </div>
           <button 
             onClick={onClose}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 transition-all text-xs font-bold text-white cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200/60 text-slate-700 text-xs font-bold transition-all cursor-pointer shadow-sm hover:shadow active:scale-95 duration-100"
             title={isInline ? "Back to Student Directory" : "Close window"}
           >
             {isInline ? (
               <>
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-                <span>Back</span>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                <span className="text-slate-600">Back</span>
               </>
             ) : (
-              <X className="h-4 w-4" />
+              <X className="h-4 w-4 text-slate-500" />
             )}
           </button>
         </div>
