@@ -321,8 +321,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing required checkout parameters." }, { status: 400 });
     }
 
-    const receiptNo = await getNextReceiptNumber();
-
     // Resolve parent profile ID and student ID
     let resolvedParentProfileId = parentProfileId || null;
     let resolvedStudentId = studentId || null;
@@ -357,6 +355,7 @@ export async function POST(request: Request) {
     }
 
     const result = await db.$transaction(async (tx) => {
+      const receiptNo = await getNextReceiptNumber(tx);
       let actualTotalPayPaisa = 0;
 
       // 1. Calculate and validate charges/overpayments first
@@ -430,13 +429,33 @@ export async function POST(request: Request) {
 
         // C. Handle Fine if any
         if (fineAmountPaisa > 0) {
-          await tx.ledgerEntry.create({
+          const fineEntry = await tx.ledgerEntry.create({
             data: {
               studentId: itemStudentId,
               feeHeadId: charge.feeHeadId,
               entryType: EntryType.FINE,
               amount: fineAmountPaisa,
               description: `Late Fee Fine: ${chargeName}`,
+              createdById: creatorUserId,
+            },
+          });
+
+          // Create offsetting PAYMENT for the fine (so it doesn't show as permanently unpaid)
+          await tx.receiptItem.create({
+            data: {
+              receiptId: receipt.id,
+              ledgerEntryId: fineEntry.id,
+              amount: fineAmountPaisa,
+            },
+          });
+          await tx.ledgerEntry.create({
+            data: {
+              studentId: itemStudentId,
+              feeHeadId: charge.feeHeadId,
+              entryType: EntryType.PAYMENT,
+              amount: -fineAmountPaisa,
+              referenceId: receipt.id,
+              description: `Payment for: Late Fee Fine: ${chargeName}`,
               createdById: creatorUserId,
             },
           });

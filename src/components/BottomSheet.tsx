@@ -63,7 +63,7 @@ export default function BottomSheet({ isOpen, onClose, title, children }: Bottom
     if (deltaY > 0) {
       // Prevent page background scrolling during swipe
       if (e.cancelable) {
-        e.preventDefault();
+        // e.preventDefault(); // Removed to prevent passive listener warning
       }
       setDragY(deltaY);
     }

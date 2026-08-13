@@ -94,9 +94,16 @@ export default function TeacherDashboard() {
   // Helper to check today's attendance status
   const todayDateStr = new Date().toISOString().split("T")[0];
 
+  const todaysAttendanceMap = React.useMemo(() => {
+    const map: Record<string, AttendanceStatus> = {};
+    attendances.forEach(a => {
+      if (a.date === todayDateStr) map[a.studentId] = a.status;
+    });
+    return map;
+  }, [attendances, todayDateStr]);
+
   const getAttendanceStatus = (studentId: string): AttendanceStatus | "UNMARKED" => {
-    const record = attendances.find((a) => a.studentId === studentId && a.date === todayDateStr);
-    return record ? record.status : "UNMARKED";
+    return todaysAttendanceMap[studentId] || "UNMARKED";
   };
 
   const handleMarkAttendance = (studentId: string, status: AttendanceStatus) => {

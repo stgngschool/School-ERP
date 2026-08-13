@@ -202,6 +202,17 @@ export default function AttendanceConsole({ initialClass }: AttendanceConsolePro
     return { total, present, absent, presentPercentage };
   }, [localAttendanceMap, classStudents]);
 
+  const monthlyLogsMap = React.useMemo(() => {
+    const map: Record<string, typeof attendances[0][]> = {};
+    attendances.forEach(a => {
+      if (a.date.startsWith(selectedMonth)) {
+        if (!map[a.studentId]) map[a.studentId] = [];
+        map[a.studentId].push(a);
+      }
+    });
+    return map;
+  }, [attendances, selectedMonth]);
+
   return (
     <div className="-mx-2 sm:mx-0 space-y-3 pb-24 md:pb-6 font-sans select-none">
       {/* ─── FULL-WIDTH FLAT HEADER (ZERO WASTED MARGINS) ─── */}
@@ -399,9 +410,7 @@ export default function AttendanceConsole({ initialClass }: AttendanceConsolePro
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-700">
                 {classStudents.map((student, idx) => {
-                  const studentLogs = attendances.filter(
-                    (a) => a.studentId === student.id && a.date.startsWith(selectedMonth)
-                  );
+                  const studentLogs = monthlyLogsMap[student.id] || [];
 
                   const pCount = studentLogs.filter((a) => a.status === "PRESENT").length;
                   const aCount = studentLogs.filter((a) => a.status === "ABSENT").length;

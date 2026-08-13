@@ -343,43 +343,30 @@ export async function backupDatabaseToDrive(folderId: string) {
   const drive = google.drive({ version: "v3", auth });
 
   // 1. Pull data from all main models
-  const [
-    users,
-    classes,
-    students,
-    attendances,
-    homeworks,
-    leaveRequests,
-    notices,
-    feeHeads,
-    feeStructures,
-    ledgerEntries,
-    receipts,
-  ] = await Promise.all([
-    prisma.user.findMany({
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        role: true,
-        status: true,
-        name: true,
-        phone: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    }),
-    prisma.class.findMany(),
-    prisma.student.findMany(),
-    prisma.attendance.findMany(),
-    prisma.homework.findMany(),
-    prisma.leaveRequest.findMany(),
-    prisma.notice.findMany(),
-    prisma.feeHead.findMany(),
-    prisma.feeStructure.findMany(),
-    prisma.ledgerEntry.findMany(),
-    prisma.receipt.findMany(),
-  ]);
+  // 1. Pull data from all main models sequentially to avoid OOM
+  const users = await prisma.user.findMany({
+    select: {
+      id: true,
+      username: true,
+      email: true,
+      role: true,
+      status: true,
+      name: true,
+      phone: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+  const classes = await prisma.class.findMany();
+  const students = await prisma.student.findMany();
+  const attendances = await prisma.attendance.findMany();
+  const homeworks = await prisma.homework.findMany();
+  const leaveRequests = await prisma.leaveRequest.findMany();
+  const notices = await prisma.notice.findMany();
+  const feeHeads = await prisma.feeHead.findMany();
+  const feeStructures = await prisma.feeStructure.findMany();
+  const ledgerEntries = await prisma.ledgerEntry.findMany();
+  const receipts = await prisma.receipt.findMany();
 
   // 2. Package into a backup format
   const backupObject = {

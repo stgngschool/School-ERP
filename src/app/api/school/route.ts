@@ -19,6 +19,10 @@ export async function POST(request: Request) {
   const authUser = await getAuthUser(request);
   if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  if (authUser.role !== "ADMIN") {
+    return NextResponse.json({ error: "Forbidden. Admin access required." }, { status: 403 });
+  }
+
   try {
     const body = await request.json();
     fs.writeFileSync(configPath, JSON.stringify(body, null, 2), "utf-8");

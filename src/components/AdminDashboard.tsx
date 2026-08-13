@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { formatP, toPaisa, toRupees } from "@/lib/currency";
 import StudentProfileModal from "@/components/StudentProfileModal";
 import MarksFeedingConsole from "@/components/MarksFeedingConsole";
 import PrintMarksheets from "@/components/PrintMarksheets";
@@ -61,6 +62,12 @@ import {
   Ghost,
   Gift,
 } from "lucide-react";
+
+const getLocalDateString = () => {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().split("T")[0];
+};
 
 // Groups multiple months or siblings into a single row if the list grows too long (> 4 items)
 const getGroupedReceiptItems = (items: any[]) => {
@@ -243,7 +250,7 @@ export default function AdminDashboard() {
   const [stdReligion, setStdReligion] = useState("Hinduism");
   const [stdMotherTongue, setStdMotherTongue] = useState("Hindi");
   const [stdNationality, setStdNationality] = useState("Indian");
-  const [stdAdmissionDate, setStdAdmissionDate] = useState(new Date().toISOString().split("T")[0]);
+  const [stdAdmissionDate, setStdAdmissionDate] = useState(getLocalDateString());
   const [stdBoardRegNo, setStdBoardRegNo] = useState("");
   const [stdPrevSchoolName, setStdPrevSchoolName] = useState("");
   const [stdPrevClassPassed, setStdPrevClassPassed] = useState("");
@@ -1031,7 +1038,7 @@ export default function AdminDashboard() {
     setStdReligion("Hinduism");
     setStdMotherTongue("Hindi");
     setStdNationality("Indian");
-    setStdAdmissionDate(new Date().toISOString().split("T")[0]);
+    setStdAdmissionDate(getLocalDateString());
     setStdBoardRegNo("");
     setStdPrevSchoolName("");
     setStdPrevClassPassed("");
@@ -1215,7 +1222,7 @@ export default function AdminDashboard() {
             discount: i.discountAmount
           };
         }),
-        createdAt: new Date().toISOString().split("T")[0],
+        createdAt: getLocalDateString(),
       };
 
       setActiveReceipt(matchedReceipt);
@@ -1260,7 +1267,7 @@ export default function AdminDashboard() {
     let total = 0;
     
     Object.keys(classFeeInputs).forEach(headName => {
-      const val = parseFloat(classFeeInputs[headName]) || 0;
+      const val = toPaisa(parseFloat(classFeeInputs[headName]) || 0);
       if (val > 0) {
         itemsList.push({ headName, amount: val });
         total += val;
@@ -1282,7 +1289,7 @@ export default function AdminDashboard() {
     let total = 0;
 
     Object.keys(inputs).forEach(headName => {
-      const val = parseFloat(inputs[headName]) || 0;
+      const val = toPaisa(parseFloat(inputs[headName]) || 0);
       if (val > 0) {
         itemsList.push({ headName, amount: val });
         total += val;
@@ -1531,13 +1538,13 @@ export default function AdminDashboard() {
   };
 
   // 1. Daily Income
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = getLocalDateString();
   const dailyIncome = receipts
     .filter((r) => r.createdAt === todayStr)
     .reduce((sum, r) => sum + r.amount, 0);
 
   // 2. Monthly Income
-  const currentMonthPrefix = new Date().toISOString().slice(0, 7);
+  const currentMonthPrefix = getLocalDateString().slice(0, 7);
   const monthlyIncome = receipts
     .filter((r) => r.createdAt.startsWith(currentMonthPrefix))
     .reduce((sum, r) => sum + r.amount, 0);
@@ -1647,7 +1654,7 @@ export default function AdminDashboard() {
   const monthlyLabels = last7Months.map(month => new Date(month + "-02").toLocaleDateString("en-US", { month: "short" }));
 
   const handleSendWhatsApp = (studentName: string, parentName: string, amount: number, phone?: string) => {
-    const message = `Dear ${parentName}, this is a gentle reminder that your ward ${studentName} has pending fee dues of Rs. ${amount.toLocaleString("en-IN")}. Please clear the dues at the earliest. Thank you, School Admin.`;
+    const message = `Dear ${parentName}, this is a gentle reminder that your ward ${studentName} has pending fee dues of ${formatP(amount)}. Please clear the dues at the earliest. Thank you, School Admin.`;
     const encodedMessage = encodeURIComponent(message);
     
     if (phone && phone.trim() !== "") {
@@ -1925,14 +1932,14 @@ export default function AdminDashboard() {
                     <div className="flex justify-between items-start">
                       <div>
                         <p className="text-sm font-medium text-slate-500">Total Revenue</p>
-                        <h3 className="text-2xl font-bold text-slate-800 mt-1">₹{totalEarnings.toLocaleString("en-IN")}</h3>
+                        <h3 className="text-2xl font-bold text-slate-800 mt-1">{formatP(totalEarnings)}</h3>
                       </div>
                       <div className="p-2 bg-indigo-50 rounded-lg">
                         <TrendingUp className="w-5 h-5 text-indigo-600" />
                       </div>
                     </div>
                     <div className="mt-4 pt-4 border-t border-slate-100 flex items-center text-xs">
-                      <span className="text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded">+₹{monthlyTotal.toLocaleString("en-IN")}</span>
+                      <span className="text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded">+{formatP(monthlyTotal)}</span>
                       <span className="text-slate-500 ml-2">this month</span>
                     </div>
                   </div>
@@ -1960,7 +1967,7 @@ export default function AdminDashboard() {
                     <div className="flex justify-between items-start">
                       <div>
                         <p className="text-sm font-medium text-slate-500">Pending Dues</p>
-                        <h3 className="text-2xl font-bold text-rose-600 mt-1">₹{totalDues.toLocaleString("en-IN")}</h3>
+                        <h3 className="text-2xl font-bold text-rose-600 mt-1">{formatP(totalDues)}</h3>
                       </div>
                       <div className="p-2 bg-rose-50 rounded-lg">
                         <AlertTriangle className="w-5 h-5 text-rose-600" />
@@ -2011,7 +2018,7 @@ export default function AdminDashboard() {
                         return (
                           <div key={m} className="flex-1 flex flex-col items-center gap-2 group relative z-10 h-full justify-end">
                             <div className="absolute bottom-full mb-2 opacity-0 group-hover:opacity-100 bg-slate-800 text-white text-[10px] font-medium py-1 px-2 rounded shadow-sm whitespace-nowrap pointer-events-none transition-opacity">
-                              ₹{val.toLocaleString("en-IN")}
+                              {formatP(val)}
                             </div>
                             <div className="w-full max-w-[32px] bg-indigo-50 rounded-t-md h-full relative flex items-end overflow-hidden">
                               <div 
@@ -2062,20 +2069,20 @@ export default function AdminDashboard() {
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
                       <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/80">
                         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Cash</p>
-                        <p className="text-xl font-bold text-slate-800">₹{todayCash.toLocaleString("en-IN")}</p>
+                        <p className="text-xl font-bold text-slate-800">{formatP(todayCash)}</p>
                       </div>
                       <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/80">
                         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">UPI</p>
-                        <p className="text-xl font-bold text-slate-800">₹{todayUpi.toLocaleString("en-IN")}</p>
+                        <p className="text-xl font-bold text-slate-800">{formatP(todayUpi)}</p>
                       </div>
                       <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/80">
                         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Bank</p>
-                        <p className="text-xl font-bold text-slate-800">₹{todayBank.toLocaleString("en-IN")}</p>
+                        <p className="text-xl font-bold text-slate-800">{formatP(todayBank)}</p>
                       </div>
                     </div>
                     <div className="flex items-center justify-between p-4 rounded-xl bg-indigo-50 border border-indigo-100">
                       <span className="text-sm font-semibold text-indigo-900">Total Today</span>
-                      <span className="text-2xl font-bold text-indigo-700">₹{todayTotal.toLocaleString("en-IN")}</span>
+                      <span className="text-2xl font-bold text-indigo-700">{formatP(todayTotal)}</span>
                     </div>
                   </div>
 
@@ -2097,7 +2104,7 @@ export default function AdminDashboard() {
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="text-sm font-bold text-slate-800">₹{col.total.toLocaleString("en-IN")}</p>
+                            <p className="text-sm font-bold text-slate-800">{formatP(col.total)}</p>
                             <p className="text-xs text-slate-500">{col.count} receipts</p>
                           </div>
                         </div>
@@ -2325,7 +2332,7 @@ export default function AdminDashboard() {
                     <div className="text-left md:text-right space-y-1 shrink-0 bg-slate-800/40 p-3.5 rounded-xl border border-slate-700/30">
                       <span className="text-[8px] font-black uppercase text-slate-400 block tracking-wider">Total Outstanding Dues</span>
                       <h3 className="text-xl font-black text-rose-400 tracking-tight">
-                        Rs. {selectedStudentDues.reduce((sum, item) => sum + item.amount, 0).toLocaleString("en-IN")}
+                        {formatP(selectedStudentDues.reduce((sum, item) => sum + item.amount, 0))}
                       </h3>
                       <p className="text-[9px] text-slate-300 font-bold">{selectedStudentDues.length} Unpaid Invoices</p>
                     </div>
@@ -2365,7 +2372,7 @@ export default function AdminDashboard() {
                                   <div>
                                     <span className="block text-xs font-black tracking-tight leading-tight">{child.name}</span>
                                     <span className={`block text-[8px] mt-0.5 font-bold ${isActive ? "text-indigo-200" : "text-slate-400"}`}>
-                                      Class {child.class}-{child.section} • {childDues.length} dues (₹{childDueSum.toLocaleString("en-IN")})
+                                      Class {child.class}-{child.section} • {childDues.length} dues ({formatP(childDueSum)})
                                     </span>
                                   </div>
                                   {childSelectedCount > 0 && (
@@ -2533,7 +2540,7 @@ export default function AdminDashboard() {
                                             </span>
                                           </div>
                                         </label>
-                                        <span className="font-black text-slate-800">₹{due.amount.toLocaleString("en-IN")}</span>
+                                        <span className="font-black text-slate-800">{formatP(due.amount)}</span>
                                       </div>
                                       
                                       {isChecked && (
@@ -2588,7 +2595,7 @@ export default function AdminDashboard() {
                                           <div className="flex flex-col justify-end text-right">
                                             <span className="block text-slate-400 mb-1">Arrears Remaining</span>
                                             <span className="text-xs font-black text-rose-600 py-2">
-                                              ₹{(due.amount - (discountsState[due.id] ?? 0) - (payingState[due.id] ?? due.amount)).toLocaleString("en-IN")}
+                                              {formatP(due.amount - (discountsState[due.id] ?? 0) - (payingState[due.id] ?? due.amount))}
                                             </span>
                                           </div>
                                         </div>
@@ -2629,7 +2636,7 @@ export default function AdminDashboard() {
                                   <p className="text-[8px] text-indigo-600 font-bold max-w-sm truncate mt-0.5">{rec.details}</p>
                                 </div>
                                 <div className="text-right flex flex-col items-end gap-1 shrink-0">
-                                  <p className="font-extrabold text-slate-800">Rs. {rec.amount.toLocaleString("en-IN")}</p>
+                                  <p className="font-extrabold text-slate-800">{formatP(rec.amount)}</p>
                                   <span className="text-[8px] font-black uppercase bg-green-50 text-green-700 border border-green-100 px-1.5 py-0.5 rounded">
                                     {rec.method} Verified
                                   </span>
@@ -2694,13 +2701,13 @@ export default function AdminDashboard() {
                             <div className="flex justify-between items-center py-3 text-xs font-semibold text-slate-500">
                               <span>Total Discount:</span>
                               <span className="font-extrabold text-green-600">
-                                Rs. {selectedDueIds.reduce((sum, id) => sum + (discountsState[id] ?? 0), 0).toLocaleString("en-IN")}
+                                {formatP(selectedDueIds.reduce((sum, id) => sum + (discountsState[id] ?? 0), 0))}
                               </span>
                             </div>
                             <div className="flex justify-between items-center py-3 text-xs font-bold text-slate-800">
                               <span>Net Payable Amount:</span>
                               <span className="text-sm font-black text-indigo-600">
-                                Rs. {selectedDueIds.reduce((sum, id) => sum + (payingState[id] ?? 0), 0).toLocaleString("en-IN")}
+                                {formatP(selectedDueIds.reduce((sum, id) => sum + (payingState[id] ?? 0), 0))}
                               </span>
                             </div>
                           </div>
@@ -2751,7 +2758,7 @@ export default function AdminDashboard() {
                                   <div className="absolute inset-x-2 top-2 h-0.5 bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.8)] animate-bounce" />
                                 </div>
                                 <p className="text-xs font-black text-indigo-600">
-                                  ₹{netPayable.toLocaleString("en-IN")}
+                                  {formatP(netPayable)}
                                 </p>
                                 <p className="text-[8px] text-slate-400 font-semibold leading-tight max-w-[185px] mx-auto">
                                   Scan using GPay, PhonePe, Paytm, or any UPI app. Amount is pre-filled.
@@ -2812,10 +2819,10 @@ export default function AdminDashboard() {
                                   Change Due
                                 </span>
                                 <span className="text-sm font-extrabold text-indigo-600 block mt-0.5">
-                                  Rs. {(() => {
+                                  {(() => {
                                     const netPayable = selectedDueIds.reduce((sum, id) => sum + (payingState[id] ?? 0), 0);
-                                    const received = Number(amountReceived) || 0;
-                                    return received > netPayable ? (received - netPayable).toLocaleString("en-IN") : 0;
+                                    const receivedPaisa = toPaisa(Number(amountReceived) || 0);
+                                    return receivedPaisa > netPayable ? formatP(receivedPaisa - netPayable) : formatP(0);
                                   })()}
                                 </span>
                               </div>
@@ -2833,7 +2840,7 @@ export default function AdminDashboard() {
                                 <span>Generating Official Receipt...</span>
                               </>
                             ) : (
-                              <span>Generate Receipt & Record (Rs. {selectedDueIds.reduce((sum, id) => sum + (payingState[id] ?? 0), 0).toLocaleString("en-IN")})</span>
+                              <span>Generate Receipt & Record ({formatP(selectedDueIds.reduce((sum, id) => sum + (payingState[id] ?? 0), 0))})</span>
                             )}
                           </button>
                         </form>
@@ -3242,8 +3249,12 @@ export default function AdminDashboard() {
                                     targetFeeHeadName: ledgerGenFeeHead,
                                   }),
                                 });
+                                if (!res.ok) {
+                                  const text = await res.text();
+                                  try { const json = JSON.parse(text); throw new Error(json.error || "Failed"); }
+                                  catch { throw new Error(`HTTP Error: ${res.status}`); }
+                                }
                                 const json = await res.json();
-                                if (!res.ok) throw new Error(json.error || "Generation failed.");
                                 setLedgerGenResult(`✓ Generated: ${json.generated || 0} | Skipped: ${json.skipped || 0}`);
                                 await refreshBilling();
                               } catch (err: any) {
@@ -3400,7 +3411,7 @@ export default function AdminDashboard() {
                                     <div className="font-bold text-slate-800 text-xs">Class {cls.name} &mdash; {cls.section}</div>
                                     {annualTotal > 0 && (
                                       <div className="text-[9px] text-emerald-600 font-bold mt-0.5">
-                                        &asymp; Rs. {annualTotal.toLocaleString("en-IN")}/year
+                                        &asymp; {formatP(annualTotal)}/year
                                       </div>
                                     )}
                                   </td>
@@ -5463,7 +5474,7 @@ export default function AdminDashboard() {
                                           {struct.frequency}
                                         </span>
                                       </div>
-                                      <span className="font-extrabold text-indigo-600">Rs. {struct.total.toLocaleString("en-IN")}</span>
+                                      <span className="font-extrabold text-indigo-600">{formatP(struct.total)}</span>
                                     </div>
                                   ))}
                               </div>
@@ -6630,7 +6641,7 @@ export default function AdminDashboard() {
                         r.receiptNo?.toLowerCase().includes(ledgerSearch.toLowerCase()) ||
                         r.studentName?.toLowerCase().includes(ledgerSearch.toLowerCase()) ||
                         r.details?.toLowerCase().includes(ledgerSearch.toLowerCase());
-                      const matchesDate = !ledgerDate || r.createdAt === ledgerDate;
+                      const matchesDate = !ledgerDate || r.createdAt.startsWith(ledgerDate);
                       return matchesSearch && matchesDate;
                     });
 
@@ -6647,15 +6658,15 @@ export default function AdminDashboard() {
                         </div>
                         <div className="p-3 bg-white border border-slate-200/70 rounded-2xl shadow-[0_2px_4px_rgba(0,0,0,0.015)]">
                           <span className="text-[8px] font-black text-indigo-500 uppercase tracking-widest block">Total Collection</span>
-                          <span className="text-sm font-black text-slate-900 mt-1 block">₹{totalAmt.toLocaleString("en-IN")}</span>
+                          <span className="text-sm font-black text-slate-900 mt-1 block">{formatP(totalAmt)}</span>
                         </div>
                         <div className="p-3 bg-white border border-slate-200/70 rounded-2xl shadow-[0_2px_4px_rgba(0,0,0,0.015)]">
                           <span className="text-[8px] font-black text-emerald-500 uppercase tracking-widest block">Cash Collection</span>
-                          <span className="text-sm font-black text-emerald-700 mt-1 block">₹{cashAmt.toLocaleString("en-IN")}</span>
+                          <span className="text-sm font-black text-emerald-700 mt-1 block">{formatP(cashAmt)}</span>
                         </div>
                         <div className="p-3 bg-white border border-slate-200/70 rounded-2xl shadow-[0_2px_4px_rgba(0,0,0,0.015)]">
                           <span className="text-[8px] font-black text-blue-500 uppercase tracking-widest block">UPI & Digital</span>
-                          <span className="text-sm font-black text-blue-700 mt-1 block">₹{(upiAmt + bankAmt).toLocaleString("en-IN")}</span>
+                          <span className="text-sm font-black text-blue-700 mt-1 block">{formatP(upiAmt + bankAmt)}</span>
                         </div>
                       </div>
                     );
@@ -6684,7 +6695,7 @@ export default function AdminDashboard() {
                                 r.receiptNo?.toLowerCase().includes(ledgerSearch.toLowerCase()) ||
                                 r.studentName?.toLowerCase().includes(ledgerSearch.toLowerCase()) ||
                                 r.details?.toLowerCase().includes(ledgerSearch.toLowerCase());
-                              const matchesDate = !ledgerDate || r.createdAt === ledgerDate;
+                              const matchesDate = !ledgerDate || r.createdAt.startsWith(ledgerDate);
                               return matchesSearch && matchesDate;
                             });
 
@@ -6719,7 +6730,7 @@ export default function AdminDashboard() {
                                   </span>
                                 </td>
                                 <td className="py-3.5 px-4 text-right font-black text-slate-955">
-                                  ₹{rec.amount.toLocaleString("en-IN")}
+                                  {formatP(rec.amount)}
                                 </td>
                                 <td className="py-3.5 px-4 text-center">
                                   <button
@@ -6764,7 +6775,7 @@ export default function AdminDashboard() {
                           !ledgerSearch.trim() ||
                           student?.name.toLowerCase().includes(ledgerSearch.toLowerCase()) ||
                           log.description.toLowerCase().includes(ledgerSearch.toLowerCase());
-                        const matchesDate = !ledgerDate || log.createdAt === ledgerDate;
+                        const matchesDate = !ledgerDate || log.createdAt.startsWith(ledgerDate);
                         return matchesSearch && matchesDate;
                       });
 
@@ -6793,7 +6804,7 @@ export default function AdminDashboard() {
                             </div>
                             <div className="text-right">
                               <span className={`text-[10px] font-black ${isCharge ? "text-rose-600" : "text-emerald-600"}`}>
-                                {isCharge ? "+" : "-"} ₹{log.amount.toLocaleString("en-IN")}
+                                {isCharge ? "+" : "-"} {formatP(log.amount)}
                               </span>
                               <span
                                 className={`block text-[7px] font-black uppercase tracking-wider mt-1 px-1.5 py-0.5 rounded border self-end ${
@@ -6939,7 +6950,7 @@ export default function AdminDashboard() {
                             <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" /> Back to Dues Report
                           </button>
                           <span className="text-[10px] font-black uppercase bg-rose-50 text-rose-700 border border-rose-100 px-3 py-1 rounded-full">
-                            Outstanding Dues: ₹{totalDue.toLocaleString("en-IN")}
+                            Outstanding Dues: {formatP(totalDue)}
                           </span>
                         </div>
 
@@ -6997,7 +7008,7 @@ export default function AdminDashboard() {
                             </div>
                             <div>
                               <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest block">Total Fees Allocated</span>
-                              <span className="text-base font-black text-slate-800 mt-0.5 block">₹{totalFee.toLocaleString("en-IN")}</span>
+                              <span className="text-base font-black text-slate-800 mt-0.5 block">{formatP(totalFee)}</span>
                             </div>
                           </div>
                           <div className="bg-white border border-slate-200/70 rounded-2xl p-4 shadow-sm flex items-center gap-3">
@@ -7006,7 +7017,7 @@ export default function AdminDashboard() {
                             </div>
                             <div>
                               <span className="text-[9px] font-black uppercase text-emerald-500 tracking-widest block">Total Fees Paid</span>
-                              <span className="text-base font-black text-emerald-600 mt-0.5 block">₹{totalPaid.toLocaleString("en-IN")}</span>
+                              <span className="text-base font-black text-emerald-600 mt-0.5 block">{formatP(totalPaid)}</span>
                             </div>
                           </div>
                           <div className="bg-white border border-slate-200/70 rounded-2xl p-4 shadow-sm flex items-center gap-3">
@@ -7015,7 +7026,7 @@ export default function AdminDashboard() {
                             </div>
                             <div>
                               <span className="text-[9px] font-black uppercase text-rose-500 tracking-widest block">Total Outstanding Dues</span>
-                              <span className="text-base font-black text-rose-600 mt-0.5 block">₹{totalDue.toLocaleString("en-IN")}</span>
+                              <span className="text-base font-black text-rose-600 mt-0.5 block">{formatP(totalDue)}</span>
                             </div>
                           </div>
                         </div>
@@ -7044,13 +7055,13 @@ export default function AdminDashboard() {
                                   <tr key={d.id} className={`${d.status === "UNPAID" ? "bg-rose-50/10" : ""} hover:bg-slate-50/40 transition-colors`}>
                                     <td className="py-3 px-5 text-slate-400 font-bold whitespace-nowrap">{d.dueDate || "—"}</td>
                                     <td className="py-3 px-5 font-bold text-slate-800">{d.name}</td>
-                                    <td className="py-3 px-5 text-right text-slate-700">₹{d.amount.toLocaleString("en-IN")}</td>
+                                    <td className="py-3 px-5 text-right text-slate-700">{formatP(d.amount)}</td>
                                     <td className="py-3 px-5 text-right text-amber-500 font-bold">₹0.00</td>
                                     <td className="py-3 px-5 text-right text-emerald-600 font-black">
-                                      {d.status === "PAID" ? `₹${d.amount.toLocaleString("en-IN")}` : "₹0.00"}
+                                      {d.status === "PAID" ? `${formatP(d.amount)}` : "₹0.00"}
                                     </td>
                                     <td className="py-3 px-5 text-right text-rose-600 font-black">
-                                      {d.status === "UNPAID" ? `₹${d.amount.toLocaleString("en-IN")}` : "₹0.00"}
+                                      {d.status === "UNPAID" ? `${formatP(d.amount)}` : "₹0.00"}
                                     </td>
                                     <td className="py-3 px-5 text-center">
                                       <span className={`inline-block text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${
@@ -7065,10 +7076,10 @@ export default function AdminDashboard() {
                                 ))}
                                 <tr className="bg-slate-50 border-t-2 border-slate-200 text-xs font-black">
                                   <td colSpan={2} className="py-3.5 px-5 text-right text-slate-500 uppercase tracking-wider">Grand Total</td>
-                                  <td className="py-3.5 px-5 text-right text-slate-800">₹{totalFee.toLocaleString("en-IN")}</td>
+                                  <td className="py-3.5 px-5 text-right text-slate-800">{formatP(totalFee)}</td>
                                   <td className="py-3.5 px-5 text-right text-amber-500">₹0.00</td>
-                                  <td className="py-3.5 px-5 text-right text-emerald-600">₹{totalPaid.toLocaleString("en-IN")}</td>
-                                  <td className="py-3.5 px-5 text-right text-rose-600">₹{totalDue.toLocaleString("en-IN")}</td>
+                                  <td className="py-3.5 px-5 text-right text-emerald-600">{formatP(totalPaid)}</td>
+                                  <td className="py-3.5 px-5 text-right text-rose-600">{formatP(totalDue)}</td>
                                   <td className="py-3.5 px-5"></td>
                                 </tr>
                               </tbody>
@@ -7115,7 +7126,7 @@ export default function AdminDashboard() {
                         { label: "Total Students", value: students.length, color: "text-slate-800" },
                         { label: "With Outstanding Due", value: filteredDefaulters.length, color: "text-rose-600" },
                         { label: "Fully Cleared", value: students.length - filteredDefaulters.length, color: "text-emerald-600" },
-                        { label: "Total Outstanding", value: `₹${totalOutstanding.toLocaleString("en-IN")}`, color: "text-rose-700" },
+                        { label: "Total Outstanding", value: `${formatP(totalOutstanding)}`, color: "text-rose-700" },
                       ].map((stat) => (
                         <div key={stat.label} className="bg-white border border-slate-200/70 rounded-xl px-4 py-3 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
                           <span className="text-[8px] font-black uppercase text-slate-400 tracking-widest block">{stat.label}</span>
@@ -7202,15 +7213,15 @@ export default function AdminDashboard() {
                               <div className="grid grid-cols-3 border border-slate-100 rounded-xl overflow-hidden">
                                 <div className="px-2 py-2 text-center border-r border-slate-100">
                                   <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider block">Total Fee</span>
-                                  <span className="text-[11px] font-black text-slate-800 mt-0.5 block whitespace-nowrap">₹{totalFee.toLocaleString("en-IN")}</span>
+                                  <span className="text-[11px] font-black text-slate-800 mt-0.5 block whitespace-nowrap">{formatP(totalFee)}</span>
                                 </div>
                                 <div className="px-2 py-2 text-center border-r border-slate-100">
                                   <span className="text-[8px] font-black uppercase text-emerald-500 tracking-wider block">Paid</span>
-                                  <span className="text-[11px] font-black text-emerald-600 mt-0.5 block whitespace-nowrap">₹{totalPaid.toLocaleString("en-IN")}</span>
+                                  <span className="text-[11px] font-black text-emerald-600 mt-0.5 block whitespace-nowrap">{formatP(totalPaid)}</span>
                                 </div>
                                 <div className="px-2 py-2 text-center">
                                   <span className="text-[8px] font-black uppercase text-rose-500 tracking-wider block">Due</span>
-                                  <span className="text-[11px] font-black text-rose-600 mt-0.5 block whitespace-nowrap">₹{totalDue.toLocaleString("en-IN")}</span>
+                                  <span className="text-[11px] font-black text-rose-600 mt-0.5 block whitespace-nowrap">{formatP(totalDue)}</span>
                                 </div>
                               </div>
                             </div>
@@ -7469,7 +7480,7 @@ export default function AdminDashboard() {
                                   </td>
                                 )}
                                 <td className={`text-right text-slate-900 font-extrabold ${receiptPageSize === "A5" ? "py-1.5 px-3" : "py-3 px-4"}`}>
-                                  ₹{item.amount.toLocaleString("en-IN")}
+                                  {formatP(item.amount)}
                                 </td>
                               </tr>
                             ))
@@ -7478,7 +7489,7 @@ export default function AdminDashboard() {
                             <tr>
                               <td className={`max-w-[200px] truncate ${receiptPageSize === "A5" ? "py-1.5 px-3" : "py-3 px-4"}`}>{activeReceipt.details}</td>
                               <td className={`text-right text-slate-900 font-extrabold ${receiptPageSize === "A5" ? "py-1.5 px-3" : "py-3 px-4"}`}>
-                                  ₹{activeReceipt.amount.toLocaleString("en-IN")}
+                                  {formatP(activeReceipt.amount)}
                               </td>
                             </tr>
                           )}
@@ -7496,25 +7507,25 @@ export default function AdminDashboard() {
                 }`}>
                   <div className="flex justify-between items-center">
                     <span>Subtotal:</span>
-                    <span className="text-slate-800">₹{activeReceipt.amount.toLocaleString("en-IN")}</span>
+                    <span className="text-slate-800">{formatP(activeReceipt.amount)}</span>
                   </div>
                   {activeReceipt.discount > 0 && (
                     <div className="flex justify-between items-center text-indigo-600">
                       <span>Discount:</span>
-                      <span className="font-extrabold">₹{activeReceipt.discount.toLocaleString("en-IN")}</span>
+                      <span className="font-extrabold">{formatP(activeReceipt.discount)}</span>
                     </div>
                   )}
                   {activeReceipt.arrears > 0 && (
                     <div className="flex justify-between items-center text-rose-600">
                       <span>Remaining Arrears:</span>
-                      <span className="font-extrabold">₹{activeReceipt.arrears.toLocaleString("en-IN")}</span>
+                      <span className="font-extrabold">{formatP(activeReceipt.arrears)}</span>
                     </div>
                   )}
                   <div className={`border-t border-slate-200 pt-1.5 flex justify-between items-center text-emerald-700 font-black ${
                     receiptPageSize === "A5" ? "text-xs" : "text-sm"
                   }`}>
                     <span>Total Paid:</span>
-                    <span>₹{activeReceipt.amount.toLocaleString("en-IN")}</span>
+                    <span>{formatP(activeReceipt.amount)}</span>
                   </div>
                 </div>
               </div>

@@ -4,10 +4,41 @@ import db from "@/lib/db";
 import { signToken } from "@/lib/auth";
 import { Role } from "@prisma/client";
 
+// Basic in-memory rate limiter for login
+const rateLimitMap = new Map<string, { count: number; expiresAt: number }>();
+const MAX_ATTEMPTS = 5;
+const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const record = rateLimitMap.get(ip);
+  if (!record) {
+    rateLimitMap.set(ip, { count: 1, expiresAt: now + WINDOW_MS });
+    return true;
+  }
+  if (now > record.expiresAt) {
+    rateLimitMap.set(ip, { count: 1, expiresAt: now + WINDOW_MS });
+    return true;
+  }
+  if (record.count >= MAX_ATTEMPTS) {
+    return false;
+  }
+  record.count++;
+  return true;
+}
+
 export async function POST(request: Request) {
   const reqId = `login_${Math.random().toString(36).substring(2, 9)}`;
   const startTime = performance.now();
   console.log(`[DIAGNOSTIC][API][START] POST /api/auth/login [${reqId}] | timestamp: ${new Date().toISOString()}`);
+
+  const ip = request.headers.get("x-forwarded-for") || "unknown";
+  if (!checkRateLimit(ip)) {
+    return NextResponse.json(
+      { error: "Too many login attempts. Please try again after 15 minutes." },
+      { status: 429 }
+    );
+  }
 
   try {
     const { username, password, portal } = await request.json();

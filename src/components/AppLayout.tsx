@@ -121,6 +121,14 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const [sessionYear, setSessionYear] = useState("2026-27");
   const [sessions, setSessions] = useState<{ id: string; name: string; isCurrent: boolean }[]>([]);
   const [showAppsModal, setShowAppsModal] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -413,7 +421,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 <div className="absolute top-11 left-0 right-0 bg-white border border-slate-200/90 rounded-2xl shadow-xl max-h-60 overflow-y-auto z-50 p-2 space-y-1">
                   {students && students.filter(s =>
                     s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                    s.admissionNo.toLowerCase().includes(searchQuery.toLowerCase())
+                    s.admissionNo?.toLowerCase().includes(searchQuery.toLowerCase())
                   ).slice(0, 8).map((student) => (
                     <button key={student.id} onClick={() => { setActiveTab("students"); setSearchQuery(""); }}
                       className="w-full text-left flex justify-between items-center p-2 rounded-xl hover:bg-indigo-50/60 transition-all">
@@ -426,7 +434,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                   ))}
                   {students && students.filter(s =>
                     s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                    s.admissionNo.toLowerCase().includes(searchQuery.toLowerCase())
+                    s.admissionNo?.toLowerCase().includes(searchQuery.toLowerCase())
                   ).length === 0 && (
                     <p className="text-center py-4 text-xs font-semibold text-slate-400">No students found.</p>
                   )}
@@ -517,7 +525,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
         {/* Main Content */}
         <main className="flex-1 px-3 pt-3 pb-28 sm:p-4 md:p-5 lg:p-6 xl:p-8 md:pb-8 overflow-y-auto overflow-x-hidden min-w-0 max-w-full touch-scroll-y  bg-white md:bg-transparent">
           {/* Desktop-Only Guard — shown only on mobile for restricted tabs */}
-          {mounted && typeof window !== 'undefined' && window.innerWidth < 768 && desktopOnlyTabs.includes(activeTab) ? (
+          {mounted && typeof window !== 'undefined' && isMobile && desktopOnlyTabs.includes(activeTab) ? (
             <div className="flex flex-col items-center justify-center h-full min-h-[60vh] text-center px-6 py-12">
               <div className="w-16 h-16 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mb-5">
                 <svg className="h-8 w-8 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>

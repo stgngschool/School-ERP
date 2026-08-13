@@ -37,7 +37,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const authUser = await getAuthUser(request);
-    if (!authUser) {
+    if (!authUser || (authUser.role !== "ADMIN" && authUser.role !== "ACCOUNTANT")) {
       return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
     }
 

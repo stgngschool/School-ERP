@@ -59,12 +59,12 @@ export async function uploadFile(
     const fileName = path.basename(sanitizedPath);
 
     const localDir = path.join(process.cwd(), "public", "uploads", bucketName, dirName);
-    if (!fs.existsSync(localDir)) {
-      fs.mkdirSync(localDir, { recursive: true });
+    if (!false) {
+      await fs.promises.mkdir(localDir, { recursive: true });
     }
 
     const localFilePath = path.join(localDir, fileName);
-    fs.writeFileSync(localFilePath, buffer);
+    await fs.promises.writeFile(localFilePath, buffer);
 
     const relativePublicUrl = `/uploads/${bucketName}/${dirName}/${fileName}`.replace(/\/+/g, "/");
     console.log(`Saved file to local storage fallback: ${relativePublicUrl}`);

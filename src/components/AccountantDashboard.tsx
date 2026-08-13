@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { formatP, toPaisa, toRupees } from "@/lib/currency";
 import {
   CreditCard,
   AlertTriangle,
@@ -459,7 +460,7 @@ export default function AccountantDashboard() {
     let total = 0;
 
     Object.keys(structFeeInputs).forEach((headName) => {
-      const val = parseFloat(structFeeInputs[headName]) || 0;
+      const val = toPaisa(parseFloat(structFeeInputs[headName]) || 0);
       if (val > 0) {
         itemsList.push({ headName, amount: val });
         total += val;
@@ -511,7 +512,7 @@ export default function AccountantDashboard() {
         <div className="bg-white border border-slate-200/80 p-3 sm:p-5 rounded-xl shadow-sm">
           <span className="text-[9px] font-black uppercase text-slate-400 block mb-1">My Daily Collection</span>
           <h3 className="text-lg font-black text-green-600 tracking-tight">
-            Rs. {myTodayCollections.toLocaleString("en-IN")}
+            {formatP(myTodayCollections)}
           </h3>
           <p className="text-[9px] text-slate-400 font-semibold mt-0.5">Today ({new Date().toLocaleDateString("en-IN")})</p>
         </div>
@@ -525,9 +526,9 @@ export default function AccountantDashboard() {
         <div className="bg-white border border-slate-200/80 p-3 sm:p-5 rounded-xl shadow-sm">
           <span className="text-[9px] font-black uppercase text-slate-400 block mb-1">My Counter Balance</span>
           <h3 className="text-lg font-black text-slate-700 tracking-tight">
-            Rs. {myTotalCollections.toLocaleString("en-IN")}
+            {formatP(myTotalCollections)}
           </h3>
-          <p className="text-[9px] text-slate-400 font-semibold mt-0.5">Cash: Rs. {myCashTally.toLocaleString("en-IN")} | UPI: Rs. {myUpiTally.toLocaleString("en-IN")}</p>
+          <p className="text-[9px] text-slate-400 font-semibold mt-0.5">Cash: {formatP(myCashTally)} | UPI: {formatP(myUpiTally)}</p>
         </div>
       </div>
 
@@ -801,7 +802,7 @@ export default function AccountantDashboard() {
                   <div className="text-left lg:text-right space-y-1 shrink-0 bg-slate-800/40 p-3.5 rounded-xl border border-slate-700/30">
                     <span className="text-[8px] font-black uppercase text-slate-400 block tracking-wider">Total Outstanding Dues</span>
                     <h3 className="text-xl font-black text-rose-400 tracking-tight">
-                      Rs. {selectedStudentDues.reduce((sum, item) => sum + item.amount, 0).toLocaleString("en-IN")}
+                      {formatP(selectedStudentDues.reduce((sum, item) => sum + item.amount, 0))}
                     </h3>
                     <p className="text-[9px] text-slate-300 font-bold">{selectedStudentDues.length} Unpaid Invoices</p>
                   </div>
@@ -841,7 +842,7 @@ export default function AccountantDashboard() {
                                 <div>
                                   <span className="block text-xs font-black tracking-tight leading-tight">{child.name}</span>
                                   <span className={`block text-[8px] mt-0.5 font-bold ${isActive ? "text-indigo-200" : "text-slate-400"}`}>
-                                    Class {child.class}-{child.section} • {childDues.length} dues (₹{childDueSum.toLocaleString("en-IN")})
+                                    Class {child.class}-{child.section} • {childDues.length} dues ({formatP(childDueSum)})
                                   </span>
                                 </div>
                                 {childSelectedCount > 0 && (
@@ -1004,7 +1005,7 @@ export default function AccountantDashboard() {
                                           </span>
                                         </div>
                                       </label>
-                                      <span className="font-black text-slate-800">₹{due.amount.toLocaleString("en-IN")}</span>
+                                      <span className="font-black text-slate-800">{formatP(due.amount)}</span>
                                     </div>
                                     
                                     {isChecked && (
@@ -1059,7 +1060,7 @@ export default function AccountantDashboard() {
                                         <div className="flex flex-col justify-end text-right">
                                           <span className="block text-slate-400 mb-1">Arrears Remaining</span>
                                           <span className="text-xs font-black text-rose-600 py-2">
-                                            ₹{(due.amount - (discountsState[due.id] ?? 0) - (payingState[due.id] ?? due.amount)).toLocaleString("en-IN")}
+                                            {formatP((due.amount - (discountsState[due.id] ?? 0) - (payingState[due.id] ?? due.amount)))}
                                           </span>
                                         </div>
                                       </div>
@@ -1100,7 +1101,7 @@ export default function AccountantDashboard() {
                                 <p className="text-[8px] text-indigo-600 font-bold max-w-sm truncate mt-0.5">{rec.details}</p>
                               </div>
                               <div className="text-right flex flex-col items-end gap-1 shrink-0">
-                                <p className="font-extrabold text-slate-800">Rs. {rec.amount.toLocaleString("en-IN")}</p>
+                                <p className="font-extrabold text-slate-800">{formatP(rec.amount)}</p>
                                 <span className="text-[8px] font-black uppercase bg-green-50 text-green-700 border border-green-100 px-1.5 py-0.5 rounded">
                                   {rec.method} Verified
                                 </span>
@@ -1165,13 +1166,13 @@ export default function AccountantDashboard() {
                           <div className="flex justify-between items-center py-3 text-xs font-semibold text-slate-500">
                             <span>Total Discount:</span>
                             <span className="font-extrabold text-green-600">
-                              Rs. {selectedDueIds.reduce((sum, id) => sum + (discountsState[id] ?? 0), 0).toLocaleString("en-IN")}
+                              {formatP(selectedDueIds.reduce((sum, id) => sum + (discountsState[id] ?? 0), 0))}
                             </span>
                           </div>
                           <div className="flex justify-between items-center py-3 text-xs font-bold text-slate-800">
                             <span>Net Payable Amount:</span>
                             <span className="text-sm font-black text-indigo-600">
-                              Rs. {selectedDueIds.reduce((sum, id) => sum + (payingState[id] ?? 0), 0).toLocaleString("en-IN")}
+                              {formatP(selectedDueIds.reduce((sum, id) => sum + (payingState[id] ?? 0), 0))}
                             </span>
                           </div>
                         </div>
@@ -1222,7 +1223,7 @@ export default function AccountantDashboard() {
                                 <div className="absolute inset-x-2 top-2 h-0.5 bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.8)] animate-bounce" />
                               </div>
                               <p className="text-xs font-black text-indigo-600">
-                                ₹{netPayable.toLocaleString("en-IN")}
+                                {formatP(netPayable)}
                               </p>
                               <p className="text-[8px] text-slate-400 font-semibold leading-tight max-w-[185px] mx-auto">
                                 Scan using GPay, PhonePe, Paytm, or any UPI app. Amount is pre-filled.
@@ -1304,7 +1305,7 @@ export default function AccountantDashboard() {
                               <span>Generating Official Receipt...</span>
                             </>
                           ) : (
-                            <span>Generate Receipt & Record (Rs. {selectedDueIds.reduce((sum, id) => sum + (payingState[id] ?? 0), 0).toLocaleString("en-IN")})</span>
+                            <span>Generate Receipt & Record ({formatP(selectedDueIds.reduce((sum, id) => sum + (payingState[id] ?? 0), 0))})</span>
                           )}
                         </button>
                       </form>
@@ -1455,7 +1456,7 @@ export default function AccountantDashboard() {
                           <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" /> Back to Dues Report
                         </button>
                         <span className="text-[10px] font-black uppercase bg-rose-50 text-rose-700 border border-rose-100 px-3 py-1 rounded-full">
-                          Outstanding Dues: ₹{totalDue.toLocaleString("en-IN")}
+                          Outstanding Dues: {formatP(totalDue)}
                         </span>
                       </div>
 
@@ -1513,7 +1514,7 @@ export default function AccountantDashboard() {
                           </div>
                           <div>
                             <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest block">Total Fees Allocated</span>
-                            <span className="text-base font-black text-slate-800 mt-0.5 block">₹{totalFee.toLocaleString("en-IN")}</span>
+                            <span className="text-base font-black text-slate-800 mt-0.5 block">{formatP(totalFee)}</span>
                           </div>
                         </div>
                         <div className="bg-white border border-slate-200/70 rounded-2xl p-4 shadow-sm flex items-center gap-3">
@@ -1522,7 +1523,7 @@ export default function AccountantDashboard() {
                           </div>
                           <div>
                             <span className="text-[9px] font-black uppercase text-emerald-500 tracking-widest block">Total Fees Paid</span>
-                            <span className="text-base font-black text-emerald-600 mt-0.5 block">₹{totalPaid.toLocaleString("en-IN")}</span>
+                            <span className="text-base font-black text-emerald-600 mt-0.5 block">{formatP(totalPaid)}</span>
                           </div>
                         </div>
                         <div className="bg-white border border-slate-200/70 rounded-2xl p-4 shadow-sm flex items-center gap-3">
@@ -1531,7 +1532,7 @@ export default function AccountantDashboard() {
                           </div>
                           <div>
                             <span className="text-[9px] font-black uppercase text-rose-500 tracking-widest block">Total Outstanding Dues</span>
-                            <span className="text-base font-black text-rose-600 mt-0.5 block">₹{totalDue.toLocaleString("en-IN")}</span>
+                            <span className="text-base font-black text-rose-600 mt-0.5 block">{formatP(totalDue)}</span>
                           </div>
                         </div>
                       </div>
@@ -1560,13 +1561,13 @@ export default function AccountantDashboard() {
                                 <tr key={d.id} className={`${d.status === "UNPAID" ? "bg-rose-50/10" : ""} hover:bg-slate-50/40 transition-colors`}>
                                   <td className="py-3 px-5 text-slate-400 font-bold whitespace-nowrap">{d.dueDate || "—"}</td>
                                   <td className="py-3 px-5 font-bold text-slate-800">{d.name}</td>
-                                  <td className="py-3 px-5 text-right text-slate-700">₹{d.amount.toLocaleString("en-IN")}</td>
+                                  <td className="py-3 px-5 text-right text-slate-700">{formatP(d.amount)}</td>
                                   <td className="py-3 px-5 text-right text-amber-500 font-bold">₹0.00</td>
                                   <td className="py-3 px-5 text-right text-emerald-600 font-black">
-                                    {d.status === "PAID" ? `₹${d.amount.toLocaleString("en-IN")}` : "₹0.00"}
+                                    {d.status === "PAID" ? `${formatP(d.amount)}` : "₹0.00"}
                                   </td>
                                   <td className="py-3 px-5 text-right text-rose-600 font-black">
-                                    {d.status === "UNPAID" ? `₹${d.amount.toLocaleString("en-IN")}` : "₹0.00"}
+                                    {d.status === "UNPAID" ? `${formatP(d.amount)}` : "₹0.00"}
                                   </td>
                                   <td className="py-3 px-5 text-center">
                                     <span className={`inline-block text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${
@@ -1581,10 +1582,10 @@ export default function AccountantDashboard() {
                               ))}
                               <tr className="bg-slate-50 border-t-2 border-slate-200 text-xs font-black">
                                 <td colSpan={2} className="py-3.5 px-5 text-right text-slate-500 uppercase tracking-wider">Grand Total</td>
-                                <td className="py-3.5 px-5 text-right text-slate-800">₹{totalFee.toLocaleString("en-IN")}</td>
+                                <td className="py-3.5 px-5 text-right text-slate-800">{formatP(totalFee)}</td>
                                 <td className="py-3.5 px-5 text-right text-amber-500">₹0.00</td>
-                                <td className="py-3.5 px-5 text-right text-emerald-600">₹{totalPaid.toLocaleString("en-IN")}</td>
-                                <td className="py-3.5 px-5 text-right text-rose-600">₹{totalDue.toLocaleString("en-IN")}</td>
+                                <td className="py-3.5 px-5 text-right text-emerald-600">{formatP(totalPaid)}</td>
+                                <td className="py-3.5 px-5 text-right text-rose-600">{formatP(totalDue)}</td>
                                 <td className="py-3.5 px-5"></td>
                               </tr>
                             </tbody>
@@ -1723,15 +1724,15 @@ export default function AccountantDashboard() {
                             <div className="grid grid-cols-3 border border-slate-100 rounded-xl overflow-hidden">
                               <div className="px-2 py-2 text-center border-r border-slate-100">
                                 <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider block">Total Fee</span>
-                                <span className="text-[11px] font-black text-slate-800 mt-0.5 block whitespace-nowrap">₹{totalFee.toLocaleString("en-IN")}</span>
+                                <span className="text-[11px] font-black text-slate-800 mt-0.5 block whitespace-nowrap">{formatP(totalFee)}</span>
                               </div>
                               <div className="px-2 py-2 text-center border-r border-slate-100">
                                 <span className="text-[8px] font-black uppercase text-emerald-500 tracking-wider block">Paid</span>
-                                <span className="text-[11px] font-black text-emerald-600 mt-0.5 block whitespace-nowrap">₹{totalPaid.toLocaleString("en-IN")}</span>
+                                <span className="text-[11px] font-black text-emerald-600 mt-0.5 block whitespace-nowrap">{formatP(totalPaid)}</span>
                               </div>
                               <div className="px-2 py-2 text-center">
                                 <span className="text-[8px] font-black uppercase text-rose-500 tracking-wider block">Due</span>
-                                <span className="text-[11px] font-black text-rose-600 mt-0.5 block whitespace-nowrap">₹{totalDue.toLocaleString("en-IN")}</span>
+                                <span className="text-[11px] font-black text-rose-600 mt-0.5 block whitespace-nowrap">{formatP(totalDue)}</span>
                               </div>
                             </div>
                           </div>
@@ -1888,7 +1889,7 @@ export default function AccountantDashboard() {
                   <div>
                     <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Total Amount (Rs.)</label>
                     <div className="w-full text-xs font-black py-2 px-2.5 bg-slate-100 border border-slate-200 rounded-lg text-indigo-700 select-none">
-                      Rs. {Object.values(structFeeInputs).reduce((sum, val) => sum + (parseFloat(val) || 0), 0).toLocaleString("en-IN")}
+                      {formatP(Object.values(structFeeInputs).reduce((sum, val) => sum + (parseFloat(val) || 0), 0))}
                     </div>
                   </div>
                 </div>
@@ -1946,7 +1947,7 @@ export default function AccountantDashboard() {
                             </span>
                           </div>
                         </div>
-                        <span className="text-indigo-600 font-black text-xs">Rs. {struct.total.toLocaleString("en-IN")}</span>
+                        <span className="text-indigo-600 font-black text-xs">{formatP(struct.total)}</span>
                       </div>
                       
                       {struct.items && struct.items.length > 0 && (
@@ -1954,7 +1955,7 @@ export default function AccountantDashboard() {
                           {struct.items.map((item, itemIdx) => (
                             <div key={itemIdx} className="flex justify-between items-center py-1 text-[10px] text-slate-500 font-medium first:pt-0 last:pb-0">
                               <span>{item.headName}</span>
-                              <span className="font-bold text-slate-700">Rs. {item.amount.toLocaleString("en-IN")}</span>
+                              <span className="font-bold text-slate-700">{formatP(item.amount)}</span>
                             </div>
                           ))}
                         </div>
@@ -2088,15 +2089,15 @@ export default function AccountantDashboard() {
                       </div>
                       <div className="p-3 bg-white border border-slate-200/70 rounded-2xl shadow-[0_2px_4px_rgba(0,0,0,0.015)]">
                         <span className="text-[8px] font-black text-indigo-500 uppercase tracking-widest block">Total Collection</span>
-                        <span className="text-sm font-black text-slate-900 mt-1 block">₹{totalAmt.toLocaleString("en-IN")}</span>
+                        <span className="text-sm font-black text-slate-900 mt-1 block">{formatP(totalAmt)}</span>
                       </div>
                       <div className="p-3 bg-white border border-slate-200/70 rounded-2xl shadow-[0_2px_4px_rgba(0,0,0,0.015)]">
                         <span className="text-[8px] font-black text-emerald-500 uppercase tracking-widest block">Cash Collection</span>
-                        <span className="text-sm font-black text-emerald-700 mt-1 block">₹{cashAmt.toLocaleString("en-IN")}</span>
+                        <span className="text-sm font-black text-emerald-700 mt-1 block">{formatP(cashAmt)}</span>
                       </div>
                       <div className="p-3 bg-white border border-slate-200/70 rounded-2xl shadow-[0_2px_4px_rgba(0,0,0,0.015)]">
                         <span className="text-[8px] font-black text-blue-500 uppercase tracking-widest block">UPI & Digital</span>
-                        <span className="text-sm font-black text-blue-700 mt-1 block">₹{(upiAmt + bankAmt).toLocaleString("en-IN")}</span>
+                        <span className="text-sm font-black text-blue-700 mt-1 block">{formatP((upiAmt + bankAmt))}</span>
                       </div>
                     </div>
                   );
@@ -2161,7 +2162,7 @@ export default function AccountantDashboard() {
                                 </span>
                               </td>
                               <td className="py-3.5 px-4 text-right font-black text-slate-950">
-                                ₹{rec.amount.toLocaleString("en-IN")}
+                                {formatP(rec.amount)}
                               </td>
                               <td className="py-3.5 px-4 text-center">
                                 <button
@@ -2236,7 +2237,7 @@ export default function AccountantDashboard() {
                           </div>
                           <div className="text-right">
                             <span className={`text-[10px] font-black ${isCharge ? "text-rose-600" : "text-emerald-600"}`}>
-                              {isCharge ? "+" : "-"} ₹{log.amount.toLocaleString("en-IN")}
+                              {isCharge ? "+" : "-"} {formatP(log.amount)}
                             </span>
                             <span
                               className={`block text-[7px] font-black uppercase tracking-wider mt-1 px-1.5 py-0.5 rounded border self-end ${
@@ -2482,7 +2483,7 @@ export default function AccountantDashboard() {
                                   </td>
                                 )}
                                 <td className={`text-right text-slate-900 font-extrabold ${receiptPageSize === "A5" ? "py-1.5 px-3" : "py-3 px-4"}`}>
-                                  ₹{item.amount.toLocaleString("en-IN")}
+                                  {formatP(item.amount)}
                                 </td>
                               </tr>
                             ))
@@ -2491,7 +2492,7 @@ export default function AccountantDashboard() {
                             <tr>
                               <td className={`max-w-[200px] truncate ${receiptPageSize === "A5" ? "py-1.5 px-3" : "py-3 px-4"}`}>{activeReceipt.details}</td>
                               <td className={`text-right text-slate-900 font-extrabold ${receiptPageSize === "A5" ? "py-1.5 px-3" : "py-3 px-4"}`}>
-                                  ₹{activeReceipt.amount.toLocaleString("en-IN")}
+                                  {formatP(activeReceipt.amount)}
                               </td>
                             </tr>
                           )}
@@ -2509,25 +2510,25 @@ export default function AccountantDashboard() {
                 }`}>
                   <div className="flex justify-between items-center">
                     <span>Subtotal:</span>
-                    <span className="text-slate-800">₹{activeReceipt.amount.toLocaleString("en-IN")}</span>
+                    <span className="text-slate-800">{formatP(activeReceipt.amount)}</span>
                   </div>
                   {activeReceipt.discount > 0 && (
                     <div className="flex justify-between items-center text-indigo-600">
                       <span>Discount:</span>
-                      <span className="font-extrabold">₹{activeReceipt.discount.toLocaleString("en-IN")}</span>
+                      <span className="font-extrabold">{formatP(activeReceipt.discount)}</span>
                     </div>
                   )}
                   {activeReceipt.arrears > 0 && (
                     <div className="flex justify-between items-center text-rose-600">
                       <span>Remaining Arrears:</span>
-                      <span className="font-extrabold">₹{activeReceipt.arrears.toLocaleString("en-IN")}</span>
+                      <span className="font-extrabold">{formatP(activeReceipt.arrears)}</span>
                     </div>
                   )}
                   <div className={`border-t border-slate-200 pt-1.5 flex justify-between items-center text-emerald-700 font-black ${
                     receiptPageSize === "A5" ? "text-xs" : "text-sm"
                   }`}>
                     <span>Total Paid:</span>
-                    <span>₹{activeReceipt.amount.toLocaleString("en-IN")}</span>
+                    <span>{formatP(activeReceipt.amount)}</span>
                   </div>
                 </div>
               </div>

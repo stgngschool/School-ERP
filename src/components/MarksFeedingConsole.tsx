@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
 import {
   Save,
@@ -81,6 +81,7 @@ export default function MarksFeedingConsole() {
 
   const [isRosterLoaded, setIsRosterLoaded] = useState(false);
   const [loadingRoster, setLoadingRoster] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     setIsRosterLoaded(false);
@@ -97,8 +98,14 @@ export default function MarksFeedingConsole() {
     setLoadingRoster(true);
     try {
       const [className, section] = selectedClass.split("-");
-      const res = await fetch(`/api/marks/roster?class=${encodeURIComponent(className)}&section=${encodeURIComponent(section)}&exam=${encodeURIComponent(selectedExam)}&subject=${encodeURIComponent(subjectToUse)}`);
-      if (!res.ok) throw new Error("Failed to fetch marks");
+            if (abortControllerRef.current) abortControllerRef.current.abort();
+      abortControllerRef.current = new AbortController();
+      const res = await fetch(`/api/marks/roster?class=${encodeURIComponent(className)}&section=${encodeURIComponent(section)}&exam=${encodeURIComponent(selectedExam)}&subject=${encodeURIComponent(subjectToUse)}`, { signal: abortControllerRef.current.signal });
+      if (!res.ok) {
+        const text = await res.text();
+        try { const json = JSON.parse(text); throw new Error(json.error || "Failed"); }
+        catch { throw new Error(`HTTP Error: ${res.status}`); }
+      }
       const marksRecord = await res.json();
 
       const newRoster: any = {};
@@ -336,8 +343,7 @@ export default function MarksFeedingConsole() {
 
         if (isSplitExam) {
           const keys = Object.keys(dataEntry.breakdown);
-          const hasAny = keys.some((k) => dataEntry.breakdown[k] !== "");
-          if (!hasAny) return null;
+
 
           const breakdownJson: { [key: string]: number } = {};
           let total = 0;

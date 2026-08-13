@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { formatP } from "@/lib/currency";
 import { useAuth } from "@/context/AuthContext";
 import {
   CreditCard,
@@ -266,7 +267,7 @@ export default function ParentDashboard() {
   const lateDays = childAttendances.filter((a) => a.status === "LATE").length;
   const absentDays = childAttendances.filter((a) => a.status === "ABSENT").length;
   const totalDays = childAttendances.length;
-  const attendanceRate = totalDays > 0 ? Math.round(((presentDays + leaveDays) / totalDays) * 100) : 100;
+  const attendanceRate = totalDays > 0 ? Math.round(((presentDays + leaveDays + lateDays) / totalDays) * 100) : 100;
 
   // Generate 30-day Calendar Grid mock for July 2026
   const calendarDays = Array.from({ length: 30 }, (_, index) => {
@@ -475,7 +476,7 @@ export default function ParentDashboard() {
             <div className="space-y-3">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Outstanding Dues</span>
               <div>
-                <h3 className="text-2xl font-black text-rose-600 tracking-tight">Rs. {childBalance.toLocaleString("en-IN")}</h3>
+                <h3 className="text-2xl font-black text-rose-600 tracking-tight">{formatP(childBalance)}</h3>
                 <p className="text-[10px] text-slate-400 font-bold mt-1">Clear via "Pay Fees" tab</p>
               </div>
             </div>
@@ -818,7 +819,7 @@ export default function ParentDashboard() {
                 </h3>
               </div>
               <span className="text-[9px] font-black uppercase bg-rose-50 text-rose-700 border border-rose-100 px-2 py-0.5 rounded">
-                Total Dues: Rs. {childBalance.toLocaleString("en-IN")}
+                Total Dues: {formatP(childBalance)}
               </span>
             </div>
 
@@ -853,7 +854,7 @@ export default function ParentDashboard() {
                           </div>
                         </div>
                         <p className="text-xs font-black text-slate-800">
-                          Rs. {item.amount.toLocaleString("en-IN")}
+                          {formatP(item.amount)}
                         </p>
                       </div>
                     );
@@ -881,7 +882,7 @@ export default function ParentDashboard() {
                   </div>
                   <div className="flex justify-between text-xs py-1.5">
                     <span className="text-slate-800 font-bold">Subtotal Amount</span>
-                    <span className="font-extrabold text-indigo-600">Rs. {paymentSubtotal.toLocaleString("en-IN")}</span>
+                    <span className="font-extrabold text-indigo-600">{formatP(paymentSubtotal)}</span>
                   </div>
                 </div>
 
@@ -890,7 +891,7 @@ export default function ParentDashboard() {
                   disabled={selectedDueIds.length === 0}
                   className="w-full mt-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-indigo-500/10 cursor-pointer"
                 >
-                  Pay Selected Dues (Rs. {paymentSubtotal.toLocaleString("en-IN")})
+                  Pay Selected Dues ({formatP(paymentSubtotal)})
                 </button>
               </div>
             </div>
@@ -919,7 +920,7 @@ export default function ParentDashboard() {
                         <p className="text-[8px] text-indigo-600 font-bold max-w-xs truncate">{rec.details}</p>
                       </div>
                       <div className="text-right flex items-center gap-3">
-                        <p className="font-extrabold text-slate-800">Rs. {rec.amount.toLocaleString("en-IN")}</p>
+                        <p className="font-extrabold text-slate-800">{formatP(rec.amount)}</p>
                         <button
                           onClick={() => {
                             setActiveReceipt(rec);
@@ -1158,7 +1159,7 @@ export default function ParentDashboard() {
                   Amount to Pay (Subtotal)
                 </label>
                 <div className="py-2 px-3 border border-slate-200/80 bg-slate-50 rounded-lg text-xs font-black text-indigo-600">
-                  Rs. {paymentSubtotal.toLocaleString("en-IN")}
+                  {formatP(paymentSubtotal)}
                 </div>
               </div>
 
@@ -1393,7 +1394,7 @@ export default function ParentDashboard() {
                                   </td>
                                 )}
                                 <td className={`text-right text-slate-900 font-extrabold ${receiptPageSize === "A5" ? "py-1.5 px-3" : "py-3 px-4"}`}>
-                                  ₹{item.amount.toLocaleString("en-IN")}
+                                  {formatP(item.amount)}
                                 </td>
                               </tr>
                             ))
@@ -1402,7 +1403,7 @@ export default function ParentDashboard() {
                             <tr>
                               <td className={`max-w-[200px] truncate ${receiptPageSize === "A5" ? "py-1.5 px-3" : "py-3 px-4"}`}>{activeReceipt.details}</td>
                               <td className={`text-right text-slate-900 font-extrabold ${receiptPageSize === "A5" ? "py-1.5 px-3" : "py-3 px-4"}`}>
-                                  ₹{activeReceipt.amount.toLocaleString("en-IN")}
+                                  {formatP(activeReceipt.amount)}
                               </td>
                             </tr>
                           )}

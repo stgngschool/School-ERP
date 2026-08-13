@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { formatP, toPaisa } from "@/lib/currency";
 import { 
   X, User, ShieldAlert, Phone, Mail, MapPin, CreditCard, 
   Calendar, FileText, CheckCircle2, AlertCircle, Clock, Percent,
@@ -57,7 +58,7 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
           action: "ADD_CUSTOM_CHARGE",
           studentId,
           title: chargeTitle,
-          amount: chargeAmount,
+          amount: toPaisa(parseFloat(chargeAmount)),
           headName: chargeHeadName,
         }),
       });
@@ -215,15 +216,7 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
 
   if (!isOpen) return null;
 
-  // Helper: Format Paisa to Rupees
-  const formatCurrency = (paisa: number) => {
-    const rupees = paisa / 100;
-    return new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency: "INR",
-      maximumFractionDigits: 0
-    }).format(rupees);
-  };
+  // Removed local formatCurrency in favor of formatP
 
   // Calculations for Financials
   const getFinancialSummary = () => {
@@ -424,7 +417,7 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
                       <div>
                         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Pending Dues</p>
                         <p className={`text-sm font-black mt-0.5 ${outstanding > 0 ? "text-rose-600" : "text-emerald-600"}`}>
-                          {formatCurrency(outstanding)}
+                          {formatP(outstanding)}
                         </p>
                       </div>
                     </div>
@@ -663,20 +656,20 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-sm">
                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Charged</p>
-                      <p className="text-base sm:text-lg font-black text-slate-700 mt-1">{formatCurrency(totalCharged)}</p>
+                      <p className="text-base sm:text-lg font-black text-slate-700 mt-1">{formatP(totalCharged)}</p>
                     </div>
                     <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-sm">
                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Paid</p>
-                      <p className="text-base sm:text-lg font-black text-emerald-600 mt-1">{formatCurrency(totalPaid)}</p>
+                      <p className="text-base sm:text-lg font-black text-emerald-600 mt-1">{formatP(totalPaid)}</p>
                     </div>
                     <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-sm">
                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Concessions</p>
-                      <p className="text-base sm:text-lg font-black text-indigo-600 mt-1">{formatCurrency(totalDiscount)}</p>
+                      <p className="text-base sm:text-lg font-black text-indigo-600 mt-1">{formatP(totalDiscount)}</p>
                     </div>
                     <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-sm">
                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Outstanding</p>
                       <p className={`text-base sm:text-lg font-black mt-1 ${outstanding > 0 ? "text-rose-600" : "text-emerald-600"}`}>
-                        {formatCurrency(outstanding)}
+                        {formatP(outstanding)}
                       </p>
                     </div>
                   </div>
@@ -731,7 +724,7 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
                                   </span>
                                 </td>
                                 <td className={`p-3 text-right font-black ${isDebit ? "text-slate-800" : "text-emerald-600"}`}>
-                                  {isDebit ? "" : "-"}{formatCurrency(Math.abs(entry.amount))}
+                                  {isDebit ? "" : "-"}{formatP(Math.abs(entry.amount))}
                                 </td>
                                 <td className="p-3 text-slate-500">{entry.createdBy}</td>
                               </tr>
@@ -777,7 +770,7 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
                             <div className="flex items-center space-x-4">
                               <div className="text-left sm:text-right">
                                 <p className="text-[10px] text-slate-400 font-bold">Amount Paid</p>
-                                <p className="text-sm font-black text-emerald-600">{formatCurrency(rec.amountPaid)}</p>
+                                <p className="text-sm font-black text-emerald-600">{formatP(rec.amountPaid)}</p>
                               </div>
                             </div>
                           </div>

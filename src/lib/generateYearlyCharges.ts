@@ -265,18 +265,20 @@ export async function generateYearlyCharges(
     }
   }
 
-  if (toCreate.length > 0) {
-    await db.ledgerEntry.createMany({
-      data: toCreate,
-    });
-  }
+  await db.$transaction(async (tx) => {
+    if (toCreate.length > 0) {
+      await tx.ledgerEntry.createMany({
+        data: toCreate,
+      });
+    }
 
-  for (const update of toUpdate) {
-    await db.ledgerEntry.update({
-      where: { id: update.id },
-      data: { amount: update.amount },
-    });
-  }
+    for (const update of toUpdate) {
+      await tx.ledgerEntry.update({
+        where: { id: update.id },
+        data: { amount: update.amount },
+      });
+    }
+  });
 
   return { generated, skipped };
 }

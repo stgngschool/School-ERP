@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
 import {
   Printer,
@@ -458,10 +458,10 @@ function SingleMarksheetCard({
     let prAct1 = 0, noteBook1 = 0, subEnri1 = 0, halfYearly1 = 0, obt1 = 0;
     if (t1Match) {
       const b1 = t1Match.breakdown || {};
-      prAct1 = b1["Practical / Activity"] ? parseFloat(b1["Practical / Activity"]) : (t1Match.practical || 0);
-      noteBook1 = b1["Notebook"] ? parseFloat(b1["Notebook"]) : (t1Match.notebook || 0);
-      subEnri1 = b1["Subject Enrichment"] ? parseFloat(b1["Subject Enrichment"]) : (t1Match.subjectEnrichment || 0);
-      halfYearly1 = b1["Written Exam"] ? parseFloat(b1["Written Exam"]) : (t1Match.writtenExam || Math.max(0, t1Match.marksObtained - prAct1 - noteBook1 - subEnri1));
+      prAct1 = b1["Practical / Activity"] !== undefined ? parseFloat(b1["Practical / Activity"]) : (t1Match.practical ?? 0);
+      noteBook1 = b1["Notebook"] !== undefined ? parseFloat(b1["Notebook"]) : (t1Match.notebook ?? 0);
+      subEnri1 = b1["Subject Enrichment"] !== undefined ? parseFloat(b1["Subject Enrichment"]) : (t1Match.subjectEnrichment ?? 0);
+      halfYearly1 = b1["Written Exam"] !== undefined ? parseFloat(b1["Written Exam"]) : (t1Match.writtenExam ?? Math.max(0, t1Match.marksObtained - prAct1 - noteBook1 - subEnri1));
       obt1 = prAct1 + noteBook1 + subEnri1 + halfYearly1;
     } else if (subMarks.length > 0) {
        // fallback if they just entered some exam
@@ -477,10 +477,10 @@ function SingleMarksheetCard({
     let prAct2 = 0, noteBook2 = 0, subEnri2 = 0, yearly2 = 0, obt2 = 0;
     if (t2Match) {
       const b2 = t2Match.breakdown || {};
-      prAct2 = b2["Practical / Activity"] ? parseFloat(b2["Practical / Activity"]) : (t2Match.practical || 0);
-      noteBook2 = b2["Notebook"] ? parseFloat(b2["Notebook"]) : (t2Match.notebook || 0);
-      subEnri2 = b2["Subject Enrichment"] ? parseFloat(b2["Subject Enrichment"]) : (t2Match.subjectEnrichment || 0);
-      yearly2 = b2["Written Exam"] ? parseFloat(b2["Written Exam"]) : (t2Match.writtenExam || Math.max(0, t2Match.marksObtained - prAct2 - noteBook2 - subEnri2));
+      prAct2 = b2["Practical / Activity"] !== undefined ? parseFloat(b2["Practical / Activity"]) : (t2Match.practical ?? 0);
+      noteBook2 = b2["Notebook"] !== undefined ? parseFloat(b2["Notebook"]) : (t2Match.notebook ?? 0);
+      subEnri2 = b2["Subject Enrichment"] !== undefined ? parseFloat(b2["Subject Enrichment"]) : (t2Match.subjectEnrichment ?? 0);
+      yearly2 = b2["Written Exam"] !== undefined ? parseFloat(b2["Written Exam"]) : (t2Match.writtenExam ?? Math.max(0, t2Match.marksObtained - prAct2 - noteBook2 - subEnri2));
       obt2 = prAct2 + noteBook2 + subEnri2 + yearly2;
     } else if (subMarks.length > 1) {
        // fallback to second exam if t2 not found

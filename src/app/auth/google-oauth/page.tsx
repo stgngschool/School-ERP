@@ -25,7 +25,7 @@ export default function GoogleOAuthConsentPage() {
             email: accountEmail,
             accessToken: "ya29.a0ARW5m7_GoogleOAuthToken_Verified",
           },
-          "*"
+          window.location.origin
         );
       }
       window.close();
