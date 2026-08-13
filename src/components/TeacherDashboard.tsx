@@ -180,30 +180,7 @@ export default function TeacherDashboard() {
         </div>
       </div>
 
-      {/* ─── Quick Action Grid ─── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
-        {[
-          { tab: "attendance", label: "Attendance Desk", icon: UserCheck, color: "bg-indigo-50 text-indigo-600 border-indigo-100", rotate: "hover:rotate-1" },
-          { tab: "homework", label: "Homework Board", icon: BookOpen, color: "bg-pink-50 text-pink-600 border-pink-100", rotate: "hover:-rotate-1" },
-          { tab: "leaves", label: "Leave Approvals", icon: FileText, color: "bg-emerald-50 text-emerald-600 border-emerald-100", rotate: "hover:rotate-1" },
-          { tab: "marks", label: "Feed Marks", icon: PlusCircle, color: "bg-amber-50 text-amber-600 border-amber-100", rotate: "hover:-rotate-1" },
-        ].map((item) => {
-          const Icon = item.icon;
-          const isActive = currentTab === item.tab;
-          return (
-            <button
-              key={item.tab}
-              onClick={() => setActiveTab(item.tab)}
-              className={`bg-white border border-slate-200 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl flex flex-col items-center justify-center text-center gap-2 press-scale transition-all duration-200 ${item.rotate} ${isActive ? "ring-2 ring-indigo-500 ring-offset-1" : ""}`}
-            >
-              <div className={`h-10 w-10 rounded-full flex items-center justify-center border ${item.color}`}>
-                <Icon className="h-5 w-5" />
-              </div>
-              <span className="text-[10px] font-black text-slate-700 uppercase tracking-wide leading-tight">{item.label}</span>
-            </button>
-          );
-        })}
-      </div>
+
 
       {/* ─── Tab Content Area ─── */}
       {!studentsLoaded ? (
@@ -225,7 +202,7 @@ export default function TeacherDashboard() {
       ) : currentTab === "marks" ? (
         <MarksFeedingConsole />
       ) : currentTab === "attendance" ? (
-        <AttendanceConsole initialClass={selectedClass} />
+        <AttendanceConsole initialClass={selectedClass} hideClassSelector={true} />
       ) : (
         <div className="bg-white border-y sm:border border-slate-200 sm:rounded-2xl shadow-sm overflow-hidden">
 

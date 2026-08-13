@@ -5100,8 +5100,8 @@ export default function AdminDashboard() {
                               };
                               const isChecked = selectedStudentIds.includes(std.id);
                               return (
-                                <div key={std.id} className={`p-3.5 flex items-center gap-3 transition-colors ${isChecked ? "bg-indigo-50/40" : ""}`}>
-                                  <label className="p-2 -m-2 flex items-center justify-center shrink-0 cursor-pointer active:scale-90 transition-transform">
+                                <div key={std.id} className={`p-3 flex items-center gap-3 transition-colors ${isChecked ? "bg-indigo-50/40" : ""}`}>
+                                  <label className="flex items-center justify-center shrink-0 cursor-pointer active:scale-90 transition-transform">
                                     <input
                                       type="checkbox"
                                       checked={isChecked}
@@ -5111,33 +5111,40 @@ export default function AdminDashboard() {
                                           checked ? [...prev, std.id] : prev.filter((id) => id !== std.id)
                                         );
                                       }}
-                                      className="rounded-md border-slate-300 text-indigo-600 focus:ring-indigo-500 h-5 w-5 cursor-pointer accent-indigo-600"
+                                      className="rounded-md border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4.5 w-4.5 cursor-pointer accent-indigo-600"
                                     />
                                   </label>
-                                  <div className="h-10 w-10 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-700 flex items-center justify-center font-extrabold text-xs uppercase shrink-0">
-                                    {std.photoUrl ? <img src={std.photoUrl} alt={std.name} className="h-full w-full object-cover rounded-full" /> : std.name.substring(0, 2)}
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="font-bold text-sm text-slate-800 truncate">{std.name}</span>
-                                      {std.isRte && <span className="text-[8px] font-black uppercase bg-purple-100 text-purple-700 px-1 rounded border border-purple-200 shrink-0">RTE</span>}
+                                  
+                                  <div 
+                                    className="flex-1 min-w-0 flex items-center gap-3 cursor-pointer group" 
+                                    onClick={() => { setSelectedStudent(std); setShowDetailModal(true); }}
+                                  >
+                                    <div className="h-9 w-9 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs uppercase shrink-0 overflow-hidden">
+                                      {std.photoUrl ? <img src={std.photoUrl} alt={std.name} className="h-full w-full object-cover" /> : std.name.substring(0, 2)}
                                     </div>
-                                    <p className="text-[10px] text-slate-400 font-semibold">
-                                      Cl {std.class}-{std.section} • {std.admissionNo}
-                                    </p>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-1.5 mb-0.5">
+                                        <span className="font-bold text-sm text-slate-800 truncate group-hover:text-indigo-600 transition-colors">{std.name}</span>
+                                        {std.isRte && <span className="text-[8px] font-black uppercase bg-purple-100 text-purple-700 px-1 rounded-sm border border-purple-200 shrink-0">RTE</span>}
+                                      </div>
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <p className="text-[10px] text-slate-500 font-medium">
+                                          Cl {std.class}-{std.section} • {std.admissionNo}
+                                        </p>
+                                        <span className={`text-[8px] font-black uppercase px-1 py-0.5 rounded-[4px] border ${statusColors[status as keyof typeof statusColors] || statusColors.ACTIVE}`}>
+                                          {status}
+                                        </span>
+                                      </div>
+                                    </div>
                                   </div>
-                                  <div className="flex items-center gap-2 shrink-0">
-                                    <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${statusColors[status as keyof typeof statusColors] || statusColors.ACTIVE}`}>
-                                      {status}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={() => { setSelectedStudent(std); setShowDetailModal(true); }}
-                                      className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl active:scale-90 transition-transform shadow-2xs border border-indigo-100/50"
-                                    >
-                                      <Eye className="h-4 w-4" />
-                                    </button>
-                                  </div>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => { setSelectedStudent(std); setShowDetailModal(true); }}
+                                    className="p-2 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg active:scale-90 transition-all shrink-0"
+                                  >
+                                    <ChevronDown className="h-4 w-4 -rotate-90" />
+                                  </button>
                                 </div>
                               );
                             })}

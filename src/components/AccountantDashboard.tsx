@@ -32,6 +32,8 @@ import {
   Loader2,
   Download,
   Layers,
+  Sparkles,
+  TrendingUp,
 } from "lucide-react";
 import StudentProfileModal from "@/components/StudentProfileModal";
 import MarksFeedingConsole from "@/components/MarksFeedingConsole";
@@ -501,86 +503,112 @@ export default function AccountantDashboard() {
 
   return (
     <div className="space-y-4 mobile-edge-grid">
-      {/* 1. Header & Quick Overview (Shown only on Dashboard tab to save vertical screen space) */}
-      {activeTab === "dashboard" && (
-        <div className="flex flex-col gap-1 border-b border-slate-200/80 pb-3">
-          <h2 className="text-base sm:text-lg font-black text-slate-800 tracking-tight">Accountant Billing Console</h2>
-          <p className="text-[11px] text-slate-400 font-medium hidden sm:block">
-            Manage school ledgers, generate receipts, record payments, and track outstanding defaulters.
-          </p>
+      {/* 1. Header & Quick Overview */}
+      {currentTab === "collect" && (
+        <>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5 mb-2">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                Welcome back, {user?.name || "Accountant"} 👋
+              </h2>
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-100">
+                <Sparkles className="w-3 h-3 text-emerald-500 animate-pulse" />
+                Session Active
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 font-semibold mt-1">
+              Manage school ledgers, generate receipts, record payments, and track outstanding defaulters.
+            </p>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <div className="text-right hidden sm:block">
+              <p className="text-xs font-bold text-slate-700">
+                {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+              </p>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Financial Control</p>
+            </div>
+            <div className="h-10 w-px bg-slate-200 hidden sm:block"></div>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-full border border-emerald-100">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                System Live
+              </span>
+            </div>
+          </div>
         </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        <div className="bg-white border border-slate-200/60 p-6 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.015)] transition-all hover:shadow-[0_8px_30px_rgba(0,0,0,0.035)] flex flex-col justify-between">
+          <div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">My Daily Collection</span>
+              <span className="p-2.5 bg-emerald-50 text-emerald-600 rounded-2xl">
+                <TrendingUp className="w-5 h-5" />
+              </span>
+            </div>
+            <h3 className="text-2xl font-black text-slate-800 tracking-tight mt-4">
+              {formatP(myTodayCollections)}
+            </h3>
+          </div>
+          <div className="mt-5 pt-4 border-t border-slate-100/80">
+            <div className="flex items-center justify-between text-[10px] text-slate-400 font-medium">
+              <span>Today ({new Date().toLocaleDateString("en-IN")})</span>
+              <span className="text-emerald-600 font-bold">Active</span>
+            </div>
+            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden mt-1.5">
+              <div className="h-full bg-emerald-600 rounded-full w-full"></div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200/60 p-6 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.015)] transition-all hover:shadow-[0_8px_30px_rgba(0,0,0,0.035)] flex flex-col justify-between">
+          <div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">My Total Receipts</span>
+              <span className="p-2.5 bg-indigo-50 text-indigo-600 rounded-2xl">
+                <FileText className="w-5 h-5" />
+              </span>
+            </div>
+            <h3 className="text-2xl font-black text-slate-800 tracking-tight mt-4">
+              {myReceipts.length} <span className="text-sm text-slate-500 font-bold">Vouchers</span>
+            </h3>
+          </div>
+          <div className="mt-5 pt-4 border-t border-slate-100/80">
+            <div className="flex items-center justify-between text-[10px] text-slate-400 font-medium">
+              <span>Total count generated by me</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200/60 p-6 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.015)] transition-all hover:shadow-[0_8px_30px_rgba(0,0,0,0.035)] flex flex-col justify-between">
+          <div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">My Counter Balance</span>
+              <span className="p-2.5 bg-amber-50 text-amber-600 rounded-2xl">
+                <Coins className="w-5 h-5" />
+              </span>
+            </div>
+            <h3 className="text-2xl font-black text-slate-800 tracking-tight mt-4">
+              {formatP(myTotalCollections)}
+            </h3>
+          </div>
+          <div className="mt-5 pt-4 border-t border-slate-100/80">
+            <div className="flex justify-between items-center text-[10px] mb-1.5 font-bold">
+              <span className="text-slate-600">Cash: {formatP(myCashTally)}</span>
+              <span className="text-indigo-600">UPI: {formatP(myUpiTally)}</span>
+            </div>
+            <div className="w-full h-1.5 bg-slate-100 rounded-full flex overflow-hidden">
+              <div className="h-full bg-slate-400" style={{ width: `${myTotalCollections > 0 ? (myCashTally/myTotalCollections)*100 : 50}%` }}></div>
+              <div className="h-full bg-indigo-400" style={{ width: `${myTotalCollections > 0 ? (myUpiTally/myTotalCollections)*100 : 50}%` }}></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      </>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-        <div className="bg-white border border-slate-200/60 p-5 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.015)]">
-          <span className="text-[9px] font-black uppercase text-slate-400 block mb-1">My Daily Collection</span>
-          <h3 className="text-xl font-black text-green-600 tracking-tight">
-            {formatP(myTodayCollections)}
-          </h3>
-          <p className="text-[9px] text-slate-400 font-semibold mt-0.5">Today ({new Date().toLocaleDateString("en-IN")})</p>
-        </div>
-        <div className="bg-white border border-slate-200/60 p-5 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.015)]">
-          <span className="text-[9px] font-black uppercase text-slate-400 block mb-1">My Total Receipts</span>
-          <h3 className="text-xl font-black text-indigo-600 tracking-tight">
-            {myReceipts.length} Vouchers
-          </h3>
-          <p className="text-[9px] text-slate-400 font-semibold mt-0.5">Total count generated by me</p>
-        </div>
-        <div className="bg-white border border-slate-200/60 p-5 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.015)]">
-          <span className="text-[9px] font-black uppercase text-slate-400 block mb-1">My Counter Balance</span>
-          <h3 className="text-xl font-black text-slate-700 tracking-tight">
-            {formatP(myTotalCollections)}
-          </h3>
-          <p className="text-[9px] text-slate-400 font-semibold mt-0.5">Cash: {formatP(myCashTally)} | UPI: {formatP(myUpiTally)}</p>
-        </div>
-      </div>
-
-      {/* Quick Action Stickers Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {/* Sticker 1: Collect Fee */}
-        <button
-          onClick={() => setActiveTab("collect")}
-          className="bg-white border border-slate-200/60 p-4 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.015)] flex flex-col items-center justify-center text-center gap-2 hover:-translate-y-0.5 hover:rotate-1 hover:border-indigo-300 transition-all duration-300 group cursor-pointer"
-        >
-          <div className="h-10 w-10 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 border border-indigo-100/50 group-hover:scale-110 transition-transform">
-            <CreditCard className="h-5 w-5" />
-          </div>
-          <span className="text-[10px] font-black text-slate-800 uppercase tracking-wider">Collect Fee</span>
-        </button>
-
-        {/* Sticker 2: Manage Defaulters */}
-        <button
-          onClick={() => setActiveTab("defaulters")}
-          className="bg-white border border-slate-200/60 p-4 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.015)] flex flex-col items-center justify-center text-center gap-2 hover:-translate-y-0.5 hover:-rotate-1 hover:border-indigo-300 transition-all duration-300 group cursor-pointer"
-        >
-          <div className="h-10 w-10 bg-pink-50 rounded-2xl flex items-center justify-center text-pink-600 border border-pink-100/50 group-hover:scale-110 transition-transform">
-            <AlertTriangle className="h-5 w-5" />
-          </div>
-          <span className="text-[10px] font-black text-slate-800 uppercase tracking-wider">Defaulters List</span>
-        </button>
-
-        {/* Sticker 3: Configure Fees */}
-        <button
-          onClick={() => setActiveTab("structures")}
-          className="bg-white border border-slate-200/60 p-4 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.015)] flex flex-col items-center justify-center text-center gap-2 hover:-translate-y-0.5 hover:rotate-1 hover:border-indigo-300 transition-all duration-300 group cursor-pointer"
-        >
-          <div className="h-10 w-10 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 border border-emerald-100/50 group-hover:scale-110 transition-transform">
-            <Settings className="h-5 w-5" />
-          </div>
-          <span className="text-[10px] font-black text-slate-800 uppercase tracking-wider">Fee Structures</span>
-        </button>
-
-        {/* Sticker 4: Ledger Audit Logs */}
-        <button
-          onClick={() => setActiveTab("ledger")}
-          className="bg-white border border-slate-200/60 p-4 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.015)] flex flex-col items-center justify-center text-center gap-2 hover:-translate-y-0.5 hover:-rotate-1 hover:border-indigo-300 transition-all duration-300 group cursor-pointer"
-        >
-          <div className="h-10 w-10 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-600 border border-amber-100/50 group-hover:scale-110 transition-transform">
-            <ArrowRightLeft className="h-5 w-5" />
-          </div>
-          <span className="text-[10px] font-black text-slate-800 uppercase tracking-wider">Ledger Audit</span>
-        </button>
-      </div>
 
       {/* 3. Panel Body */}
       {currentTab === "marks" ? (
@@ -604,8 +632,8 @@ export default function AccountantDashboard() {
             <div>
             {!selectedStudentId ? (
               // SEARCH VIEW (No student selected)
-              <div className="max-w-2xl mx-auto py-12 px-4 text-center space-y-6">
-                <div className="inline-flex p-3.5 bg-indigo-50 border border-indigo-100 rounded-2xl text-indigo-600 shadow-[0_4px_12px_rgba(79,70,229,0.06)]">
+              <div className="max-w-2xl mx-auto py-12 px-4 text-center space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+                <div className="inline-flex p-3.5 bg-emerald-50 border border-emerald-100 rounded-2xl text-emerald-600 shadow-[0_8px_30px_rgba(16,185,129,0.12)] hover:scale-110 transition-transform cursor-default">
                   <CreditCard className="h-7 w-7" />
                 </div>
                 <div>
@@ -617,7 +645,7 @@ export default function AccountantDashboard() {
                 
                 {/* Search Input Container */}
                 <div className="relative max-w-lg mx-auto">
-                  <div className="relative shadow-sm rounded-xl border border-slate-200 bg-white p-1 focus-within:border-indigo-600 focus-within:ring-2 focus-within:ring-indigo-100 transition-all duration-300">
+                  <div className="relative shadow-[0_8px_30px_rgb(0,0,0,0.02)] rounded-xl border border-slate-200/80 bg-white/70 backdrop-blur-sm p-1 focus-within:border-emerald-500 focus-within:ring-4 focus-within:ring-emerald-500/10 transition-all duration-300">
                     <div className="flex items-center">
                       <Search className="h-4.5 w-4.5 text-slate-400 ml-3" />
                       <input

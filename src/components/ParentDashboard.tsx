@@ -393,52 +393,7 @@ export default function ParentDashboard() {
         />
       ) : (
         <>
-          {/* Quick Action Stickers Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-4">
-        {/* Sticker 1: Pay Fees */}
-        <button
-          onClick={() => setActiveTab("fees")}
-          className="bg-white border border-slate-200/80 p-3 sm:p-4 rounded-xl sm:rounded-2xl shadow-[0_1px_2px_rgba(0,0,0,0.02)] flex flex-col items-center justify-center text-center gap-2 hover:-translate-y-0.5 hover:rotate-1 hover:border-indigo-300 transition-all duration-300 group cursor-pointer"
-        >
-          <div className="h-10 w-10 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-600 border border-indigo-100 group-hover:scale-110 transition-transform">
-            <CreditCard className="h-5 w-5" />
-          </div>
-          <span className="text-[10px] font-black text-slate-800 uppercase tracking-wider">Pay School Fees</span>
-        </button>
 
-        {/* Sticker 2: Homework Board */}
-        <button
-          onClick={() => setActiveTab("homework")}
-          className="bg-white border border-slate-200/80 p-3 sm:p-4 rounded-xl sm:rounded-2xl shadow-[0_1px_2px_rgba(0,0,0,0.02)] flex flex-col items-center justify-center text-center gap-2 hover:-translate-y-0.5 hover:-rotate-1 hover:border-indigo-300 transition-all duration-300 group cursor-pointer"
-        >
-          <div className="h-10 w-10 bg-pink-50 rounded-full flex items-center justify-center text-pink-600 border border-pink-100 group-hover:scale-110 transition-transform">
-            <BookOpen className="h-5 w-5" />
-          </div>
-          <span className="text-[10px] font-black text-slate-800 uppercase tracking-wider">Assignments</span>
-        </button>
-
-        {/* Sticker 3: Attendance History */}
-        <button
-          onClick={() => setActiveTab("attendance")}
-          className="bg-white border border-slate-200/80 p-3 sm:p-4 rounded-xl sm:rounded-2xl shadow-[0_1px_2px_rgba(0,0,0,0.02)] flex flex-col items-center justify-center text-center gap-2 hover:-translate-y-0.5 hover:rotate-1 hover:border-indigo-300 transition-all duration-300 group cursor-pointer"
-        >
-          <div className="h-10 w-10 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-650 border border-emerald-100 group-hover:scale-110 transition-transform">
-            <CalendarIcon className="h-5 w-5" />
-          </div>
-          <span className="text-[10px] font-black text-slate-800 uppercase tracking-wider">Attendance Logs</span>
-        </button>
-
-        {/* Sticker 4: Apply for Leave */}
-        <button
-          onClick={() => setActiveTab("leave")}
-          className="bg-white border border-slate-200/80 p-3 sm:p-4 rounded-xl sm:rounded-2xl shadow-[0_1px_2px_rgba(0,0,0,0.02)] flex flex-col items-center justify-center text-center gap-2 hover:-translate-y-0.5 hover:-rotate-1 hover:border-indigo-300 transition-all duration-300 group cursor-pointer"
-        >
-          <div className="h-10 w-10 bg-amber-50 rounded-full flex items-center justify-center text-amber-655 border border-amber-100 group-hover:scale-110 transition-transform">
-            <FileText className="h-5 w-5" />
-          </div>
-          <span className="text-[10px] font-black text-slate-800 uppercase tracking-wider">Apply Leave</span>
-        </button>
-      </div>
 
       {/* 2. Dynamic Views based on activeTab */}
       {activeTab === "dashboard" && (
