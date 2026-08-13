@@ -427,13 +427,16 @@ export default function AccountantDashboard() {
       setSelectedStudentId("");
       setSearchQuery("");
       setShowReceiptModal(true);
+    } catch (error) {
+      console.error("Payment submission error:", error);
+      alert("An unexpected error occurred while recording the payment.");
     } finally {
       setIsSubmittingPayment(false);
     }
   };
 
   const handleSendWhatsApp = (studentName: string, parentName: string, amount: number, phone?: string) => {
-    const message = `Dear ${parentName}, this is a gentle reminder that your ward ${studentName} has pending fee dues of Rs. ${amount.toLocaleString("en-IN")}. Please clear the dues at the earliest. Thank you, School Admin.`;
+    const message = `Dear ${parentName}, this is a gentle reminder that your ward ${studentName} has pending fee dues of ${formatP(amount)}. Please clear the dues at the earliest. Thank you, School Admin.`;
     const encodedMessage = encodeURIComponent(message);
     
     if (phone && phone.trim() !== "") {
@@ -1211,7 +1214,7 @@ export default function AccountantDashboard() {
                         {/* UPI Dynamic QR Code Selector */}
                         {payMethod === "UPI" && (() => {
                           const netPayable = selectedDueIds.reduce((sum, id) => sum + (payingState[id] ?? 0), 0);
-                          const upiLink = `upi://pay?pa=${schoolInfo.upiId || "gngschool@icici"}&pn=${encodeURIComponent(schoolInfo.upiMerchantName || schoolInfo.name || "School Finance")}&am=${netPayable.toFixed(2)}&cu=INR&tn=${encodeURIComponent("School Fees")}`;
+                          const upiLink = `upi://pay?pa=${schoolInfo.upiId || "gngschool@icici"}&pn=${encodeURIComponent(schoolInfo.upiMerchantName || schoolInfo.name || "School Finance")}&am=${(netPayable / 100).toFixed(2)}&cu=INR&tn=${encodeURIComponent("School Fees")}`;
                           const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(upiLink)}`;
                           return (
                             <div className="bg-white p-4 rounded-xl border border-slate-100 flex flex-col items-center justify-center gap-3 text-center animate-in slide-in-from-top-2 duration-200">
@@ -1284,10 +1287,10 @@ export default function AccountantDashboard() {
                                 Change Due
                               </span>
                               <span className="text-sm font-extrabold text-indigo-600 block mt-0.5">
-                                Rs. {(() => {
+                                {(() => {
                                   const netPayable = selectedDueIds.reduce((sum, id) => sum + (payingState[id] ?? 0), 0);
                                   const received = Number(amountReceived) || 0;
-                                  return received > netPayable ? (received - netPayable).toLocaleString("en-IN") : 0;
+                                  return received > toRupees(netPayable) ? formatP(toPaisa(received - toRupees(netPayable))) : formatP(0);
                                 })()}
                               </span>
                             </div>
@@ -1889,7 +1892,7 @@ export default function AccountantDashboard() {
                   <div>
                     <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Total Amount (Rs.)</label>
                     <div className="w-full text-xs font-black py-2 px-2.5 bg-slate-100 border border-slate-200 rounded-lg text-indigo-700 select-none">
-                      {formatP(Object.values(structFeeInputs).reduce((sum, val) => sum + (parseFloat(val) || 0), 0))}
+                      {formatP(Object.values(structFeeInputs).reduce((sum, val) => sum + toPaisa(parseFloat(val) || 0), 0))}
                     </div>
                   </div>
                 </div>
