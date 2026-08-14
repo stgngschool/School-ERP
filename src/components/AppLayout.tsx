@@ -34,6 +34,7 @@ import {
   ShieldCheck,
   GraduationCap,
   Printer,
+  Phone,
 } from "lucide-react";
 
 interface AppLayoutProps {
@@ -60,19 +61,23 @@ const getNavItems = (activeRole: string): NavItem[] => {
         { category: "Academic Portal", name: "Attendance History", shortName: "Attendance", icon: Calendar, tab: "attendance" },
         { category: "Finance & Services", name: "Pay School Fees", shortName: "Fees", icon: CreditCard, tab: "fees" },
         { category: "Finance & Services", name: "Apply for Leave", shortName: "Leave", icon: FileText, tab: "leave" },
+        { category: "Communication", name: "Notices & Circulars", shortName: "Notices", icon: Bell, tab: "notices" },
       ];
     case "TEACHER":
       return [
         { category: "Daily Academics", name: "Mark Attendance", shortName: "Attendance", icon: UserCheck, tab: "attendance" },
         { category: "Daily Academics", name: "Marks & Exam Roster", shortName: "Marks", icon: GraduationCap, tab: "marks" },
         { category: "Daily Academics", name: "Upload Homework", shortName: "Homework", icon: BookOpen, tab: "homework" },
+        { category: "Daily Academics", name: "Fee Status & Dues", shortName: "Fee Dues", icon: AlertTriangle, tab: "defaulters" },
         { category: "Daily Academics", name: "Leave Requests", shortName: "Leaves", icon: FileText, tab: "leaves" },
+        { category: "Communication", name: "Notices & Circulars", shortName: "Notices", icon: Bell, tab: "notices" },
       ];
     case "ACCOUNTANT":
       return [
         { category: "Fee Transactions", name: "Fee Collection", shortName: "Collect", icon: CreditCard, tab: "collect" },
         { category: "Fee Transactions", name: "Fee Defaulters & Dues", shortName: "Dues", icon: AlertTriangle, tab: "defaulters" },
         { category: "Fee Transactions", name: "Receipts & Ledger Logs", shortName: "Ledger", icon: ArrowRightLeft, tab: "ledger", desktopOnly: true },
+        { category: "Communication", name: "Notices & Circulars", shortName: "Notices", icon: Bell, tab: "notices" },
       ];
     case "ADMIN":
       return [
@@ -172,6 +177,16 @@ const getMegaMenuData = (activeRole: string): MegaMenuCategory[] => {
             { name: "Outstanding Dues Ledger", tab: "defaulters" },
             { name: "All Receipts Ledger", tab: "ledger" },
           ]
+        },
+        {
+          title: "Announcements",
+          textColor: "text-indigo-600",
+          bgColor: "bg-indigo-50",
+          borderColor: "border-indigo-100",
+          icon: Bell,
+          items: [
+            { name: "Notices & Circulars", tab: "notices" },
+          ]
         }
       ];
     case "TEACHER":
@@ -186,7 +201,18 @@ const getMegaMenuData = (activeRole: string): MegaMenuCategory[] => {
             { name: "Mark Daily Attendance", tab: "attendance" },
             { name: "Exams & Marks Entry", tab: "marks" },
             { name: "Upload Homework Files", tab: "homework" },
+            { name: "Class Fee Status & Dues", tab: "defaulters" },
             { name: "My Leave Requests", tab: "leaves" },
+          ]
+        },
+        {
+          title: "Bulletins",
+          textColor: "text-amber-600",
+          bgColor: "bg-amber-50",
+          borderColor: "border-amber-100",
+          icon: Bell,
+          items: [
+            { name: "Notices & Circulars", tab: "notices" },
           ]
         }
       ];
@@ -205,7 +231,7 @@ const getMegaMenuData = (activeRole: string): MegaMenuCategory[] => {
           ]
         },
         {
-          title: "Fee Payments & Requests",
+          title: "Fee Payments & Notices",
           textColor: "text-emerald-600",
           bgColor: "bg-emerald-50",
           borderColor: "border-emerald-100",
@@ -213,6 +239,7 @@ const getMegaMenuData = (activeRole: string): MegaMenuCategory[] => {
           items: [
             { name: "Pay School Fees Online", tab: "fees" },
             { name: "Apply for Leave", tab: "leave" },
+            { name: "Notices & Circulars", tab: "notices" },
           ]
         }
       ];
@@ -332,23 +359,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
           </div>
         </div>
 
-        {/* User Profile Card */}
-        <div className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-100 rounded-2xl mb-6 shrink-0">
-          <div className={`flex h-8 w-8 items-center justify-center rounded-full ${roleBadgeColor} text-white font-bold text-xs shrink-0`}>
-            {mounted ? (user?.name?.slice(0, 1) || "U") : "U"}
-          </div>
-          <div className="min-w-0 flex-1">
-            <h4 className="text-xs font-bold text-slate-800 truncate">{mounted ? (user?.name || "System User") : "System User"}</h4>
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{mounted ? activeRole : ""}</p>
-          </div>
-          <button
-            onClick={handleLogout}
-            title="Sign Out"
-            className="p-1.5 hover:bg-rose-50 rounded-xl text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
-          >
-            <LogOut className="h-4 w-4" />
-          </button>
-        </div>
+        {/* User Profile Card moved to bottom */}
 
         {/* Navigation */}
         <nav className="flex-1 space-y-1 overflow-y-auto pr-1 select-none">
@@ -381,8 +392,23 @@ export default function AppLayout({ children }: AppLayoutProps) {
         </nav>
 
         {/* Sidebar Footer */}
-        <div className="pt-3 border-t border-slate-100 space-y-2 shrink-0">
-          <p className="text-[10px] font-semibold text-slate-400 text-center pb-2">Finance OS v1.0.0</p>
+        <div className="pt-3 border-t border-slate-100 shrink-0 mt-4">
+          <div className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-100 rounded-2xl shrink-0">
+            <div className={`flex h-8 w-8 items-center justify-center rounded-full ${roleBadgeColor} text-white font-bold text-xs shrink-0`}>
+              {mounted ? (user?.name?.slice(0, 1) || "U") : "U"}
+            </div>
+            <div className="min-w-0 flex-1">
+              <h4 className="text-xs font-bold text-slate-800 truncate">{mounted ? (user?.name || "System User") : "System User"}</h4>
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{mounted ? activeRole : ""}</p>
+            </div>
+            <button
+              onClick={handleLogout}
+              title="Sign Out"
+              className="p-1.5 hover:bg-rose-50 rounded-xl text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -480,45 +506,71 @@ export default function AppLayout({ children }: AppLayoutProps) {
               })()}
             </div>
 
-            {/* Search Bar */}
-            <div className="relative flex-1" ref={searchRef}>
-              <div className="absolute inset-y-0 left-3.5 flex items-center pointer-events-none text-slate-400">
-                <Search className="h-3.5 w-3.5" />
-              </div>
-              <input
-                type="text"
-                placeholder="Search students, admission no, family code... (Ctrl+K)"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-14 py-2 bg-slate-100/50 border border-slate-200/50 rounded-2xl text-xs font-semibold focus:outline-none focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500 focus:bg-white transition-all text-slate-800 shadow-[inset_0_1px_2px_rgba(0,0,0,0.02)] placeholder:text-slate-400"
-              />
-              <div className="absolute inset-y-0 right-3.5 flex items-center pointer-events-none">
-                <kbd className="hidden sm:inline-block text-[9px] font-black text-slate-500 bg-slate-200/60 border border-transparent rounded-lg px-2 py-0.5">Ctrl K</kbd>
-              </div>
-              {searchQuery && (
-                <div className="absolute top-11 left-0 right-0 bg-white border border-slate-200/90 rounded-2xl shadow-xl max-h-60 overflow-y-auto z-50 p-2 space-y-1">
-                  {students && students.filter(s =>
-                    s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                    s.admissionNo?.toLowerCase().includes(searchQuery.toLowerCase())
-                  ).slice(0, 8).map((student) => (
-                    <button key={student.id} onClick={() => { setActiveTab("students"); setSearchQuery(""); }}
-                      className="w-full text-left flex justify-between items-center p-2 rounded-xl hover:bg-indigo-50/60 transition-all">
-                      <div>
-                        <p className="text-xs font-bold text-slate-800">{student.name}</p>
-                        <p className="text-[10px] text-slate-400 font-semibold">{student.admissionNo} • Class {student.class}</p>
-                      </div>
-                      <span className="text-[10px] font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full uppercase">View</span>
-                    </button>
-                  ))}
-                  {students && students.filter(s =>
-                    s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                    s.admissionNo?.toLowerCase().includes(searchQuery.toLowerCase())
-                  ).length === 0 && (
-                    <p className="text-center py-4 text-xs font-semibold text-slate-400">No students found.</p>
-                  )}
+            {/* Search Bar or Parent Support Bar */}
+            {!mounted ? (
+              <div className="flex-1" />
+            ) : activeRole === "PARENT" ? (
+              <div className="flex items-center gap-3 flex-1">
+                {schoolInfo?.phone && (
+                  <a
+                    href={`tel:${schoolInfo.phone}`}
+                    className="flex items-center gap-2 bg-emerald-50/80 hover:bg-emerald-100 border border-emerald-200/60 text-emerald-800 py-2 px-3.5 rounded-2xl text-xs font-black transition-all shadow-2xs cursor-pointer group"
+                    title="Click to call school helpdesk"
+                  >
+                    <Phone className="h-3.5 w-3.5 text-emerald-600 group-hover:rotate-12 transition-transform shrink-0" />
+                    <span>Helpdesk: {schoolInfo.phone}</span>
+                  </a>
+                )}
+
+                <div className="hidden lg:flex items-center gap-2 bg-indigo-50/70 border border-indigo-100 text-indigo-800 py-2 px-3.5 rounded-2xl text-xs font-black shadow-2xs">
+                  <GraduationCap className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+                  <span>
+                    {students && students.length > 0
+                      ? `${students[0].name} (Cl ${students[0].class}-${students[0].section})`
+                      : "Parent Academic Portal"}
+                  </span>
                 </div>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="relative flex-1" ref={searchRef}>
+                <div className="absolute inset-y-0 left-3.5 flex items-center pointer-events-none text-slate-400">
+                  <Search className="h-3.5 w-3.5" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search students, admission no, family code... (Ctrl+K)"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-14 py-2 bg-slate-100/50 border border-slate-200/50 rounded-2xl text-xs font-semibold focus:outline-none focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500 focus:bg-white transition-all text-slate-800 shadow-[inset_0_1px_2px_rgba(0,0,0,0.02)] placeholder:text-slate-400"
+                />
+                <div className="absolute inset-y-0 right-3.5 flex items-center pointer-events-none">
+                  <kbd className="hidden sm:inline-block text-[9px] font-black text-slate-500 bg-slate-200/60 border border-transparent rounded-lg px-2 py-0.5">Ctrl K</kbd>
+                </div>
+                {searchQuery && (
+                  <div className="absolute top-11 left-0 right-0 bg-white border border-slate-200/90 rounded-2xl shadow-xl max-h-60 overflow-y-auto z-50 p-2 space-y-1">
+                    {students && students.filter(s =>
+                      s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                      s.admissionNo?.toLowerCase().includes(searchQuery.toLowerCase())
+                    ).slice(0, 8).map((student) => (
+                      <button key={student.id} onClick={() => { setActiveTab("students"); setSearchQuery(""); }}
+                        className="w-full text-left flex justify-between items-center p-2 rounded-xl hover:bg-indigo-50/60 transition-all">
+                        <div>
+                          <p className="text-xs font-bold text-slate-800">{student.name}</p>
+                          <p className="text-[10px] text-slate-400 font-semibold">{student.admissionNo} • Class {student.class}</p>
+                        </div>
+                        <span className="text-[10px] font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full uppercase">View</span>
+                      </button>
+                    ))}
+                    {students && students.filter(s =>
+                      s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                      s.admissionNo?.toLowerCase().includes(searchQuery.toLowerCase())
+                    ).length === 0 && (
+                      <p className="text-center py-4 text-xs font-semibold text-slate-400">No students found.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Right Controls */}

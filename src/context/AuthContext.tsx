@@ -254,6 +254,7 @@ interface AuthContextType {
   ) => Promise<void>;
   updateLeaveStatus: (id: string, status: LeaveStatus, remarks: string) => Promise<void>;
   addNotice: (title: string, content: string, target: string) => Promise<void>;
+  deleteNotice: (id: string) => Promise<boolean>;
   recordItemizedPayment: (
     studentId: string | null,
     items: { ledgerEntryId: string; payAmount: number; discountAmount: number }[],
@@ -546,6 +547,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         apiFetch("/api/events").then((data) => data && setEventsList(data));
       } else if (role === "TEACHER") {
         apiFetch("/api/students").then((data) => data && setStudents(data)).then(() => setStudentsLoaded(true));
+        apiFetch("/api/billing").then((data) => {
+          if (data) {
+            setLedgerEntries(data.ledgerEntries || []);
+            setReceipts(data.receipts || []);
+            setDueItems(data.dueItems || []);
+            setBillingLoaded(true);
+          }
+        });
         apiFetch("/api/attendance").then((data) => data && setAttendances(data)).then(() => setAttendanceLoaded(true));
         apiFetch("/api/homework").then((data) => data && setHomeworks(data));
         apiFetch("/api/leave").then((data) => data && setLeaveRequests(data));
@@ -960,7 +969,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (res.ok) {
-        await refreshHomework();
+        await refreshLeave();
       }
     } catch (err) {
       console.error("Apply leave failed:", err);
@@ -992,10 +1001,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (res.ok) {
-        await refreshLeave();
+        await refreshNotices();
       }
     } catch (err) {
       console.error("Add notice failed:", err);
+    }
+  };
+
+  const deleteNotice = async (id: string): Promise<boolean> => {
+    try {
+      const res = await fetch("/api/notice", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+
+      if (res.ok) {
+        await refreshNotices();
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error("Delete notice failed:", err);
+      return false;
     }
   };
 
@@ -1358,6 +1386,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         applyLeave,
         updateLeaveStatus,
         addNotice,
+        deleteNotice,
         recordItemizedPayment,
         addStudent,
         bulkImportStudents,

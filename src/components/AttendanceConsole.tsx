@@ -18,6 +18,7 @@ interface AttendanceConsoleProps {
 
 export default function AttendanceConsole({ initialClass, hideClassSelector }: AttendanceConsoleProps) {
   const {
+    user,
     students,
     attendances,
     leaveRequests,
@@ -28,6 +29,7 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
   const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
   const [selectedClass, setSelectedClass] = useState<string>(initialClass || "10-A");
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
+  const [hasLoaded, setHasLoaded] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [activeView, setActiveView] = useState<"ROSTER" | "MONTHLY">("ROSTER");
@@ -35,6 +37,10 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   });
+
+  useEffect(() => {
+    setHasLoaded(false);
+  }, [selectedClass, selectedDate]);
 
   // Profile modal state
   const [showProfileModal, setShowProfileModal] = useState<boolean>(false);
@@ -59,19 +65,24 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
     return ["ALL", ...list];
   }, [students]);
 
-  // Sync selected class when initialClass is resolved asynchronously
+  // Sync selected class when initialClass is resolved asynchronously or teacher profile loads
   useEffect(() => {
     if (initialClass) {
       setSelectedClass(initialClass);
+    } else if (user?.role === "TEACHER" && user.teacherProfile?.classes && user.teacherProfile.classes.length > 0) {
+      const cls = user.teacherProfile.classes[0];
+      const classKey = cls.section && !cls.name.toLowerCase().includes(cls.section.toLowerCase()) 
+        ? `${cls.name}-${cls.section}` : cls.name;
+      setSelectedClass(classKey);
     }
-  }, [initialClass]);
+  }, [initialClass, user]);
 
   // Set default class if current selectedClass has no students
   useEffect(() => {
-    if (availableClasses.length > 1 && !availableClasses.includes(selectedClass)) {
+    if (user?.role !== "TEACHER" && availableClasses.length > 1 && !availableClasses.includes(selectedClass)) {
       setSelectedClass(availableClasses[1]);
     }
-  }, [availableClasses, selectedClass]);
+  }, [availableClasses, selectedClass, user]);
 
   // Students in selected class
   const classStudents = useMemo(() => {
@@ -321,8 +332,22 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
       )}
 
       {/* ─── FULL-WIDTH ROSTER LIST (ZERO SIDE PADDING WASTE) ─── */}
-      {activeView === "ROSTER" && (
-        <div className="bg-white border-y sm:border border-slate-200/60 divide-y divide-slate-100 sm:rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)]">
+      {!hasLoaded ? (
+        <div className="bg-white border-y sm:border border-slate-200/60 p-10 sm:rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] text-center mt-4">
+          <Users className="h-14 w-14 mx-auto text-indigo-200 mb-4" />
+          <h3 className="text-xl font-black text-slate-800 mb-2">Ready to Take Attendance?</h3>
+          <p className="text-sm text-slate-500 mb-8 max-w-md mx-auto">
+            Click the button below to fetch the student list for {selectedClass === "ALL" ? "All Classes" : `Class ${selectedClass}`}. This helps save bandwidth and database limits.
+          </p>
+          <button
+            onClick={() => setHasLoaded(true)}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-indigo-500/20 transition-all active:scale-95 text-sm"
+          >
+            Load Students
+          </button>
+        </div>
+      ) : activeView === "ROSTER" && (
+        <div className="bg-white border-y sm:border border-slate-200/60 divide-y divide-slate-100 sm:rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] mt-4">
           {filteredStudents.length === 0 ? (
             <div className="text-center py-8 text-slate-400">
               <Users className="h-8 w-8 mx-auto mb-1 opacity-40" />
@@ -376,8 +401,8 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
       )}
 
       {/* ─── MONTHLY REGISTER VIEW ─── */}
-      {activeView === "MONTHLY" && (
-        <div className="bg-white border-y sm:border border-slate-200/60 p-4 sm:p-6 sm:rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] space-y-3">
+      {hasLoaded && activeView === "MONTHLY" && (
+        <div className="bg-white border-y sm:border border-slate-200/60 p-4 sm:p-6 sm:rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] space-y-3 mt-4">
           <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
             <div>
               <h3 className="text-xs font-extrabold text-slate-900">Monthly Attendance Register</h3>

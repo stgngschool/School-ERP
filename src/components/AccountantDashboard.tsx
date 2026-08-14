@@ -36,8 +36,15 @@ import {
   TrendingUp,
 } from "lucide-react";
 import StudentProfileModal from "@/components/StudentProfileModal";
+import AttendanceConsole from "@/components/AttendanceConsole";
 import MarksFeedingConsole from "@/components/MarksFeedingConsole";
+import NoticeBoardView from "@/components/NoticeBoardView";
 import PrintMarksheets from "@/components/PrintMarksheets";
+import {
+  generateFeeReminderWhatsAppUrl,
+  isDueUpToCurrentMonth,
+  getCurrentMonthName,
+} from "@/lib/whatsapp";
 
 
 // Groups multiple months or siblings into a single row if the list grows too long (> 4 items)
@@ -149,7 +156,7 @@ export default function AccountantDashboard() {
     billingLoaded,
   } = useAuth();
 
-  const validTabs = ["dashboard", "collect", "attendance", "defaulters", "ledger", "structures", "students", "idcards", "audit", "print_marksheets", "marks"];
+  const validTabs = ["dashboard", "collect", "attendance", "defaulters", "ledger", "structures", "students", "idcards", "audit", "print_marksheets", "marks", "notices"];
   const currentTab = validTabs.includes(activeTab) ? activeTab : "collect";
 
   React.useEffect(() => {
@@ -1432,7 +1439,7 @@ export default function AccountantDashboard() {
                 if (!studentDuesMap.has(sid)) studentDuesMap.set(sid, []);
                 studentDuesMap.get(sid)!.push(d);
 
-                if (d.status === "UNPAID") {
+                if (d.status === "UNPAID" && isDueUpToCurrentMonth(d)) {
                   if (!unpaidDuesMap.has(sid)) unpaidDuesMap.set(sid, []);
                   unpaidDuesMap.get(sid)!.push(d);
                 } else if (d.status === "PAID") {
@@ -1523,7 +1530,7 @@ export default function AccountantDashboard() {
                             </div>
                           </div>
                         </div>
-                        <div className="sm:border-l sm:border-slate-200/80 sm:pl-6 space-y-1.5 shrink-0">
+                        <div className="sm:border-l sm:border-slate-200/80 sm:pl-6 space-y-2 shrink-0">
                           <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
                             <span className="text-slate-400 flex items-center justify-center"><UserCheck className="h-4 w-4" /></span>
                             <span>{std.fatherName || std.parentName}</span>
@@ -1534,6 +1541,31 @@ export default function AccountantDashboard() {
                               <span>{std.fatherMobile || std.parentPhone}</span>
                             </div>
                           )}
+                          <div className="flex items-center gap-2 pt-1">
+                            {(std.fatherMobile || std.parentPhone) && (
+                              <a
+                                href={`tel:${std.fatherMobile || std.parentPhone}`}
+                                className="flex items-center gap-1 py-1.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all shadow-2xs"
+                              >
+                                <Phone className="h-3.5 w-3.5" /> Call
+                              </a>
+                            )}
+                            {totalDue > 0 && (
+                              <a
+                                href={generateFeeReminderWhatsAppUrl({
+                                  student: std,
+                                  unpaidDues,
+                                  schoolInfo,
+                                  senderRole: "ACCOUNTANT",
+                                })}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1.5 py-1.5 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition-all shadow-xs"
+                              >
+                                <Send className="h-3.5 w-3.5" /> WhatsApp Reminder
+                              </a>
+                            )}
+                          </div>
                         </div>
                       </div>
 
@@ -1768,12 +1800,39 @@ export default function AccountantDashboard() {
                             </div>
                           </div>
 
-                          {/* View Full Statement CTA */}
+                          {/* View Full Statement CTA & Action Buttons */}
                           <div className="w-full flex items-center justify-between px-4 py-2.5 border-t border-slate-100 bg-slate-50/20 group-hover:bg-indigo-50/30 transition-colors">
                             <span className="text-[10px] font-bold text-indigo-600 group-hover:text-indigo-700 transition-colors">
-                                View Full Statement
+                              View Statement
                             </span>
-                            <ArrowRight className="h-3.5 w-3.5 text-indigo-400 group-hover:text-indigo-600 transition-transform group-hover:translate-x-1" />
+
+                            <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                              {(std.fatherMobile || std.parentPhone) && (
+                                <a
+                                  href={`tel:${std.fatherMobile || std.parentPhone}`}
+                                  title="Call Parent"
+                                  className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 transition-all"
+                                >
+                                  <Phone className="h-3.5 w-3.5" />
+                                </a>
+                              )}
+                              {totalDue > 0 && (
+                                <a
+                                  href={generateFeeReminderWhatsAppUrl({
+                                    student: std,
+                                    unpaidDues,
+                                    schoolInfo,
+                                    senderRole: "ACCOUNTANT",
+                                  })}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title="Send WhatsApp Reminder"
+                                  className="flex items-center gap-1 py-1 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black transition-all shadow-2xs"
+                                >
+                                  <Send className="h-3 w-3" /> WhatsApp
+                                </a>
+                              )}
+                            </div>
                           </div>
                         </div>
                       );
@@ -2290,8 +2349,16 @@ export default function AccountantDashboard() {
           </div>
           )
         )}
+
+        {/* TAB 5: Notices & Circulars */}
+        {currentTab === "notices" && (
+          <NoticeBoardView
+            title="Finance & Official School Circulars"
+            subtitle="Fee deadlines, administrative circulars, and institutional announcements."
+          />
+        )}
       </div>
-)}
+    )}
 
       <StudentProfileModal
         studentId={selectedStudentId}

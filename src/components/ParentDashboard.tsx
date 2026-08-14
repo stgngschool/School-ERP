@@ -1,5 +1,3 @@
-"use client";
-
 import React, { useState } from "react";
 import { formatP } from "@/lib/currency";
 import { useAuth } from "@/context/AuthContext";
@@ -16,9 +14,17 @@ import {
   Users,
   Printer,
   ChevronRight,
+  ChevronLeft,
+  ChevronDown,
+  Paperclip,
+  Loader2,
+  QrCode,
+  ExternalLink,
+  ShieldCheck,
 } from "lucide-react";
 
 import StudentProfileModal from "@/components/StudentProfileModal";
+import NoticeBoardView from "@/components/NoticeBoardView";
 
 // Groups multiple months or siblings into a single row if the list grows too long (> 4 items)
 const getGroupedReceiptItems = (items: any[]) => {
@@ -128,18 +134,20 @@ export default function ParentDashboard() {
     attendanceLoaded,
   } = useAuth();
 
-  // Filter students belonging to this parent dynamically with robust phone/family matching
-  const parentStudents = students.filter((s) => {
-    if (!user) return false;
-    const norm = (str?: string) => (str ? str.replace(/\D/g, "").slice(-10) : "");
-    const userPhone = norm(user.phone || user.username);
-    const sFatherPhone = norm(s.fatherMobile || s.parentPhone);
-    const sMotherPhone = norm(s.motherMobile);
-    if (userPhone && (userPhone === sFatherPhone || userPhone === sMotherPhone)) return true;
-    if (user.name && s.parentName && user.name.toLowerCase().trim() === s.parentName.toLowerCase().trim()) return true;
-    if (user.name && s.fatherName && user.name.toLowerCase().trim() === s.fatherName.toLowerCase().trim()) return true;
-    return false;
-  });
+  // Filter students belonging to this parent dynamically
+  const parentStudents = (user?.role === "PARENT" && students.length > 0)
+    ? students
+    : students.filter((s) => {
+        if (!user) return false;
+        const norm = (str?: string) => (str ? str.replace(/\D/g, "").slice(-10) : "");
+        const userPhone = norm(user.phone || user.username);
+        const sFatherPhone = norm(s.fatherMobile || s.parentPhone);
+        const sMotherPhone = norm(s.motherMobile);
+        if (userPhone && (userPhone === sFatherPhone || userPhone === sMotherPhone)) return true;
+        if (user.name && s.parentName && user.name.toLowerCase().trim() === s.parentName.toLowerCase().trim()) return true;
+        if (user.name && s.fatherName && user.name.toLowerCase().trim() === s.fatherName.toLowerCase().trim()) return true;
+        return false;
+      });
   
   const [selectedChildId, setSelectedChildId] = useState(
     parentStudents.length > 0 ? parentStudents[0].id : ""
@@ -161,7 +169,12 @@ export default function ParentDashboard() {
   const childDues = child ? dueItems.filter((d) => d.studentId === child.id && d.status === "UNPAID") : [];
   const childAttendances = child ? attendances.filter((a) => a.studentId === child.id) : [];
   const childHomework = child ? homeworks.filter(
-    (h) => h.classSection === `${child.class}-${child.section}`
+    (h) => {
+      const childClass = (child.class || "").toLowerCase().replace(/\s+/g, "");
+      const childSection = (child.section || "").toLowerCase().replace(/\s+/g, "");
+      const hwCS = (h.classSection || "").toLowerCase().replace(/\s+/g, "");
+      return hwCS.includes(childClass) || hwCS === `${childClass}-${childSection}`;
+    }
   ) : [];
   const childLeaves = child ? leaveRequests.filter((l) => l.studentId === child.id) : [];
 
@@ -169,6 +182,7 @@ export default function ParentDashboard() {
   const [selectedDueIds, setSelectedDueIds] = useState<string[]>([]);
   const [payMethod, setPayMethod] = useState("UPI");
   const [showPayModal, setShowPayModal] = useState(false);
+  const [payLoading, setPayLoading] = useState(false);
   
   // Printable Invoice Receipt States
   const [showReceiptModal, setShowReceiptModal] = useState(false);
@@ -179,10 +193,79 @@ export default function ParentDashboard() {
   const [leaveStart, setLeaveStart] = useState("");
   const [leaveEnd, setLeaveEnd] = useState("");
   const [leaveReason, setLeaveReason] = useState("");
+  const [leaveFile, setLeaveFile] = useState<File | null>(null);
+  const [leaveLoading, setLeaveLoading] = useState(false);
   const [showLeaveSuccess, setShowLeaveSuccess] = useState(false);
   const [selectedExamTab, setSelectedExamTab] = useState("");
 
   const [childMarks, setChildMarks] = useState<any[]>([]);
+
+  // Attendance Month & Year Navigation
+  const now = new Date();
+  const [selectedYear, setSelectedYear] = useState<number>(now.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth() + 1); // 1-12
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null);
+
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+
+  // Number of days in selected month
+  const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
+  // Day of week of the 1st of month (0 = Mon, 6 = Sun)
+  const firstDayOfWeek = (new Date(selectedYear, selectedMonth - 1, 1).getDay() + 6) % 7;
+
+  const monthStrPrefix = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
+
+  const paddingDays = Array.from({ length: firstDayOfWeek }, (_, i) => ({
+    type: "PAD" as const,
+    id: `pad-${i}`,
+  }));
+
+  const activeMonthDays = Array.from({ length: daysInMonth }, (_, index) => {
+    const dayNumber = index + 1;
+    const dateStr = `${monthStrPrefix}-${String(dayNumber).padStart(2, "0")}`;
+    const dayOfWeek = (firstDayOfWeek + index) % 7; // 0=Mon ... 6=Sun
+    const isSunday = dayOfWeek === 6;
+    const statusRecord = childAttendances.find((a) => a.date === dateStr);
+    return {
+      type: "DAY" as const,
+      day: dayNumber,
+      date: dateStr,
+      isSunday,
+      status: statusRecord ? statusRecord.status : (isSunday ? "SUNDAY" : "UNMARKED"),
+    };
+  });
+
+  // Selected Month Attendance Stats
+  const monthlyLogs = childAttendances.filter((a) => a.date.startsWith(monthStrPrefix));
+  const monthlyPresent = monthlyLogs.filter((a) => a.status === "PRESENT").length;
+  const monthlyAbsent = monthlyLogs.filter((a) => a.status === "ABSENT").length;
+  const monthlyLeave = monthlyLogs.filter((a) => a.status === "LEAVE").length;
+  const monthlyLate = monthlyLogs.filter((a) => a.status === "LATE").length;
+  const monthlyTotal = monthlyLogs.length;
+  const monthlyRate = monthlyTotal > 0 ? Math.round(((monthlyPresent + monthlyLeave + monthlyLate) / monthlyTotal) * 100) : 100;
+
+  const handlePrevMonth = () => {
+    if (selectedMonth === 1) {
+      setSelectedMonth(12);
+      setSelectedYear((prev) => prev - 1);
+    } else {
+      setSelectedMonth((prev) => prev - 1);
+    }
+    setSelectedCalendarDate(null);
+  };
+
+  const handleNextMonth = () => {
+    if (selectedMonth === 12) {
+      setSelectedMonth(1);
+      setSelectedYear((prev) => prev + 1);
+    } else {
+      setSelectedMonth((prev) => prev + 1);
+    }
+    setSelectedCalendarDate(null);
+  };
 
   React.useEffect(() => {
     if (child?.id) {
@@ -208,7 +291,7 @@ export default function ParentDashboard() {
     setShowPayModal(true);
   };
 
-  const handleSimulatePayment = (e: React.FormEvent) => {
+  const handleSimulatePayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!child) return;
     const unpaidItems = childDues.filter((d) => selectedDueIds.includes(d.id));
@@ -221,36 +304,52 @@ export default function ParentDashboard() {
       payAmount: d.amount,
       discountAmount: 0,
     }));
-    recordItemizedPayment(child.id, items, payMethod);
 
-    // Track recently generated receipt details for print layout
-    const matchedReceipt = {
-      receiptNo: `REC-2026-${Math.floor(1000 + Math.random() * 9000)}`,
-      studentName: child.name,
-      classSection: `${child.class}-${child.section}`,
-      admissionNo: child.admissionNo,
-      amount: totalAmount,
-      method: payMethod,
-      details: unpaidItems.map((i) => `${i.name} (Rs. ${i.amount})`).join(" + "),
-      createdAt: new Date().toISOString().split("T")[0],
-    };
+    setPayLoading(true);
+    try {
+      const ok = await recordItemizedPayment(child.id, items, payMethod);
+      if (ok) {
+        const matchedReceipt = {
+          receiptNo: `REC-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+          studentName: child.name,
+          classSection: `${child.class}-${child.section}`,
+          admissionNo: child.admissionNo,
+          amount: totalAmount,
+          method: payMethod,
+          details: unpaidItems.map((i) => `${i.name} (Rs. ${i.amount})`).join(" + "),
+          createdAt: new Date().toISOString().split("T")[0],
+        };
 
-    setActiveReceipt(matchedReceipt);
-    setSelectedDueIds([]);
-    setShowPayModal(false);
-    setShowReceiptModal(true);
+        setActiveReceipt(matchedReceipt);
+        setSelectedDueIds([]);
+        setShowPayModal(false);
+        setShowReceiptModal(true);
+      }
+    } catch (err) {
+      console.error("Payment error:", err);
+    } finally {
+      setPayLoading(false);
+    }
   };
 
-  const handleApplyLeave = (e: React.FormEvent) => {
+  const handleApplyLeave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!child || !leaveStart || !leaveEnd || !leaveReason) return;
 
-    applyLeave(child.id, leaveStart, leaveEnd, leaveReason);
-    setLeaveStart("");
-    setLeaveEnd("");
-    setLeaveReason("");
-    setShowLeaveSuccess(true);
-    setTimeout(() => setShowLeaveSuccess(false), 3000);
+    setLeaveLoading(true);
+    try {
+      await applyLeave(child.id, leaveStart, leaveEnd, leaveReason, leaveFile);
+      setLeaveStart("");
+      setLeaveEnd("");
+      setLeaveReason("");
+      setLeaveFile(null);
+      setShowLeaveSuccess(true);
+      setTimeout(() => setShowLeaveSuccess(false), 3500);
+    } catch (err) {
+      console.error("Apply leave error:", err);
+    } finally {
+      setLeaveLoading(false);
+    }
   };
 
   // Compute subtotal of selected due checkouts
@@ -261,7 +360,7 @@ export default function ParentDashboard() {
   // Compute total outstanding balance from unpaid items
   const childBalance = childDues.reduce((sum, item) => sum + item.amount, 0);
 
-  // Compute attendance summary
+  // Compute overall session attendance summary
   const presentDays = childAttendances.filter((a) => a.status === "PRESENT").length;
   const leaveDays = childAttendances.filter((a) => a.status === "LEAVE").length;
   const lateDays = childAttendances.filter((a) => a.status === "LATE").length;
@@ -269,19 +368,7 @@ export default function ParentDashboard() {
   const totalDays = childAttendances.length;
   const attendanceRate = totalDays > 0 ? Math.round(((presentDays + leaveDays + lateDays) / totalDays) * 100) : 100;
 
-  // Generate 30-day Calendar Grid mock for July 2026
-  const calendarDays = Array.from({ length: 30 }, (_, index) => {
-    const dayNumber = index + 1;
-    const dateStr = `2026-07-${String(dayNumber).padStart(2, "0")}`;
-    const statusRecord = childAttendances.find((a) => a.date === dateStr);
-    return {
-      day: dayNumber,
-      date: dateStr,
-      status: statusRecord ? statusRecord.status : "UNMARKED",
-    };
-  });
-
-  const validTabs = ["dashboard", "reportcard", "fees", "homework", "attendance", "leave"];
+  const validTabs = ["dashboard", "reportcard", "fees", "homework", "attendance", "leave", "notices"];
   React.useEffect(() => {
     if (!validTabs.includes(activeTab)) {
       setActiveTab("dashboard");
@@ -404,7 +491,7 @@ export default function ParentDashboard() {
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Attendance Rate</span>
               <div>
                 <h3 className="text-2xl font-black text-slate-900 tracking-tight">{attendanceRate}%</h3>
-                <p className="text-[10px] text-slate-400 font-semibold mt-1">July 2026 Academic Cycle</p>
+                <p className="text-[10px] text-slate-400 font-semibold mt-1">Current Academic Session</p>
               </div>
             </div>
             <div className="h-10 w-10 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 border border-indigo-100/50 shrink-0">
@@ -919,10 +1006,19 @@ export default function ParentDashboard() {
                     </span>
                   </div>
                   <h4 className="text-xs font-extrabold text-slate-800">{hw.title}</h4>
-                  <p className="text-xs text-slate-500 font-medium leading-relaxed">{hw.description}</p>
-                  <button className="flex items-center gap-1 text-[9px] font-black uppercase text-indigo-600 cursor-pointer mt-1">
-                    <Download className="h-3 w-3" /> Download Worksheet
-                  </button>
+                  <p className="text-xs text-slate-500 font-medium leading-relaxed whitespace-pre-wrap">{hw.description}</p>
+                  {hw.fileUrl ? (
+                    <a
+                      href={hw.fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[10px] font-black uppercase text-indigo-600 hover:text-indigo-800 transition-colors mt-1"
+                    >
+                      <Download className="h-3.5 w-3.5" /> Download Attached Worksheet
+                    </a>
+                  ) : (
+                    <span className="text-[9px] font-semibold text-slate-400 italic">No attachment file provided.</span>
+                  )}
                 </div>
               ))
             ) : (
@@ -946,53 +1042,233 @@ export default function ParentDashboard() {
             </div>
           </div>
         ) : (
-        <div className="bg-white border border-slate-200/80 p-3 sm:p-6 sm:rounded-2xl rounded-xl shadow-sm space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-200/80 pb-3">
-            <div className="flex items-center gap-2">
-              <CalendarIcon className="h-4.5 w-4.5 text-indigo-600" />
-              <h3 className="text-xs font-black uppercase tracking-wider text-slate-800">
-                Attendance Calendar: July 2026
-              </h3>
-            </div>
-            <span className="text-[9px] font-black uppercase bg-green-50 text-green-700 px-2 py-0.5 rounded">
-              Rate: {attendanceRate}%
-            </span>
-          </div>
-
-          <div className="grid grid-cols-4 gap-1 border-b border-slate-200/80 pb-2 text-[9px] font-bold text-slate-400 uppercase text-center max-w-sm">
-            <div className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-green-500"></span> Present</div>
-            <div className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-rose-500"></span> Absent</div>
-            <div className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-500"></span> Late</div>
-            <div className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-indigo-500"></span> Leave</div>
-          </div>
-
-          <div className="grid grid-cols-7 gap-2 pt-2 max-w-md">
-            {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day, idx) => (
-              <div key={idx} className="text-center text-[10px] font-black text-slate-400 py-1">
-                {day}
+        <div className="space-y-6">
+          {/* Main Attendance Calendar Card */}
+          <div className="bg-white border border-slate-200/80 p-4 sm:p-6 sm:rounded-2xl rounded-xl shadow-sm space-y-5">
+            {/* Header: Month/Year Navigator & Rate */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 bg-indigo-50 border border-indigo-100/50 rounded-2xl flex items-center justify-center text-indigo-600 shrink-0">
+                  <CalendarIcon className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm sm:text-base font-black text-slate-800 tracking-tight">
+                      {monthNames[selectedMonth - 1]} {selectedYear}
+                    </h3>
+                    <div className="flex items-center gap-1 ml-2">
+                      <button
+                        type="button"
+                        onClick={handlePrevMonth}
+                        className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors cursor-pointer"
+                        title="Previous Month"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleNextMonth}
+                        className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors cursor-pointer"
+                        title="Next Month"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
+                    Viewing attendance roster for {child.name}
+                  </p>
+                </div>
               </div>
-            ))}
-            {calendarDays.map((dayItem) => {
-              const { status } = dayItem;
+
+              {/* Monthly Stats Badges */}
+              <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                <span className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider border ${
+                  monthlyRate >= 75
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200/80"
+                    : "bg-rose-50 text-rose-700 border-rose-200/80"
+                }`}>
+                  Monthly Rate: {monthlyRate}%
+                </span>
+                <span className="px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200/80">
+                  Overall: {attendanceRate}%
+                </span>
+              </div>
+            </div>
+
+            {/* Quick Summary Pill Counters */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              <div className="p-3 bg-emerald-50/50 border border-emerald-100 rounded-xl flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                  <span className="text-[11px] font-bold text-emerald-900">Present</span>
+                </div>
+                <span className="text-sm font-black text-emerald-700">{monthlyPresent}</span>
+              </div>
+
+              <div className="p-3 bg-rose-50/50 border border-rose-100 rounded-xl flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-rose-500" />
+                  <span className="text-[11px] font-bold text-rose-900">Absent</span>
+                </div>
+                <span className="text-sm font-black text-rose-700">{monthlyAbsent}</span>
+              </div>
+
+              <div className="p-3 bg-indigo-50/50 border border-indigo-100 rounded-xl flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-indigo-500" />
+                  <span className="text-[11px] font-bold text-indigo-900">Leave</span>
+                </div>
+                <span className="text-sm font-black text-indigo-700">{monthlyLeave}</span>
+              </div>
+
+              <div className="p-3 bg-amber-50/50 border border-amber-100 rounded-xl flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
+                  <span className="text-[11px] font-bold text-amber-900">Late</span>
+                </div>
+                <span className="text-sm font-black text-amber-700">{monthlyLate}</span>
+              </div>
+            </div>
+
+            {/* Interactive Calendar Grid */}
+            <div className="max-w-2xl mx-auto pt-2">
+              <div className="grid grid-cols-7 gap-1.5 sm:gap-2 text-center text-[10px] sm:text-xs font-black uppercase text-slate-400 pb-2 border-b border-slate-100">
+                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day, idx) => (
+                  <div key={idx} className={idx === 6 ? "text-rose-400" : ""}>
+                    {day}
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-7 gap-1.5 sm:gap-2 pt-2.5">
+                {/* Blank Padding Cells */}
+                {paddingDays.map((pad) => (
+                  <div key={pad.id} className="aspect-square rounded-xl bg-slate-50/40 border border-transparent" />
+                ))}
+
+                {/* Day Cells */}
+                {activeMonthDays.map((dayItem) => {
+                  const { status, isSunday, day, date } = dayItem;
+                  const isSelected = selectedCalendarDate === date;
+
+                  let cellStyle = "bg-slate-50/50 border-slate-200/60 text-slate-400";
+                  if (status === "PRESENT") {
+                    cellStyle = "bg-emerald-50 border-emerald-300 text-emerald-700 font-black shadow-2xs";
+                  } else if (status === "ABSENT") {
+                    cellStyle = "bg-rose-50 border-rose-300 text-rose-700 font-black shadow-2xs";
+                  } else if (status === "LEAVE") {
+                    cellStyle = "bg-indigo-50 border-indigo-300 text-indigo-700 font-black shadow-2xs";
+                  } else if (status === "LATE") {
+                    cellStyle = "bg-amber-50 border-amber-300 text-amber-700 font-black shadow-2xs";
+                  } else if (isSunday) {
+                    cellStyle = "bg-slate-100/60 border-slate-200/40 text-slate-400 font-semibold";
+                  }
+
+                  return (
+                    <button
+                      key={day}
+                      type="button"
+                      onClick={() => setSelectedCalendarDate(isSelected ? null : date)}
+                      className={`aspect-square rounded-xl border text-xs sm:text-sm font-extrabold flex flex-col items-center justify-center relative transition-all cursor-pointer hover:scale-105 active:scale-95 ${cellStyle} ${
+                        isSelected ? "ring-2 ring-indigo-600 ring-offset-2" : ""
+                      }`}
+                    >
+                      <span>{day}</span>
+                      {status === "PRESENT" && <span className="text-[8px] sm:text-[9px] font-black uppercase">P</span>}
+                      {status === "ABSENT" && <span className="text-[8px] sm:text-[9px] font-black uppercase text-rose-600">A</span>}
+                      {status === "LEAVE" && <span className="text-[8px] sm:text-[9px] font-black uppercase text-indigo-600">L</span>}
+                      {status === "LATE" && <span className="text-[8px] sm:text-[9px] font-black uppercase text-amber-600">LT</span>}
+                      {isSunday && status === "SUNDAY" && <span className="text-[7px] font-bold text-slate-400">OFF</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Selected Date Inspector */}
+            {selectedCalendarDate && (() => {
+              const rec = childAttendances.find((a) => a.date === selectedCalendarDate);
               return (
-                <div
-                  key={dayItem.day}
-                  className={`aspect-square rounded-xl border text-xs font-extrabold flex flex-col items-center justify-center relative cursor-help transition-all ${
-                    status === "PRESENT"
-                      ? "bg-green-50/50 border-green-200 text-green-700"
-                      : status === "ABSENT"
-                      ? "bg-rose-50/50 border-rose-200 text-rose-700"
-                      : status === "LATE"
-                      ? "bg-amber-50/50 border-amber-200 text-amber-700"
-                      : status === "LEAVE"
-                      ? "bg-indigo-50/50 border-indigo-200 text-indigo-700"
-                      : "bg-slate-50/30 border-slate-200/80 text-slate-400"
-                  }`}
-                >
-                  <span>{dayItem.day}</span>
+                <div className="p-3.5 bg-indigo-50/70 border border-indigo-100 rounded-2xl flex items-center justify-between text-xs text-slate-700 animate-fade-in">
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">Selected Date:</span>
+                    <h5 className="font-extrabold text-slate-900">{selectedCalendarDate}</h5>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-slate-500">Status:</span>
+                    <span className={`px-2.5 py-1 rounded-lg text-xs font-black uppercase ${
+                      rec?.status === "PRESENT" ? "bg-emerald-100 text-emerald-800" :
+                      rec?.status === "ABSENT" ? "bg-rose-100 text-rose-800" :
+                      rec?.status === "LEAVE" ? "bg-indigo-100 text-indigo-800" :
+                      rec?.status === "LATE" ? "bg-amber-100 text-amber-800" :
+                      "bg-slate-100 text-slate-600"
+                    }`}>
+                      {rec?.status || "Holiday / Unmarked"}
+                    </span>
+                  </div>
                 </div>
               );
-            })}
+            })()}
+          </div>
+
+          {/* Detailed Attendance History List */}
+          <div className="bg-white border border-slate-200/80 p-4 sm:p-6 sm:rounded-2xl rounded-xl shadow-sm space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                  Recent Daily Log History
+                </h4>
+                <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
+                  Verified school register logs for {child.name} ({childAttendances.length} records).
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1">
+              {childAttendances.length === 0 ? (
+                <div className="p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-400">
+                  <CalendarIcon className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                  <p className="text-xs font-bold">No attendance records logged yet.</p>
+                </div>
+              ) : (
+                childAttendances.slice(0, 45).map((att) => (
+                  <div
+                    key={att.id}
+                    className="p-3 border border-slate-100 bg-slate-50/50 hover:bg-slate-50 rounded-xl flex items-center justify-between text-xs transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`h-8 w-8 rounded-xl flex items-center justify-center shrink-0 ${
+                        att.status === "PRESENT" ? "bg-emerald-100 text-emerald-700" :
+                        att.status === "ABSENT" ? "bg-rose-100 text-rose-700" :
+                        att.status === "LEAVE" ? "bg-indigo-100 text-indigo-700" :
+                        "bg-amber-100 text-amber-700"
+                      }`}>
+                        {att.status === "PRESENT" && <CheckCircle className="h-4 w-4" />}
+                        {att.status === "ABSENT" && <XCircle className="h-4 w-4" />}
+                        {att.status === "LEAVE" && <FileText className="h-4 w-4" />}
+                        {att.status === "LATE" && <Clock className="h-4 w-4" />}
+                      </div>
+                      <div>
+                        <p className="font-extrabold text-slate-800">{att.date}</p>
+                        <p className="text-[10px] text-slate-400 font-semibold">
+                          Class {child.class}-{child.section} • Roll {child.rollNo || "N/A"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${
+                      att.status === "PRESENT" ? "bg-emerald-100 text-emerald-800" :
+                      att.status === "ABSENT" ? "bg-rose-100 text-rose-800" :
+                      att.status === "LEAVE" ? "bg-indigo-100 text-indigo-800" :
+                      "bg-amber-100 text-amber-800"
+                    }`}>
+                      {att.status}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
         )
@@ -1038,22 +1314,41 @@ export default function ParentDashboard() {
                 </div>
               </div>
 
-              <div>
-                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Reason Description</label>
-                <textarea
-                  required
-                  rows={3}
-                  value={leaveReason}
-                  onChange={(e) => setLeaveReason(e.target.value)}
-                  placeholder="Mention valid health/family travel note..."
-                  className="w-full text-xs font-semibold py-1.5 px-2.5 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 resize-none"
-                />
-              </div>
+                <div>
+                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Reason Description</label>
+                  <textarea
+                    required
+                    rows={3}
+                    value={leaveReason}
+                    onChange={(e) => setLeaveReason(e.target.value)}
+                    placeholder="Mention valid health/family travel note..."
+                    className="w-full text-xs font-semibold py-1.5 px-2.5 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 resize-none"
+                  />
+                </div>
 
-              <button type="submit" className="w-full py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-lg transition-all cursor-pointer">
-                Submit Petition
-              </button>
-            </form>
+                <div>
+                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                    Attachment (Doctor Note / Slip - Optional)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="file"
+                      id="leave-file-input"
+                      onChange={(e) => setLeaveFile(e.target.files?.[0] || null)}
+                      className="text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-black file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer w-full"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={leaveLoading}
+                  className="w-full py-2.5 bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                  {leaveLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  {leaveLoading ? "Submitting..." : "Submit Petition"}
+                </button>
+              </form>
           </div>
 
           <div className="lg:col-span-2 bg-white border border-slate-200/80 p-3 sm:p-6 sm:rounded-2xl rounded-xl shadow-sm space-y-4">
@@ -1097,6 +1392,13 @@ export default function ParentDashboard() {
         </div>
       )}
 
+      {activeTab === "notices" && (
+        <NoticeBoardView
+          title="Parent Notices & Circulars"
+          subtitle="Official school announcements, circular bulletins, and event alerts."
+        />
+      )}
+
       {/* 3. Unified Billing Payment Gateway Modal */}
       {showPayModal && (
         <div className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
@@ -1129,22 +1431,43 @@ export default function ParentDashboard() {
                 >
                   <option value="UPI">UPI (QR Code / Instant Transfer)</option>
                   <option value="ONLINE">Credit/Debit Card Portal</option>
+                  <option value="CASH">Counter Cash Verification</option>
                 </select>
               </div>
+
+              {payMethod === "UPI" && schoolInfo?.upiId && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl space-y-1.5 text-xs text-emerald-900">
+                  <div className="flex items-center gap-1.5 font-extrabold text-emerald-800">
+                    <QrCode className="h-4 w-4" />
+                    <span>School UPI VPA: {schoolInfo.upiId}</span>
+                  </div>
+                  {schoolInfo.upiMerchantName && (
+                    <p className="text-[10px] text-emerald-700 font-semibold">
+                      Payee: {schoolInfo.upiMerchantName}
+                    </p>
+                  )}
+                  <p className="text-[9px] text-emerald-600">
+                    After completing the transfer, click Authorize Payment below to generate your official receipt.
+                  </p>
+                </div>
+              )}
 
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => setShowPayModal(false)}
+                  disabled={payLoading}
                   className="flex-1 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl text-xs font-bold transition-all cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-500/10 cursor-pointer"
+                  disabled={payLoading}
+                  className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-500/10 cursor-pointer flex items-center justify-center gap-2"
                 >
-                  Authorize Payment
+                  {payLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  {payLoading ? "Processing..." : "Authorize Payment"}
                 </button>
               </div>
             </form>

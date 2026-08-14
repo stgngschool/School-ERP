@@ -41,8 +41,12 @@ export async function GET(request: Request) {
         admissionNumber: true,
         rollNumber: true,
         gender: true,
+        dob: true,
+        aadhaar: true,
         fatherName: true,
         fatherMobile: true,
+        motherName: true,
+        motherMobile: true,
         isRte: true,
         isMarksheetClaimed: true,
         photoUrl: true,
@@ -53,6 +57,7 @@ export async function GET(request: Request) {
         parentProfile: {
           select: { 
             familyCode: true,
+            address: true,
             user: { select: { name: true, phone: true } }
           }
         },
@@ -71,8 +76,13 @@ export async function GET(request: Request) {
       admissionNo: s.admissionNumber,
       rollNo: s.rollNumber || "",
       gender: s.gender || "",
+      dob: s.dob ? s.dob.toISOString().split("T")[0] : "",
+      aadhaar: s.aadhaar || "",
       fatherName: s.fatherName || "",
       fatherMobile: s.fatherMobile || "",
+      motherName: s.motherName || "",
+      motherMobile: s.motherMobile || "",
+      address: s.parentProfile?.address || "",
       isRte: s.isRte,
       isMarksheetClaimed: s.isMarksheetClaimed,
       class: s.class.name,

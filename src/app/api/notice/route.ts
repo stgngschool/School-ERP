@@ -79,3 +79,28 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Failed to create notice" }, { status: 500 });
   }
 }
+
+export async function DELETE(request: Request) {
+  const authUser = await getAuthUser(request);
+  if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  if (authUser.role !== "ADMIN") {
+    return NextResponse.json({ error: "Forbidden. Admin access required." }, { status: 403 });
+  }
+
+  try {
+    const { id } = await request.json();
+    if (!id) {
+      return NextResponse.json({ error: "Notice ID is required." }, { status: 400 });
+    }
+
+    await db.notice.delete({
+      where: { id },
+    });
+
+    return NextResponse.json({ success: true, message: "Notice deleted successfully" });
+  } catch (error: any) {
+    console.error("Delete notice error:", error);
+    return NextResponse.json({ error: "Failed to delete notice" }, { status: 500 });
+  }
+}

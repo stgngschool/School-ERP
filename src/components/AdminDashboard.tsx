@@ -8,6 +8,11 @@ import MarksFeedingConsole from "@/components/MarksFeedingConsole";
 import PrintMarksheets from "@/components/PrintMarksheets";
 import AttendanceConsole from "@/components/AttendanceConsole";
 import {
+  generateFeeReminderWhatsAppUrl,
+  isDueUpToCurrentMonth,
+  getCurrentMonthName,
+} from "@/lib/whatsapp";
+import {
   Users,
   Bell,
   CheckCircle,
@@ -64,6 +69,7 @@ import {
   Trophy,
   Ghost,
   Gift,
+  Megaphone,
 } from "lucide-react";
 
 const getLocalDateString = () => {
@@ -214,6 +220,8 @@ export default function AdminDashboard() {
     updateAdminProfile,
     registerNewStaff,
     addNotice,
+    deleteNotice,
+    notices,
     addStudent,
     bulkImportStudents,
     students,
@@ -266,6 +274,8 @@ export default function AdminDashboard() {
   const [noticeContent, setNoticeContent] = useState("");
   const [noticeTarget, setNoticeTarget] = useState<"ALL" | "TEACHERS" | "PARENTS">("ALL");
   const [noticeSuccess, setNoticeSuccess] = useState(false);
+  const [noticeLoading, setNoticeLoading] = useState(false);
+  const [deletingNoticeId, setDeletingNoticeId] = useState<string | null>(null);
 
   // Student Registration Form State
   const [stdName, setStdName] = useState("");
@@ -1005,15 +1015,34 @@ export default function AdminDashboard() {
     }
   }, [stdFamilyIdMode, stdSelectedFamilyCode, parentFamilies]);
 
-  const handleCreateNotice = (e: React.FormEvent) => {
+  const handleCreateNotice = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!noticeTitle || !noticeContent) return;
 
-    addNotice(noticeTitle, noticeContent, noticeTarget);
-    setNoticeTitle("");
-    setNoticeContent("");
-    setNoticeSuccess(true);
-    setTimeout(() => setNoticeSuccess(false), 3000);
+    setNoticeLoading(true);
+    try {
+      await addNotice(noticeTitle, noticeContent, noticeTarget);
+      setNoticeTitle("");
+      setNoticeContent("");
+      setNoticeSuccess(true);
+      setTimeout(() => setNoticeSuccess(false), 3500);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setNoticeLoading(false);
+    }
+  };
+
+  const handleDeleteNotice = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this notice?")) return;
+    setDeletingNoticeId(id);
+    try {
+      await deleteNotice(id);
+    } catch (err) {
+      console.error("Delete notice error:", err);
+    } finally {
+      setDeletingNoticeId(null);
+    }
   };
 
   const handleRegisterStudent = (e: React.FormEvent) => {
@@ -1946,21 +1975,89 @@ export default function AdminDashboard() {
             });
             const collectorsList = Object.values(collectorStats).sort((a, b) => b.total - a.total);
 
-            const currentMonth = new Date().getMonth();
-            const upcomingBirthdays = students.filter(s => {
-              if (!s.dob) return false;
-              const bdate = new Date(s.dob);
-              return bdate.getMonth() === currentMonth;
-            }).slice(0, 6).map(s => {
-              const bdate = new Date(s.dob!);
-              return {
-                id: s.id,
-                name: s.name,
-                classSection: `${s.class}-${s.section}`,
-                day: bdate.getDate(),
-                month: bdate.toLocaleString("default", { month: "short" })
-              };
+            // Compute high-priority defaulters (due up to current month)
+            const studentDueMap: { [stdId: string]: { name: string; classSection: string; amount: number; count: number; phone?: string; admNo?: string } } = {};
+            dueItems.forEach(d => {
+              if (d.status === "UNPAID" && isDueUpToCurrentMonth(d)) {
+                if (!studentDueMap[d.studentId]) {
+                  const std = students.find(s => s.id === d.studentId);
+                  studentDueMap[d.studentId] = {
+                    name: std?.name || "Student",
+                    classSection: std ? `${std.class}-${std.section}` : "N/A",
+                    amount: 0,
+                    count: 0,
+                    phone: std?.fatherMobile || std?.motherMobile || "",
+                    admNo: std?.admissionNo || ""
+                  };
+                }
+                studentDueMap[d.studentId].amount += d.amount;
+                studentDueMap[d.studentId].count += 1;
+              }
             });
+            const topDefaulters = Object.entries(studentDueMap)
+              .map(([id, info]) => ({ id, ...info }))
+              .sort((a, b) => b.amount - a.amount)
+              .slice(0, 5);
+
+            const currentMonth = new Date().getMonth();
+            const upcomingBirthdays = students
+              .filter(s => {
+                if (!s.dob) return false;
+                let bMonth: number | null = null;
+                const rawDob = s.dob.trim();
+                if (rawDob.includes("-")) {
+                  const parts = rawDob.split("-");
+                  if (parts.length >= 2) {
+                    bMonth = parseInt(parts[1], 10) - 1;
+                  }
+                } else if (rawDob.includes("/")) {
+                  const parts = rawDob.split("/");
+                  if (parts.length >= 2) {
+                    bMonth = parseInt(parts[1], 10) - 1;
+                  }
+                } else {
+                  const bdate = new Date(rawDob);
+                  if (!isNaN(bdate.getTime())) bMonth = bdate.getMonth();
+                }
+                return bMonth === currentMonth;
+              })
+              .map(s => {
+                const rawDob = s.dob!.trim();
+                let day = 1;
+                let monthName = new Date().toLocaleString("default", { month: "short" });
+                if (rawDob.includes("-")) {
+                  const parts = rawDob.split("-");
+                  if (parts.length >= 3) {
+                    day = parseInt(parts[2].slice(0, 2), 10) || 1;
+                    const mNum = parseInt(parts[1], 10) - 1;
+                    const dObj = new Date(2026, mNum, day);
+                    monthName = dObj.toLocaleString("default", { month: "short" });
+                  }
+                } else if (rawDob.includes("/")) {
+                  const parts = rawDob.split("/");
+                  if (parts.length >= 2) {
+                    day = parseInt(parts[0], 10) || 1;
+                    const mNum = parseInt(parts[1], 10) - 1;
+                    const dObj = new Date(2026, mNum, day);
+                    monthName = dObj.toLocaleString("default", { month: "short" });
+                  }
+                } else {
+                  const bdate = new Date(rawDob);
+                  if (!isNaN(bdate.getTime())) {
+                    day = bdate.getDate();
+                    monthName = bdate.toLocaleString("default", { month: "short" });
+                  }
+                }
+                return {
+                  id: s.id,
+                  name: s.name,
+                  classSection: `${s.class}-${s.section}`,
+                  day,
+                  month: monthName
+                };
+              })
+              .sort((a, b) => a.day - b.day)
+              .slice(0, 8);
 
             const totalAttendance = attendances.length;
             const presentCount = attendances.filter(a => a.status === "PRESENT").length;
@@ -2098,6 +2195,63 @@ export default function AdminDashboard() {
             return (
               <div className="space-y-6">
                 
+                {/* ─── Quick Actions Command Hub ─── */}
+                <div className="bg-white rounded-3xl border border-slate-200/80 p-4 shadow-[0_4px_20px_rgba(0,0,0,0.015)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-indigo-600 animate-pulse" />
+                    <span className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                      Quick Command Hub:
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+                    <button
+                      onClick={() => setActiveTab("collect")}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/60 text-xs font-bold transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95"
+                    >
+                      <CreditCard className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Fee Counter</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        localStorage.setItem("students_import_mode", "single");
+                        setActiveTab("students");
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200/60 text-xs font-bold transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95"
+                    >
+                      <PlusCircle className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>New Admission</span>
+                    </button>
+                    <button
+                      onClick={() => setActiveTab("attendance")}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200/60 text-xs font-bold transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95"
+                    >
+                      <UserCheck className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Attendance</span>
+                    </button>
+                    <button
+                      onClick={() => setActiveTab("notices")}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200/60 text-xs font-bold transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95"
+                    >
+                      <Megaphone className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Post Circular</span>
+                    </button>
+                    <button
+                      onClick={() => setActiveTab("defaulters")}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200/60 text-xs font-bold transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95"
+                    >
+                      <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                      <span>Defaulters List</span>
+                    </button>
+                    <button
+                      onClick={() => setActiveTab("print_marksheets")}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95"
+                    >
+                      <Printer className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Marksheets</span>
+                    </button>
+                  </div>
+                </div>
+
                 {/* ─── Metric Cards Grid ─── */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                   {/* Revenue Card */}
@@ -2582,7 +2736,7 @@ export default function AdminDashboard() {
                   <div className="bg-white rounded-3xl border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.015)] p-6 flex flex-col justify-between">
                     <div>
                       <h4 className="text-sm font-black text-slate-800 tracking-tight">Admin Scratchpad</h4>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Quick reminders & reminders</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Quick reminders & notes</p>
                     </div>
 
                     <div className="flex-1 overflow-y-auto max-h-[160px] my-4 pr-1 scrollbar-thin space-y-2">
@@ -2622,6 +2776,126 @@ export default function AdminDashboard() {
                         Add
                       </button>
                     </div>
+                  </div>
+                </div>
+
+                {/* ─── Top Critical Defaulters Alert Widget ─── */}
+                <div className="bg-white rounded-3xl border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.015)] p-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-5">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="p-1.5 bg-rose-50 text-rose-600 rounded-xl">
+                          <AlertTriangle className="w-4 h-4" />
+                        </span>
+                        <h4 className="text-sm font-black text-slate-900 tracking-tight">
+                          Critical Fee Defaulters Alert
+                        </h4>
+                      </div>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">
+                        Top outstanding accounts requiring administrative follow-up
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={() => setActiveTab("defaulters")}
+                      className="text-xs font-black text-indigo-600 hover:text-indigo-700 hover:underline cursor-pointer flex items-center gap-1"
+                    >
+                      <span>Full Defaulters Ledger</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50/75 border-b border-slate-200/50 text-[9px] font-black uppercase text-slate-400 tracking-wider">
+                          <th className="py-3 px-4">Student & Roll / ADM</th>
+                          <th className="py-3 px-4">Class</th>
+                          <th className="py-3 px-4">Parent Phone</th>
+                          <th className="py-3 px-4 text-center">Unpaid Months</th>
+                          <th className="py-3 px-4 text-right">Total Overdue</th>
+                          <th className="py-3 px-4 text-right">Quick Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-700">
+                        {topDefaulters.map((def) => (
+                          <tr key={def.id} className="hover:bg-rose-50/20 transition-colors">
+                            <td className="py-3 px-4">
+                              <p className="font-extrabold text-slate-900">{def.name}</p>
+                              <p className="text-[10px] text-slate-400 font-bold mt-0.5">ADM: {def.admNo || "N/A"}</p>
+                            </td>
+                            <td className="py-3 px-4 font-bold text-slate-700">
+                              Class {def.classSection}
+                            </td>
+                            <td className="py-3 px-4">
+                              {def.phone ? (
+                                <a
+                                  href={`tel:${def.phone}`}
+                                  className="text-indigo-600 font-bold hover:underline flex items-center gap-1"
+                                >
+                                  <Phone className="w-3 h-3 text-slate-400" />
+                                  <span>{def.phone}</span>
+                                </a>
+                              ) : (
+                                <span className="text-slate-400 text-[10px] italic">Not registered</span>
+                              )}
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <span className="px-2 py-0.5 rounded-md bg-rose-50 border border-rose-100 text-rose-700 font-black text-[10px]">
+                                {def.count} {def.count === 1 ? "Bill" : "Bills"}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-right font-black text-rose-600">
+                              {formatP(def.amount)}
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                {def.phone && (
+                                  <a
+                                    href={generateFeeReminderWhatsAppUrl({
+                                      student: {
+                                        id: def.id,
+                                        name: def.name,
+                                        class: def.classSection.split("-")[0] || "",
+                                        section: def.classSection.split("-")[1] || "",
+                                        admissionNo: def.admNo,
+                                        fatherMobile: def.phone,
+                                      },
+                                      unpaidDues: [{ id: "due", title: "Pending School Fee", amount: def.amount }],
+                                      schoolInfo,
+                                      senderRole: "ADMIN",
+                                    })}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    title="Send WhatsApp Reminder"
+                                    className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black transition-all shadow-xs flex items-center gap-1 active:scale-95"
+                                  >
+                                    <MessageSquare className="w-3 h-3" />
+                                    <span>WhatsApp</span>
+                                  </a>
+                                )}
+                                <button
+                                  onClick={() => {
+                                    setSelectedStudentId(def.id);
+                                    setActiveTab("collect");
+                                  }}
+                                  className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-black transition-all cursor-pointer shadow-xs active:scale-95"
+                                >
+                                  Collect Fee
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                        {topDefaulters.length === 0 && (
+                          <tr>
+                            <td colSpan={6} className="py-8 text-center text-xs text-slate-400 font-semibold italic">
+                              🎉 Excellent! No fee defaulters recorded in the system.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
 
@@ -4655,32 +4929,76 @@ export default function AdminDashboard() {
                     />
                   </div>
 
-                  <button type="submit" className="w-full py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-lg transition-all cursor-pointer">
-                    Broadcast Notice
+                  <button
+                    type="submit"
+                    disabled={noticeLoading}
+                    className="w-full py-2.5 bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    {noticeLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    {noticeLoading ? "Broadcasting..." : "Broadcast Notice"}
                   </button>
                 </form>
               </div>
 
               <div className="lg:col-span-2 space-y-4">
-                <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider border-b border-slate-200/80 pb-2">
-                  History Logs (Broadcasted Bulletins)
-                </h3>
-                <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
-                  Circular history log containing recent announcements.
-                </p>
-                <div className="space-y-3">
-                  <div className="p-4 border border-slate-200/80 rounded-xl bg-slate-50/50 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[8px] font-black uppercase px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded">
-                        Target: ALL
-                      </span>
-                      <span className="text-[9px] font-semibold text-slate-400">2026-07-10</span>
-                    </div>
-                    <h4 className="text-xs font-extrabold text-slate-800">Parent-Teacher Meeting (PTM)</h4>
-                    <p className="text-xs text-slate-600 font-medium leading-relaxed">
-                      The first PTM of the academic session 2026-27 is scheduled for Saturday, 18th July. Timings: 9:00 AM to 12:30 PM.
+                <div className="flex items-center justify-between border-b border-slate-200/80 pb-2">
+                  <div>
+                    <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider">
+                      History Logs (Broadcasted Bulletins)
+                    </h3>
+                    <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
+                      Circular history log containing recent announcements ({notices.length} total).
                     </p>
                   </div>
+                </div>
+
+                <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
+                  {notices.length === 0 ? (
+                    <div className="p-8 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 text-slate-400">
+                      <Bell className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                      <p className="text-xs font-bold">No notices broadcasted yet.</p>
+                      <p className="text-[10px]">Create your first notice using the form on the left.</p>
+                    </div>
+                  ) : (
+                    notices.slice().reverse().map((nt) => (
+                      <div
+                        key={nt.id}
+                        className="p-4 border border-slate-200/80 rounded-xl bg-white hover:bg-slate-50/50 transition-all space-y-2 relative group shadow-2xs"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded ${
+                              nt.target === "TEACHERS" ? "bg-amber-100 text-amber-800" :
+                              nt.target === "PARENTS" ? "bg-emerald-100 text-emerald-800" :
+                              "bg-indigo-100 text-indigo-800"
+                            }`}>
+                              Target: {nt.target || "ALL"}
+                            </span>
+                            <span className="text-[9px] font-semibold text-slate-400">{nt.createdAt}</span>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteNotice(nt.id)}
+                            disabled={deletingNoticeId === nt.id}
+                            className="text-slate-400 hover:text-rose-600 p-1 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
+                            title="Delete Notice"
+                          >
+                            {deletingNoticeId === nt.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin text-rose-600" />
+                            ) : (
+                              <Trash2 className="h-3.5 w-3.5" />
+                            )}
+                          </button>
+                        </div>
+
+                        <h4 className="text-xs font-extrabold text-slate-800">{nt.title}</h4>
+                        <p className="text-xs text-slate-600 font-medium leading-relaxed whitespace-pre-wrap">
+                          {nt.content}
+                        </p>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             </div>
@@ -5178,6 +5496,7 @@ export default function AdminDashboard() {
                                   <th className="py-3 px-4">Class</th>
                                   <th className="py-3 px-4">Family ID</th>
                                   <th className="py-3 px-4">ADM Number</th>
+                                  <th className="py-3 px-4">Roll Number</th>
                                   <th className="py-3 px-4">Father Name</th>
                                   <th className="py-3 px-4 text-center">Status</th>
                                   <th className="py-3 px-4 text-right">Actions</th>
@@ -5186,7 +5505,7 @@ export default function AdminDashboard() {
                               <tbody className="divide-y divide-slate-100">
                                 {paginatedStudents.length === 0 ? (
                                   <tr>
-                                    <td colSpan={8} className="text-center py-8 text-slate-400 font-bold italic">
+                                    <td colSpan={9} className="text-center py-8 text-slate-400 font-bold italic">
                                       No students found matching filters.
                                     </td>
                                   </tr>
@@ -5240,6 +5559,9 @@ export default function AdminDashboard() {
                                         </td>
                                         <td className="py-3 px-4 font-mono font-bold text-indigo-600">
                                           {std.admissionNo}
+                                        </td>
+                                        <td className="py-3 px-4 font-mono font-bold text-slate-600">
+                                          {std.rollNo || "N/A"}
                                         </td>
                                         <td className="py-3 px-4 text-slate-600 font-medium">{std.parentName || "N/A"}</td>
                                         <td className="py-3 px-4 text-center">
@@ -7393,7 +7715,7 @@ export default function AdminDashboard() {
                   if (!studentDuesMap.has(sid)) studentDuesMap.set(sid, []);
                   studentDuesMap.get(sid)!.push(d);
 
-                  if (d.status === "UNPAID") {
+                  if (d.status === "UNPAID" && isDueUpToCurrentMonth(d)) {
                     if (!unpaidDuesMap.has(sid)) unpaidDuesMap.set(sid, []);
                     unpaidDuesMap.get(sid)!.push(d);
                   } else if (d.status === "PAID") {
@@ -7476,7 +7798,7 @@ export default function AdminDashboard() {
                               </div>
                             </div>
                           </div>
-                          <div className="md:border-l md:border-slate-200/80 md:pl-6 space-y-1.5 shrink-0">
+                          <div className="md:border-l md:border-slate-200/80 md:pl-6 space-y-2 shrink-0">
                             <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
                               <span className="text-slate-400 flex items-center justify-center"><UserCheck className="h-4 w-4" /></span>
                               <span>{std.fatherName || std.parentName}</span>
@@ -7487,6 +7809,31 @@ export default function AdminDashboard() {
                                 <span>{std.fatherMobile || std.parentPhone}</span>
                               </div>
                             )}
+                            <div className="flex items-center gap-2 pt-1">
+                              {(std.fatherMobile || std.parentPhone) && (
+                                <a
+                                  href={`tel:${std.fatherMobile || std.parentPhone}`}
+                                  className="flex items-center gap-1 py-1.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all shadow-2xs"
+                                >
+                                  <Phone className="h-3.5 w-3.5" /> Call
+                                </a>
+                              )}
+                              {totalDue > 0 && (
+                                <a
+                                  href={generateFeeReminderWhatsAppUrl({
+                                    student: std,
+                                    unpaidDues,
+                                    schoolInfo,
+                                    senderRole: "ADMIN",
+                                  })}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1.5 py-1.5 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition-all shadow-xs"
+                                >
+                                  <Send className="h-3.5 w-3.5" /> WhatsApp Reminder
+                                </a>
+                              )}
+                            </div>
                           </div>
                         </div>
 
@@ -7716,12 +8063,39 @@ export default function AdminDashboard() {
                               </div>
                             </div>
 
-                            {/* View Full Statement CTA */}
+                            {/* View Full Statement CTA & Action Buttons */}
                             <div className="w-full flex items-center justify-between px-4 py-2.5 border-t border-slate-100 bg-slate-50/20 group-hover:bg-indigo-50/30 transition-colors">
                               <span className="text-[10px] font-bold text-indigo-600 group-hover:text-indigo-700 transition-colors">
-                                View Full Statement
+                                View Statement
                               </span>
-                              <ArrowRight className="h-3.5 w-3.5 text-indigo-400 group-hover:text-indigo-600 transition-transform group-hover:translate-x-1" />
+
+                              <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                {(std.fatherMobile || std.parentPhone) && (
+                                  <a
+                                    href={`tel:${std.fatherMobile || std.parentPhone}`}
+                                    title="Call Parent"
+                                    className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 transition-all"
+                                  >
+                                    <Phone className="h-3.5 w-3.5" />
+                                  </a>
+                                )}
+                                {totalDue > 0 && (
+                                  <a
+                                    href={generateFeeReminderWhatsAppUrl({
+                                      student: std,
+                                      unpaidDues,
+                                      schoolInfo,
+                                      senderRole: "ADMIN",
+                                    })}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    title="Send WhatsApp Reminder"
+                                    className="flex items-center gap-1 py-1 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black transition-all shadow-2xs"
+                                  >
+                                    <Send className="h-3 w-3" /> WhatsApp
+                                  </a>
+                                )}
+                              </div>
                             </div>
                           </div>
                         );

@@ -16,18 +16,29 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
     }
 
-    if (authUser.role === "TEACHER") {
-      return NextResponse.json({
-        ledgerEntries: [],
-        receipts: [],
-        dueItems: [],
-      });
-    }
-
     let ledgerWhere: any = {};
     let receiptWhere: any = {};
     let chargesWhere: any = { entryType: EntryType.CHARGE };
     let discountsWhere: any = { entryType: EntryType.DISCOUNT };
+
+    if (authUser.role === "TEACHER") {
+      const teacherProfile = await db.teacherProfile.findUnique({
+        where: { userId: authUser.userId },
+        include: { classes: true }
+      });
+      const classIds = teacherProfile?.classes.map(c => c.id) || [];
+      const teacherStudents = await db.student.findMany({
+        where: classIds.length > 0 ? { classId: { in: classIds } } : {},
+        select: { id: true }
+      });
+      const studentIds = teacherStudents.map((s) => s.id);
+      if (studentIds.length > 0) {
+        ledgerWhere = { studentId: { in: studentIds } };
+        receiptWhere = { studentId: { in: studentIds } };
+        chargesWhere = { entryType: EntryType.CHARGE, studentId: { in: studentIds } };
+        discountsWhere = { entryType: EntryType.DISCOUNT, studentId: { in: studentIds } };
+      }
+    }
 
     if (authUser.role === "PARENT") {
       const parentProfile = await db.parentProfile.findUnique({
