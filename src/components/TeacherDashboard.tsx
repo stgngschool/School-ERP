@@ -22,6 +22,7 @@ import {
   CheckCircle2,
   DollarSign,
   ChevronRight,
+  GraduationCap,
 } from "lucide-react";
 import StudentProfileModal from "@/components/StudentProfileModal";
 import MarksFeedingConsole from "@/components/MarksFeedingConsole";
@@ -578,6 +579,10 @@ export default function TeacherDashboard() {
                                 {item.unpaidDues.length} bill{item.unpaidDues.length > 1 ? "s" : ""} due
                               </span>
                             </div>
+                          ) : std.isRte ? (
+                            <span className="px-2.5 py-1 rounded-xl bg-purple-100 text-purple-700 border border-purple-200 font-black text-[10px] uppercase">
+                              RTE (Govt Free)
+                            </span>
                           ) : (
                             <span className="px-2.5 py-1 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-100 font-black text-[10px] uppercase">
                               All Clear
@@ -724,6 +729,11 @@ export default function TeacherDashboard() {
                                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-rose-50 text-rose-700 border border-rose-100 font-black text-[10px] uppercase shadow-2xs">
                                     <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
                                     {item.unpaidDues.length} Bill{item.unpaidDues.length > 1 ? "s" : ""} Due
+                                  </span>
+                                ) : std.isRte ? (
+                                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-purple-100 text-purple-700 border border-purple-200 font-black text-[10px] uppercase shadow-2xs">
+                                    <GraduationCap className="w-3.5 h-3.5 text-purple-600" />
+                                    RTE (Govt Free)
                                   </span>
                                 ) : (
                                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-100 font-black text-[10px] uppercase shadow-2xs">

@@ -288,8 +288,8 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-base sm:text-xl font-black text-slate-900 tracking-tight truncate">{data?.name || "Student Profile"}</h2>
                 {data?.isRte && (
-                  <span className="bg-amber-50 text-amber-700 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border border-amber-200/50 shrink-0">
-                    RTE
+                  <span className="bg-purple-100 text-purple-700 text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border border-purple-200 shrink-0">
+                    RTE (Govt Free Quota)
                   </span>
                 )}
               </div>
@@ -651,7 +651,18 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
               {/* FEES & FINANCIAL TAB */}
               {activeTab === "fees" && (
                 <div className="space-y-6">
-                  
+                  {data?.isRte && (
+                    <div className="p-4 bg-purple-50/70 border border-purple-200 rounded-2xl flex items-center gap-3 text-xs text-purple-900">
+                      <div className="p-2 bg-purple-100 rounded-xl text-purple-700 font-bold shrink-0">
+                        🏛️ RTE
+                      </div>
+                      <div>
+                        <p className="font-black text-purple-950">100% Free Education Exemption (Right to Education Act)</p>
+                        <p className="text-[11px] text-purple-700 mt-0.5">This student is admitted under the Government RTE quota. Regular school fees are fully waived.</p>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Financial Mini Overview Cards */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-sm">

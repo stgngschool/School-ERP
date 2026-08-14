@@ -166,7 +166,16 @@ export default function ParentDashboard() {
   const child = students.find((s) => s.id === selectedChildId) || parentStudents[0];
 
   // Child-specific datasets
-  const childDues = child ? dueItems.filter((d) => d.studentId === child.id && d.status === "UNPAID") : [];
+  const childDues = child 
+    ? dueItems
+        .filter((d) => d.studentId === child.id && d.status === "UNPAID")
+        .slice()
+        .sort((a, b) => {
+          if (a.isCurrentSession === false && b.isCurrentSession !== false) return -1;
+          if (b.isCurrentSession === false && a.isCurrentSession !== false) return 1;
+          return (a.dueDate || "").localeCompare(b.dueDate || "");
+        })
+    : [];
   const childAttendances = child ? attendances.filter((a) => a.studentId === child.id) : [];
   const childHomework = child ? homeworks.filter(
     (h) => {
@@ -316,7 +325,7 @@ export default function ParentDashboard() {
           admissionNo: child.admissionNo,
           amount: totalAmount,
           method: payMethod,
-          details: unpaidItems.map((i) => `${i.name} (Rs. ${i.amount})`).join(" + "),
+          details: unpaidItems.map((i) => `${i.name} (${formatP(i.amount)})`).join(" + "),
           createdAt: new Date().toISOString().split("T")[0],
         };
 

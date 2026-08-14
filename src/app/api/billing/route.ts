@@ -9,6 +9,40 @@ import fs from "fs";
 import path from "path";
 import { getAcademicYear } from "@/lib/generateYearlyCharges";
 
+function getChargeDueDate(chargeName: string, fallbackTime: number): string {
+  const nameLower = chargeName.toLowerCase();
+  
+  if (nameLower.includes("april")) return "2026-04-10";
+  if (nameLower.includes("may")) return "2026-05-10";
+  if (nameLower.includes("june")) return "2026-06-10";
+  if (nameLower.includes("july")) {
+    if (nameLower.includes("unit 1") || nameLower.includes("exam")) return "2026-07-15";
+    return "2026-07-10";
+  }
+  if (nameLower.includes("august")) return "2026-08-10";
+  if (nameLower.includes("september")) return "2026-09-10";
+  if (nameLower.includes("october")) {
+    if (nameLower.includes("half yearly") || nameLower.includes("exam")) return "2026-10-15";
+    return "2026-10-10";
+  }
+  if (nameLower.includes("november")) return "2026-11-10";
+  if (nameLower.includes("december")) {
+    if (nameLower.includes("unit 2") || nameLower.includes("exam")) return "2026-12-15";
+    return "2026-12-10";
+  }
+  if (nameLower.includes("january")) return "2027-01-10";
+  if (nameLower.includes("february")) return "2027-02-10";
+  if (nameLower.includes("march")) {
+    if (nameLower.includes("yearly") || nameLower.includes("exam")) return "2027-03-15";
+    return "2027-03-10";
+  }
+  if (nameLower.includes("m/s") || nameLower.includes("annual") || nameLower.includes("admission") || nameLower.includes("previous session")) {
+    return "2026-04-10";
+  }
+  
+  return new Date(fallbackTime).toISOString().split("T")[0];
+}
+
 export async function GET(request: Request) {
   try {
     const authUser = await getAuthUser(request);
@@ -148,7 +182,7 @@ export async function GET(request: Request) {
       id: l.id,
       studentId: l.studentId,
       type: l.entryType,
-      amount: l.amount / 100,
+      amount: l.amount,
       description: l.description,
       createdById: l.createdById,
     }));
@@ -174,7 +208,7 @@ export async function GET(request: Request) {
         studentId: r.studentId || (studentIds.length === 1 ? studentIds[0] : null),
         studentIds,
         receiptNo: r.receiptNumber,
-        amount: r.amountPaid / 100,
+        amount: r.amountPaid,
         paymentMethod: r.paymentMethod,
         method: r.paymentMethod,
         transactionRef: r.transactionReference || "",
@@ -197,7 +231,7 @@ export async function GET(request: Request) {
           .join(" + "),
         items: r.items.map((i) => ({
           name: `${i.ledgerEntry.student?.name || "Student"}: ${i.ledgerEntry.description}`,
-          amount: i.amount / 100,
+          amount: i.amount,
         })),
       };
     });
@@ -245,28 +279,29 @@ export async function GET(request: Request) {
           if (schoolConfig.lateFeeType === "DAILY") {
             const msDiff = Date.now() - graceTime;
             const daysOver = Math.floor(msDiff / (24 * 60 * 60 * 1000)) + 1; // At least 1 day over
-            fineAmount = daysOver * (schoolConfig.lateFeeAmount ?? 5);
+            fineAmount = daysOver * (schoolConfig.lateFeeAmount ?? 5) * 100;
           } else {
-            fineAmount = schoolConfig.lateFeeAmount ?? 50;
+            fineAmount = (schoolConfig.lateFeeAmount ?? 50) * 100;
           }
         }
+
+        const chargeDueDate = getChargeDueDate(chargeName, c.createdAt.getTime() + 15 * 24 * 60 * 60 * 1000);
 
         return {
           id: c.id,
           studentId: c.studentId,
           name: chargeName,
-          amount: outstanding / 100,
-          originalAmount: c.amount / 100,
-          totalPaid: totalPaid / 100,
-          totalDiscount: associatedDiscounts / 100,
-          dueDate: new Date(dueTime).toISOString().split("T")[0],
+          amount: Math.max(0, outstanding),
+          originalAmount: c.amount,
+          totalPaid: totalPaid,
+          totalDiscount: associatedDiscounts,
+          dueDate: chargeDueDate,
           sessionName: c.session?.name,
           isCurrentSession: c.session?.isCurrent !== false, // Default true if session is missing
           status: outstanding <= 0 ? "PAID" : "UNPAID",
           fine: fineAmount,
         };
-      })
-      .filter((d) => d.status === "UNPAID" && d.amount > 0);
+      });
 
     return NextResponse.json({
       ledgerEntries: formattedLedger,

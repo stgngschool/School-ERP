@@ -70,6 +70,7 @@ import {
   Ghost,
   Gift,
   Megaphone,
+  GraduationCap,
 } from "lucide-react";
 
 const getLocalDateString = () => {
@@ -734,6 +735,8 @@ export default function AdminDashboard() {
   const [ledgerSubTab, setLedgerSubTab] = useState<"receipts" | "raw">("receipts");
   const [ledgerSearch, setLedgerSearch] = useState("");
   const [ledgerDate, setLedgerDate] = useState("");
+  const [visibleReceiptsCount, setVisibleReceiptsCount] = useState(25);
+  const [visibleLedgerCount, setVisibleLedgerCount] = useState(30);
 
   // Defaulter / Dues Report filters
   const [defaulterSearch, setDefaulterSearch] = useState("");
@@ -741,6 +744,12 @@ export default function AdminDashboard() {
   const [alertSuccessMsg, setAlertSuccessMsg] = useState("");
   const [expandedStudentId, setExpandedStudentId] = useState<string | null>(null);
   const [defaulterPage, setDefaulterPage] = useState(1);
+
+  // Reset lazy load counts when ledger filter changes
+  React.useEffect(() => {
+    setVisibleReceiptsCount(25);
+    setVisibleLedgerCount(30);
+  }, [ledgerSearch, ledgerDate, ledgerSubTab]);
   
   // School Customizer Settings Form State
   const [activeSchoolSubTab, setActiveSchoolSubTab] = useState<"profile" | "admin" | "sync" | "exams">("profile");
@@ -818,17 +827,23 @@ export default function AdminDashboard() {
     }
   }, [user]);
 
+  // Debounced Search Query (Instagram-style smooth search, prevents rapid querying & saves bandwidth)
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = React.useState("");
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   // Memos for Fee Collection (ported from Accountant Dashboard)
   const suggestions = React.useMemo(() => {
     if (!students || students.length === 0) return [];
-    const query = searchQuery.trim().toLowerCase();
+    const query = debouncedSearchQuery.trim().toLowerCase();
 
+    // Do not show any automatic suggestions when search box is empty (saves egress and keeps UI clean)
     if (!query) {
-      // Prioritize students with unpaid dues when search query is empty
-      const studentsWithDues = students.filter((s) =>
-        dueItems.some((d) => d.studentId === s.id && d.status === "UNPAID")
-      );
-      return (studentsWithDues.length > 0 ? studentsWithDues : students).slice(0, 8);
+      return [];
     }
 
     return students.filter((s) => {
@@ -854,7 +869,7 @@ export default function AdminDashboard() {
         classOnly === query
       );
     }).slice(0, 10);
-  }, [searchQuery, students, dueItems]);
+  }, [debouncedSearchQuery, students]);
 
   const selectedStudentObj = students.find((s) => s.id === selectedStudentId);
 
@@ -869,7 +884,14 @@ export default function AdminDashboard() {
   }, [siblingStudents]);
 
   const selectedStudentDues = React.useMemo(() => {
-    return dueItems.filter(d => siblingStudentIds.includes(d.studentId) && d.status === "UNPAID");
+    return dueItems
+      .filter(d => siblingStudentIds.includes(d.studentId) && d.status === "UNPAID")
+      .slice()
+      .sort((a, b) => {
+        if (a.isCurrentSession === false && b.isCurrentSession !== false) return -1;
+        if (b.isCurrentSession === false && a.isCurrentSession !== false) return 1;
+        return (a.dueDate || "").localeCompare(b.dueDate || "");
+      });
   }, [siblingStudentIds, dueItems]);
 
   React.useEffect(() => {
@@ -1292,7 +1314,7 @@ export default function AdminDashboard() {
             const itemDesc = itemObj?.name || "";
             const child = students.find(s => s.id === itemObj?.studentId);
             const prefix = child ? `${child.name}: ` : "";
-            return `${prefix}${itemDesc} (Paid: Rs. ${i.payAmount}${i.discountAmount > 0 ? `, Disc: Rs. ${i.discountAmount}` : ""})`;
+            return `${prefix}${itemDesc} (Paid: ${formatP(i.payAmount)}${i.discountAmount > 0 ? `, Disc: ${formatP(i.discountAmount)}` : ""})`;
           })
           .join(" + "),
         items: items.map((i) => {
@@ -2943,12 +2965,12 @@ export default function AdminDashboard() {
             <div>
               {!selectedStudentId ? (
                 // SEARCH VIEW (No student selected)
-                <div className="max-w-2xl mx-auto py-12 px-4 text-center space-y-6">
-                  <div className="inline-flex p-3.5 bg-indigo-50 border border-indigo-100 rounded-2xl text-indigo-600 shadow-[0_4px_12px_rgba(79,70,229,0.06)]">
+                <div className="max-w-2xl mx-auto py-10 px-4 text-center space-y-6 min-h-[500px]">
+                  <div className="inline-flex p-3.5 bg-indigo-50 border border-indigo-100 rounded-2xl text-indigo-600 shadow-[0_4px_12px_rgba(79,70,229,0.08)]">
                     <CreditCard className="h-7 w-7" />
                   </div>
                   <div>
-                    <h3 className="text-base font-extrabold text-slate-800 tracking-tight">Counter Fee Collection</h3>
+                    <h3 className="text-lg font-black text-slate-900 tracking-tight">Counter Fee Collection</h3>
                     <p className="text-xs text-slate-400 font-semibold mt-1">
                       Search for a student by their Name, Admission Number, or Family Code to access their billing ledger.
                     </p>
@@ -2956,9 +2978,9 @@ export default function AdminDashboard() {
                   
                   {/* Search Input Container */}
                   <div className="relative max-w-lg mx-auto">
-                    <div className="relative shadow-sm rounded-xl border border-slate-200 bg-white p-1 focus-within:border-indigo-600 focus-within:ring-2 focus-within:ring-indigo-100 transition-all duration-300">
+                    <div className="relative shadow-sm rounded-2xl border border-slate-200 bg-white p-1 focus-within:border-indigo-600 focus-within:ring-4 focus-within:ring-indigo-100/70 transition-all duration-200">
                       <div className="flex items-center">
-                        <Search className="h-4.5 w-4.5 text-slate-400 ml-3" />
+                        <Search className="h-5 w-5 text-indigo-500 ml-3 shrink-0" />
                         <input
                           type="text"
                           value={searchQuery}
@@ -2967,8 +2989,8 @@ export default function AdminDashboard() {
                             setShowSuggestions(true);
                           }}
                           onFocus={() => setShowSuggestions(true)}
-                          placeholder="Type Student Name, Admission No, or Family ID..."
-                          className="w-full text-xs font-semibold py-2.5 px-3 outline-none border-none bg-transparent text-slate-700 placeholder-slate-400"
+                          placeholder="Type student name, admission no, or family code..."
+                          className="w-full text-xs font-bold py-3 px-3 outline-none border-none bg-transparent text-slate-800 placeholder-slate-400"
                         />
                         {searchQuery && (
                           <button
@@ -2980,101 +3002,116 @@ export default function AdminDashboard() {
                               setDiscountsState({});
                               setPayingState({});
                             }}
-                            className="p-1.5 text-slate-400 hover:text-slate-600 text-[10px] font-bold mr-2 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors"
+                            className="py-1 px-2.5 text-slate-400 hover:text-slate-700 text-[10px] font-bold mr-2 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors"
                           >
                             Clear
                           </button>
                         )}
                       </div>
                     </div>
+                  </div>
 
-                    {/* Suggestions dropdown inside search view */}
-                    {showSuggestions && (
-                      <>
-                        <div 
-                          className="fixed inset-0 z-10 cursor-default" 
-                          onClick={() => setShowSuggestions(false)} 
-                        />
-                        <div className="absolute z-20 w-full bg-white border border-slate-200/80 rounded-xl mt-2 shadow-xl max-h-72 overflow-y-auto divide-y divide-slate-100 animate-in fade-in duration-200 text-left">
-                          {!searchQuery.trim() && (
-                            <div className="px-4 py-2 bg-slate-50 border-b border-slate-100 text-[10px] font-black uppercase text-slate-400 tracking-wider">
-                              Students Pending Dues (Click to Select)
-                            </div>
-                          )}
-                          {suggestions.length > 0 ? (
-                            suggestions.map((s) => {
-                              const studentDueSum = dueItems
-                                .filter((d) => d.studentId === s.id && d.status === "UNPAID")
-                                .reduce((sum, i) => sum + i.amount, 0);
-                              return (
-                                <button
-                                  key={s.id}
-                                  type="button"
-                                  onClick={() => {
-                                    handleStudentSelect(s.id);
-                                    setSearchQuery(`${s.name} (${s.class}-${s.section})`);
-                                    setShowSuggestions(false);
-                                  }}
-                                  className="w-full px-5 py-3 hover:bg-indigo-50/50 text-xs transition-colors flex justify-between items-center cursor-pointer group"
-                                >
+                  {/* Dynamic Inline Results List or Quick Info Grid */}
+                  {debouncedSearchQuery.trim().length > 0 ? (
+                    <div className="max-w-lg mx-auto bg-white border border-slate-200/90 rounded-2xl shadow-sm divide-y divide-slate-100 text-left overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                      <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-[10px] font-black uppercase text-slate-500 tracking-wider">
+                        <span>Search Results</span>
+                        <span>{suggestions.length} matches found</span>
+                      </div>
+                      {suggestions.length > 0 ? (
+                        <div className="divide-y divide-slate-100 max-h-[420px] overflow-y-auto">
+                          {suggestions.map((s) => {
+                            const studentDueSum = dueItems
+                              .filter((d) => d.studentId === s.id && d.status === "UNPAID")
+                              .reduce((sum, i) => sum + i.amount, 0);
+                            return (
+                              <button
+                                key={s.id}
+                                type="button"
+                                onClick={() => {
+                                  handleStudentSelect(s.id);
+                                  setSearchQuery(`${s.name} (${s.class}-${s.section})`);
+                                  setShowSuggestions(false);
+                                }}
+                                className="w-full px-4 py-3 hover:bg-indigo-50/60 text-xs transition-all flex justify-between items-center cursor-pointer group"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className={`w-9 h-9 rounded-xl border flex items-center justify-center font-black text-xs shrink-0 transition-colors shadow-2xs ${
+                                    s.isRte
+                                      ? "bg-purple-100 border-purple-200 text-purple-700 group-hover:bg-purple-600 group-hover:text-white"
+                                      : "bg-indigo-50 border-indigo-100 text-indigo-700 group-hover:bg-indigo-600 group-hover:text-white"
+                                  }`}>
+                                    {s.name.substring(0, 2).toUpperCase()}
+                                  </div>
                                   <div>
-                                    <div className="font-bold text-slate-800 group-hover:text-indigo-600 transition-colors flex items-center gap-1.5">
-                                      {s.name}
+                                    <div className="font-bold text-slate-850 group-hover:text-indigo-600 transition-colors flex items-center gap-1.5 flex-wrap">
+                                      <span className="font-black text-slate-900 uppercase text-xs">{s.name}</span>
+                                      {s.isRte && (
+                                        <span className="text-[8px] font-black uppercase tracking-wider px-2 py-0.5 bg-purple-100 text-purple-700 rounded-md border border-purple-200 shrink-0">
+                                          RTE Govt Quota
+                                        </span>
+                                      )}
                                       {s.familyCode && (
-                                        <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 bg-slate-50 text-slate-400 rounded border border-slate-200/60">
-                                          Family: {s.familyCode}
+                                        <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded border border-slate-200">
+                                          Fam: {s.familyCode}
                                         </span>
                                       )}
                                     </div>
-                                    <div className="text-[9px] font-semibold text-slate-400 mt-1">
-                                      Class: {s.class}-{s.section} | Adm: {s.admissionNo} | Parent: {s.parentName || s.fatherName || "N/A"}
+                                    <div className="text-[10px] font-semibold text-slate-400 mt-0.5">
+                                      Class {s.class}-{s.section} &bull; Adm: <span className="text-slate-600 font-bold">{s.admissionNo}</span> &bull; Parent: <span className="text-slate-600">{s.parentName || s.fatherName || "N/A"}</span>
                                     </div>
                                   </div>
-                                  <div className="text-right">
-                                    <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full ${
-                                      studentDueSum > 0 ? "bg-rose-50 text-rose-600 border border-rose-100" : "bg-green-50 text-green-600 border border-green-100"
-                                    }`}>
-                                      Rs. {studentDueSum}
+                                </div>
+                                <div className="text-right shrink-0">
+                                  {s.isRte ? (
+                                    <span className="text-[10px] font-extrabold px-3 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                                      RTE (100% Free)
                                     </span>
-                                  </div>
-                                </button>
-                              );
-                            })
-                          ) : (
-                            <div className="p-6 text-center text-xs font-semibold text-slate-400">
-                              No students found matching "{searchQuery}".
-                            </div>
-                          )}
+                                  ) : (
+                                    <span className={`text-[10px] font-extrabold px-3 py-1 rounded-full ${
+                                      studentDueSum > 0 ? "bg-rose-50 text-rose-600 border border-rose-200" : "bg-emerald-50 text-emerald-600 border border-emerald-200"
+                                    }`}>
+                                      {formatP(studentDueSum)}
+                                    </span>
+                                  )}
+                                </div>
+                              </button>
+                            );
+                          })}
                         </div>
-                      </>
-                    )}
-                  </div>
-
-                  {/* Quick Info Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg mx-auto pt-4 text-left">
-                    <div className="p-4 bg-slate-50 border border-slate-200/60 rounded-xl flex gap-3">
-                      <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600 h-fit border border-indigo-100/50">
-                        <Users className="h-4 w-4" />
+                      ) : (
+                        <div className="p-8 text-center text-xs font-semibold text-slate-400">
+                          No students found matching "{debouncedSearchQuery}".
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    /* Quick Info Grid when not searching */
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg mx-auto pt-4 text-left">
+                      <div className="p-4 bg-slate-50 border border-slate-200/60 rounded-2xl flex gap-3">
+                        <div className="p-2 bg-indigo-50 rounded-xl text-indigo-600 h-fit border border-indigo-100/50">
+                          <Users className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <h4 className="text-[10px] font-black text-slate-700 uppercase tracking-wider">Family Accounts</h4>
+                          <p className="text-[9px] text-slate-400 font-semibold mt-0.5">
+                            Selecting a student automatically bundles sibling dues. Issue a single combined receipt for parents.
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="text-[10px] font-black text-slate-700 uppercase tracking-wider">Family Accounts</h4>
-                        <p className="text-[9px] text-slate-400 font-semibold mt-0.5">
-                          Selecting a student automatically bundles sibling dues. Issue a single combined receipt for parents.
-                        </p>
+                      <div className="p-4 bg-slate-50 border border-slate-200/60 rounded-2xl flex gap-3">
+                        <div className="p-2 bg-emerald-50 rounded-xl text-emerald-600 h-fit border border-emerald-100/50">
+                          <Printer className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <h4 className="text-[10px] font-black text-slate-700 uppercase tracking-wider">Print Vouchers</h4>
+                          <p className="text-[9px] text-slate-400 font-semibold mt-0.5">
+                            Record counter payments and print official receipts instantly. Shows discounts and remaining balances.
+                          </p>
+                        </div>
                       </div>
                     </div>
-                    <div className="p-4 bg-slate-50 border border-slate-200/60 rounded-xl flex gap-3">
-                      <div className="p-2 bg-emerald-50 rounded-lg text-emerald-600 h-fit border border-emerald-100/50">
-                        <Printer className="h-4 w-4" />
-                      </div>
-                      <div>
-                        <h4 className="text-[10px] font-black text-slate-700 uppercase tracking-wider">Print Vouchers</h4>
-                        <p className="text-[9px] text-slate-400 font-semibold mt-0.5">
-                          Record counter payments and print official receipts instantly. Shows discounts and remaining balances.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                  )}
 
                 </div>
               ) : (
@@ -3105,6 +3142,11 @@ export default function AdminDashboard() {
                         <span className="text-[9px] font-black uppercase bg-indigo-600/60 text-white px-2 py-0.5 rounded-full border border-indigo-500/50">
                           Class {selectedStudentObj?.class}-{selectedStudentObj?.section}
                         </span>
+                        {selectedStudentObj?.isRte && (
+                          <span className="text-[9px] font-black uppercase bg-purple-500/30 text-purple-200 px-2.5 py-0.5 rounded-full border border-purple-400/50 flex items-center gap-1">
+                            <GraduationCap className="h-3 w-3" /> RTE Free Education (Govt Quota)
+                          </span>
+                        )}
                         {selectedStudentObj?.familyCode && (
                           <span className="text-[9px] font-black uppercase bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30 flex items-center gap-1">
                             <Users className="h-3 w-3" /> Family Code: {selectedStudentObj?.familyCode}
@@ -3126,10 +3168,12 @@ export default function AdminDashboard() {
 
                     <div className="text-left md:text-right space-y-1 shrink-0 bg-slate-800/40 p-3.5 rounded-xl border border-slate-700/30">
                       <span className="text-[8px] font-black uppercase text-slate-400 block tracking-wider">Total Outstanding Dues</span>
-                      <h3 className="text-xl font-black text-rose-400 tracking-tight">
+                      <h3 className={`text-xl font-black tracking-tight ${selectedStudentObj?.isRte ? "text-purple-300" : "text-rose-400"}`}>
                         {formatP(selectedStudentDues.reduce((sum, item) => sum + item.amount, 0))}
                       </h3>
-                      <p className="text-[9px] text-slate-300 font-bold">{selectedStudentDues.length} Unpaid Invoices</p>
+                      <p className={`text-[9px] font-bold ${selectedStudentObj?.isRte ? "text-purple-300" : "text-slate-300"}`}>
+                        {selectedStudentObj?.isRte ? "100% Free Education (Govt RTE)" : `${selectedStudentDues.length} Unpaid Invoices`}
+                      </p>
                     </div>
                   </div>
 
@@ -3270,6 +3314,25 @@ export default function AdminDashboard() {
                           const childDues = selectedStudentDues.filter(d => d.studentId === child.id);
                           
                           if (childDues.length === 0) {
+                            if (child.isRte) {
+                              return (
+                                <div className="text-center py-10 bg-purple-50/60 border border-purple-200/80 rounded-2xl space-y-3 p-6">
+                                  <div className="w-12 h-12 rounded-2xl bg-purple-100 border border-purple-200 text-purple-700 flex items-center justify-center mx-auto shadow-sm">
+                                    <GraduationCap className="h-6 w-6" />
+                                  </div>
+                                  <div>
+                                    <span className="text-[9px] font-black uppercase tracking-widest px-2.5 py-1 bg-purple-200/80 text-purple-800 rounded-full border border-purple-300">
+                                      RTE Student &bull; Govt Free Quota
+                                    </span>
+                                    <h4 className="text-sm font-black text-purple-950 mt-2">100% Fee Waived Under RTE Act</h4>
+                                    <p className="text-[11px] text-purple-700/90 font-medium max-w-md mx-auto mt-1">
+                                      {child.name} is enrolled under the Right to Education (RTE) Scheme. Monthly tuition and standard annual fees are 100% exempted under government mandate. Current fee payable is ₹0.
+                                    </p>
+                                  </div>
+                                </div>
+                              );
+                            }
+
                             return (
                               <div className="text-center py-12 bg-slate-50 border border-slate-100 rounded-2xl space-y-2">
                                 <CheckCircle className="h-8 w-8 text-emerald-500 mx-auto" />
@@ -3298,82 +3361,95 @@ export default function AdminDashboard() {
                               <div className="divide-y divide-slate-100 p-2 space-y-2 max-h-[480px] overflow-y-auto">
                                 {childDues.map((due) => {
                                   const isChecked = selectedDueIds.includes(due.id);
+                                  const isPast = due.isCurrentSession === false;
+                                  const isOverdue = isDueUpToCurrentMonth(due);
+
                                   return (
                                     <div
                                       key={due.id}
-                                      className={`p-3.5 border rounded-xl text-xs space-y-3 transition-all duration-150 ${
+                                      className={`p-3.5 border rounded-2xl text-xs space-y-3 transition-all duration-150 ${
                                         isChecked 
-                                          ? "bg-indigo-50/10 border-indigo-200 shadow-sm" 
-                                          : "bg-transparent border-transparent hover:border-slate-200"
+                                          ? "bg-indigo-50/20 border-indigo-300 shadow-sm" 
+                                          : "bg-white border-slate-200/70 hover:border-indigo-200 hover:bg-slate-50/40"
                                       }`}
                                     >
-                                      <div className="flex items-center justify-between">
-                                        <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                                      <div className="flex items-center justify-between gap-3">
+                                        <label className="flex items-start gap-3 cursor-pointer select-none flex-1">
                                           <input
                                             type="checkbox"
                                             checked={isChecked}
                                             onChange={() => handleToggleDueSelection(due.id)}
-                                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 mt-0.5 cursor-pointer"
+                                            className="rounded-md border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4.5 w-4.5 mt-0.5 cursor-pointer shrink-0"
                                           />
-                                          <div>
-                                            <div className="flex items-center flex-wrap gap-1.5">
-                                              <span className="font-bold text-slate-800 text-xs">{due.name}</span>
-                                              {due.isCurrentSession === false && due.sessionName && (
-                                                <span className="inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-200 px-1.5 py-0.5 rounded leading-none">
-                                                  Past Due ({due.sessionName})
+                                          <div className="space-y-0.5">
+                                            <div className="flex items-center flex-wrap gap-2">
+                                              <span className="font-extrabold text-slate-850 text-xs">{due.name}</span>
+                                              {isPast ? (
+                                                <span className="inline-flex items-center text-[8px] font-black uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 rounded-md leading-none">
+                                                  Past Due ({due.sessionName || "Previous Session"})
+                                                </span>
+                                              ) : isOverdue ? (
+                                                <span className="inline-flex items-center text-[8px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-md leading-none">
+                                                  Due / Current
+                                                </span>
+                                              ) : (
+                                                <span className="inline-flex items-center text-[8px] font-black uppercase tracking-wider bg-slate-100 text-slate-500 border border-slate-200 px-2 py-0.5 rounded-md leading-none">
+                                                  Upcoming
                                                 </span>
                                               )}
                                               {due.totalPaid && due.totalPaid > 0 ? (
-                                                <span className="inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-100 px-1.5 py-0.5 rounded leading-none">
-                                                  Partially Paid (₹{due.totalPaid} Paid)
+                                                <span className="inline-flex items-center text-[8px] font-black uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded-md leading-none">
+                                                  {formatP(due.totalPaid)} Paid
                                                 </span>
                                               ) : null}
                                             </div>
-                                            <span className="text-[9px] font-bold text-slate-400 block mt-0.5">
-                                              Due Date: {due.dueDate}
-                                              {due.originalAmount && due.originalAmount !== due.amount ? ` | Original: ₹${due.originalAmount}` : ""}
+                                            <span className="text-[10px] font-bold text-slate-400 block">
+                                              Due Date: <span className="text-slate-600">{due.dueDate || "N/A"}</span>
+                                              {due.originalAmount && due.originalAmount !== due.amount ? ` • Original: ${formatP(due.originalAmount)}` : ""}
                                             </span>
                                           </div>
                                         </label>
-                                        <span className="font-black text-slate-800">{formatP(due.amount)}</span>
+                                        <span className="font-black text-slate-900 text-sm shrink-0">{formatP(due.amount)}</span>
                                       </div>
                                       
                                       {isChecked && (
                                         <div className="grid grid-cols-3 gap-3 pt-3 border-t border-slate-100 text-[9px] font-black text-slate-400 uppercase tracking-wider animate-in fade-in duration-150">
                                           <div>
-                                            <span className="block mb-1 text-slate-400">Discount (₹)</span>
+                                            <span className="block mb-1 text-slate-500">Discount (₹)</span>
                                             <input
                                               type="number"
                                               min="0"
-                                              max={due.amount}
-                                              value={discountsState[due.id] === undefined || discountsState[due.id] === 0 ? "" : discountsState[due.id]}
+                                              max={toRupees(due.amount)}
+                                              value={discountsState[due.id] === undefined || discountsState[due.id] === 0 ? "" : toRupees(discountsState[due.id])}
                                               placeholder="0"
                                               onChange={(e) => {
                                                 const raw = e.target.value.replace(/^0+(?=\d)/, "");
-                                                const disc = Math.max(0, Math.min(due.amount, Number(raw) || 0));
-                                                setDiscountsState((d) => ({ ...d, [due.id]: raw === "" ? 0 : disc }));
-                                                setPayingState((p) => ({ ...p, [due.id]: due.amount - (raw === "" ? 0 : disc) }));
+                                                const discRupees = Math.max(0, Math.min(toRupees(due.amount), Number(raw) || 0));
+                                                const discPaisa = toPaisa(discRupees);
+                                                setDiscountsState((d) => ({ ...d, [due.id]: raw === "" ? 0 : discPaisa }));
+                                                setPayingState((p) => ({ ...p, [due.id]: due.amount - (raw === "" ? 0 : discPaisa) }));
                                               }}
-                                              className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:outline-none focus:bg-white focus:border-indigo-500"
+                                              className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:bg-white focus:border-indigo-500 shadow-2xs"
                                             />
                                           </div>
                                           <div>
-                                            <span className="block mb-1 text-slate-400">Paying Amount (₹)</span>
+                                            <span className="block mb-1 text-slate-500">Paying Amount (₹)</span>
                                             <div className="relative">
                                               <input
                                                 type="number"
                                                 min="0"
-                                                max={due.amount - (discountsState[due.id] ?? 0)}
-                                                value={payingState[due.id] === undefined ? due.amount : (payingState[due.id] === 0 && (discountsState[due.id] ?? 0) !== due.amount ? "" : payingState[due.id])}
+                                                max={toRupees(due.amount - (discountsState[due.id] ?? 0))}
+                                                value={payingState[due.id] === undefined ? toRupees(due.amount) : (payingState[due.id] === 0 && (discountsState[due.id] ?? 0) !== due.amount ? "" : toRupees(payingState[due.id]))}
                                                 placeholder="0"
                                                 onChange={(e) => {
                                                   const raw = e.target.value.replace(/^0+(?=\d)/, "");
                                                   const disc = discountsState[due.id] ?? 0;
-                                                  const maxPay = due.amount - disc;
-                                                  const payVal = Math.max(0, Math.min(maxPay, Number(raw) || 0));
-                                                  setPayingState((p) => ({ ...p, [due.id]: raw === "" ? 0 : payVal }));
+                                                  const maxPayRupees = toRupees(due.amount - disc);
+                                                  const payRupees = Math.max(0, Math.min(maxPayRupees, Number(raw) || 0));
+                                                  const payPaisa = toPaisa(payRupees);
+                                                  setPayingState((p) => ({ ...p, [due.id]: raw === "" ? 0 : payPaisa }));
                                                 }}
-                                                className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:outline-none focus:bg-white focus:border-indigo-500 pr-10"
+                                                className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:bg-white focus:border-indigo-500 pr-12 shadow-2xs"
                                               />
                                               <button
                                                 type="button"
@@ -3381,14 +3457,14 @@ export default function AdminDashboard() {
                                                   const disc = discountsState[due.id] ?? 0;
                                                   setPayingState(p => ({ ...p, [due.id]: due.amount - disc }));
                                                 }}
-                                                className="absolute right-1 top-1.5 bottom-1.5 px-1.5 bg-indigo-50 hover:bg-indigo-100 text-[8px] font-black text-indigo-700 rounded transition-colors cursor-pointer"
+                                                className="absolute right-1 top-1.5 bottom-1.5 px-2 bg-indigo-50 hover:bg-indigo-100 text-[8px] font-black text-indigo-700 rounded-lg transition-colors cursor-pointer"
                                               >
                                                 FULL
                                               </button>
                                             </div>
                                           </div>
                                           <div className="flex flex-col justify-end text-right">
-                                            <span className="block text-slate-400 mb-1">Arrears Remaining</span>
+                                            <span className="block text-slate-500 mb-1">Arrears Remaining</span>
                                             <span className="text-xs font-black text-rose-600 py-2">
                                               {formatP(due.amount - (discountsState[due.id] ?? 0) - (payingState[due.id] ?? due.amount))}
                                             </span>
@@ -4197,7 +4273,7 @@ export default function AdminDashboard() {
                                 if (head.frequency === "monthly") return sum + amt * 12;
                                 if (head.frequency === "annual") return sum + amt;
                                 if (head.frequency === "one_time") return sum + amt;
-                                if (head.frequency === "exam") return sum + amt * 3;
+                                if (head.frequency === "exam") return sum + amt;
                                 return sum + amt;
                               }, 0);
                               return (
@@ -4206,7 +4282,7 @@ export default function AdminDashboard() {
                                     <div className="font-bold text-slate-800 text-xs">Class {cls.name} &mdash; {cls.section}</div>
                                     {annualTotal > 0 && (
                                       <div className="text-[9px] text-emerald-600 font-bold mt-0.5">
-                                        &asymp; {formatP(annualTotal)}/year
+                                        &asymp; ₹{annualTotal.toLocaleString("en-IN")}/year
                                       </div>
                                     )}
                                   </td>
@@ -6338,7 +6414,7 @@ export default function AdminDashboard() {
                                           {struct.frequency}
                                         </span>
                                       </div>
-                                      <span className="font-extrabold text-indigo-600">{formatP(struct.total)}</span>
+                                      <span className="font-extrabold text-indigo-600">₹{struct.total.toLocaleString("en-IN")}</span>
                                     </div>
                                   ))}
                               </div>
@@ -7521,48 +7597,67 @@ export default function AdminDashboard() {
                               );
                             }
 
-                            return filtered.map((rec) => (
-                              <tr key={rec.id} className="hover:bg-slate-50/40 transition-colors">
-                                <td className="py-3.5 px-4 font-black text-indigo-755">{rec.receiptNo}</td>
-                                <td className="py-3.5 px-4">
-                                  <p className="font-extrabold text-slate-900">{rec.studentName}</p>
-                                  <p className="text-[9px] text-slate-400 font-bold uppercase">{rec.classSection}</p>
-                                </td>
-                                <td className="py-3.5 px-4 max-w-xs truncate text-[10px] text-slate-500 font-medium">
-                                  {rec.details}
-                                </td>
-                                <td className="py-3.5 px-4 text-slate-500 text-[10px] font-bold">{rec.createdAt}</td>
-                                <td className="py-3.5 px-4">
-                                  <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded border ${
-                                    rec.method === "CASH"
-                                      ? "bg-emerald-50 text-emerald-700 border-emerald-100"
-                                      : "bg-blue-50 text-blue-700 border-blue-100"
-                                  }`}>
-                                    {rec.method}
-                                  </span>
-                                </td>
-                                <td className="py-3.5 px-4 text-right font-black text-slate-955">
-                                  {formatP(rec.amount)}
-                                </td>
-                                <td className="py-3.5 px-4 text-center">
-                                  <button
-                                    onClick={() => {
-                                      const std = students.find((s) => s.id === rec.studentId);
-                                      setActiveReceipt({
-                                        ...rec,
-                                        admissionNo: std ? std.admissionNo : "Unified/Family",
-                                        discount: 0,
-                                        arrears: 0,
-                                      });
-                                      setShowReceiptModal(true);
-                                    }}
-                                    className="p-1.5 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg text-slate-400 transition-all cursor-pointer"
-                                  >
-                                    <Printer className="h-3.5 w-3.5" />
-                                  </button>
-                                </td>
-                              </tr>
-                            ));
+                            const visibleReceipts = filtered.slice(0, visibleReceiptsCount);
+
+                            return (
+                              <>
+                                {visibleReceipts.map((rec) => (
+                                  <tr key={rec.id} className="hover:bg-slate-50/40 transition-colors">
+                                    <td className="py-3.5 px-4 font-black text-indigo-755">{rec.receiptNo}</td>
+                                    <td className="py-3.5 px-4">
+                                      <p className="font-extrabold text-slate-900">{rec.studentName}</p>
+                                      <p className="text-[9px] text-slate-400 font-bold uppercase">{rec.classSection}</p>
+                                    </td>
+                                    <td className="py-3.5 px-4 max-w-xs truncate text-[10px] text-slate-500 font-medium">
+                                      {rec.details}
+                                    </td>
+                                    <td className="py-3.5 px-4 text-slate-500 text-[10px] font-bold">{rec.createdAt}</td>
+                                    <td className="py-3.5 px-4">
+                                      <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded border ${
+                                        rec.method === "CASH"
+                                          ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+                                          : "bg-blue-50 text-blue-700 border-blue-100"
+                                      }`}>
+                                        {rec.method}
+                                      </span>
+                                    </td>
+                                    <td className="py-3.5 px-4 text-right font-black text-slate-955">
+                                      {formatP(rec.amount)}
+                                    </td>
+                                    <td className="py-3.5 px-4 text-center">
+                                      <button
+                                        onClick={() => {
+                                          const std = students.find((s) => s.id === rec.studentId);
+                                          setActiveReceipt({
+                                            ...rec,
+                                            admissionNo: std ? std.admissionNo : "Unified/Family",
+                                            discount: 0,
+                                            arrears: 0,
+                                          });
+                                          setShowReceiptModal(true);
+                                        }}
+                                        className="p-1.5 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg text-slate-400 transition-all cursor-pointer"
+                                      >
+                                        <Printer className="h-3.5 w-3.5" />
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))}
+                                {filtered.length > visibleReceiptsCount && (
+                                  <tr>
+                                    <td colSpan={7} className="py-4 text-center bg-slate-50/60 border-t border-slate-100">
+                                      <button
+                                        type="button"
+                                        onClick={() => setVisibleReceiptsCount((prev) => prev + 30)}
+                                        className="py-2 px-5 bg-white hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-indigo-600 text-xs font-extrabold rounded-xl shadow-xs transition-all cursor-pointer"
+                                      >
+                                        Load More Receipts (Showing {visibleReceipts.length} of {filtered.length})
+                                      </button>
+                                    </td>
+                                  </tr>
+                                )}
+                              </>
+                            );
                           })()}
                         </tbody>
                       </table>
@@ -7579,7 +7674,7 @@ export default function AdminDashboard() {
                     <span>Total {ledgerEntries.length} items logged</span>
                   </div>
 
-                  <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1">
+                  <div className="space-y-2 max-h-[450px] overflow-y-auto pr-1">
                     {(() => {
                       const filtered = ledgerEntries.filter((log) => {
                         const student = students.find((s) => s.id === log.studentId);
@@ -7599,38 +7694,55 @@ export default function AdminDashboard() {
                         );
                       }
 
-                      return filtered.map((log) => {
-                        const isCharge = log.type === "CHARGE" || log.type === "FINE";
-                        const student = students.find((s) => s.id === log.studentId);
-                        return (
-                          <div
-                            key={log.id}
-                            className="p-3 border border-slate-200/80 rounded-xl flex items-center justify-between text-xs font-semibold"
-                          >
-                            <div>
-                              <p className="font-black text-slate-800">
-                                {student?.name || "Student"} ({student?.class}-{student?.section})
-                              </p>
-                              <p className="text-slate-500 font-semibold text-[10px] mt-0.5">{log.description}</p>
-                              <span className="text-[8px] font-bold text-slate-400 uppercase">{log.createdAt}</span>
-                            </div>
-                            <div className="text-right">
-                              <span className={`text-[10px] font-black ${isCharge ? "text-rose-600" : "text-emerald-600"}`}>
-                                {isCharge ? "+" : "-"} {formatP(log.amount)}
-                              </span>
-                              <span
-                                className={`block text-[7px] font-black uppercase tracking-wider mt-1 px-1.5 py-0.5 rounded border self-end ${
-                                  isCharge
-                                    ? "bg-rose-50 border-rose-100 text-rose-800"
-                                    : "bg-green-50 border-green-100 text-green-800"
-                                }`}
+                      const visibleLedger = filtered.slice(0, visibleLedgerCount);
+
+                      return (
+                        <>
+                          {visibleLedger.map((log) => {
+                            const isCharge = log.type === "CHARGE" || log.type === "FINE";
+                            const student = students.find((s) => s.id === log.studentId);
+                            return (
+                              <div
+                                key={log.id}
+                                className="p-3 border border-slate-200/80 rounded-xl flex items-center justify-between text-xs font-semibold hover:bg-slate-50/50 transition-colors"
                               >
-                                {log.type}
-                              </span>
+                                <div>
+                                  <p className="font-black text-slate-800">
+                                    {student?.name || "Student"} ({student?.class}-{student?.section})
+                                  </p>
+                                  <p className="text-slate-500 font-semibold text-[10px] mt-0.5">{log.description}</p>
+                                  <span className="text-[8px] font-bold text-slate-400 uppercase">{log.createdAt}</span>
+                                </div>
+                                <div className="text-right">
+                                  <span className={`text-[10px] font-black ${isCharge ? "text-rose-600" : "text-emerald-600"}`}>
+                                    {isCharge ? "+" : "-"} {formatP(log.amount)}
+                                  </span>
+                                  <span
+                                    className={`block text-[7px] font-black uppercase tracking-wider mt-1 px-1.5 py-0.5 rounded border self-end ${
+                                      isCharge
+                                        ? "bg-rose-50 border-rose-100 text-rose-800"
+                                        : "bg-green-50 border-green-100 text-green-800"
+                                    }`}
+                                  >
+                                    {log.type}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {filtered.length > visibleLedgerCount && (
+                            <div className="pt-2 text-center">
+                              <button
+                                type="button"
+                                onClick={() => setVisibleLedgerCount((prev) => prev + 30)}
+                                className="w-full py-2 px-4 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-indigo-600 text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer"
+                              >
+                                Load More Ledger Records (Showing {visibleLedger.length} of {filtered.length})
+                              </button>
                             </div>
-                          </div>
-                        );
-                      });
+                          )}
+                        </>
+                      );
                     })()}
                   </div>
                 </div>
@@ -7744,12 +7856,13 @@ export default function AdminDashboard() {
                 if (expandedStudentId) {
                   const std = filteredDefaulters.find((s) => s.id === expandedStudentId) || students.find((s) => s.id === expandedStudentId);
                   if (std) {
-                    const allDues    = studentDuesMap.get(std.id) || [];
+                    const allDues    = (studentDuesMap.get(std.id) || []).slice().sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || ""));
                     const unpaidDues = unpaidDuesMap.get(std.id) || [];
                     const paidDues   = paidDuesMap.get(std.id) || [];
-                    const totalFee   = allDues.reduce((s, d) => s + d.amount, 0);
-                    const totalPaid  = paidDues.reduce((s, d) => s + d.amount, 0);
-                    const totalDue   = unpaidDues.reduce((s, d) => s + d.amount, 0);
+                    const totalFee   = allDues.reduce((s, d) => s + (d.originalAmount || d.amount), 0);
+                    const totalPaid  = allDues.reduce((s, d) => s + (d.totalPaid || (d.status === "PAID" ? (d.originalAmount || d.amount) : 0)), 0);
+                    const fullYearRemainingDue = Math.max(0, totalFee - totalPaid);
+                    const overdueTillNow = unpaidDues.reduce((s, d) => s + d.amount, 0);
 
                     return (
                       <div className="space-y-5 animate-fade-in bg-white border border-slate-200 rounded-2xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.03)]">
@@ -7761,9 +7874,14 @@ export default function AdminDashboard() {
                           >
                             <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" /> Back to Dues Report
                           </button>
-                          <span className="text-[10px] font-black uppercase bg-rose-50 text-rose-700 border border-rose-100 px-3 py-1 rounded-full">
-                            Outstanding Dues: {formatP(totalDue)}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-black uppercase bg-rose-50 text-rose-700 border border-rose-100 px-3 py-1 rounded-full">
+                              Overdue Till Date: {formatP(overdueTillNow)}
+                            </span>
+                            <span className="text-[10px] font-black uppercase bg-slate-100 text-slate-700 border border-slate-200 px-3 py-1 rounded-full">
+                              Full Year Remaining: {formatP(fullYearRemainingDue)}
+                            </span>
+                          </div>
                         </div>
 
                         {/* Student Profile Info */}
@@ -7818,7 +7936,7 @@ export default function AdminDashboard() {
                                   <Phone className="h-3.5 w-3.5" /> Call
                                 </a>
                               )}
-                              {totalDue > 0 && (
+                              {overdueTillNow > 0 && (
                                 <a
                                   href={generateFeeReminderWhatsAppUrl({
                                     student: std,
@@ -7844,8 +7962,9 @@ export default function AdminDashboard() {
                               <CreditCard className="h-5 w-5" />
                             </div>
                             <div>
-                              <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest block">Total Fees Allocated</span>
+                              <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest block">Total Annual Fees</span>
                               <span className="text-base font-black text-slate-800 mt-0.5 block">{formatP(totalFee)}</span>
+                              <span className="text-[9px] font-semibold text-slate-400 block mt-0.5">12 Months + Exam & M/S</span>
                             </div>
                           </div>
                           <div className="bg-white border border-slate-200/70 rounded-2xl p-4 shadow-sm flex items-center gap-3">
@@ -7855,6 +7974,7 @@ export default function AdminDashboard() {
                             <div>
                               <span className="text-[9px] font-black uppercase text-emerald-500 tracking-widest block">Total Fees Paid</span>
                               <span className="text-base font-black text-emerald-600 mt-0.5 block">{formatP(totalPaid)}</span>
+                              <span className="text-[9px] font-semibold text-emerald-600/80 block mt-0.5">Receipts recorded</span>
                             </div>
                           </div>
                           <div className="bg-white border border-slate-200/70 rounded-2xl p-4 shadow-sm flex items-center gap-3">
@@ -7862,8 +7982,9 @@ export default function AdminDashboard() {
                               <AlertCircle className="h-5 w-5" />
                             </div>
                             <div>
-                              <span className="text-[9px] font-black uppercase text-rose-500 tracking-widest block">Total Outstanding Dues</span>
-                              <span className="text-base font-black text-rose-600 mt-0.5 block">{formatP(totalDue)}</span>
+                              <span className="text-[9px] font-black uppercase text-rose-500 tracking-widest block">Remaining Balance</span>
+                              <span className="text-base font-black text-rose-600 mt-0.5 block">{formatP(fullYearRemainingDue)}</span>
+                              <span className="text-[9px] font-bold text-rose-500 block mt-0.5">Overdue till date: {formatP(overdueTillNow)}</span>
                             </div>
                           </div>
                         </div>
@@ -7888,36 +8009,42 @@ export default function AdminDashboard() {
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-700">
-                                {allDues.map((d) => (
-                                  <tr key={d.id} className={`${d.status === "UNPAID" ? "bg-rose-50/10" : ""} hover:bg-slate-50/40 transition-colors`}>
-                                    <td className="py-3 px-5 text-slate-400 font-bold whitespace-nowrap">{d.dueDate || "—"}</td>
-                                    <td className="py-3 px-5 font-bold text-slate-800">{d.name}</td>
-                                    <td className="py-3 px-5 text-right text-slate-700">{formatP(d.amount)}</td>
-                                    <td className="py-3 px-5 text-right text-amber-500 font-bold">₹0.00</td>
-                                    <td className="py-3 px-5 text-right text-emerald-600 font-black">
-                                      {d.status === "PAID" ? `${formatP(d.amount)}` : "₹0.00"}
-                                    </td>
-                                    <td className="py-3 px-5 text-right text-rose-600 font-black">
-                                      {d.status === "UNPAID" ? `${formatP(d.amount)}` : "₹0.00"}
-                                    </td>
-                                    <td className="py-3 px-5 text-center">
-                                      <span className={`inline-block text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${
-                                        d.status === "PAID"
-                                          ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                                          : "bg-rose-50 border-rose-200 text-rose-700"
-                                      }`}>
-                                        {d.status}
-                                      </span>
-                                    </td>
-                                  </tr>
-                                ))}
+                                {allDues.map((d) => {
+                                  const isPaid = d.status === "PAID" || (d.amount === 0 && (d.totalPaid ?? 0) > 0);
+                                  const isOverdue = !isPaid && isDueUpToCurrentMonth(d);
+                                  return (
+                                    <tr key={d.id} className={`${isOverdue ? "bg-rose-50/15" : isPaid ? "bg-emerald-50/5" : ""} hover:bg-slate-50/40 transition-colors`}>
+                                      <td className="py-3 px-5 text-slate-500 font-bold whitespace-nowrap">{d.dueDate || "—"}</td>
+                                      <td className="py-3 px-5 font-bold text-slate-800">{d.name}</td>
+                                      <td className="py-3 px-5 text-right text-slate-700">{formatP(d.originalAmount || d.amount)}</td>
+                                      <td className="py-3 px-5 text-right text-amber-500 font-bold">{d.totalDiscount ? formatP(d.totalDiscount) : "—"}</td>
+                                      <td className="py-3 px-5 text-right text-emerald-600 font-black">
+                                        {d.totalPaid ? formatP(d.totalPaid) : (isPaid ? formatP(d.originalAmount || d.amount) : "—")}
+                                      </td>
+                                      <td className="py-3 px-5 text-right text-rose-600 font-black">
+                                        {!isPaid ? formatP(d.amount) : "—"}
+                                      </td>
+                                      <td className="py-3 px-5 text-center">
+                                        <span className={`inline-block text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                                          isPaid
+                                            ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                                            : isOverdue
+                                            ? "bg-rose-50 border-rose-200 text-rose-700"
+                                            : "bg-slate-100 border-slate-200 text-slate-500"
+                                        }`}>
+                                          {isPaid ? "PAID" : isOverdue ? "OVERDUE" : "UPCOMING"}
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
                                 <tr className="bg-slate-50 border-t-2 border-slate-200 text-xs font-black">
                                   <td colSpan={2} className="py-3.5 px-5 text-right text-slate-500 uppercase tracking-wider">Grand Total</td>
                                   <td className="py-3.5 px-5 text-right text-slate-800">{formatP(totalFee)}</td>
-                                  <td className="py-3.5 px-5 text-right text-amber-500">₹0.00</td>
+                                  <td className="py-3.5 px-5 text-right text-amber-500">—</td>
                                   <td className="py-3.5 px-5 text-right text-emerald-600">{formatP(totalPaid)}</td>
-                                  <td className="py-3.5 px-5 text-right text-rose-600">{formatP(totalDue)}</td>
-                                  <td className="py-3.5 px-5"></td>
+                                  <td className="py-3.5 px-5 text-right text-rose-600">{formatP(fullYearRemainingDue)}</td>
+                                  <td className="py-3.5 px-5 text-center text-[9px] text-rose-600 font-black">({formatP(overdueTillNow)} overdue)</td>
                                 </tr>
                               </tbody>
                             </table>
@@ -7932,7 +8059,7 @@ export default function AdminDashboard() {
                               <Printer className="h-4 w-4 text-slate-500" /> Print Statement
                             </button>
                             <button
-                              onClick={() => handleSendWhatsApp(std.name, std.parentName, totalDue, std.fatherMobile || std.parentPhone)}
+                              onClick={() => handleSendWhatsApp(std.name, std.parentName, overdueTillNow > 0 ? overdueTillNow : fullYearRemainingDue, std.fatherMobile || std.parentPhone)}
                               className="flex items-center gap-1.5 py-2 px-4 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold transition-all cursor-pointer shadow-sm"
                             >
                               <Send className="h-4 w-4 text-emerald-600" /> WhatsApp
@@ -7978,8 +8105,8 @@ export default function AdminDashboard() {
                         const allDues    = studentDuesMap.get(std.id) || [];
                         const unpaidDues = unpaidDuesMap.get(std.id) || [];
                         const paidDues   = paidDuesMap.get(std.id) || [];
-                        const totalFee   = allDues.reduce((s, d) => s + d.amount, 0);
-                        const totalPaid  = paidDues.reduce((s, d) => s + d.amount, 0);
+                        const totalFee   = allDues.reduce((s, d) => s + (d.originalAmount || d.amount), 0);
+                        const totalPaid  = allDues.reduce((s, d) => s + (d.totalPaid || (d.status === "PAID" ? (d.originalAmount || d.amount) : 0)), 0);
                         const totalDue   = unpaidDues.reduce((s, d) => s + d.amount, 0);
 
                         return (
