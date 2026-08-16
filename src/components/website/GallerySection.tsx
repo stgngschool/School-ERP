@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { getOptimizedImageUrl } from "@/lib/cloudinary";
 import {
   Sparkles,
   Image as ImageIcon,
@@ -155,6 +156,30 @@ export default function GallerySection() {
   const [filter, setFilter] = useState<string>("ALL");
   const [activeVideo, setActiveVideo] = useState<MediaItem | null>(null);
   const [selectedPhoto, setSelectedPhoto] = useState<MediaItem | null>(null);
+  const [dynamicItems, setDynamicItems] = useState<MediaItem[]>(ALL_MEDIA_ITEMS);
+
+  useEffect(() => {
+    fetch("/api/website-media")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.gallery && Array.isArray(data.gallery) && data.gallery.length > 0) {
+          const uploadedPhotos: MediaItem[] = data.gallery.map((g: any) => ({
+            id: g.id,
+            type: "PHOTO",
+            title: g.title,
+            category: g.category || "EVENTS",
+            imageUrl: g.imageUrl,
+            description: g.description || "",
+            badgeText: "Live Photo",
+          }));
+
+          // Keep YouTube videos and prepend dynamic uploaded photos
+          const youtubeVideos = ALL_MEDIA_ITEMS.filter((item) => item.type === "VIDEO");
+          setDynamicItems([...uploadedPhotos, ...youtubeVideos]);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const filterTabs = [
     { key: "ALL", label: "All Media (सभी)" },
@@ -181,7 +206,7 @@ export default function GallerySection() {
     }
   }, [filter]);
 
-  const filteredItems = ALL_MEDIA_ITEMS.filter((item) => {
+  const filteredItems = dynamicItems.filter((item) => {
     if (filter === "ALL") return true;
     if (filter === "VIDEO") return item.type === "VIDEO";
     if (filter === "PHOTO") return item.type === "PHOTO";
@@ -267,7 +292,7 @@ export default function GallerySection() {
               {/* Media Thumbnail */}
               <div className="relative h-48 sm:h-52 bg-slate-900 overflow-hidden">
                 <img
-                  src={item.imageUrl}
+                  src={getOptimizedImageUrl(item.imageUrl, 700)}
                   alt={item.title}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 />
@@ -432,7 +457,7 @@ export default function GallerySection() {
             </button>
 
             <img
-              src={selectedPhoto.imageUrl}
+              src={getOptimizedImageUrl(selectedPhoto.imageUrl, 1200)}
               alt={selectedPhoto.title}
               className="w-full max-h-[70vh] object-contain bg-slate-950"
             />

@@ -7,6 +7,7 @@ import StudentProfileModal from "@/components/StudentProfileModal";
 import MarksFeedingConsole from "@/components/MarksFeedingConsole";
 import PrintMarksheets from "@/components/PrintMarksheets";
 import AttendanceConsole from "@/components/AttendanceConsole";
+import WebsiteMediaManager from "@/components/WebsiteMediaManager";
 import ModernDatePicker from "@/components/ModernDatePicker";
 import {
   generateFeeReminderWhatsAppUrl,
@@ -7692,6 +7693,11 @@ export default function AdminDashboard() {
 
           {activeTab === "print_marksheets" && (
             <PrintMarksheets />
+          )}
+
+          {/* TAB: Website Photos & Media Manager (Cloudinary CDN) */}
+          {activeTab === "website_media" && (
+            <WebsiteMediaManager />
           )}
 
           {/* TAB 7: Unpaid Fee Defaulters Registry & Dues Report */}

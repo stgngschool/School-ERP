@@ -1,9 +1,33 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Quote, Award, Sparkles, CheckCircle } from "lucide-react";
+import { getOptimizedImageUrl } from "@/lib/cloudinary";
 
 export default function PrincipalMessage() {
+  const [principalInfo, setPrincipalInfo] = useState<{
+    name: string;
+    designation: string;
+    photoUrl: string;
+    message: string;
+  }>({
+    name: "S. N. Tripathi",
+    designation: "Principal & Educational Director",
+    photoUrl: "",
+    message:
+      "Since our inception in 2005 at Salarpur, Varanasi, St. G.N.G. School has remained steadfast in its commitment to providing an inspiring learning atmosphere where academic discipline meets traditional Indian cultural values (Sanskar).",
+  });
+
+  useEffect(() => {
+    fetch("/api/website-media")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.principal) {
+          setPrincipalInfo((prev) => ({ ...prev, ...data.principal }));
+        }
+      })
+      .catch(() => {});
+  }, []);
   return (
     <section className="py-20 bg-slate-50 border-b border-slate-200/80">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
@@ -39,8 +63,8 @@ export default function PrincipalMessage() {
 
               <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-4">
                 <div>
-                  <div className="text-base font-extrabold text-indigo-700">Principal & Management</div>
-                  <div className="text-xs text-slate-500 font-medium">St. G.N.G. School, Salarpur, Varanasi</div>
+                  <div className="text-base font-extrabold text-indigo-700">{principalInfo.name}</div>
+                  <div className="text-xs text-slate-500 font-medium">{principalInfo.designation}</div>
                 </div>
 
                 <div className="text-xs font-bold text-slate-500 flex items-center gap-2">
@@ -50,19 +74,29 @@ export default function PrincipalMessage() {
               </div>
             </div>
 
-            {/* Right: Badge Card */}
+            {/* Right: Principal / Badge Card */}
             <div className="lg:col-span-4 flex flex-col items-center justify-center p-6 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-3">
-              <img
-                src="/logo.png"
-                alt="School Logo"
-                className="h-20 w-auto object-contain drop-shadow-sm"
-                onError={(e) => {
-                  (e.target as HTMLElement).style.display = "none";
-                }}
-              />
+              {principalInfo.photoUrl ? (
+                <div className="relative w-28 h-28 rounded-2xl overflow-hidden border-2 border-indigo-200 shadow-md">
+                  <img
+                    src={getOptimizedImageUrl(principalInfo.photoUrl, 400)}
+                    alt={principalInfo.name}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              ) : (
+                <img
+                  src="/logo.png"
+                  alt="School Logo"
+                  className="h-20 w-auto object-contain drop-shadow-sm"
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = "none";
+                  }}
+                />
+              )}
 
-              <h4 className="text-sm font-black text-slate-900">St. G.N.G. School</h4>
-              <p className="text-[11px] font-bold text-slate-500">UDISE: 09670707502</p>
+              <h4 className="text-sm font-black text-slate-900">{principalInfo.name}</h4>
+              <p className="text-[11px] font-bold text-slate-500">{principalInfo.designation}</p>
 
               <div className="w-full pt-3 border-t border-slate-200 text-left space-y-1.5 text-xs text-slate-700 font-medium">
                 <div className="flex items-center gap-2">

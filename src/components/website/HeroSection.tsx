@@ -1,7 +1,8 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { getOptimizedImageUrl } from "@/lib/cloudinary";
 import {
   GraduationCap,
   ShieldCheck,
@@ -21,6 +22,18 @@ interface HeroSectionProps {
 }
 
 export default function HeroSection({ onOpenEnquiry }: HeroSectionProps) {
+  const [heroImage, setHeroImage] = useState<string>("/images/hero_school.jpg");
+
+  useEffect(() => {
+    fetch("/api/website-media")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.hero?.bannerImage) {
+          setHeroImage(data.hero.bannerImage);
+        }
+      })
+      .catch(() => {});
+  }, []);
   return (
     <section
       id="home"
@@ -119,11 +132,11 @@ export default function HeroSection({ onOpenEnquiry }: HeroSectionProps) {
               {/* Main Photo Frame */}
               <div className="relative rounded-3xl overflow-hidden border-4 border-white shadow-xl bg-slate-100 group">
                 <img
-                  src="/images/hero_school.jpg"
+                  src={getOptimizedImageUrl(heroImage, 1200)}
                   alt="St. GNG School Building & Students"
                   className="w-full h-64 sm:h-80 md:h-96 object-cover object-center group-hover:scale-105 transition-transform duration-500"
                   onError={(e) => {
-                    (e.target as HTMLElement).style.display = "none";
+                    (e.target as HTMLImageElement).src = "/images/hero_school.jpg";
                   }}
                 />
 

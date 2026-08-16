@@ -1,0 +1,106 @@
+{
+  "hero": {
+    "bannerImage": "https://images.unsplash.com/photo-1580582932707-520aed937b7b?q=80&w=1600&auto=format&fit=crop",
+    "badgeText": "Admissions Open 2026-27 (Nursery to 8th)"
+  },
+  "principal": {
+    "name": "S. N. Tripathi",
+    "designation": "Principal & Educational Director",
+    "photoUrl": "https://images.unsplash.com/photo-1560250097-0b93528c311a?q=80&w=800&auto=format&fit=crop",
+    "message": "At St. G.N.G. School, we believe that education is the most powerful weapon which you can use to change the world. For over two decades, our campus has nurtured young minds with moral values and academic excellence."
+  },
+  "facilities": [
+    {
+      "id": "fac-1",
+      "title": "Smart Digital Classrooms",
+      "category": "Technology",
+      "imageUrl": "https://images.unsplash.com/photo-1580582932707-520aed937b7b?q=80&w=800&auto=format&fit=crop",
+      "description": "Well-ventilated, multimedia-equipped smart classrooms making learning visual and interactive."
+    },
+    {
+      "id": "fac-2",
+      "title": "Modern Computer & Coding Lab",
+      "category": "Technology",
+      "imageUrl": "https://images.unsplash.com/photo-1562774053-701939374585?q=80&w=800&auto=format&fit=crop",
+      "description": "High-speed broadband connected computing lab with 1:1 student-to-computer ratio."
+    },
+    {
+      "id": "fac-3",
+      "title": "Science & Innovation Corner",
+      "category": "Academics",
+      "imageUrl": "https://images.unsplash.com/photo-1532094349884-543bc11b234d?q=80&w=800&auto=format&fit=crop",
+      "description": "Practical apparatus and models for hands-on physics, chemistry, and biology learning."
+    },
+    {
+      "id": "fac-4",
+      "title": "Rich Library & Reading Lounge",
+      "category": "Academics",
+      "imageUrl": "https://images.unsplash.com/photo-1521587760476-6c12a4b040da?q=80&w=800&auto=format&fit=crop",
+      "description": "Over 2,500+ storybooks, encyclopedias, NCERT references, and multilingual periodicals."
+    },
+    {
+      "id": "fac-5",
+      "title": "Sports Ground & Kids Playzone",
+      "category": "Sports",
+      "imageUrl": "https://images.unsplash.com/photo-1576995853123-5a10305d93c0?q=80&w=800&auto=format&fit=crop",
+      "description": "Safe open playground with cricket pitch, badminton court, and nursery play equipments."
+    },
+    {
+      "id": "fac-6",
+      "title": "Clean RO Drinking Water & CCTV Security",
+      "category": "Safety",
+      "imageUrl": "https://images.unsplash.com/photo-1584697964190-7bb883b27b3f?q=80&w=800&auto=format&fit=crop",
+      "description": "100% CCTV-monitored campus with pure commercial-grade RO water plant."
+    }
+  ],
+  "gallery": [
+    {
+      "id": "gal-1",
+      "title": "Republic Day Grand Celebration",
+      "category": "EVENTS",
+      "imageUrl": "https://images.unsplash.com/photo-1511578314322-379afb476865?q=80&w=1000&auto=format&fit=crop",
+      "description": "Students performing patriotic cultural dances and parade on 26th January.",
+      "date": "2026-01-26"
+    },
+    {
+      "id": "gal-2",
+      "title": "Annual Science & Art Exhibition",
+      "category": "ACADEMICS",
+      "imageUrl": "https://images.unsplash.com/photo-1577495508048-b635879837f1?q=80&w=1000&auto=format&fit=crop",
+      "description": "Young innovators showcasing working science models and handcrafted artwork.",
+      "date": "2025-11-14"
+    },
+    {
+      "id": "gal-3",
+      "title": "Inter-House Sports Meet & Races",
+      "category": "SPORTS",
+      "imageUrl": "https://images.unsplash.com/photo-1461896836934-ffe607ba8211?q=80&w=1000&auto=format&fit=crop",
+      "description": "Annual athletics meet, 100m sprint, relay race, and medal distribution ceremony.",
+      "date": "2025-12-20"
+    },
+    {
+      "id": "gal-4",
+      "title": "Cultural Dance & Drama Festival",
+      "category": "CULTURAL",
+      "imageUrl": "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=1000&auto=format&fit=crop",
+      "description": "Mesmerizing folk and classical dance performances by junior and senior students.",
+      "date": "2026-01-26"
+    },
+    {
+      "id": "gal-5",
+      "title": "Interactive Smart Classroom Session",
+      "category": "ACADEMICS",
+      "imageUrl": "https://images.unsplash.com/photo-1509062522246-3755977927d7?q=80&w=1000&auto=format&fit=crop",
+      "description": "Students actively participating in digital audio-visual learning module.",
+      "date": "2026-02-10"
+    },
+    {
+      "id": "gal-6",
+      "title": "Yoga & Wellness Morning Assembly",
+      "category": "SPORTS",
+      "imageUrl": "https://images.unsplash.com/photo-1545205597-3d9d02c29597?q=80&w=1000&auto=format&fit=crop",
+      "description": "Daily morning prayer, meditation, and physical exercise routine.",
+      "date": "2026-02-05"
+    }
+  ]
+}
