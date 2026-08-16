@@ -43,22 +43,22 @@ export default function IndexPage() {
       const params = new URLSearchParams(window.location.search);
       const requestedView = params.get("view");
       const isPwaSource = params.get("source") === "pwa";
-
       const isStandalone =
         window.matchMedia("(display-mode: standalone)").matches ||
-        (window.navigator as any).standalone === true ||
-        document.referrer.includes("android-app://");
+        (window.navigator as any).standalone === true;
 
       if (isPwaSource || isStandalone) {
         setIsPwaMode(true);
         if (user && activeRole) {
           setViewMode("ERP");
         } else if (!authLoading && !user) {
-          // If launched from installed PWA on phone and not logged in, take directly to Login
+          // If launched from installed standalone PWA on phone and not logged in, take to Login
           window.location.replace("/login?source=pwa");
         }
       } else if (requestedView === "erp") {
-        setViewMode("ERP");
+        if (user && activeRole) {
+          setViewMode("ERP");
+        }
       }
     }
   }, [user, activeRole, authLoading]);

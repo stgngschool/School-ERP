@@ -242,7 +242,12 @@ export function useAuthLogic(refreshData: (user?: MockUser | null) => Promise<vo
                 if (!res.ok) {
                   setUser(null);
                   setActiveRole(null);
-                  if (typeof window !== "undefined") {
+                  try {
+                    localStorage.removeItem("gng_user");
+                    localStorage.removeItem("gng_active_role");
+                  } catch (e) {}
+                  // Only redirect if explicitly on ERP dashboard view
+                  if (typeof window !== "undefined" && window.location.search.includes("view=erp")) {
                     window.location.replace("/login");
                   }
                 }

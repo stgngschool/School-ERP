@@ -14,35 +14,19 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Skip proxy for API auth routes, static files, images, etc.
-  const isPublicPath = pathname === "/login" || pathname.startsWith("/api/auth");
-
-  if (isPublicPath) {
-    // Only redirect to / if user is trying to access /login while already logged in
-    if (pathname === "/login" && token) {
-      try {
-        await jwtVerify(token, JWT_SECRET);
-        return NextResponse.redirect(new URL("/", request.url));
-      } catch (err) {
-        // Token invalid, allow accessing the login page
-      }
+  // If user is already authenticated and visits /login, redirect to ERP dashboard
+  if (pathname === "/login" && token) {
+    try {
+      await jwtVerify(token, JWT_SECRET);
+      return NextResponse.redirect(new URL("/?view=erp", request.url));
+    } catch (err) {
+      // Token invalid, allow accessing the login page
     }
-    return NextResponse.next();
   }
 
-  // Protected paths: redirect to /login if no token is found
-  if (!token) {
-    return NextResponse.redirect(new URL("/login", request.url));
-  }
-
-  try {
-    await jwtVerify(token, JWT_SECRET);
-    return NextResponse.next();
-  } catch (err) {
-    const response = NextResponse.redirect(new URL("/login", request.url));
-    response.cookies.delete("auth_token");
-    return response;
-  }
+  // All website routes (/, /about, /academics, /admissions, /facilities, /gallery, /notices, /contact, /videos, etc.)
+  // and login page are publicly accessible
+  return NextResponse.next();
 }
 
 export const config = {
