@@ -61,17 +61,22 @@ export async function GET(request: Request) {
         include: { classes: true }
       });
       const classIds = teacherProfile?.classes.map(c => c.id) || [];
+      if (classIds.length === 0) {
+        return NextResponse.json({
+          ledgerEntries: [],
+          receipts: [],
+          dueItems: [],
+        });
+      }
       const teacherStudents = await db.student.findMany({
-        where: classIds.length > 0 ? { classId: { in: classIds } } : {},
+        where: { classId: { in: classIds } },
         select: { id: true }
       });
       const studentIds = teacherStudents.map((s) => s.id);
-      if (studentIds.length > 0) {
-        ledgerWhere = { studentId: { in: studentIds } };
-        receiptWhere = { studentId: { in: studentIds } };
-        chargesWhere = { entryType: EntryType.CHARGE, studentId: { in: studentIds } };
-        discountsWhere = { entryType: EntryType.DISCOUNT, studentId: { in: studentIds } };
-      }
+      ledgerWhere = { studentId: { in: studentIds } };
+      receiptWhere = { studentId: { in: studentIds } };
+      chargesWhere = { entryType: EntryType.CHARGE, studentId: { in: studentIds } };
+      discountsWhere = { entryType: EntryType.DISCOUNT, studentId: { in: studentIds } };
     }
 
     if (authUser.role === "PARENT") {
@@ -126,20 +131,48 @@ export async function GET(request: Request) {
       db.receipt.findMany({
         where: receiptWhere,
         take: 200,
-        include: {
+        select: {
+          id: true,
+          studentId: true,
+          receiptNumber: true,
+          paymentMethod: true,
+          transactionReference: true,
+          amountPaid: true,
+          createdAt: true,
+          createdById: true,
           student: {
-            include: {
-              class: true,
+            select: {
+              name: true,
+              class: {
+                select: {
+                  name: true,
+                  section: true,
+                },
+              },
             },
           },
-          createdBy: true,
+          createdBy: {
+            select: {
+              name: true,
+              role: true,
+            },
+          },
           items: {
-            include: {
+            select: {
+              amount: true,
               ledgerEntry: {
-                include: {
+                select: {
+                  studentId: true,
+                  description: true,
                   student: {
-                    include: {
-                      class: true,
+                    select: {
+                      name: true,
+                      class: {
+                        select: {
+                          name: true,
+                          section: true,
+                        },
+                      },
                     },
                   },
                 },
@@ -365,6 +398,11 @@ export async function POST(request: Request) {
 
     if (!items || items.length === 0 || !paymentMethod) {
       return NextResponse.json({ error: "Missing required checkout parameters." }, { status: 400 });
+    }
+
+    // Role check: Only ADMIN and ACCOUNTANT can record offline receipts or grant fee discounts
+    if (authUser.role !== "ADMIN" && authUser.role !== "ACCOUNTANT") {
+      return NextResponse.json({ error: "Forbidden. Only authorized finance staff can record fee receipts." }, { status: 403 });
     }
 
     // Resolve parent profile ID and student ID

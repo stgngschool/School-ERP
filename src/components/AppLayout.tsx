@@ -550,20 +550,22 @@ export default function AppLayout({ children }: AppLayoutProps) {
                   <div className="absolute top-11 left-0 right-0 bg-white border border-slate-200/90 rounded-2xl shadow-xl max-h-60 overflow-y-auto z-50 p-2 space-y-1">
                     {students && students.filter(s =>
                       s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                      s.admissionNo?.toLowerCase().includes(searchQuery.toLowerCase())
+                      s.admissionNo?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                      (s.rollNo && String(s.rollNo).toLowerCase().includes(searchQuery.toLowerCase()))
                     ).slice(0, 8).map((student) => (
                       <button key={student.id} onClick={() => { setActiveTab("students"); setSearchQuery(""); }}
                         className="w-full text-left flex justify-between items-center p-2 rounded-xl hover:bg-indigo-50/60 transition-all">
                         <div>
                           <p className="text-xs font-bold text-slate-800">{student.name}</p>
-                          <p className="text-[10px] text-slate-400 font-semibold">{student.admissionNo} • Class {student.class}</p>
+                          <p className="text-[10px] text-slate-400 font-semibold">Roll: {student.rollNo || "--"} • {student.admissionNo} • Class {student.class}</p>
                         </div>
                         <span className="text-[10px] font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full uppercase">View</span>
                       </button>
                     ))}
                     {students && students.filter(s =>
                       s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                      s.admissionNo?.toLowerCase().includes(searchQuery.toLowerCase())
+                      s.admissionNo?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                      (s.rollNo && String(s.rollNo).toLowerCase().includes(searchQuery.toLowerCase()))
                     ).length === 0 && (
                       <p className="text-center py-4 text-xs font-semibold text-slate-400">No students found.</p>
                     )}

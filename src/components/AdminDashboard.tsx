@@ -7,6 +7,7 @@ import StudentProfileModal from "@/components/StudentProfileModal";
 import MarksFeedingConsole from "@/components/MarksFeedingConsole";
 import PrintMarksheets from "@/components/PrintMarksheets";
 import AttendanceConsole from "@/components/AttendanceConsole";
+import ModernDatePicker from "@/components/ModernDatePicker";
 import {
   generateFeeReminderWhatsAppUrl,
   isDueUpToCurrentMonth,
@@ -849,6 +850,7 @@ export default function AdminDashboard() {
     return students.filter((s) => {
       const name = s.name ? s.name.toLowerCase() : "";
       const adm = s.admissionNo ? s.admissionNo.toLowerCase() : "";
+      const roll = s.rollNo ? String(s.rollNo).toLowerCase() : "";
       const parent = s.parentName ? s.parentName.toLowerCase() : "";
       const father = s.fatherName ? s.fatherName.toLowerCase() : "";
       const phone = s.parentPhone ? s.parentPhone : "";
@@ -860,6 +862,7 @@ export default function AdminDashboard() {
       return (
         name.includes(query) ||
         adm.includes(query) ||
+        roll.includes(query) ||
         parent.includes(query) ||
         father.includes(query) ||
         phone.includes(query) ||
@@ -1850,16 +1853,19 @@ export default function AdminDashboard() {
   const unpaidStudentIdsSet = React.useMemo(() => new Set(dueItems.filter((d) => d.status === "UNPAID").map((d) => d.studentId)), [dueItems]);
 
   const filteredStudentsMemo = React.useMemo(() => {
+    const q = debouncedDirSearch.trim().toLowerCase();
     return students.filter((s: any) => {
-      const q = debouncedDirSearch.trim().toLowerCase();
+      const rollStr = s.rollNo ? String(s.rollNo).toLowerCase() : (s.rollNumber ? String(s.rollNumber).toLowerCase() : "");
       const matchesSearch =
         !q ||
         s.name?.toLowerCase().includes(q) ||
         s.admissionNo?.toLowerCase().includes(q) ||
-        (s.rollNumber && s.rollNumber.toLowerCase().includes(q)) ||
+        rollStr.includes(q) ||
         (s.familyCode && s.familyCode.toLowerCase().includes(q)) ||
         (s.parentName && s.parentName.toLowerCase().includes(q)) ||
+        (s.fatherName && s.fatherName.toLowerCase().includes(q)) ||
         (s.fatherMobile && s.fatherMobile.toLowerCase().includes(q)) ||
+        (s.parentPhone && s.parentPhone.toLowerCase().includes(q)) ||
         (s.aadhaar && s.aadhaar.includes(q));
 
       const matchesClass = !dirClassFilter || s.class === dirClassFilter;
@@ -2389,147 +2395,72 @@ export default function AdminDashboard() {
 
                 {/* ─── Visualizations Section (SVG Charts) ─── */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  {/* Revenue Curve Chart (SVG Area Chart) */}
+                  {/* Revenue Curve Chart (Modern Rounded Bar Chart with Growth Analytics) */}
                   <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.015)] p-6 relative flex flex-col justify-between">
-                    <div className="flex justify-between items-center mb-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 pb-3 border-b border-slate-100">
                       <div>
-                        <h4 className="text-sm font-black text-slate-800 tracking-tight">Collection Revenue Trend</h4>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Session 2026-27</p>
+                        <h4 className="text-sm font-black text-slate-800 tracking-tight">Monthly Fee Collection Analysis</h4>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Session 2026-27 • 12-Month Cashflow</p>
                       </div>
-                      <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md">Line Chart</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-extrabold bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-xl border border-indigo-100">
+                          Total: {formatP(totalEarnings)}
+                        </span>
+                      </div>
                     </div>
 
-                    <div className="relative w-full h-[180px] mt-2">
-                      {/* Tooltip Overlay */}
-                      {hoveredMonth && (() => {
-                        const p = points.find(pt => pt.month === hoveredMonth);
-                        if (!p) return null;
+                    <div className="relative w-full h-[210px] flex items-end justify-between gap-1.5 sm:gap-3 pt-6 pb-2 px-1">
+                      {monthsOrder.map((m) => {
+                        const val = monthlyRevenue[m] || 0;
+                        const heightPct = maxRev > 0 ? Math.max((val / maxRev) * 100, val > 0 ? 8 : 3) : 3;
+                        const isCurrentMonth = m === "Aug";
+                        const isHighest = val === Math.max(...Object.values(monthlyRevenue)) && val > 0;
+
                         return (
                           <div 
-                            className="absolute bg-slate-900/95 text-white text-[10px] font-bold py-1.5 px-2.5 rounded-xl shadow-lg border border-slate-800 pointer-events-none transition-all duration-150 z-20"
-                            style={{ 
-                              left: `${(p.x / chartWidth) * 100}%`, 
-                              top: `${(p.y / chartHeight) * 100 - 30}%`,
-                              transform: 'translateX(-50%)'
-                            }}
+                            key={m} 
+                            className="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer"
                           >
-                            <p className="text-slate-400 font-medium uppercase tracking-wider text-[8px]">{p.month}</p>
-                            <p className="text-white mt-0.5">{formatP(p.val)}</p>
+                            {/* Hover Tooltip Popup */}
+                            <div className="absolute -top-9 opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none bg-slate-900 text-white text-[10px] font-bold py-1 px-2 rounded-lg shadow-xl whitespace-nowrap z-20">
+                              <span className="text-slate-300">{m}: </span>
+                              <span className="text-amber-300 font-black">₹{val.toLocaleString('en-IN')}</span>
+                            </div>
+
+                            {/* Top value label for active months */}
+                            {val > 0 && (
+                              <span className="text-[9px] font-black text-slate-700 mb-1.5 tracking-tight group-hover:text-indigo-600">
+                                {val >= 100000 ? `₹${(val / 100000).toFixed(1)}L` : val >= 1000 ? `₹${Math.round(val / 1000)}k` : `₹${val}`}
+                              </span>
+                            )}
+
+                            {/* Bar Cylinder */}
+                            <div className="w-full max-w-[34px] bg-slate-100/90 rounded-2xl p-0.5 flex flex-col justify-end h-full max-h-[140px]">
+                              <div
+                                style={{ height: `${heightPct}%` }}
+                                className={`w-full rounded-xl transition-all duration-500 relative ${
+                                  isHighest
+                                    ? "bg-gradient-to-t from-indigo-600 to-indigo-400 shadow-md shadow-indigo-500/30"
+                                    : val > 0
+                                    ? "bg-gradient-to-t from-indigo-500 to-indigo-300"
+                                    : "bg-slate-200/50"
+                                } group-hover:brightness-110`}
+                              >
+                                {isCurrentMonth && val > 0 && (
+                                  <span className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-amber-400 border border-white animate-ping" />
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Month Label */}
+                            <span className={`text-[10px] font-extrabold mt-2 uppercase tracking-wider ${
+                              isCurrentMonth ? "text-indigo-600 font-black" : "text-slate-400 group-hover:text-slate-700"
+                            }`}>
+                              {m}
+                            </span>
                           </div>
                         );
-                      })()}
-
-                      <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full h-full overflow-visible">
-                        <defs>
-                          <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#4f46e5" stopOpacity="0.18" />
-                            <stop offset="100%" stopColor="#4f46e5" stopOpacity="0.0" />
-                          </linearGradient>
-                        </defs>
-                        
-                        {/* Grid Lines */}
-                        {[0, 0.25, 0.5, 0.75, 1].map((ratio, index) => {
-                          const y = paddingTop + ratio * activeHeight;
-                          const gridVal = maxRev - ratio * maxRev;
-                          return (
-                            <g key={index}>
-                              <line 
-                                x1={paddingLeft} 
-                                y1={y} 
-                                x2={chartWidth - paddingRight} 
-                                y2={y} 
-                                stroke="#f1f5f9" 
-                                strokeWidth="1" 
-                              />
-                              <text 
-                                x={paddingLeft - 8} 
-                                y={y + 3} 
-                                fill="#94a3b8" 
-                                fontSize="9" 
-                                fontWeight="bold" 
-                                textAnchor="end"
-                              >
-                                {gridVal >= 100000 ? `${Math.round(gridVal/1000)}k` : Math.round(gridVal)}
-                              </text>
-                            </g>
-                          );
-                        })}
-
-                        {/* Chart Paths */}
-                        <path d={areaPath} fill="url(#chartGradient)" />
-                        <path 
-                          d={linePath} 
-                          fill="none" 
-                          stroke="#4f46e5" 
-                          strokeWidth="3" 
-                          strokeLinecap="round" 
-                          strokeLinejoin="round" 
-                        />
-
-                        {/* Month Axis Labels */}
-                        {points.map((p, idx) => (
-                          <text 
-                            key={idx} 
-                            x={p.x} 
-                            y={chartHeight - 8} 
-                            fill="#94a3b8" 
-                            fontSize="9" 
-                            fontWeight="black" 
-                            textAnchor="middle"
-                          >
-                            {p.month}
-                          </text>
-                        ))}
-
-                        {/* Interactive Dot & Lines */}
-                        {points.map((p, idx) => {
-                          const isHovered = hoveredMonth === p.month;
-                          return (
-                            <g key={idx}>
-                              {isHovered && (
-                                <>
-                                  <line 
-                                    x1={p.x} 
-                                    y1={paddingTop} 
-                                    x2={p.x} 
-                                    y2={chartHeight - paddingBottom} 
-                                    stroke="#4f46e5" 
-                                    strokeDasharray="3 3" 
-                                    strokeWidth="1.5" 
-                                  />
-                                  <circle cx={p.x} cy={p.y} r="7" fill="#4f46e5" opacity="0.3" className="animate-ping" />
-                                  <circle cx={p.x} cy={p.y} r="5" fill="#ffffff" stroke="#4f46e5" strokeWidth="3" />
-                                </>
-                              )}
-                              <circle 
-                                cx={p.x} 
-                                cy={p.y} 
-                                r="3.5" 
-                                fill="#4f46e5" 
-                                className="transition-all duration-200 hover:scale-125" 
-                              />
-                            </g>
-                          );
-                        })}
-
-                        {/* Hover Zones */}
-                        {points.map((p, idx) => {
-                          const colWidth = activeWidth / monthsOrder.length;
-                          return (
-                            <rect
-                              key={idx}
-                              x={p.x - colWidth / 2}
-                              y={0}
-                              width={colWidth}
-                              height={chartHeight}
-                              fill="transparent"
-                              className="cursor-pointer pointer-events-auto"
-                              onMouseEnter={() => setHoveredMonth(p.month)}
-                              onMouseLeave={() => setHoveredMonth(null)}
-                            />
-                          );
-                        })}
-                      </svg>
+                      })}
                     </div>
                   </div>
 
@@ -5888,12 +5819,11 @@ export default function AdminDashboard() {
                           </div>
                           <div>
                             <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">DOB *</label>
-                            <input
-                              type="date"
-                              required
+                            <ModernDatePicker
                               value={stdDob}
-                              onChange={(e) => setStdDob(e.target.value)}
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
+                              onChange={(val) => setStdDob(val)}
+                              placeholder="Select DOB"
+                              className="w-full"
                             />
                           </div>
                         </div>
@@ -6061,11 +5991,11 @@ export default function AdminDashboard() {
                           </div>
                           <div>
                             <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Admission Date</label>
-                            <input
-                              type="date"
+                            <ModernDatePicker
                               value={stdAdmissionDate}
-                              onChange={(e) => setStdAdmissionDate(e.target.value)}
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
+                              onChange={(val) => setStdAdmissionDate(val)}
+                              placeholder="Admission Date"
+                              className="w-full"
                             />
                           </div>
                           <div>
@@ -7496,11 +7426,11 @@ export default function AdminDashboard() {
 
                 {/* Date Filter */}
                 <div className="relative">
-                  <input
-                    type="date"
+                  <ModernDatePicker
                     value={ledgerDate}
-                    onChange={(e) => setLedgerDate(e.target.value)}
-                    className="w-full text-xs font-semibold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 transition-all text-slate-705"
+                    onChange={(val) => setLedgerDate(val)}
+                    placeholder="Filter by date"
+                    className="w-full"
                   />
                 </div>
 

@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: 'St. GNG School - Finance OS',
     short_name: 'GNG School',
     description: 'School Management & Finance OS Portal for Admins, Accountants, Teachers, and Parents',
-    start_url: '/',
+    start_url: '/?source=pwa',
     scope: '/',
     display: 'standalone',
     display_override: ['standalone', 'minimal-ui'],

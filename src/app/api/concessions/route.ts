@@ -9,7 +9,11 @@ export async function GET() {
     const concessions = await db.concession.findMany({
       orderBy: { name: "asc" },
     });
-    return NextResponse.json(concessions);
+    return NextResponse.json(concessions, {
+      headers: {
+        "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
+      },
+    });
   } catch (error) {
     console.error("Fetch concessions error:", error);
     return NextResponse.json({ error: "Failed to fetch concessions" }, { status: 500 });
@@ -19,6 +23,9 @@ export async function GET() {
 export async function POST(request: Request) {
   const authUser = await getAuthUser(request);
   if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (authUser.role !== "ADMIN" && authUser.role !== "ACCOUNTANT") {
+    return NextResponse.json({ error: "Forbidden. Admin or Accountant access required." }, { status: 403 });
+  }
 
   try {
     const { name, percentage, feeHeadName } = await request.json();
@@ -50,6 +57,9 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   const authUser = await getAuthUser(request);
   if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (authUser.role !== "ADMIN" && authUser.role !== "ACCOUNTANT") {
+    return NextResponse.json({ error: "Forbidden. Admin or Accountant access required." }, { status: 403 });
+  }
 
   try {
     const { id } = await request.json();

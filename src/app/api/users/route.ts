@@ -257,33 +257,12 @@ export async function DELETE(request: Request) {
     // Safely reassign or delete user and their associated entities in a transaction
     await db.$transaction(async (tx) => {
       if (user.role === "PARENT" && user.parentProfile) {
-        const studentIds = user.parentProfile.students.map((s) => s.id);
-        if (studentIds.length > 0) {
-          // Delete student references to prevent constraints failure
-          await tx.receiptItem.deleteMany({
-            where: {
-              OR: [
-                { ledgerEntry: { studentId: { in: studentIds } } },
-                { receipt: { studentId: { in: studentIds } } }
-              ]
-            }
-          });
-          await tx.receipt.deleteMany({
-            where: {
-              OR: [
-                { studentId: { in: studentIds } },
-                { parentProfileId: user.parentProfile.id }
-              ]
-            }
-          });
-          await tx.mark.deleteMany({ where: { studentId: { in: studentIds } } });
-          await tx.feeAssignment.deleteMany({ where: { studentId: { in: studentIds } } });
-          await tx.attendance.deleteMany({ where: { studentId: { in: studentIds } } });
-          await tx.leaveRequest.deleteMany({ where: { studentId: { in: studentIds } } });
-          await tx.ledgerEntry.deleteMany({ where: { studentId: { in: studentIds } } });
-          await tx.student.deleteMany({ where: { id: { in: studentIds } } });
-        }
-        await tx.parentProfile.delete({ where: { id: user.parentProfile.id } });
+        // Mark user account as BLOCKED to prevent login while keeping all student linkages, ledger entries and receipts intact
+        await tx.user.update({
+          where: { id: user.id },
+          data: { status: "BLOCKED" }
+        });
+        return;
       } else if (user.role === "TEACHER" && user.teacherProfile) {
         // Unbind as class teacher
         await tx.class.updateMany({

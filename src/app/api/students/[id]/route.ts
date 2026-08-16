@@ -18,53 +18,182 @@ export async function GET(
       return NextResponse.json({ error: "Student ID is required" }, { status: 400 });
     }
 
-    // Fetch student with all relationships
+    // Fetch student with optimized scoped relationships
     const student = await db.student.findUnique({
       where: { id },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        admissionNumber: true,
+        rollNumber: true,
+        gender: true,
+        dob: true,
+        aadhaar: true,
+        disability: true,
+        fatherName: true,
+        motherName: true,
+        fatherMobile: true,
+        motherMobile: true,
+        fatherAadhaar: true,
+        category: true,
+        religion: true,
+        motherTongue: true,
+        nationality: true,
+        admissionDate: true,
+        boardRegNo: true,
+        prevSchoolName: true,
+        prevClassPassed: true,
+        tcNumber: true,
+        parentOccupation: true,
+        familyIncome: true,
+        emergencyName: true,
+        emergencyPhone: true,
+        motherAadhaar: true,
+        transportMode: true,
+        busRoute: true,
+        busStop: true,
+        isRte: true,
+        status: true,
+        photoUrl: true,
+        parentProfileId: true,
         class: {
-          include: {
+          select: {
+            id: true,
+            name: true,
+            section: true,
             classTeacher: {
-              include: {
-                user: true,
-              },
-            },
-          },
-        },
-        parentProfile: {
-          include: {
-            user: true,
-          },
-        },
-        concession: true,
-        marks: true,
-        attendance: {
-          orderBy: { date: "desc" },
-        },
-        leaveRequests: {
-          orderBy: { startDate: "desc" },
-        },
-        ledgerEntries: {
-          include: {
-            feeHead: true,
-            createdBy: true,
-          },
-          orderBy: { createdAt: "desc" },
-        },
-        receipts: {
-          include: {
-            createdBy: true,
-            items: {
-              include: {
-                ledgerEntry: {
-                  include: {
-                    feeHead: true,
+              select: {
+                id: true,
+                user: {
+                  select: {
+                    name: true,
+                    email: true,
+                    phone: true,
                   },
                 },
               },
             },
           },
+        },
+        parentProfile: {
+          select: {
+            id: true,
+            familyCode: true,
+            address: true,
+            user: {
+              select: {
+                name: true,
+                email: true,
+                phone: true,
+              },
+            },
+          },
+        },
+        concession: {
+          select: {
+            id: true,
+            name: true,
+            percentage: true,
+            feeHeadName: true,
+          },
+        },
+        marks: {
+          select: {
+            id: true,
+            subject: true,
+            examName: true,
+            marksObtained: true,
+            maxMarks: true,
+            writtenExam: true,
+            notebook: true,
+            subjectEnrichment: true,
+            practical: true,
+            breakdown: true,
+            remarks: true,
+            createdAt: true,
+          },
+        },
+        attendance: {
+          take: 120, // Scoped to recent attendance to prevent massive egress
+          orderBy: { date: "desc" },
+          select: {
+            id: true,
+            date: true,
+            status: true,
+            markedBy: true,
+            createdAt: true,
+          },
+        },
+        leaveRequests: {
+          take: 50,
+          orderBy: { startDate: "desc" },
+          select: {
+            id: true,
+            startDate: true,
+            endDate: true,
+            reason: true,
+            status: true,
+            remarks: true,
+            createdAt: true,
+          },
+        },
+        ledgerEntries: {
+          take: 100,
           orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            entryType: true,
+            amount: true,
+            description: true,
+            createdAt: true,
+            feeHead: {
+              select: {
+                id: true,
+                name: true,
+                frequency: true,
+              },
+            },
+            createdBy: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+        receipts: {
+          take: 50,
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            receiptNumber: true,
+            paymentMethod: true,
+            transactionReference: true,
+            amountPaid: true,
+            status: true,
+            remarks: true,
+            createdAt: true,
+            createdBy: {
+              select: {
+                name: true,
+              },
+            },
+            items: {
+              select: {
+                id: true,
+                amount: true,
+                ledgerEntry: {
+                  select: {
+                    description: true,
+                    feeHead: {
+                      select: {
+                        name: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
         },
       },
     });

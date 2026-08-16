@@ -25,6 +25,7 @@ import {
 
 import StudentProfileModal from "@/components/StudentProfileModal";
 import NoticeBoardView from "@/components/NoticeBoardView";
+import ModernDatePicker from "@/components/ModernDatePicker";
 
 // Groups multiple months or siblings into a single row if the list grows too long (> 4 items)
 const getGroupedReceiptItems = (items: any[]) => {
@@ -316,10 +317,10 @@ export default function ParentDashboard() {
 
     setPayLoading(true);
     try {
-      const ok = await recordItemizedPayment(child.id, items, payMethod);
-      if (ok) {
+      const payRes = await recordItemizedPayment(child.id, items, payMethod);
+      if (payRes.success) {
         const matchedReceipt = {
-          receiptNo: `REC-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+          receiptNo: payRes.receipt?.receiptNo || `REC-2026-${Math.floor(1000 + Math.random() * 9000)}`,
           studentName: child.name,
           classSection: `${child.class}-${child.section}`,
           admissionNo: child.admissionNo,
@@ -333,6 +334,8 @@ export default function ParentDashboard() {
         setSelectedDueIds([]);
         setShowPayModal(false);
         setShowReceiptModal(true);
+      } else {
+        alert(payRes.error || "Payment failed. Please try again.");
       }
     } catch (err) {
       console.error("Payment error:", err);
@@ -1303,22 +1306,22 @@ export default function ParentDashboard() {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Start Date</label>
-                  <input
-                    type="date"
-                    required
+                  <ModernDatePicker
                     value={leaveStart}
-                    onChange={(e) => setLeaveStart(e.target.value)}
-                    className="w-full text-xs font-semibold py-1.5 px-2.5 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
+                    onChange={(val) => setLeaveStart(val)}
+                    placeholder="Start date"
+                    className="w-full"
+                    showClear={false}
                   />
                 </div>
                 <div>
                   <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">End Date</label>
-                  <input
-                    type="date"
-                    required
+                  <ModernDatePicker
                     value={leaveEnd}
-                    onChange={(e) => setLeaveEnd(e.target.value)}
-                    className="w-full text-xs font-semibold py-1.5 px-2.5 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
+                    onChange={(val) => setLeaveEnd(val)}
+                    placeholder="End date"
+                    className="w-full"
+                    showClear={false}
                   />
                 </div>
               </div>

@@ -11,11 +11,11 @@ if (!connectionString) {
 }
 
 // In Prisma 7, adapter is strictly required. 
-// We use a small connection pool per instance to prevent exhausting Supavisor session limit.
+// We use a safe connection pool per instance to prevent exhausting Supavisor session limit while supporting concurrent dashboard requests.
 const poolConfig = {
   connectionString,
-  max: 1, // Restrict to 1 connection per worker to drastically reduce global connection count
-  idleTimeoutMillis: 5000,
+  max: 5, // 5 connections per worker prevents deadlock on concurrent API requests & transactions
+  idleTimeoutMillis: 10000,
   connectionTimeoutMillis: 10000,
 };
 

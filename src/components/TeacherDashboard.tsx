@@ -28,6 +28,7 @@ import StudentProfileModal from "@/components/StudentProfileModal";
 import MarksFeedingConsole from "@/components/MarksFeedingConsole";
 import AttendanceConsole from "@/components/AttendanceConsole";
 import NoticeBoardView from "@/components/NoticeBoardView";
+import ModernDatePicker from "@/components/ModernDatePicker";
 import {
   generateFeeReminderWhatsAppUrl,
   isDueUpToCurrentMonth,
@@ -234,8 +235,13 @@ export default function TeacherDashboard() {
                     </div>
                     <div>
                       <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Due Date</label>
-                      <input type="date" required value={hwDueDate} onChange={(e) => setHwDueDate(e.target.value)}
-                        className="w-full font-semibold py-3 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-400 text-slate-700" />
+                      <ModernDatePicker
+                        value={hwDueDate}
+                        onChange={(val) => setHwDueDate(val)}
+                        placeholder="Select due date"
+                        className="w-full"
+                        showClear={false}
+                      />
                     </div>
                   </div>
 

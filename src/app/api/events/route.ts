@@ -56,6 +56,9 @@ take: 100,
 export async function POST(request: Request) {
   const authUser = await getAuthUser(request);
   if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (authUser.role !== "ADMIN" && authUser.role !== "ACCOUNTANT") {
+    return NextResponse.json({ error: "Forbidden. Admin or Accountant access required." }, { status: 403 });
+  }
 
   try {
     const body = await request.json();
@@ -87,6 +90,9 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   const authUser = await getAuthUser(request);
   if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (authUser.role !== "ADMIN" && authUser.role !== "ACCOUNTANT") {
+    return NextResponse.json({ error: "Forbidden. Admin or Accountant access required." }, { status: 403 });
+  }
 
   try {
     const { searchParams } = new URL(request.url);

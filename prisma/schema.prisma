@@ -182,6 +182,7 @@ model Attendance {
 
   @@index([studentId])
   @@index([date])
+  @@index([sessionId])
   @@unique([studentId, date])
 }
 
@@ -197,6 +198,9 @@ model Homework {
   teacherId   String
   teacher     TeacherProfile @relation(fields: [teacherId], references: [id])
   createdAt   DateTime       @default(now())
+
+  @@index([classId])
+  @@index([teacherId])
 }
 
 model LeaveRequest {
@@ -212,6 +216,9 @@ model LeaveRequest {
   teacher     TeacherProfile? @relation(fields: [teacherId], references: [id])
   remarks     String?
   createdAt   DateTime     @default(now())
+
+  @@index([studentId])
+  @@index([teacherId])
 }
 
 model Notice {
@@ -223,6 +230,8 @@ model Notice {
   createdById String
   createdBy   User         @relation("NoticeCreator", fields: [createdById], references: [id])
   createdAt   DateTime     @default(now())
+
+  @@index([createdById])
 }
 
 // --- Ledger & Financial Modules ---
@@ -272,6 +281,9 @@ model FeeStructureItem {
   feeHeadId      String
   feeHead        FeeHead      @relation(fields: [feeHeadId], references: [id])
   amount         Int          // In Paisa (Integer)
+
+  @@index([feeStructureId])
+  @@index([feeHeadId])
 }
 
 model FeeAssignment {
@@ -284,6 +296,8 @@ model FeeAssignment {
   session        AcademicSession @relation(fields: [sessionId], references: [id])
   createdAt      DateTime     @default(now())
 
+  @@index([feeStructureId])
+  @@index([sessionId])
   @@unique([studentId, feeStructureId, sessionId])
 }
 
@@ -309,6 +323,9 @@ model LedgerEntry {
   @@index([createdAt])
   @@index([studentId, entryType])
   @@index([entryType, createdAt])
+  @@index([feeHeadId])
+  @@index([sessionId])
+  @@index([createdById])
 }
 
 model Receipt {
@@ -331,6 +348,7 @@ model Receipt {
   @@index([studentId])
   @@index([parentProfileId])
   @@index([createdAt])
+  @@index([createdById])
 }
 
 model ReceiptItem {
@@ -341,6 +359,7 @@ model ReceiptItem {
   ledgerEntry   LedgerEntry @relation(fields: [ledgerEntryId], references: [id])
   amount        Int         // Amount applied to this specific charge
 
+  @@index([ledgerEntryId])
   @@unique([receiptId, ledgerEntryId])
 }
 
@@ -354,6 +373,8 @@ model AuditLog {
   oldValues  String?  // JSON string
   newValues  String?  // JSON string
   createdAt  DateTime @default(now())
+
+  @@index([userId])
 }
 
 model CalendarEvent {
@@ -387,6 +408,7 @@ model Mark {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
+  @@index([sessionId])
   @@unique([studentId, subject, examName])
 }
 
@@ -415,5 +437,8 @@ model StudentSession {
   class      Class           @relation(fields: [classId], references: [id])
   rollNumber String?
   
+  @@index([classId])
+  @@index([sessionId])
   @@unique([studentId, sessionId])
 }
+

@@ -13,7 +13,11 @@ export async function GET(request: Request) {
         { section: "asc" }
       ]
     });
-    return NextResponse.json(classes);
+    return NextResponse.json(classes, {
+      headers: {
+        "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
+      },
+    });
   } catch (error) {
     console.error("Fetch classes error:", error);
     return NextResponse.json({ error: "Failed to fetch classes" }, { status: 500 });

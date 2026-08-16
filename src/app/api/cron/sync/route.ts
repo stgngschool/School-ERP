@@ -9,11 +9,16 @@ const INTEGRATIONS_FILE = path.join(process.cwd(), "src/data/integrations.json")
 
 export async function GET(request: Request) {
   try {
-    // Optionally secure this endpoint with a secret token from headers or query params
-    // const authHeader = request.headers.get('authorization');
-    // if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    //   return new Response('Unauthorized', { status: 401 });
-    // }
+    // Validate Cron Secret or Staff Authorization
+    const cronSecret = process.env.CRON_SECRET;
+    const authHeader = request.headers.get("authorization");
+    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+      const url = new URL(request.url);
+      const queryKey = url.searchParams.get("key");
+      if (queryKey !== cronSecret) {
+        return NextResponse.json({ error: "Unauthorized cron execution." }, { status: 401 });
+      }
+    }
 
     let countStudents = 0;
     let countTransactions = 0;

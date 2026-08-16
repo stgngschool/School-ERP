@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import StudentProfileModal from "@/components/StudentProfileModal";
 import AttendanceConsole from "@/components/AttendanceConsole";
+import ModernDatePicker from "@/components/ModernDatePicker";
 import MarksFeedingConsole from "@/components/MarksFeedingConsole";
 import NoticeBoardView from "@/components/NoticeBoardView";
 import PrintMarksheets from "@/components/PrintMarksheets";
@@ -247,6 +248,7 @@ export default function AccountantDashboard() {
     return students.filter((s) => {
       const name = s.name ? s.name.toLowerCase() : "";
       const adm = s.admissionNo ? s.admissionNo.toLowerCase() : "";
+      const roll = s.rollNo ? String(s.rollNo).toLowerCase() : "";
       const parent = s.parentName ? s.parentName.toLowerCase() : "";
       const father = s.fatherName ? s.fatherName.toLowerCase() : "";
       const phone = s.parentPhone ? s.parentPhone : "";
@@ -258,6 +260,7 @@ export default function AccountantDashboard() {
       return (
         name.includes(query) ||
         adm.includes(query) ||
+        roll.includes(query) ||
         parent.includes(query) ||
         father.includes(query) ||
         phone.includes(query) ||
@@ -402,9 +405,9 @@ export default function AccountantDashboard() {
       }
 
       // Send null for studentId to trigger unified family checkout
-      const success = await recordItemizedPayment(null, items, payMethod, transactionRef);
-      if (!success) {
-        alert("Payment failed. Please check backend logs or try again.");
+      const payRes = await recordItemizedPayment(null, items, payMethod, transactionRef);
+      if (!payRes.success) {
+        alert(payRes.error || "Payment failed. Please check backend logs or try again.");
         setIsSubmittingPayment(false);
         return;
       }
@@ -417,9 +420,9 @@ export default function AccountantDashboard() {
       const totalRemainingArrears = familyOtherDuesSum + remainingArrears;
       const isSingleSibling = siblingStudents.length === 1;
 
-      // Receipt Details for modal
+      // Receipt Details for modal using real database receipt number
       const matchedReceipt = {
-        receiptNo: `REC-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+        receiptNo: payRes.receipt?.receiptNo || `REC-2026-${Math.floor(1000 + Math.random() * 9000)}`,
         studentName: isSingleSibling ? student.name : `Family (Siblings: ${siblingStudents.map(s => s.name).join(", ")})`,
         classSection: isSingleSibling ? `${student.class}-${student.section}` : "Unified Family",
         admissionNo: isSingleSibling ? student.admissionNo : student.familyCode || "Multi",
@@ -2224,11 +2227,11 @@ export default function AccountantDashboard() {
 
               {/* Date Filter */}
               <div className="relative">
-                <input
-                  type="date"
+                <ModernDatePicker
                   value={ledgerDate}
-                  onChange={(e) => setLedgerDate(e.target.value)}
-                  className="w-full text-xs font-semibold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 transition-all text-slate-705"
+                  onChange={(val) => setLedgerDate(val)}
+                  placeholder="Filter by date"
+                  className="w-full"
                 />
               </div>
 

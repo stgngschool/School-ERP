@@ -60,6 +60,76 @@ body {
 }
 
 /* ─────────────────────────────────────────
+   LIQUID FLUID TRANSITIONS & SPRING EFFECTS (iOS STYLE)
+───────────────────────────────────────── */
+@keyframes iosSlideFromRight {
+  0% {
+    opacity: 0;
+    transform: translateX(32px) scale(0.985);
+    filter: blur(4px);
+  }
+  60% {
+    opacity: 0.95;
+    transform: translateX(-3px) scale(1.002);
+    filter: blur(0px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+    filter: blur(0px);
+  }
+}
+
+@keyframes iosSlideFromLeft {
+  0% {
+    opacity: 0;
+    transform: translateX(-32px) scale(0.985);
+    filter: blur(4px);
+  }
+  60% {
+    opacity: 0.95;
+    transform: translateX(3px) scale(1.002);
+    filter: blur(0px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+    filter: blur(0px);
+  }
+}
+
+.animate-ios-slide-right {
+  animation: iosSlideFromRight 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity, filter;
+}
+
+.animate-ios-slide-left {
+  animation: iosSlideFromLeft 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity, filter;
+}
+
+@keyframes liquidPillSpring {
+  0% {
+    transform: scale(0.92);
+  }
+  50% {
+    transform: scale(1.08, 0.94);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.animate-liquid-spring {
+  animation: liquidPillSpring 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.liquid-nav-island {
+  position: relative;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ─────────────────────────────────────────
    STRIPE + LINEAR DESIGN SYSTEM UTILITIES
 ───────────────────────────────────────── */
 .stripe-card {
@@ -552,4 +622,62 @@ button {
 }
 button:active {
   transform: scale(0.975) !important;
+}
+
+/* ─────────────────────────────────────────
+   OFFICIAL CLEAN PRINT STYLESHEET
+   ───────────────────────────────────────── */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm 12mm 15mm 12mm;
+  }
+
+  html, body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    overflow: visible !important;
+    height: auto !important;
+    min-height: auto !important;
+    font-size: 11pt !important;
+  }
+
+  /* Hide app frame elements on print */
+  aside, 
+  header, 
+  nav, 
+  .mobile-bottom-nav, 
+  .no-print,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* Reset main container dimensions */
+  div.h-screen, 
+  div.flex-1, 
+  main, 
+  .overflow-hidden, 
+  .overflow-y-auto {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+  }
+
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  th, td {
+    padding: 6px 8px !important;
+    border-bottom: 1px solid #cbd5e1 !important;
+  }
+
+  /* Keep table rows intact across page breaks */
+  tr {
+    page-break-inside: avoid !important;
+  }
 }

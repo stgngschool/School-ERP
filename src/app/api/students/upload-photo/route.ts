@@ -36,6 +36,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Only image files (JPG/PNG/WEBP) are supported." }, { status: 400 });
     }
 
+    // Limit maximum photo size to 2MB to prevent large Supabase Storage egress
+    if (file.size > 2 * 1024 * 1024) {
+      return NextResponse.json({ error: "File size exceeds 2MB limit. Please upload a smaller image." }, { status: 400 });
+    }
+
     // Read file to Buffer
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);

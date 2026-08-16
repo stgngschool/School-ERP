@@ -261,7 +261,7 @@ interface AuthContextType {
     paymentMethod: string,
     transactionRef?: string,
     parentProfileId?: string
-  ) => Promise<boolean>;
+  ) => Promise<{ success: boolean; receipt?: any; error?: string }>;
   addStudent: (
     studentData: {
       name: string;
@@ -413,6 +413,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [attendanceLoaded, setAttendanceLoaded] = useState(false);
 
 
+  const clearApiCache = (urlPrefix?: string) => {
+    if (typeof window === 'undefined') return;
+    if (!urlPrefix) {
+      Object.keys(sessionStorage).forEach((key) => {
+        if (key.startsWith('__api_cache_')) sessionStorage.removeItem(key);
+      });
+      return;
+    }
+    const targetKey = '__api_cache_' + urlPrefix;
+    Object.keys(sessionStorage).forEach((key) => {
+      if (key.startsWith(targetKey)) sessionStorage.removeItem(key);
+    });
+  };
+
   const apiFetch = async (url: string, options: RequestInit = {}, timeoutMs = 12000, useCache = false) => {
     if (useCache && typeof window !== 'undefined') {
       const cacheKey = '__api_cache_' + url;
@@ -420,6 +434,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (cachedStr) {
         try {
           const cached = JSON.parse(cachedStr);
+          // 5-minute memory cache with background revalidation capability
           if (Date.now() - cached.timestamp < 1000 * 60 * 5) return cached.data;
         } catch(e) {}
       }
@@ -517,7 +532,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Trigger background loads asynchronously based on role to avoid blocking render
       const role = userToFetch.role;
       if (role === "ADMIN") {
-        apiFetch("/api/students").then((data) => data && setStudents(data)).then(() => setStudentsLoaded(true));
+        apiFetch("/api/students", {}, 12000, true).then((data) => data && setStudents(data)).then(() => setStudentsLoaded(true));
         apiFetch("/api/billing").then((data) => {
           if (data) {
             setLedgerEntries(data.ledgerEntries || []);
@@ -527,14 +542,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         });
         apiFetch("/api/attendance").then((data) => data && setAttendances(data)).then(() => setAttendanceLoaded(true));
-        apiFetch("/api/homework").then((data) => data && setHomeworks(data));
-        apiFetch("/api/leave").then((data) => data && setLeaveRequests(data));
-        apiFetch("/api/notice").then((data) => data && setNotices(data));
-        apiFetch("/api/events").then((data) => data && setEventsList(data));
-        apiFetch("/api/users").then((data) => data && setUsersList(data));
+        apiFetch("/api/homework", {}, 12000, true).then((data) => data && setHomeworks(data));
+        apiFetch("/api/leave", {}, 12000, true).then((data) => data && setLeaveRequests(data));
+        apiFetch("/api/notice", {}, 12000, true).then((data) => data && setNotices(data));
+        apiFetch("/api/events", {}, 12000, true).then((data) => data && setEventsList(data));
+        apiFetch("/api/users", {}, 12000, true).then((data) => data && setUsersList(data));
         apiFetch("/api/audits").then((data) => data && setAuditLogs(data));
       } else if (role === "ACCOUNTANT") {
-        apiFetch("/api/students").then((data) => data && setStudents(data)).then(() => setStudentsLoaded(true));
+        apiFetch("/api/students", {}, 12000, true).then((data) => data && setStudents(data)).then(() => setStudentsLoaded(true));
         apiFetch("/api/billing").then((data) => {
           if (data) {
             setLedgerEntries(data.ledgerEntries || []);
@@ -543,25 +558,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setBillingLoaded(true);
           }
         });
-        apiFetch("/api/notice").then((data) => data && setNotices(data));
-        apiFetch("/api/events").then((data) => data && setEventsList(data));
+        apiFetch("/api/notice", {}, 12000, true).then((data) => data && setNotices(data));
+        apiFetch("/api/events", {}, 12000, true).then((data) => data && setEventsList(data));
       } else if (role === "TEACHER") {
-        apiFetch("/api/students").then((data) => data && setStudents(data)).then(() => setStudentsLoaded(true));
-        apiFetch("/api/billing").then((data) => {
-          if (data) {
-            setLedgerEntries(data.ledgerEntries || []);
-            setReceipts(data.receipts || []);
-            setDueItems(data.dueItems || []);
-            setBillingLoaded(true);
-          }
-        });
+        apiFetch("/api/students", {}, 12000, true).then((data) => data && setStudents(data)).then(() => setStudentsLoaded(true));
         apiFetch("/api/attendance").then((data) => data && setAttendances(data)).then(() => setAttendanceLoaded(true));
-        apiFetch("/api/homework").then((data) => data && setHomeworks(data));
-        apiFetch("/api/leave").then((data) => data && setLeaveRequests(data));
-        apiFetch("/api/notice").then((data) => data && setNotices(data));
-        apiFetch("/api/events").then((data) => data && setEventsList(data));
+        apiFetch("/api/homework", {}, 12000, true).then((data) => data && setHomeworks(data));
+        apiFetch("/api/leave", {}, 12000, true).then((data) => data && setLeaveRequests(data));
+        apiFetch("/api/notice", {}, 12000, true).then((data) => data && setNotices(data));
       } else if (role === "PARENT") {
-        apiFetch("/api/students").then((data) => data && setStudents(data)).then(() => setStudentsLoaded(true));
+        apiFetch("/api/students", {}, 12000, true).then((data) => data && setStudents(data)).then(() => setStudentsLoaded(true));
         apiFetch("/api/billing").then((data) => {
           if (data) {
             setLedgerEntries(data.ledgerEntries || []);
@@ -571,10 +577,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         });
         apiFetch("/api/attendance").then((data) => data && setAttendances(data)).then(() => setAttendanceLoaded(true));
-        apiFetch("/api/homework").then((data) => data && setHomeworks(data));
-        apiFetch("/api/leave").then((data) => data && setLeaveRequests(data));
-        apiFetch("/api/notice").then((data) => data && setNotices(data));
-        apiFetch("/api/events").then((data) => data && setEventsList(data));
+        apiFetch("/api/homework", {}, 12000, true).then((data) => data && setHomeworks(data));
+        apiFetch("/api/leave", {}, 12000, true).then((data) => data && setLeaveRequests(data));
+        apiFetch("/api/notice", {}, 12000, true).then((data) => data && setNotices(data));
+        apiFetch("/api/events", {}, 12000, true).then((data) => data && setEventsList(data));
       }
     } catch (err) {
       console.error("[AuthContext] refreshData EXCEPTION:", err);
@@ -596,6 +602,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 
   const refreshStudents = async () => {
+    clearApiCache("/api/students");
     const data = await apiFetch("/api/students");
     if (data) {
       setStudents(data);
@@ -861,7 +868,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (res.ok) {
-        await refreshUsers();
+        await refreshSchool();
       }
     } catch (err) {
       console.error("Update school profile failed:", err);
@@ -877,7 +884,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (res.ok) {
-        await refreshSchool();
+        await refreshAttendance();
       }
     } catch (err) {
       console.error("Mark attendance failed:", err);
@@ -886,6 +893,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const markBatchAttendance = async (records: { studentId: string; date: string; status: AttendanceStatus }[]) => {
     try {
+      // Optimistically update attendances state immediately
+      setAttendances((prev) => {
+        const next = [...prev];
+        for (const rec of records) {
+          const idx = next.findIndex((a) => a.studentId === rec.studentId && a.date === rec.date);
+          if (idx !== -1) {
+            next[idx] = { ...next[idx], status: rec.status };
+          } else {
+            next.unshift({
+              id: "temp-" + Math.random().toString(36).substring(2, 9),
+              studentId: rec.studentId,
+              date: rec.date,
+              status: rec.status,
+            });
+          }
+        }
+        return next;
+      });
+
       const res = await fetch("/api/attendance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -925,7 +951,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (res.ok) {
-        await refreshAttendance();
+        await refreshHomework();
       }
     } catch (err) {
       console.error("Add homework failed:", err);
@@ -1033,7 +1059,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     paymentMethod: string,
     transactionRef?: string,
     parentProfileId?: string
-  ): Promise<boolean> => {
+  ): Promise<{ success: boolean; receipt?: any; error?: string }> => {
     try {
       const res = await fetch("/api/billing", {
         method: "POST",
@@ -1041,15 +1067,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({ studentId, parentProfileId, items, paymentMethod, transactionRef }),
       });
 
+      const data = await res.json();
       if (res.ok) {
         // Run refreshData in background without blocking receipt modal generation
         refreshBilling().catch((err: any) => console.error("Background refresh error:", err));
-        return true;
+        return { success: true, receipt: data.receipt };
       }
-      return false;
-    } catch (err) {
+      return { success: false, error: data.error || "Payment checkout failed." };
+    } catch (err: any) {
       console.error("Record checkout payment failed:", err);
-      return false;
+      return { success: false, error: err.message || "Network error during checkout." };
     }
   };
 
@@ -1101,7 +1128,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (res.ok) {
-        await refreshNotices();
+        await Promise.all([refreshStudents(), refreshBilling()]);
       }
     } catch (err) {
       console.error("Add student failed:", err);

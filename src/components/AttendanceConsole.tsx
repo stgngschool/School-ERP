@@ -10,6 +10,7 @@ import {
   Users,
 } from "lucide-react";
 import StudentProfileModal from "@/components/StudentProfileModal";
+import ModernDatePicker from "@/components/ModernDatePicker";
 
 interface AttendanceConsoleProps {
   initialClass?: string;
@@ -19,6 +20,7 @@ interface AttendanceConsoleProps {
 export default function AttendanceConsole({ initialClass, hideClassSelector }: AttendanceConsoleProps) {
   const {
     user,
+    schoolInfo,
     students,
     attendances,
     leaveRequests,
@@ -29,7 +31,6 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
   const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
   const [selectedClass, setSelectedClass] = useState<string>(initialClass || "10-A");
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
-  const [hasLoaded, setHasLoaded] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [activeView, setActiveView] = useState<"ROSTER" | "MONTHLY">("ROSTER");
@@ -37,10 +38,6 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   });
-
-  useEffect(() => {
-    setHasLoaded(false);
-  }, [selectedClass, selectedDate]);
 
   // Profile modal state
   const [showProfileModal, setShowProfileModal] = useState<boolean>(false);
@@ -106,13 +103,13 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
         (a) => a.studentId === student.id && a.date === selectedDate
       );
 
-      const hasApprovedLeave = leaveRequests.some(
-        (l) =>
-          l.studentId === student.id &&
-          l.status === "APPROVED" &&
-          selectedDate >= l.startDate &&
-          selectedDate <= l.endDate
-      );
+      const dateKey = selectedDate.substring(0, 10);
+      const hasApprovedLeave = leaveRequests.some((l) => {
+        if (l.studentId !== student.id || l.status !== "APPROVED") return false;
+        const start = l.startDate ? l.startDate.substring(0, 10) : "";
+        const end = l.endDate ? l.endDate.substring(0, 10) : "";
+        return dateKey >= start && dateKey <= end;
+      });
 
       if (existing) {
         newMap[student.id] = existing.status;
@@ -226,9 +223,9 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
   }, [attendances, selectedMonth]);
 
   return (
-    <div className="-mx-2 sm:mx-0 space-y-3 pb-24 md:pb-6 font-sans select-none">
-      {/* ─── FULL-WIDTH FLAT HEADER (ZERO WASTED MARGINS) ─── */}
-      <div className="bg-white border-y sm:border border-slate-200/60 p-4 sm:p-6 space-y-2.5 sm:rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)]">
+    <div className="-mx-2 sm:mx-0 space-y-3 pb-24 md:pb-6 font-sans select-none print:m-0 print:p-0 print:space-y-0">
+      {/* ─── FULL-WIDTH FLAT HEADER (ZERO WASTED MARGINS) (HIDDEN ON PRINT) ─── */}
+      <div className="bg-white border-y sm:border border-slate-200/60 p-4 sm:p-6 space-y-2.5 sm:rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] print:hidden">
         {/* Row 1: Title, Class, Date & View Toggle */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
           <div className="flex items-center justify-between sm:justify-start gap-2 min-w-0 w-full sm:w-auto">
@@ -253,11 +250,12 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
           </div>
 
           <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0 w-full sm:w-auto">
-            <input
-              type="date"
+            <ModernDatePicker
               value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="bg-slate-50 border border-slate-200/60 text-slate-800 text-xs font-bold py-1.5 px-3 rounded-2xl outline-none cursor-pointer flex-1 sm:flex-none"
+              onChange={(val) => val && setSelectedDate(val)}
+              placeholder="Select date"
+              className="flex-1 sm:flex-none"
+              showClear={false}
             />
 
             <div className="inline-flex p-0.5 bg-slate-100 rounded-lg border border-slate-200 text-[11px] font-bold shrink-0">
@@ -332,26 +330,12 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
       )}
 
       {/* ─── FULL-WIDTH ROSTER LIST (ZERO SIDE PADDING WASTE) ─── */}
-      {!hasLoaded ? (
-        <div className="bg-white border-y sm:border border-slate-200/60 p-10 sm:rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] text-center mt-4">
-          <Users className="h-14 w-14 mx-auto text-indigo-200 mb-4" />
-          <h3 className="text-xl font-black text-slate-800 mb-2">Ready to Take Attendance?</h3>
-          <p className="text-sm text-slate-500 mb-8 max-w-md mx-auto">
-            Click the button below to fetch the student list for {selectedClass === "ALL" ? "All Classes" : `Class ${selectedClass}`}. This helps save bandwidth and database limits.
-          </p>
-          <button
-            onClick={() => setHasLoaded(true)}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-indigo-500/20 transition-all active:scale-95 text-sm"
-          >
-            Load Students
-          </button>
-        </div>
-      ) : activeView === "ROSTER" && (
+      {activeView === "ROSTER" && (
         <div className="bg-white border-y sm:border border-slate-200/60 divide-y divide-slate-100 sm:rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] mt-4">
           {filteredStudents.length === 0 ? (
             <div className="text-center py-8 text-slate-400">
               <Users className="h-8 w-8 mx-auto mb-1 opacity-40" />
-              <p className="text-xs font-semibold">No students found</p>
+              <p className="text-xs font-semibold">No students found in this class</p>
             </div>
           ) : (
             filteredStudents.map((student, idx) => {
@@ -401,12 +385,39 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
       )}
 
       {/* ─── MONTHLY REGISTER VIEW ─── */}
-      {hasLoaded && activeView === "MONTHLY" && (
-        <div className="bg-white border-y sm:border border-slate-200/60 p-4 sm:p-6 sm:rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] space-y-3 mt-4">
-          <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+      {activeView === "MONTHLY" && (
+        <div className="bg-white border-y sm:border border-slate-200/60 p-4 sm:p-6 sm:rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] space-y-3 mt-4 print:p-0 print:border-0 print:shadow-none">
+          {/* Printable Official School Header (Visible ONLY on Print) */}
+          <div className="hidden print:block text-center border-b-2 border-slate-800 pb-4 mb-4">
+            <div className="flex items-center justify-center gap-3 mb-1">
+              <img src="/logo.png" alt="Logo" className="h-14 w-14 object-contain" />
+              <div>
+                <h1 className="text-xl font-black uppercase text-slate-900 tracking-wide">{schoolInfo?.name || "St. G.N.G. School"}</h1>
+                <p className="text-xs text-slate-600 font-medium">{schoolInfo?.address || "Main Campus, Education Hub"}</p>
+                {schoolInfo?.udiseCode && (
+                  <p className="text-[11px] font-bold text-slate-500">UDISE: {schoolInfo.udiseCode} • Phone: {schoolInfo.phone || "N/A"}</p>
+                )}
+              </div>
+            </div>
+            <div className="mt-3 py-1 px-3 bg-slate-100 rounded inline-block">
+              <h2 className="text-xs font-black uppercase tracking-wider text-slate-900">
+                Monthly Attendance Register — Class: {selectedClass === "ALL" ? "All Classes" : `Class ${selectedClass}`}
+              </h2>
+              <p className="text-[10px] font-bold text-slate-600">
+                Month: {new Date(`${selectedMonth}-01`).toLocaleString("default", { month: "long", year: "numeric" })} • Generated on: {new Date().toLocaleDateString("en-IN")}
+              </p>
+            </div>
+          </div>
+
+          {/* Screen Toolbar (Hidden on Print) */}
+          <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2.5 print:hidden">
             <div>
-              <h3 className="text-xs font-extrabold text-slate-900">Monthly Attendance Register</h3>
-              <p className="text-[10px] text-slate-400 font-medium">Defaulters (&lt;75%) highlighted in red.</p>
+              <h3 className="text-xs sm:text-sm font-black text-slate-900">
+                Monthly Attendance Register — {selectedClass === "ALL" ? "All Classes" : `Class ${selectedClass}`}
+              </h3>
+              <p className="text-[10px] text-slate-400 font-medium">
+                Month: {new Date(`${selectedMonth}-01`).toLocaleString("default", { month: "long", year: "numeric" })} • Defaulters (&lt;75%) highlighted.
+              </p>
             </div>
 
             <div className="flex items-center gap-2">
@@ -418,10 +429,11 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
               />
               <button
                 onClick={() => window.print()}
-                className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-all"
-                title="Print"
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black transition-all shadow-md cursor-pointer active:scale-95"
+                title="Print Official Report"
               >
-                <Printer className="h-3.5 w-3.5" />
+                <Printer className="h-4 w-4" />
+                <span>Print Report</span>
               </button>
             </div>
           </div>
@@ -429,11 +441,13 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-slate-200 text-[10px] font-black uppercase text-slate-400">
-                  <th className="py-2 px-2">Roll</th>
-                  <th className="py-2 px-2">Student Name</th>
-                  <th className="py-2 px-2 text-center">Present</th>
+                <tr className="border-b border-slate-200 text-[10px] font-black uppercase text-slate-400 print:text-slate-700">
+                  <th className="py-2.5 px-2">Roll</th>
+                  <th className="py-2.5 px-2">Student Name</th>
+                  <th className="py-2.5 px-2 text-center">Present</th>
                   <th className="py-2.5 px-2 text-center">Absent</th>
+                  <th className="py-2.5 px-2 text-center">Leave</th>
+                  <th className="py-2.5 px-2 text-center">Total Working</th>
                   <th className="py-2.5 px-2 text-right">Attendance %</th>
                   <th className="py-2.5 px-2 text-center">Status</th>
                 </tr>
@@ -444,13 +458,14 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
 
                   const pCount = studentLogs.filter((a) => a.status === "PRESENT").length;
                   const aCount = studentLogs.filter((a) => a.status === "ABSENT").length;
+                  const lCount = studentLogs.filter((a) => a.status === "LEAVE").length;
                   const totalLogged = studentLogs.length;
                   const pct = totalLogged > 0 ? Math.round((pCount / totalLogged) * 100) : 100;
                   const isDefaulter = pct < 75 && totalLogged > 0;
 
                   return (
-                    <tr key={student.id} className="hover:bg-slate-50">
-                      <td className="py-2 px-2 font-bold text-slate-400">
+                    <tr key={student.id} className="hover:bg-slate-50 print:hover:bg-transparent">
+                      <td className="py-2 px-2 font-bold text-slate-400 print:text-slate-600">
                         Roll {student.rollNo ? String(student.rollNo).padStart(2, "0") : String(idx + 1).padStart(2, "0")}
                       </td>
                       <td className="py-2 px-2 font-extrabold text-slate-900 truncate max-w-[160px]">
@@ -458,6 +473,8 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
                       </td>
                       <td className="py-2 px-2 text-center font-black text-emerald-700">{pCount}</td>
                       <td className="py-2 px-2 text-center font-black text-rose-700">{aCount}</td>
+                      <td className="py-2 px-2 text-center font-bold text-amber-700">{lCount}</td>
+                      <td className="py-2 px-2 text-center font-semibold text-slate-500">{totalLogged}</td>
                       <td className="py-2 px-2 text-right font-black">
                         <span className={pct >= 75 ? "text-slate-900" : "text-rose-600 font-extrabold"}>
                           {pct}%
@@ -465,11 +482,11 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
                       </td>
                       <td className="py-2 px-2 text-center">
                         {isDefaulter ? (
-                          <span className="text-[9px] font-black px-2 py-0.5 rounded bg-rose-100 text-rose-800">
+                          <span className="text-[9px] font-black px-2 py-0.5 rounded bg-rose-100 text-rose-800 print:border print:border-rose-300">
                             Low
                           </span>
                         ) : (
-                          <span className="text-[9px] font-black px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                          <span className="text-[9px] font-black px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 print:border print:border-emerald-300">
                             OK
                           </span>
                         )}
@@ -479,6 +496,22 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
                 })}
               </tbody>
             </table>
+          </div>
+
+          {/* Printable Signature & Stamp Footer (Visible ONLY on Print) */}
+          <div className="hidden print:flex justify-between items-end pt-16 px-4 text-xs font-bold text-slate-800">
+            <div className="text-center">
+              <div className="w-40 border-t border-slate-900 mb-1"></div>
+              <p>Class Teacher's Signature</p>
+            </div>
+            <div className="text-center">
+              <div className="w-40 border-t border-slate-900 mb-1"></div>
+              <p>Checked By / Admin</p>
+            </div>
+            <div className="text-center">
+              <div className="w-40 border-t border-slate-900 mb-1"></div>
+              <p>Principal's Signature & Stamp</p>
+            </div>
           </div>
         </div>
       )}

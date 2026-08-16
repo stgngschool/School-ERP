@@ -314,6 +314,8 @@ export default function PrintMarksheets() {
               left: 0;
               top: 0;
               width: 100%;
+              margin: 0 !important;
+              padding: 0 !important;
             }
             .no-print {
               display: none !important;
@@ -323,11 +325,12 @@ export default function PrintMarksheets() {
               display: block !important;
               visibility: visible !important;
               width: 100% !important;
-              max-width: 210mm !important;
+              max-width: 200mm !important;
+              min-height: 282mm !important;
               margin: 0 auto !important;
-              padding: 0 !important;
+              padding: 6mm 8mm !important;
               box-shadow: none !important;
-              border: 4px solid #0f172a !important;
+              border: 2.5px solid #0f172a !important;
               background-color: #ffffff !important;
               page-break-after: always !important;
               page-break-inside: avoid !important;
@@ -336,7 +339,7 @@ export default function PrintMarksheets() {
             }
             @page {
               size: A4 portrait;
-              margin: 6mm;
+              margin: 4mm;
             }
           }
         `
@@ -492,7 +495,12 @@ function SingleMarksheetCard({
        // Or just leave it in t1 as we did above.
     }
 
-    const maxM = 200;
+    // Calculate dynamic max marks based on active terms (100 per conducted term or recorded maxMarks)
+    const hasTerm1 = t1Match || (subMarks.length > 0 && !t2Match);
+    const hasTerm2 = !!t2Match || (subMarks.length > 1);
+    const term1Max = t1Match?.maxMarks ? Number(t1Match.maxMarks) : (hasTerm1 ? 100 : 0);
+    const term2Max = t2Match?.maxMarks ? Number(t2Match.maxMarks) : (hasTerm2 ? 100 : 0);
+    const maxM = (term1Max + term2Max) > 0 ? (term1Max + term2Max) : 100;
     const totalTermObt = obt1 + obt2;
 
     term1TotalObtained += obt1;
@@ -514,23 +522,26 @@ function SingleMarksheetCard({
   return (
     <div
       id={`report-card-print-${student.id}`}
-      className="bg-white p-4 sm:p-6 w-full max-w-[210mm] border-[5px] border-slate-900 rounded-none text-slate-950 font-serif print-only-container relative shadow-2xl mx-auto page-break-after text-left overflow-hidden"
-      style={{ minHeight: "275mm" }}
+      className="bg-white p-5 w-full max-w-[200mm] border-[2.5px] border-slate-900 rounded-none text-slate-950 font-serif print-only-container relative shadow-2xl mx-auto page-break-after text-left overflow-hidden"
+      style={{ minHeight: "280mm" }}
     >
-      <div className="border-2 border-slate-900 p-4 min-h-[265mm] flex flex-col justify-between relative z-10 bg-white">
+      <div className="p-0 min-h-[268mm] flex flex-col justify-between relative z-10 bg-white">
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-0">
           <img src="/logo.png" alt="St. G.N.G. School Watermark" className="w-[380px] h-[380px] object-contain opacity-[0.06]" />
         </div>
-        <div className="relative z-10 space-y-3">
+        <div className="relative z-10 space-y-2.5">
           <div className="text-center space-y-1.5 border-b-2 border-slate-900 pb-3">
-            <div className="flex items-center justify-between px-1">
+            {/* 3-Column Equal Grid to ensure EXACT Center Alignment */}
+            <div className="grid grid-cols-3 items-center px-1">
               <div className="text-left text-[9px] font-sans font-extrabold text-slate-800 space-y-1.5 pt-1">
                 <p>SCHOOL CODE: <span className="font-black text-slate-950">09670707502</span></p>
                 <p>REPORT CARD NO: <span className="font-bold text-slate-700">GNG/2025/{student.id.slice(0, 5).toUpperCase()}</span></p>
               </div>
-              <div className="flex flex-col items-center">
-                <img src="/logo.png" alt="St. G.N.G. School Logo" className="h-20 w-auto object-contain mx-auto" />
+
+              <div className="flex justify-center items-center">
+                <img src="/logo.png" alt="St. G.N.G. School Logo" className="h-20 w-auto object-contain block mx-auto" />
               </div>
+
               <div className="text-right text-[9px] font-sans font-extrabold text-slate-800 space-y-1.5 pt-1">
                 <p>ESTD. - <span className="font-black text-slate-950">2003</span></p>
                 <p>ADM NO: <span className="font-bold text-slate-700">{student.admissionNo}</span></p>

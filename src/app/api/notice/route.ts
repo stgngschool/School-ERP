@@ -6,15 +6,16 @@ import { verifyToken, getAuthUser } from "@/lib/auth";
 export async function GET(request: Request) {
   try {
     const authUser = await getAuthUser(request);
-    if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
-    }
+    let whereClause: any = { target: "ALL" };
 
-    let whereClause = {};
-    if (authUser.role === "PARENT") {
-      whereClause = { target: { in: ["ALL", "PARENTS"] } };
-    } else if (authUser.role === "TEACHER") {
-      whereClause = { target: { in: ["ALL", "TEACHERS"] } };
+    if (authUser) {
+      if (authUser.role === "ADMIN" || authUser.role === "ACCOUNTANT") {
+        whereClause = {}; // Admin and accountant see all notices
+      } else if (authUser.role === "PARENT") {
+        whereClause = { target: { in: ["ALL", "PARENTS"] } };
+      } else if (authUser.role === "TEACHER") {
+        whereClause = { target: { in: ["ALL", "TEACHERS"] } };
+      }
     }
 
     const notices = await db.notice.findMany({

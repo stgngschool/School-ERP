@@ -11,8 +11,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (authUser.role !== "ADMIN") {
-      return NextResponse.json({ error: "Forbidden. Admin access required." }, { status: 403 });
+    if (authUser.role !== "ADMIN" && authUser.role !== "TEACHER") {
+      return NextResponse.json({ error: "Forbidden. Admin or Teacher access required." }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);

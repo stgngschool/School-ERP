@@ -5,7 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Lock, User, AlertCircle, Loader2, Eye, EyeOff, ShieldCheck, UserCheck } from "lucide-react";
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { user, activeRole, login } = useAuth();
   const [activeTab, setActiveTab] = useState<"STAFF" | "PARENT">("STAFF");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -25,7 +25,7 @@ export default function LoginPage() {
         throw new Error(result.error || "Invalid credentials. Please try again.");
       }
 
-      window.location.replace("/");
+      window.location.replace("/?view=erp");
     } catch (err: any) {
       setError(err.message);
       setLoading(false);
@@ -38,6 +38,20 @@ export default function LoginPage() {
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
+      {/* Back to Public Website Navigation */}
+      <div className="w-full max-w-md mb-4 flex items-center justify-between z-10">
+        <a
+          href="/"
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-indigo-600 px-3 py-1.5 rounded-xl bg-white/80 border border-slate-200 shadow-sm transition-colors"
+        >
+          <span>← Back to School Website</span>
+        </a>
+
+        <span className="text-[11px] font-bold text-slate-400">
+          UDISE: 09670707502
+        </span>
+      </div>
+
       <div className="w-full max-w-md relative z-10">
         {/* Brand Header */}
         <div className="text-center mb-8 flex flex-col items-center">
@@ -47,6 +61,23 @@ export default function LoginPage() {
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">St. G.N.G. School</h1>
           <p className="text-indigo-600 text-xs mt-1 font-extrabold uppercase tracking-widest">School ERP & Finance OS</p>
         </div>
+
+        {/* Already Logged In Quick Action Banner */}
+        {user && activeRole && (
+          <div className="mb-4 p-4 rounded-3xl bg-indigo-50 border border-indigo-200 text-xs text-indigo-900 flex items-center justify-between gap-3 shadow-sm">
+            <div>
+              <p className="font-extrabold text-indigo-950">Active Session Found</p>
+              <p className="text-[11px] text-indigo-700">Logged in as {user.name || user.username} ({activeRole})</p>
+            </div>
+            <a
+              href="/?view=erp"
+              className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shrink-0 shadow-sm flex items-center gap-1"
+            >
+              <span>Open ERP</span>
+              <span>→</span>
+            </a>
+          </div>
+        )}
 
         {/* Light Theme Login Card */}
         <div className="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-8 shadow-xl shadow-slate-200/60">
