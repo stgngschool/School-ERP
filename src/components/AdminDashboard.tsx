@@ -261,7 +261,23 @@ export default function AdminDashboard() {
     attendanceLoaded,
   } = useAuth();
 
-  const validTabs = ["dashboard", "collect", "attendance", "marks", "print_marksheets", "defaulters", "ledger", "structures", "students", "users", "idcards", "notices", "school", "audit"];
+  const validTabs = [
+    "dashboard",
+    "collect",
+    "attendance",
+    "marks",
+    "print_marksheets",
+    "defaulters",
+    "ledger",
+    "structures",
+    "students",
+    "users",
+    "idcards",
+    "notices",
+    "school",
+    "audit",
+    "website_media",
+  ];
   React.useEffect(() => {
     if (!validTabs.includes(activeTab)) {
       setActiveTab("dashboard");
