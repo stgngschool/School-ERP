@@ -88,7 +88,7 @@ export default function PrincipalMessage() {
                 <img
                   src="/logo.png"
                   alt="School Logo"
-                  className="h-20 w-auto object-contain drop-shadow-sm"
+                  className="h-20 w-20 object-contain"
                   onError={(e) => {
                     (e.target as HTMLElement).style.display = "none";
                   }}

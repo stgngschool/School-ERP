@@ -8329,7 +8329,7 @@ export default function AdminDashboard() {
               {/* Receipt Header */}
               <div className="flex justify-between items-start border-b border-slate-200 pb-3">
                 <div className="flex items-center gap-2">
-                  <img src="/logo.png" alt="School Logo" className={`rounded-full object-contain border border-slate-100 bg-white ${
+                  <img src="/logo.png" alt="School Logo" className={`object-contain ${
                     receiptPageSize === "A5" ? "h-8 w-8" : "h-12 w-12"
                   }`} />
                   <div className="space-y-0.5">
@@ -9531,7 +9531,7 @@ export default function AdminDashboard() {
 
                     {/* Header School Banner */}
                     <div className="flex items-center gap-2 pb-2 border-b border-slate-100 relative z-10">
-                      <img src="/logo.png" alt="St. G.N.G. School Logo" className="h-8 w-8 object-contain shrink-0 bg-indigo-50/50 p-0.5 rounded-full border border-indigo-100/50" />
+                      <img src="/logo.png" alt="St. G.N.G. School Logo" className="h-8 w-8 object-contain shrink-0" />
                       <div className="text-left min-w-0 flex-1">
                         <h4 className="text-[9.5px] font-black text-indigo-950 uppercase tracking-tight truncate leading-none font-sans">
                           St. G.N.G. School

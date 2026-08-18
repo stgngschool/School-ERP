@@ -1604,7 +1604,7 @@ export default function ParentDashboard() {
 
               {/* Receipt Header */}
               <div className="text-center border-b border-slate-200 pb-3 flex flex-col items-center justify-center">
-                <img src="/logo.png" alt="School Logo" className={`rounded-full object-contain border border-slate-100 bg-white mb-1.5 ${
+                <img src="/logo.png" alt="School Logo" className={`object-contain mb-1.5 ${
                   receiptPageSize === "A5" ? "h-10 w-10" : "h-14 w-14"
                 }`} />
                 <h4 className={`font-black text-indigo-700 uppercase leading-tight ${

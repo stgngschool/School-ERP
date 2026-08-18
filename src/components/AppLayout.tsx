@@ -354,7 +354,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
       <aside className="hidden md:flex md:w-64 flex-col border-r border-slate-200 bg-white p-5 shrink-0 select-none no-print">
         {/* Branding */}
         <div className="flex items-center gap-2.5 pb-6 border-b border-slate-100 mb-6 shrink-0">
-          <img src="/logo.png" alt="St. G.N.G. School Logo" className="h-9 w-9 rounded-full object-contain border border-slate-100 bg-white" />
+          <img src="/logo.png" alt="St. G.N.G. School Logo" className="h-9 w-9 object-contain shrink-0" />
           <div>
             <h1 className="font-extrabold text-xs text-slate-900 leading-tight">St. G.N.G. School</h1>
             <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Varanasi</p>
@@ -419,7 +419,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
       ════════════════════════════════════════ */}
       <header className="md:hidden mobile-page-header shrink-0 px-4 py-3 bg-white border-b border-slate-100 flex items-center justify-between">
         <div className="flex items-center gap-3 min-w-0">
-          <img src="/logo.png" alt="GNG" className="h-9 w-9 rounded-full object-contain border border-slate-100 bg-slate-50 shrink-0" />
+          <img src="/logo.png" alt="GNG" className="h-9 w-9 object-contain shrink-0" />
           <div className="min-w-0">
             <p className="font-black text-sm text-slate-800 leading-tight truncate">
               St. G.N.G. School

@@ -55,9 +55,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md relative z-10">
         {/* Brand Header */}
         <div className="text-center mb-8 flex flex-col items-center">
-          <div className="w-16 h-16 bg-white border border-slate-200/90 rounded-2xl flex items-center justify-center shadow-md shadow-slate-200/50 mb-3.5 p-2">
-            <img src="/logo.png" alt="School Logo" className="w-full h-full object-contain" />
-          </div>
+          <img src="/logo.png" alt="St. G.N.G. School Logo" className="w-16 h-16 object-contain mb-3.5" />
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">St. G.N.G. School</h1>
           <p className="text-indigo-600 text-xs mt-1 font-extrabold uppercase tracking-widest">School ERP & Finance OS</p>
         </div>

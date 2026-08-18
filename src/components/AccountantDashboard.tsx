@@ -2620,7 +2620,7 @@ export default function AccountantDashboard() {
               {/* Receipt Header */}
               <div className="flex justify-between items-start border-b border-slate-200 pb-3">
                 <div className="flex items-center gap-2">
-                  <img src="/logo.png" alt="School Logo" className={`rounded-full object-contain border border-slate-100 bg-white ${
+                  <img src="/logo.png" alt="School Logo" className={`object-contain ${
                     receiptPageSize === "A5" ? "h-8 w-8" : "h-12 w-12"
                   }`} />
                   <div className="space-y-0.5">
