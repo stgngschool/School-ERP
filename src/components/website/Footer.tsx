@@ -27,14 +27,16 @@ export default function Footer() {
           {/* Column 1: School Brand & Identity (4 cols) */}
           <div className="lg:col-span-4 space-y-4">
             <div className="flex items-center gap-3">
-              <img
-                src="/logo.png"
-                alt="St. GNG School Logo"
-                className="h-12 sm:h-14 w-auto object-contain"
-                onError={(e) => {
-                  (e.target as HTMLElement).style.display = "none";
-                }}
-              />
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-white p-1 shadow-xs border border-slate-200/90 flex items-center justify-center shrink-0">
+                <img
+                  src="/logo.png"
+                  alt="St. GNG School Logo"
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = "none";
+                  }}
+                />
+              </div>
               <div>
                 <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">St. G.N.G. School</h3>
                 <p className="text-[11px] font-bold text-indigo-700">Govt. Recognized • Salarpur, Varanasi</p>
