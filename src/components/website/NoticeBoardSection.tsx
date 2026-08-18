@@ -122,18 +122,13 @@ export default function NoticeBoardSection() {
 
   const categories = [
     { key: "ALL", label: "All Circulars" },
-    { key: "EXAM", label: "Examinations & Datesheet" },
+    { key: "EXAM", label: "Examinations" },
     { key: "ACADEMIC", label: "Academic & PTM" },
     { key: "ADMISSION", label: "Admissions" },
     { key: "HOLIDAY", label: "Events & Holidays" },
     { key: "FEE", label: "Fee Counter" },
     { key: "GENERAL", label: "General Alerts" },
   ];
-
-  const getCategoryCount = (catKey: string) => {
-    if (catKey === "ALL") return notices.length;
-    return notices.filter((n) => (n.category || "GENERAL") === catKey).length;
-  };
 
   const categoryRefs = React.useRef<(HTMLButtonElement | null)[]>([]);
   const [catPill, setCatPill] = useState({ left: 0, width: 0, opacity: 0 });
@@ -179,75 +174,71 @@ export default function NoticeBoardSection() {
   };
 
   return (
-    <section id="notices" className="py-16 sm:py-20 bg-slate-50 border-b border-slate-200/80 font-sans">
+    <section id="notices" className="py-16 bg-slate-50 border-b border-slate-200/80 font-sans">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         {/* Section Header */}
-        <div className="text-center max-w-2xl mx-auto mb-10">
+        <div className="text-center max-w-3xl mx-auto mb-8">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-bold uppercase tracking-wider mb-2">
             <Bell className="w-3.5 h-3.5" />
-            <span>Official School Circulars Desk</span>
+            <span>Digital Circular Desk</span>
           </div>
-          <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">
-            Notice Board & Announcements
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-slate-900 tracking-tight">
+            Official School Notice Board
           </h2>
-          <p className="text-xs sm:text-sm text-slate-600 font-medium mt-2">
-            Stay updated with official notifications, datesheets, examination schedules, and holidays directly from the school administration.
+          <p className="text-xs sm:text-sm text-slate-600 font-medium mt-2 leading-relaxed">
+            Real-time official announcements, exam datesheets, fee reminders, and school circulars.
           </p>
         </div>
 
-        {/* Filter Bar & Search */}
-        <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-xs mb-8 flex flex-col lg:flex-row gap-4 items-center justify-between">
-          {/* Category Tabs */}
-          <div className="relative flex items-center gap-1 overflow-x-auto w-full lg:w-auto pb-2 lg:pb-0 scrollbar-none">
-            {/* Sliding Liquid Background Pill */}
-            <span
-              className="absolute top-1 bottom-1 rounded-xl bg-indigo-50 border border-indigo-200 transition-all duration-300 pointer-events-none"
+        {/* Filter Bar with iOS Liquid Sliding Capsule & Search */}
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-8">
+          {/* iOS Liquid Sliding Glass Bubble Capsule (Identical to Gallery) */}
+          <div className="relative flex items-center p-1 rounded-2xl bg-slate-100/85 backdrop-blur-md border border-slate-200/80 shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] max-w-full overflow-x-auto scrollbar-none">
+            {/* 🌊 Pure Transparent Liquid Glass Bubble Capsule */}
+            <div
+              className="absolute top-1 bottom-1 rounded-xl pointer-events-none transition-all duration-350 ease-[cubic-bezier(0.34,1.56,0.64,1)] will-change-[transform,width]"
               style={{
-                left: `${catPill.left}px`,
+                transform: `translateX(${catPill.left}px)`,
                 width: `${catPill.width}px`,
                 opacity: catPill.opacity,
+                background:
+                  "linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(243, 246, 255, 0.88) 100%)",
+                boxShadow:
+                  "inset 0 1.5px 1px 0 rgba(255, 255, 255, 1), 0 4px 14px -1px rgba(99, 102, 241, 0.16), 0 2px 4px -1px rgba(0, 0, 0, 0.04)",
+                border: "1px solid rgba(255, 255, 255, 0.95)",
               }}
-            />
+            >
+              {/* Liquid Gloss Reflection */}
+              <div className="absolute inset-x-2 top-0.5 h-[45%] rounded-t-lg bg-gradient-to-b from-white/90 to-transparent pointer-events-none opacity-90" />
+            </div>
 
-            {categories.map((cat, idx) => {
-              const count = getCategoryCount(cat.key);
-              return (
-                <button
-                  key={cat.key}
-                  ref={(el) => {
-                    categoryRefs.current[idx] = el;
-                  }}
-                  onClick={() => setSelectedCategory(cat.key)}
-                  className={`relative z-10 px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 ${
-                    selectedCategory === cat.key
-                      ? "text-indigo-700 font-extrabold"
-                      : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  <span>{cat.label}</span>
-                  <span
-                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
-                      selectedCategory === cat.key
-                        ? "bg-indigo-600 text-white"
-                        : "bg-slate-100 text-slate-500"
-                    }`}
-                  >
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
+            {categories.map((c, idx) => (
+              <button
+                key={c.key}
+                ref={(el) => {
+                  categoryRefs.current[idx] = el;
+                }}
+                onClick={() => setSelectedCategory(c.key)}
+                className={`relative z-10 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-colors duration-200 cursor-pointer whitespace-nowrap ${
+                  selectedCategory === c.key
+                    ? "text-indigo-600 font-black"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                {c.label}
+              </button>
+            ))}
           </div>
 
-          {/* Search Box */}
-          <div className="relative w-full lg:w-64 shrink-0">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          {/* Search Box with Clean Minimalist Border */}
+          <div className="relative w-full md:w-64 shrink-0">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Search circulars by keyword..."
+              placeholder="Search circulars..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:bg-white focus:border-indigo-600 focus:outline-none transition-all"
+              className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 transition-all shadow-xs"
             />
           </div>
         </div>
