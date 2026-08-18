@@ -136,7 +136,11 @@ export interface MockNotice {
   id: string;
   title: string;
   content: string;
+  category?: string;
   target: string;
+  isUrgent?: boolean;
+  isActive?: boolean;
+  fileUrl?: string | null;
   createdAt: string;
 }
 
@@ -173,6 +177,17 @@ export interface MockSchoolInfo {
   name: string;
   address: string;
   phone: string;
+  alternatePhone?: string;
+  whatsappNumber?: string;
+  schoolTimings?: string;
+  admissionSession?: string;
+  admissionStatus?: string;
+  admissionClasses?: string;
+  marqueeText?: string;
+  googleMapsUrl?: string;
+  youtubeUrl?: string;
+  facebookUrl?: string;
+  instagramUrl?: string;
   email: string;
   udiseCode?: string;
   upiId?: string;
@@ -253,7 +268,26 @@ interface AuthContextType {
     file?: File | null
   ) => Promise<void>;
   updateLeaveStatus: (id: string, status: LeaveStatus, remarks: string) => Promise<void>;
-  addNotice: (title: string, content: string, target: string) => Promise<void>;
+  addNotice: (
+    title: string,
+    content: string,
+    target: string,
+    category?: string,
+    isUrgent?: boolean,
+    fileUrl?: string
+  ) => Promise<void>;
+  updateNotice: (
+    id: string,
+    data: {
+      title?: string;
+      content?: string;
+      target?: string;
+      category?: string;
+      isUrgent?: boolean;
+      isActive?: boolean;
+      fileUrl?: string | null;
+    }
+  ) => Promise<boolean>;
   deleteNotice: (id: string) => Promise<boolean>;
   recordItemizedPayment: (
     studentId: string | null,
@@ -1018,12 +1052,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const addNotice = async (title: string, content: string, target: string) => {
+  const addNotice = async (
+    title: string,
+    content: string,
+    target: string,
+    category?: string,
+    isUrgent?: boolean,
+    fileUrl?: string
+  ) => {
     try {
       const res = await fetch("/api/notice", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, content, target }),
+        body: JSON.stringify({ title, content, target, category, isUrgent, fileUrl }),
       });
 
       if (res.ok) {
@@ -1031,6 +1072,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (err) {
       console.error("Add notice failed:", err);
+    }
+  };
+
+  const updateNotice = async (
+    id: string,
+    data: {
+      title?: string;
+      content?: string;
+      target?: string;
+      category?: string;
+      isUrgent?: boolean;
+      isActive?: boolean;
+      fileUrl?: string | null;
+    }
+  ): Promise<boolean> => {
+    try {
+      const res = await fetch("/api/notice", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, ...data }),
+      });
+
+      if (res.ok) {
+        await refreshNotices();
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error("Update notice failed:", err);
+      return false;
     }
   };
 
@@ -1413,6 +1484,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         applyLeave,
         updateLeaveStatus,
         addNotice,
+        updateNotice,
         deleteNotice,
         recordItemizedPayment,
         addStudent,

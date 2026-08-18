@@ -16,6 +16,25 @@ import {
 } from "lucide-react";
 
 export default function Footer() {
+  const [schoolData, setSchoolData] = React.useState<any>({
+    name: "St. G.N.G. School",
+    address: "Salarpur, Rasulgarh, Varanasi - 221007, Uttar Pradesh",
+    phone: "9452824318",
+    alternatePhone: "9415812975",
+    email: "stgng2005@gmail.com",
+    schoolTimings: "8:00 AM - 1:30 PM (Mon - Sat)",
+    udiseCode: "09670707502",
+  });
+
+  React.useEffect(() => {
+    fetch("/api/school")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) setSchoolData(data);
+      })
+      .catch(() => {});
+  }, []);
+
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -36,7 +55,7 @@ export default function Footer() {
                 }}
               />
               <div>
-                <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">St. G.N.G. School</h3>
+                <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">{schoolData.name || "St. G.N.G. School"}</h3>
                 <p className="text-[11px] font-bold text-indigo-700">Govt. Recognized • Salarpur, Varanasi</p>
               </div>
             </div>
@@ -53,11 +72,11 @@ export default function Footer() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-slate-500 font-medium">UDISE Code:</span>
-                <strong className="text-indigo-700 font-mono font-bold">09670707502</strong>
+                <strong className="text-indigo-700 font-mono font-bold">{schoolData.udiseCode || "09670707502"}</strong>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-slate-500 font-medium">Classes:</span>
-                <span className="text-slate-900 font-bold">Nursery to Class 8th</span>
+                <span className="text-slate-900 font-bold">{schoolData.admissionClasses || "Nursery to Class 8th"}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-slate-500 font-medium">Medium:</span>
@@ -68,8 +87,8 @@ export default function Footer() {
 
           {/* Column 2: Quick Links (2 cols) */}
           <div className="lg:col-span-2 space-y-3">
-            <h4 className="text-xs font-black uppercase text-indigo-800 tracking-wider">Quick Links</h4>
-            <ul className="space-y-2 text-xs font-bold text-slate-600">
+            <h4 className="text-xs font-black uppercase text-indigo-800 tracking-wider">Quick Navigation</h4>
+            <ul className="space-y-2 text-xs text-slate-600 font-medium">
               <li>
                 <Link href="/" className="hover:text-indigo-600 transition-colors flex items-center gap-1.5">
                   <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
@@ -85,7 +104,7 @@ export default function Footer() {
               <li>
                 <Link href="/academics" className="hover:text-indigo-600 transition-colors flex items-center gap-1.5">
                   <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Academic Wings</span>
+                  <span>Academics & PTM</span>
                 </Link>
               </li>
               <li>
@@ -103,7 +122,7 @@ export default function Footer() {
               <li>
                 <Link href="/admissions" className="hover:text-indigo-600 transition-colors flex items-center gap-1.5">
                   <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Admissions 2026-27</span>
+                  <span>Admissions {schoolData.admissionSession || "2026-27"}</span>
                 </Link>
               </li>
               <li>
@@ -168,47 +187,50 @@ export default function Footer() {
             <div className="space-y-2.5 text-xs text-slate-700 font-medium">
               <div className="flex items-start gap-2">
                 <MapPin className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
-                <span>Salarpur, Rasulgarh, Varanasi - 221007, Uttar Pradesh</span>
+                <span>{schoolData.address || "Salarpur, Rasulgarh, Varanasi - 221007, Uttar Pradesh"}</span>
               </div>
 
               <div className="flex items-center gap-2">
                 <Phone className="w-4 h-4 text-emerald-600 shrink-0" />
-                <a href="tel:9452824318" className="hover:text-indigo-600 font-bold text-slate-900">
-                  +91 9452824318
+                <a href={`tel:${schoolData.phone || "9452824318"}`} className="hover:text-indigo-600 font-bold text-slate-900">
+                  +91 {schoolData.phone || "9452824318"}
                 </a>
+                {schoolData.alternatePhone && (
+                  <>
+                    <span className="text-slate-400">/</span>
+                    <a href={`tel:${schoolData.alternatePhone}`} className="hover:text-indigo-600 font-bold text-slate-900">
+                      {schoolData.alternatePhone}
+                    </a>
+                  </>
+                )}
               </div>
 
               <div className="flex items-center gap-2">
                 <Mail className="w-4 h-4 text-indigo-600 shrink-0" />
-                <a href="mailto:stgng2005@gmail.com" className="hover:text-indigo-600 font-bold text-slate-900">
-                  stgng2005@gmail.com
+                <a href={`mailto:${schoolData.email || "stgng2005@gmail.com"}`} className="hover:text-indigo-600">
+                  {schoolData.email || "stgng2005@gmail.com"}
                 </a>
               </div>
 
-              <div className="flex items-start gap-2 text-slate-600 pt-1">
-                <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                <div>
-                  <p><strong>School:</strong> 07:30 AM – 02:00 PM</p>
-                  <p><strong>Office Counter:</strong> 08:00 AM – 01:30 PM</p>
-                </div>
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>Office: {schoolData.schoolTimings || "8:00 AM - 1:30 PM (Mon - Sat)"}</span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Bottom Copyright & Back to Top */}
-        <div className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500 font-semibold">
-          <div>
-            © {new Date().getFullYear()} St. G.N.G. School, Varanasi • All Rights Reserved
-          </div>
-
+        {/* Bottom Bar: Copyright & Recognition */}
+        <div className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500 font-medium">
+          <p>© {new Date().getFullYear()} {schoolData.name || "St. G.N.G. School"}. All rights reserved.</p>
           <div className="flex items-center gap-4">
+            <span className="text-emerald-700 font-bold">● Govt. Approved Institution</span>
             <button
               onClick={scrollToTop}
-              className="p-2 rounded-xl bg-white hover:bg-slate-200 border border-slate-200 text-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+              className="inline-flex items-center gap-1 text-slate-600 hover:text-indigo-600 font-bold transition-colors cursor-pointer"
             >
-              <ArrowUp className="w-3.5 h-3.5" />
               <span>Back to Top</span>
+              <ArrowUp className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>

@@ -8,6 +8,7 @@ import MarksFeedingConsole from "@/components/MarksFeedingConsole";
 import PrintMarksheets from "@/components/PrintMarksheets";
 import AttendanceConsole from "@/components/AttendanceConsole";
 import WebsiteMediaManager from "@/components/WebsiteMediaManager";
+import AdmissionLeadsDesk from "@/components/AdmissionLeadsDesk";
 import ModernDatePicker from "@/components/ModernDatePicker";
 import {
   generateFeeReminderWhatsAppUrl,
@@ -73,6 +74,7 @@ import {
   Gift,
   Megaphone,
   GraduationCap,
+  Globe,
 } from "lucide-react";
 
 const getLocalDateString = () => {
@@ -223,6 +225,7 @@ export default function AdminDashboard() {
     updateAdminProfile,
     registerNewStaff,
     addNotice,
+    updateNotice,
     deleteNotice,
     notices,
     addStudent,
@@ -237,21 +240,29 @@ export default function AdminDashboard() {
     receipts,
     recordItemizedPayment,
     addFeeHead,
-    addFeeStructure,
+    removeFeeHead,
     feeHeads,
+    addFeeStructure,
     feeStructures,
-    classes,
+    cloneFeeStructure,
     addClass,
     removeClass,
-    removeFeeHead,
+    classes,
     generateBills,
+    ledgerEntries,
+    attendances,
+    triggerAudit,
     updateStudentStatus,
     promoteStudent,
     editStudentDetails,
     eventsList,
     addEvent,
-    ledgerEntries,
-    attendances,
+    transportStops,
+    addTransportStop,
+    removeTransportStop,
+    concessions,
+    addConcession,
+    removeConcession,
     refreshStudents,
     refreshBilling,
     refreshAttendance,
@@ -274,6 +285,7 @@ export default function AdminDashboard() {
     "users",
     "idcards",
     "notices",
+    "enquiries",
     "school",
     "audit",
     "website_media",
@@ -292,6 +304,12 @@ export default function AdminDashboard() {
   const [noticeTitle, setNoticeTitle] = useState("");
   const [noticeContent, setNoticeContent] = useState("");
   const [noticeTarget, setNoticeTarget] = useState<"ALL" | "TEACHERS" | "PARENTS">("ALL");
+  const [noticeCategory, setNoticeCategory] = useState<string>("GENERAL");
+  const [noticeIsUrgent, setNoticeIsUrgent] = useState(false);
+  const [noticeFileUrl, setNoticeFileUrl] = useState("");
+  const [editingNotice, setEditingNotice] = useState<any | null>(null);
+  const [noticeSearch, setNoticeSearch] = useState("");
+  const [noticeCategoryFilter, setNoticeCategoryFilter] = useState("ALL");
   const [noticeSuccess, setNoticeSuccess] = useState(false);
   const [noticeLoading, setNoticeLoading] = useState(false);
   const [deletingNoticeId, setDeletingNoticeId] = useState<string | null>(null);
@@ -770,12 +788,21 @@ export default function AdminDashboard() {
   }, [ledgerSearch, ledgerDate, ledgerSubTab]);
   
   // School Customizer Settings Form State
-  const [activeSchoolSubTab, setActiveSchoolSubTab] = useState<"profile" | "admin" | "sync" | "exams">("profile");
+  const [activeSchoolSubTab, setActiveSchoolSubTab] = useState<"profile" | "website" | "admin" | "sync" | "exams">("profile");
 
   // School Customizer Settings Form State
   const [schoolName, setSchoolName] = useState(schoolInfo.name);
   const [schoolAddress, setSchoolAddress] = useState(schoolInfo.address);
   const [schoolPhone, setSchoolPhone] = useState(schoolInfo.phone);
+  const [schoolAlternatePhone, setSchoolAlternatePhone] = useState(schoolInfo.alternatePhone || "");
+  const [schoolWhatsapp, setSchoolWhatsapp] = useState(schoolInfo.whatsappNumber || "");
+  const [schoolTimings, setSchoolTimings] = useState(schoolInfo.schoolTimings || "8:00 AM - 1:30 PM (Mon - Sat)");
+  const [schoolAdmissionSession, setSchoolAdmissionSession] = useState(schoolInfo.admissionSession || "2026-2027");
+  const [schoolAdmissionStatus, setSchoolAdmissionStatus] = useState(schoolInfo.admissionStatus || "OPEN");
+  const [schoolAdmissionClasses, setSchoolAdmissionClasses] = useState(schoolInfo.admissionClasses || "Nursery to 8th");
+  const [schoolMarqueeText, setSchoolMarqueeText] = useState(schoolInfo.marqueeText || "");
+  const [schoolGoogleMapsUrl, setSchoolGoogleMapsUrl] = useState(schoolInfo.googleMapsUrl || "");
+  const [schoolYoutubeUrl, setSchoolYoutubeUrl] = useState(schoolInfo.youtubeUrl || "");
   const [schoolEmail, setSchoolEmail] = useState(schoolInfo.email);
   const [schoolUdiseCode, setSchoolUdiseCode] = useState(schoolInfo.udiseCode || "09300302001");
   const [schoolUpiId, setSchoolUpiId] = useState(schoolInfo.upiId || "");
@@ -795,6 +822,15 @@ export default function AdminDashboard() {
       setSchoolName(schoolInfo.name);
       setSchoolAddress(schoolInfo.address);
       setSchoolPhone(schoolInfo.phone);
+      setSchoolAlternatePhone(schoolInfo.alternatePhone || "");
+      setSchoolWhatsapp(schoolInfo.whatsappNumber || "");
+      setSchoolTimings(schoolInfo.schoolTimings || "8:00 AM - 1:30 PM (Mon - Sat)");
+      setSchoolAdmissionSession(schoolInfo.admissionSession || "2026-2027");
+      setSchoolAdmissionStatus(schoolInfo.admissionStatus || "OPEN");
+      setSchoolAdmissionClasses(schoolInfo.admissionClasses || "Nursery to 8th");
+      setSchoolMarqueeText(schoolInfo.marqueeText || "");
+      setSchoolGoogleMapsUrl(schoolInfo.googleMapsUrl || "");
+      setSchoolYoutubeUrl(schoolInfo.youtubeUrl || "");
       setSchoolEmail(schoolInfo.email);
       setSchoolUdiseCode(schoolInfo.udiseCode || "09300302001");
       setSchoolUpiId(schoolInfo.upiId || "");
@@ -1063,13 +1099,48 @@ export default function AdminDashboard() {
 
     setNoticeLoading(true);
     try {
-      await addNotice(noticeTitle, noticeContent, noticeTarget);
+      await addNotice(
+        noticeTitle,
+        noticeContent,
+        noticeTarget,
+        noticeCategory,
+        noticeIsUrgent,
+        noticeFileUrl || undefined
+      );
       setNoticeTitle("");
       setNoticeContent("");
+      setNoticeCategory("GENERAL");
+      setNoticeIsUrgent(false);
+      setNoticeFileUrl("");
       setNoticeSuccess(true);
       setTimeout(() => setNoticeSuccess(false), 3500);
     } catch (err) {
       console.error(err);
+    } finally {
+      setNoticeLoading(false);
+    }
+  };
+
+  const handleUpdateNotice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingNotice || !editingNotice.title || !editingNotice.content) return;
+
+    setNoticeLoading(true);
+    try {
+      await updateNotice(editingNotice.id, {
+        title: editingNotice.title,
+        content: editingNotice.content,
+        target: editingNotice.target,
+        category: editingNotice.category,
+        isUrgent: editingNotice.isUrgent,
+        isActive: editingNotice.isActive,
+        fileUrl: editingNotice.fileUrl,
+      });
+      setEditingNotice(null);
+      setNoticeSuccess(true);
+      setTimeout(() => setNoticeSuccess(false), 3500);
+    } catch (err) {
+      console.error("Update notice error:", err);
     } finally {
       setNoticeLoading(false);
     }
@@ -1187,9 +1258,19 @@ export default function AdminDashboard() {
   const handleUpdateSchool = (e: React.FormEvent) => {
     e.preventDefault();
     updateSchoolInfo({
+      ...schoolInfo,
       name: schoolName,
       address: schoolAddress,
       phone: schoolPhone,
+      alternatePhone: schoolAlternatePhone,
+      whatsappNumber: schoolWhatsapp,
+      schoolTimings: schoolTimings,
+      admissionSession: schoolAdmissionSession,
+      admissionStatus: schoolAdmissionStatus,
+      admissionClasses: schoolAdmissionClasses,
+      marqueeText: schoolMarqueeText,
+      googleMapsUrl: schoolGoogleMapsUrl,
+      youtubeUrl: schoolYoutubeUrl,
       email: schoolEmail,
       udiseCode: schoolUdiseCode,
       upiId: schoolUpiId,
@@ -4896,136 +4977,419 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          {/* TAB 2: Notice Board */}
+          {/* TAB 2: Notice Board (Full ERP & Live Website Control) */}
           {activeTab === "notices" && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-1 space-y-4">
-                <div>
-                  <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider">
-                    Broadcast Notice
-                  </h3>
-                  <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
-                    Broadcast critical circular alerts directly onto notice widgets.
-                  </p>
+            <div className="space-y-6">
+              {noticeSuccess && (
+                <div className="flex items-center gap-2 bg-emerald-50 text-emerald-800 p-3 rounded-2xl border border-emerald-200 text-xs font-bold animate-fade-in shadow-2xs">
+                  <CheckCircle className="h-4 w-4 shrink-0 text-emerald-600" />
+                  <span>Notice broadcasted live across ERP portals and Public Website!</span>
                 </div>
+              )}
 
-                {noticeSuccess && (
-                  <div className="flex items-center gap-2 bg-green-50 text-green-700 p-2.5 rounded border border-green-100 text-[11px] font-semibold">
-                    <CheckCircle className="h-4 w-4" /> Notice broadcasted live!
-                  </div>
-                )}
-
-                <form onSubmit={handleCreateNotice} className="space-y-3">
-                  <div>
-                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Notice Title</label>
-                    <input
-                      type="text"
-                      required
-                      value={noticeTitle}
-                      onChange={(e) => setNoticeTitle(e.target.value)}
-                      placeholder="e.g. Independence Day Celebrations"
-                      className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Broadcast Target Audience</label>
-                    <select
-                      value={noticeTarget}
-                      onChange={(e) => setNoticeTarget(e.target.value as any)}
-                      className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                    >
-                      <option value="ALL">All Users (PTM & Alerts)</option>
-                      <option value="TEACHERS">Teachers Only</option>
-                      <option value="PARENTS">Parents Only</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Notice Content</label>
-                    <textarea
-                      required
-                      rows={4}
-                      value={noticeContent}
-                      onChange={(e) => setNoticeContent(e.target.value)}
-                      placeholder="Type details about timings, dress codes, holiday dates..."
-                      className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 resize-none"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={noticeLoading}
-                    className="w-full py-2.5 bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-2"
-                  >
-                    {noticeLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                    {noticeLoading ? "Broadcasting..." : "Broadcast Notice"}
-                  </button>
-                </form>
-              </div>
-
-              <div className="lg:col-span-2 space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-200/80 pb-2">
-                  <div>
-                    <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider">
-                      History Logs (Broadcasted Bulletins)
-                    </h3>
-                    <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
-                      Circular history log containing recent announcements ({notices.length} total).
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
-                  {notices.length === 0 ? (
-                    <div className="p-8 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 text-slate-400">
-                      <Bell className="h-8 w-8 mx-auto mb-2 opacity-40" />
-                      <p className="text-xs font-bold">No notices broadcasted yet.</p>
-                      <p className="text-[10px]">Create your first notice using the form on the left.</p>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Left Column: Create Notice Form */}
+                <div className="lg:col-span-1 space-y-4">
+                  <div className="bg-white border border-slate-200/80 p-5 rounded-3xl shadow-2xs space-y-4">
+                    <div>
+                      <h3 className="text-xs font-black uppercase text-indigo-700 bg-indigo-50 border border-indigo-100/50 px-3 py-1 rounded-xl inline-flex items-center gap-1.5 tracking-wider">
+                        <Megaphone className="h-3.5 w-3.5" /> Broadcast New Circular
+                      </h3>
+                      <p className="text-[10px] text-slate-400 font-semibold mt-1.5">
+                        Post announcements directly onto ERP desks and the live school website.
+                      </p>
                     </div>
-                  ) : (
-                    notices.slice().reverse().map((nt) => (
-                      <div
-                        key={nt.id}
-                        className="p-4 border border-slate-200/80 rounded-xl bg-white hover:bg-slate-50/50 transition-all space-y-2 relative group shadow-2xs"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded ${
-                              nt.target === "TEACHERS" ? "bg-amber-100 text-amber-800" :
-                              nt.target === "PARENTS" ? "bg-emerald-100 text-emerald-800" :
-                              "bg-indigo-100 text-indigo-800"
-                            }`}>
-                              Target: {nt.target || "ALL"}
-                            </span>
-                            <span className="text-[9px] font-semibold text-slate-400">{nt.createdAt}</span>
-                          </div>
 
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteNotice(nt.id)}
-                            disabled={deletingNoticeId === nt.id}
-                            className="text-slate-400 hover:text-rose-600 p-1 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
-                            title="Delete Notice"
+                    <form onSubmit={handleCreateNotice} className="space-y-3.5">
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                          Circular Title *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={noticeTitle}
+                          onChange={(e) => setNoticeTitle(e.target.value)}
+                          placeholder="e.g. Half-Yearly Exam Datesheet & Syllabus"
+                          className="w-full text-xs font-bold py-2.5 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 transition-all"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <div>
+                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                            Category *
+                          </label>
+                          <select
+                            value={noticeCategory}
+                            onChange={(e) => setNoticeCategory(e.target.value)}
+                            className="w-full text-xs font-bold py-2.5 px-2.5 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 cursor-pointer"
                           >
-                            {deletingNoticeId === nt.id ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin text-rose-600" />
-                            ) : (
-                              <Trash2 className="h-3.5 w-3.5" />
-                            )}
-                          </button>
+                            <option value="GENERAL">General Bulletin</option>
+                            <option value="EXAM">Examinations</option>
+                            <option value="ACADEMIC">Academic & PTM</option>
+                            <option value="ADMISSION">Admissions</option>
+                            <option value="HOLIDAY">Holiday & Events</option>
+                            <option value="FEE">Fee Counter Alert</option>
+                          </select>
                         </div>
 
-                        <h4 className="text-xs font-extrabold text-slate-800">{nt.title}</h4>
-                        <p className="text-xs text-slate-600 font-medium leading-relaxed whitespace-pre-wrap">
-                          {nt.content}
+                        <div>
+                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                            Target Audience *
+                          </label>
+                          <select
+                            value={noticeTarget}
+                            onChange={(e) => setNoticeTarget(e.target.value as any)}
+                            className="w-full text-xs font-bold py-2.5 px-2.5 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 cursor-pointer"
+                          >
+                            <option value="ALL">All (Public Website & Portal)</option>
+                            <option value="PARENTS">Parents Only</option>
+                            <option value="TEACHERS">Teachers Only</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Urgent Flag Toggle */}
+                      <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-200/80">
+                        <div>
+                          <span className="text-xs font-bold text-slate-800 block">Mark as Urgent</span>
+                          <span className="text-[10px] text-slate-400 font-medium">
+                            Highlighted with urgent badge on website
+                          </span>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={noticeIsUrgent}
+                            onChange={(e) => setNoticeIsUrgent(e.target.checked)}
+                            className="sr-only peer"
+                          />
+                          <div className="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-500"></div>
+                        </label>
+                      </div>
+
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                          Attachment File URL (Optional)
+                        </label>
+                        <input
+                          type="url"
+                          value={noticeFileUrl}
+                          onChange={(e) => setNoticeFileUrl(e.target.value)}
+                          placeholder="https://... (PDF or Image link)"
+                          className="w-full text-xs font-semibold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                          Circular Content *
+                        </label>
+                        <textarea
+                          required
+                          rows={4}
+                          value={noticeContent}
+                          onChange={(e) => setNoticeContent(e.target.value)}
+                          placeholder="Type circular details, schedule, timings, guidelines..."
+                          className="w-full text-xs font-semibold py-2.5 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 resize-none"
+                        />
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={noticeLoading}
+                        className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-extrabold rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm"
+                      >
+                        {noticeLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+                        {noticeLoading ? "Publishing Circular..." : "Publish Live Notice"}
+                      </button>
+                    </form>
+                  </div>
+                </div>
+
+                {/* Right Column: Live History Logs */}
+                <div className="lg:col-span-2 space-y-4">
+                  <div className="bg-white border border-slate-200/80 p-5 rounded-3xl shadow-2xs space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                      <div>
+                        <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider">
+                          Circulars & Notices Registry ({notices.length})
+                        </h3>
+                        <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
+                          Active bulletins live on website and ERP portal.
                         </p>
                       </div>
-                    ))
-                  )}
+
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={noticeCategoryFilter}
+                          onChange={(e) => setNoticeCategoryFilter(e.target.value)}
+                          className="text-[11px] font-bold py-1.5 px-2.5 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white text-slate-700 cursor-pointer"
+                        >
+                          <option value="ALL">All Categories</option>
+                          <option value="GENERAL">General</option>
+                          <option value="EXAM">Examinations</option>
+                          <option value="ACADEMIC">Academic</option>
+                          <option value="ADMISSION">Admissions</option>
+                          <option value="HOLIDAY">Holidays</option>
+                          <option value="FEE">Fees</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Filter & Search Bar */}
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        placeholder="Search published notices by title or content..."
+                        value={noticeSearch}
+                        onChange={(e) => setNoticeSearch(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:border-indigo-600 outline-none"
+                      />
+                    </div>
+
+                    {/* Notice Items List */}
+                    <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
+                      {notices.length === 0 ? (
+                        <div className="p-12 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 text-slate-400">
+                          <Bell className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                          <p className="text-xs font-bold">No circulars published yet.</p>
+                          <p className="text-[10px]">Create your first notice using the form on the left.</p>
+                        </div>
+                      ) : (
+                        notices
+                          .filter((nt) => {
+                            const matchesSearch =
+                              nt.title.toLowerCase().includes(noticeSearch.toLowerCase()) ||
+                              nt.content.toLowerCase().includes(noticeSearch.toLowerCase());
+                            const matchesCat =
+                              noticeCategoryFilter === "ALL" ||
+                              (nt.category || "GENERAL") === noticeCategoryFilter;
+                            return matchesSearch && matchesCat;
+                          })
+                          .slice()
+                          .reverse()
+                          .map((nt) => (
+                            <div
+                              key={nt.id}
+                              className={`p-4 border ${
+                                nt.isUrgent ? "border-rose-200 bg-rose-50/30" : "border-slate-200/80 bg-white"
+                              } rounded-2xl hover:border-indigo-300 transition-all space-y-2.5 shadow-2xs`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                    {nt.category || "GENERAL"}
+                                  </span>
+                                  {nt.isUrgent && (
+                                    <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-rose-500 text-white">
+                                      Urgent
+                                    </span>
+                                  )}
+                                  <span
+                                    className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded ${
+                                      nt.target === "TEACHERS"
+                                        ? "bg-amber-100 text-amber-800"
+                                        : nt.target === "PARENTS"
+                                        ? "bg-emerald-100 text-emerald-800"
+                                        : "bg-slate-100 text-slate-700"
+                                    }`}
+                                  >
+                                    Target: {nt.target || "ALL"}
+                                  </span>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                                    <CalendarIcon className="w-3 h-3" />
+                                    {nt.createdAt}
+                                  </span>
+
+                                  {/* Edit Button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingNotice(JSON.parse(JSON.stringify(nt)))}
+                                    className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
+                                    title="Edit Notice"
+                                  >
+                                    <Edit className="h-3.5 w-3.5" />
+                                  </button>
+
+                                  {/* Delete Button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteNotice(nt.id)}
+                                    disabled={deletingNoticeId === nt.id}
+                                    className="text-slate-400 hover:text-rose-600 p-1 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
+                                    title="Delete Notice"
+                                  >
+                                    {deletingNoticeId === nt.id ? (
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin text-rose-600" />
+                                    ) : (
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    )}
+                                  </button>
+                                </div>
+                              </div>
+
+                              <h4 className="text-xs font-extrabold text-slate-900 leading-snug">
+                                {nt.title}
+                              </h4>
+                              <p className="text-xs text-slate-600 font-normal leading-relaxed whitespace-pre-wrap">
+                                {nt.content}
+                              </p>
+
+                              {nt.fileUrl && (
+                                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-indigo-600 font-bold">
+                                  <span>Attached Document / PDF</span>
+                                  <a
+                                    href={nt.fileUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="hover:underline flex items-center gap-0.5"
+                                  >
+                                    <span>View File</span>
+                                    <ArrowUpRight className="w-3 h-3" />
+                                  </a>
+                                </div>
+                              )}
+                            </div>
+                          ))
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
+
+              {/* ─── Edit Notice Modal ─── */}
+              {editingNotice && (
+                <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+                  <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                      <div className="flex items-center gap-2">
+                        <Edit className="w-5 h-5 text-indigo-600" />
+                        <h3 className="text-sm font-black text-slate-900">Edit Published Notice</h3>
+                      </div>
+                      <button
+                        onClick={() => setEditingNotice(null)}
+                        className="p-1 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleUpdateNotice} className="space-y-3">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-600 uppercase mb-1 block">
+                          Title
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={editingNotice.title}
+                          onChange={(e) =>
+                            setEditingNotice({ ...editingNotice, title: e.target.value })
+                          }
+                          className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-600 uppercase mb-1 block">
+                            Category
+                          </label>
+                          <select
+                            value={editingNotice.category || "GENERAL"}
+                            onChange={(e) =>
+                              setEditingNotice({ ...editingNotice, category: e.target.value })
+                            }
+                            className="w-full text-xs font-bold py-2 px-2 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white"
+                          >
+                            <option value="GENERAL">General Bulletin</option>
+                            <option value="EXAM">Examinations</option>
+                            <option value="ACADEMIC">Academic & PTM</option>
+                            <option value="ADMISSION">Admissions</option>
+                            <option value="HOLIDAY">Holiday & Events</option>
+                            <option value="FEE">Fee Counter Alert</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-600 uppercase mb-1 block">
+                            Target Audience
+                          </label>
+                          <select
+                            value={editingNotice.target || "ALL"}
+                            onChange={(e) =>
+                              setEditingNotice({ ...editingNotice, target: e.target.value })
+                            }
+                            className="w-full text-xs font-bold py-2 px-2 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white"
+                          >
+                            <option value="ALL">All Users</option>
+                            <option value="PARENTS">Parents Only</option>
+                            <option value="TEACHERS">Teachers Only</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Urgent Toggle in Modal */}
+                      <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                        <span className="text-xs font-bold text-slate-700">Urgent Notice</span>
+                        <input
+                          type="checkbox"
+                          checked={Boolean(editingNotice.isUrgent)}
+                          onChange={(e) =>
+                            setEditingNotice({ ...editingNotice, isUrgent: e.target.checked })
+                          }
+                          className="h-4 w-4 text-indigo-600 rounded"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-600 uppercase mb-1 block">
+                          Content
+                        </label>
+                        <textarea
+                          required
+                          rows={4}
+                          value={editingNotice.content}
+                          onChange={(e) =>
+                            setEditingNotice({ ...editingNotice, content: e.target.value })
+                          }
+                          className="w-full text-xs font-semibold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 resize-none"
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setEditingNotice(null)}
+                          className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={noticeLoading}
+                          className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                        >
+                          {noticeLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                          <span>Save Changes</span>
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
             </div>
+          )}
+
+          {/* TAB: Admission Leads / Enquiries Desk */}
+          {activeTab === "enquiries" && (
+            <AdmissionLeadsDesk />
           )}
 
           {/* TAB 3: Register Student */}
@@ -6736,6 +7100,7 @@ export default function AdminDashboard() {
               <div className="flex flex-wrap gap-2 border-b border-slate-200/60 pb-3 no-print">
                 {[
                   { id: "profile", label: "School Profile", icon: Building2, activeClass: "bg-indigo-50 border-indigo-150 text-indigo-700 shadow-2xs" },
+                  { id: "website", label: "Website & Admissions Info", icon: Globe, activeClass: "bg-sky-50 border-sky-150 text-sky-700 shadow-2xs" },
                   { id: "admin", label: "Admin Credentials", icon: User, activeClass: "bg-emerald-50 border-emerald-150 text-emerald-700 shadow-2xs" },
                   { id: "sync", label: "Google Cloud Sync", icon: Database, activeClass: "bg-amber-50 border-amber-150 text-amber-700 shadow-2xs" },
                   { id: "exams", label: "Exams & Grading", icon: Award, activeClass: "bg-rose-50 border-rose-150 text-rose-700 shadow-2xs" },
@@ -6760,6 +7125,148 @@ export default function AdminDashboard() {
 
               {/* Sub-tab Panels */}
               <div className="max-w-2xl w-full">
+                {activeSchoolSubTab === "website" && (
+                  <div className="bg-white border border-slate-200/60 p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] space-y-5 animate-scale-in">
+                    <div>
+                      <h3 className="text-xs font-black uppercase text-sky-700 bg-sky-50 border border-sky-100/50 px-3 py-1 rounded-xl inline-flex items-center gap-1.5 tracking-wider">
+                        <Globe className="h-3.5 w-3.5" /> Website Content & Admissions Desk
+                      </h3>
+                      <p className="text-[10px] text-slate-400 font-semibold mt-1.5">
+                        Control public website contact details, admission status, announcements, and office timings.
+                      </p>
+                    </div>
+
+                    {schoolSuccess && (
+                      <div className="flex items-center gap-2 bg-emerald-50 text-emerald-700 p-2.5 rounded-xl border border-emerald-100 text-[11px] font-bold">
+                        <CheckCircle className="h-4 w-4 shrink-0" /> Website settings updated live!
+                      </div>
+                    )}
+
+                    <form onSubmit={handleUpdateSchool} className="space-y-4">
+                      {/* Top Marquee Announcement */}
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                          Top Marquee Announcement Ticker
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={schoolMarqueeText}
+                          onChange={(e) => setSchoolMarqueeText(e.target.value)}
+                          placeholder="e.g. Admissions Open for Session 2026-2027 (Nursery to Class 8th) • Call: 9452824318"
+                          className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 resize-none shadow-2xs"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                            Admission Session
+                          </label>
+                          <input
+                            type="text"
+                            value={schoolAdmissionSession}
+                            onChange={(e) => setSchoolAdmissionSession(e.target.value)}
+                            placeholder="2026-2027"
+                            className="w-full text-xs font-bold py-2.5 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 shadow-2xs"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                            Admission Status
+                          </label>
+                          <select
+                            value={schoolAdmissionStatus}
+                            onChange={(e) => setSchoolAdmissionStatus(e.target.value)}
+                            className="w-full text-xs font-bold py-2.5 px-2.5 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 cursor-pointer shadow-2xs"
+                          >
+                            <option value="OPEN">Admissions Open</option>
+                            <option value="CLOSING_SOON">Closing Soon</option>
+                            <option value="CLOSED">Admissions Closed</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                            Classes Offered
+                          </label>
+                          <input
+                            type="text"
+                            value={schoolAdmissionClasses}
+                            onChange={(e) => setSchoolAdmissionClasses(e.target.value)}
+                            placeholder="Nursery to 8th"
+                            className="w-full text-xs font-bold py-2.5 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 shadow-2xs"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                            WhatsApp Helpline Number
+                          </label>
+                          <input
+                            type="text"
+                            value={schoolWhatsapp}
+                            onChange={(e) => setSchoolWhatsapp(e.target.value)}
+                            placeholder="9452824318"
+                            className="w-full text-xs font-bold py-2.5 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 shadow-2xs"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                            School & Office Timings
+                          </label>
+                          <input
+                            type="text"
+                            value={schoolTimings}
+                            onChange={(e) => setSchoolTimings(e.target.value)}
+                            placeholder="8:00 AM - 1:30 PM (Mon - Sat)"
+                            className="w-full text-xs font-bold py-2.5 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 shadow-2xs"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                            Google Maps URL
+                          </label>
+                          <input
+                            type="url"
+                            value={schoolGoogleMapsUrl}
+                            onChange={(e) => setSchoolGoogleMapsUrl(e.target.value)}
+                            placeholder="https://maps.google.com/..."
+                            className="w-full text-xs font-semibold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 shadow-2xs"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                            YouTube Channel URL
+                          </label>
+                          <input
+                            type="url"
+                            value={schoolYoutubeUrl}
+                            onChange={(e) => setSchoolYoutubeUrl(e.target.value)}
+                            placeholder="https://www.youtube.com/@stgngschool"
+                            className="w-full text-xs font-semibold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 shadow-2xs"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="pt-2">
+                        <button
+                          type="submit"
+                          className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl transition-all cursor-pointer shadow-sm"
+                        >
+                          Save Website Settings
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
                 {activeSchoolSubTab === "profile" && (
                   <div className="bg-white border border-slate-200/60 p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] space-y-5 animate-scale-in">
                     <div>

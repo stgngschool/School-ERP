@@ -102,5 +102,43 @@
       "description": "Daily morning prayer, meditation, and physical exercise routine.",
       "date": "2026-02-05"
     }
+  ],
+  "videos": [
+    {
+      "id": "oW5tWtf7gwM",
+      "title": "Papa Kehte Hain Dance Performance | 26 January 2026 | St GNG School Varanasi",
+      "category": "DANCE",
+      "categoryLabel": "Dance Performance",
+      "duration": "5:19",
+      "views": "500+ views",
+      "timeAgo": "26 Jan 2026",
+      "thumbnail": "https://i.ytimg.com/vi/oW5tWtf7gwM/hqdefault.jpg",
+      "watchUrl": "https://www.youtube.com/watch?v=oW5tWtf7gwM",
+      "embedUrl": "https://www.youtube-nocookie.com/embed/oW5tWtf7gwM?autoplay=1"
+    },
+    {
+      "id": "P27gveGTYXg",
+      "title": "Jhoom Barabar Jhoom Dance Performance 🔥 | 26 January 2026 | St GNG School Varanasi",
+      "category": "DANCE",
+      "categoryLabel": "Group Dance",
+      "duration": "3:17",
+      "views": "467 views",
+      "timeAgo": "26 Jan 2026",
+      "thumbnail": "https://i.ytimg.com/vi/P27gveGTYXg/hqdefault.jpg",
+      "watchUrl": "https://www.youtube.com/watch?v=P27gveGTYXg",
+      "embedUrl": "https://www.youtube-nocookie.com/embed/P27gveGTYXg?autoplay=1"
+    },
+    {
+      "id": "3pix6gpgPS0",
+      "title": "Apna Har Din Aise Jiyo Dance Performance 💫 | 26 January 2026 | St GNG School Varanasi",
+      "category": "PATRIOTIC",
+      "categoryLabel": "Patriotic Dance",
+      "duration": "4:44",
+      "views": "412 views",
+      "timeAgo": "26 Jan 2026",
+      "thumbnail": "https://i.ytimg.com/vi/3pix6gpgPS0/hqdefault.jpg",
+      "watchUrl": "https://www.youtube.com/watch?v=3pix6gpgPS0",
+      "embedUrl": "https://www.youtube-nocookie.com/embed/3pix6gpgPS0?autoplay=1"
+    }
   ]
 }

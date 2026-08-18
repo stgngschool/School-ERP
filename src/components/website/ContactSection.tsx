@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   MapPin,
   Phone,
@@ -14,6 +14,17 @@ import {
 } from "lucide-react";
 
 export default function ContactSection() {
+  const [schoolData, setSchoolData] = useState<any>({
+    name: "St. G.N.G. School",
+    address: "Salarpur, Rasulgarh, Varanasi - 221007, Uttar Pradesh, India",
+    phone: "9452824318",
+    alternatePhone: "9415812975",
+    whatsappNumber: "9452824318",
+    email: "stgng2005@gmail.com",
+    schoolTimings: "8:00 AM - 1:30 PM (Monday to Saturday)",
+    googleMapsUrl: "https://maps.google.com/?q=St+GNG+School+Salarpur+Rasulgarh+Varanasi",
+  });
+
   const [formData, setFormData] = useState({
     name: "",
     phone: "",
@@ -21,16 +32,47 @@ export default function ContactSection() {
     message: "",
   });
   const [sent, setSent] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    fetch("/api/school")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) setSchoolData(data);
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const text = `*Website Contact Inquiry — St. GNG School*
+    setSubmitting(true);
+
+    try {
+      await fetch("/api/enquiries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          parentName: formData.name,
+          studentName: formData.name,
+          mobile: formData.phone,
+          targetClass: formData.subject || "General Query",
+          message: formData.message,
+        }),
+      });
+    } catch (err) {
+      console.error("Failed to log enquiry:", err);
+    } finally {
+      setSubmitting(false);
+    }
+
+    const text = `*Website Contact Inquiry — ${schoolData.name || "St. GNG School"}*
 • *Name:* ${formData.name}
 • *Phone:* ${formData.phone}
 • *Subject:* ${formData.subject || "General Query"}
 • *Message:* ${formData.message}`;
 
-    const waUrl = `https://wa.me/919452824318?text=${encodeURIComponent(text)}`;
+    const waNumber = schoolData.whatsappNumber || schoolData.phone || "9452824318";
+    const waUrl = `https://wa.me/91${waNumber}?text=${encodeURIComponent(text)}`;
     setSent(true);
     window.open(waUrl, "_blank");
   };
@@ -45,7 +87,7 @@ export default function ContactSection() {
             <span>Campus Location & Contact</span>
           </div>
           <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">
-            Get in Touch with St. G.N.G. School
+            Get in Touch with {schoolData.name || "St. G.N.G. School"}
           </h2>
           <p className="text-xs sm:text-sm text-slate-600 font-medium mt-2">
             We are always here to assist you with admissions, syllabus, fee schedules, or visiting the school campus.
@@ -66,13 +108,13 @@ export default function ContactSection() {
                     School Campus Address
                   </h3>
                   <p className="text-sm font-black text-slate-900 mt-1">
-                    St. G.N.G. School
+                    {schoolData.name || "St. G.N.G. School"}
                   </p>
                   <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
-                    Salarpur, Rasulgarh, Varanasi - 221007, Uttar Pradesh, India
+                    {schoolData.address || "Salarpur, Rasulgarh, Varanasi - 221007, Uttar Pradesh, India"}
                   </p>
                   <a
-                    href="https://maps.google.com/?q=St+GNG+School+Salarpur+Rasulgarh+Varanasi"
+                    href={schoolData.googleMapsUrl || "https://maps.google.com/?q=St+GNG+School+Salarpur+Rasulgarh+Varanasi"}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 hover:underline mt-2"
@@ -93,9 +135,14 @@ export default function ContactSection() {
                     Official Helplines
                   </h3>
                   <p className="text-sm font-black text-slate-900 mt-1">
-                    <a href="tel:9452824318" className="hover:text-emerald-600 transition-colors">
-                      +91 9452824318
+                    <a href={`tel:${schoolData.phone || "9452824318"}`} className="hover:text-emerald-600 transition-colors">
+                      +91 {schoolData.phone || "9452824318"}
                     </a>
+                    {schoolData.alternatePhone && (
+                      <span className="text-slate-500 font-bold ml-2">
+                        / +91 {schoolData.alternatePhone}
+                      </span>
+                    )}
                   </p>
                   <p className="text-xs text-slate-500 mt-0.5">
                     Available for admission queries & parent guidance
@@ -113,8 +160,8 @@ export default function ContactSection() {
                     Official Email
                   </h3>
                   <p className="text-sm font-black text-slate-900 mt-1">
-                    <a href="mailto:stgng2005@gmail.com" className="hover:text-amber-600 transition-colors">
-                      stgng2005@gmail.com
+                    <a href={`mailto:${schoolData.email || "stgng2005@gmail.com"}`} className="hover:text-amber-600 transition-colors">
+                      {schoolData.email || "stgng2005@gmail.com"}
                     </a>
                   </p>
                   <p className="text-xs text-slate-500 mt-0.5">
@@ -133,10 +180,7 @@ export default function ContactSection() {
                     School & Office Hours
                   </h3>
                   <p className="text-xs font-black text-slate-900 mt-1">
-                    School Hours: 07:30 AM – 02:00 PM (Mon to Sat)
-                  </p>
-                  <p className="text-xs text-slate-600 mt-0.5">
-                    Office & Fee Counter: 08:00 AM – 01:30 PM
+                    {schoolData.schoolTimings || "8:00 AM - 1:30 PM (Monday to Saturday)"}
                   </p>
                   <p className="text-[11px] text-rose-600 font-bold mt-1">
                     Sundays & Gazetted Holidays Closed

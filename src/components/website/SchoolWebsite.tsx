@@ -147,27 +147,50 @@ export default function SchoolWebsite({
     },
   ];
 
-  // Latest 3 Notices
-  const recentNotices = [
+  // Dynamic Live Notices from ERP Database
+  const [liveNotices, setLiveNotices] = useState<any[]>([
     {
-      tag: "Admissions",
+      id: "fallback-1",
+      category: "ADMISSION",
       title: "Admissions Open for Session 2026-2027 (Nursery to Class 8th)",
-      date: "Aug 2026",
-      desc: "Limited seats available per section. Collect form from office or apply online.",
+      createdAt: "Aug 2026",
+      content: "Limited seats available per section. Collect form from office or submit online enquiry.",
+      isUrgent: true,
     },
     {
-      tag: "Examination",
+      id: "fallback-2",
+      category: "EXAM",
       title: "Half-Yearly Examination Datesheet & Syllabus Notification",
-      date: "Aug 2026",
-      desc: "Syllabus posted on the Parent Portal. Please ensure project notebooks are complete.",
+      createdAt: "Aug 2026",
+      content: "Syllabus posted on the Parent Portal. Please ensure project notebooks are complete.",
+      isUrgent: true,
     },
     {
-      tag: "Fee Counter",
+      id: "fallback-3",
+      category: "FEE",
       title: "Monthly Fee Dues Clearance Reminder (Counter & Online Portal)",
-      date: "Aug 2026",
-      desc: "Clear pending tuition fees at school counter or check dues on the Parent ERP Portal.",
+      createdAt: "Aug 2026",
+      content: "Clear pending tuition fees at school counter or check dues on the Parent ERP Portal.",
+      isUrgent: false,
     },
-  ];
+  ]);
+
+  useEffect(() => {
+    async function loadLatestNotices() {
+      try {
+        const res = await fetch("/api/notice?public=true&limit=3", { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            setLiveNotices(data);
+          }
+        }
+      } catch (e) {
+        console.warn("Using offline notice fallback");
+      }
+    }
+    loadLatestNotices();
+  }, []);
 
   return (
     <div className="min-h-screen bg-white text-slate-900 flex flex-col justify-between font-sans selection:bg-indigo-600 selection:text-white">
@@ -306,31 +329,61 @@ export default function SchoolWebsite({
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {recentNotices.map((n, i) => (
-                    <div key={i} className="p-5 rounded-2xl bg-slate-50 border border-slate-200/80 hover:bg-white hover:shadow-md transition-all flex flex-col justify-between">
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-indigo-100 text-indigo-800 uppercase">
-                            {n.tag}
-                          </span>
-                          <span className="text-[11px] font-bold text-slate-400">{n.date}</span>
-                        </div>
-                        <h3 className="text-sm font-bold text-slate-900 leading-snug mb-1">
-                          {n.title}
-                        </h3>
-                        <p className="text-xs text-slate-600 font-normal leading-relaxed">
-                          {n.desc}
-                        </p>
-                      </div>
-                      <button
+                  {liveNotices.map((n, i) => {
+                    const cat = (n.category || "GENERAL").toUpperCase();
+                    const badgeClass =
+                      cat === "EXAM"
+                        ? "bg-rose-100 text-rose-800"
+                        : cat === "ADMISSION"
+                        ? "bg-amber-100 text-amber-800"
+                        : cat === "FEE"
+                        ? "bg-emerald-100 text-emerald-800"
+                        : cat === "HOLIDAY"
+                        ? "bg-purple-100 text-purple-800"
+                        : "bg-indigo-100 text-indigo-800";
+
+                    return (
+                      <div
+                        key={n.id || i}
                         onClick={() => handleTabSwitch("NOTICES")}
-                        className="mt-4 pt-3 border-t border-slate-200/60 text-xs font-bold text-indigo-600 flex items-center gap-1 hover:underline text-left cursor-pointer"
+                        className={`p-5 rounded-2xl bg-slate-50 border ${
+                          n.isUrgent ? "border-rose-300 ring-2 ring-rose-100/80 bg-white" : "border-slate-200/80 hover:bg-white"
+                        } hover:shadow-md transition-all flex flex-col justify-between cursor-pointer group`}
                       >
-                        <span>Read Full Circular</span>
-                        <ChevronRight className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ))}
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-1.5">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${badgeClass}`}>
+                                {n.category || "General"}
+                              </span>
+                              {n.isUrgent && (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-rose-500 text-white animate-pulse">
+                                  Urgent
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[11px] font-bold text-slate-400">{n.createdAt}</span>
+                          </div>
+                          <h3 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors leading-snug mb-1 line-clamp-2">
+                            {n.title}
+                          </h3>
+                          <p className="text-xs text-slate-600 font-normal leading-relaxed line-clamp-3">
+                            {n.content || n.desc}
+                          </p>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleTabSwitch("NOTICES");
+                          }}
+                          className="mt-4 pt-3 border-t border-slate-200/60 text-xs font-bold text-indigo-600 flex items-center gap-1 hover:underline text-left cursor-pointer"
+                        >
+                          <span>Read Full Circular</span>
+                          <ChevronRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </section>

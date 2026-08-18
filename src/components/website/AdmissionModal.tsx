@@ -31,11 +31,28 @@ export default function AdmissionModal({ onClose }: AdmissionModalProps) {
     "Class 8",
   ];
 
-  const handleModalSubmit = (e: React.FormEvent) => {
+  const handleModalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!modalForm.parentName || !modalForm.studentName || !modalForm.mobile) {
       alert("Please fill in parent name, student name, and mobile number.");
       return;
+    }
+
+    try {
+      // Save lead directly to ERP database
+      await fetch("/api/enquiries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          parentName: modalForm.parentName,
+          studentName: modalForm.studentName,
+          mobile: modalForm.mobile,
+          targetClass: modalForm.targetClass,
+          message: modalForm.message,
+        }),
+      });
+    } catch (err) {
+      console.warn("Could not record lead into database offline");
     }
 
     const text = `*New Admission Enquiry — St. GNG School (Session 2026-27)*

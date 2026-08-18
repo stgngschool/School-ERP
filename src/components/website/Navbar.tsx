@@ -162,6 +162,22 @@ export default function Navbar({
     }
   };
 
+  const [schoolData, setSchoolData] = useState<any>({
+    phone: "9452824318",
+    email: "stgng2005@gmail.com",
+    schoolTimings: "8:00 AM - 1:30 PM",
+    marqueeText: "Admissions Open 2026-27 (Nursery to 8th) • U.P. Govt. Recognized • UDISE: 09670707502",
+  });
+
+  useEffect(() => {
+    fetch("/api/school")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) setSchoolData(data);
+      })
+      .catch(() => {});
+  }, []);
+
   return (
     <header className="sticky top-0 z-50 w-full transition-all duration-300 font-sans shadow-xs">
       {/* ─── Top Urgent Bulletin Strip ─── */}
@@ -183,29 +199,29 @@ export default function Navbar({
               }}
               className="text-xs font-medium text-slate-300 truncate hover:text-white transition-colors"
             >
-              Admissions Open 2026-27 (Nursery to 8th) • U.P. Govt. Recognized • UDISE: 09670707502
+              {schoolData.marqueeText || "Admissions Open 2026-27 (Nursery to 8th) • U.P. Govt. Recognized • UDISE: 09670707502"}
             </Link>
           </div>
 
           {/* Right: Quick Contact & Timings (Desktop) */}
           <div className="hidden md:flex items-center gap-6 text-[11px] font-semibold text-slate-400 shrink-0">
             <a
-              href="tel:9452824318"
+              href={`tel:${schoolData.phone || "9452824318"}`}
               className="flex items-center gap-1.5 hover:text-white transition-colors"
             >
               <Phone className="w-3.5 h-3.5 text-emerald-400" />
-              <span>+91 9452824318</span>
+              <span>+91 {schoolData.phone || "9452824318"}</span>
             </a>
             <a
-              href="mailto:stgng2005@gmail.com"
+              href={`mailto:${schoolData.email || "stgng2005@gmail.com"}`}
               className="flex items-center gap-1.5 hover:text-white transition-colors"
             >
               <Mail className="w-3.5 h-3.5 text-indigo-400" />
-              <span>stgng2005@gmail.com</span>
+              <span>{schoolData.email || "stgng2005@gmail.com"}</span>
             </a>
             <div className="flex items-center gap-1.5 text-slate-400">
               <Clock className="w-3.5 h-3.5 text-amber-400" />
-              <span>7:30 AM - 2:00 PM</span>
+              <span>{schoolData.schoolTimings || "8:00 AM - 1:30 PM"}</span>
             </div>
           </div>
         </div>
