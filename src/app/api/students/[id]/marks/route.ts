@@ -53,18 +53,20 @@ export async function POST(
   const authUser = await getAuthUser(request);
   if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  if (authUser.role !== "ADMIN" && authUser.role !== "TEACHER" && authUser.role !== "ACCOUNTANT") {
-    return NextResponse.json({ error: "Unauthorized. Only staff can record marks." }, { status: 403 });
+  if (authUser.role !== "ADMIN" && authUser.role !== "TEACHER") {
+    return NextResponse.json({ error: "Unauthorized. Only administrators and teachers can record marks." }, { status: 403 });
   }
 
   try {
     const { id } = await params;
-    const body = await request.json();
-    const { subject, examName, marksObtained, maxMarks, remarks, writtenExam, notebook, subjectEnrichment, practical } = body;
 
     if (!id) {
       return NextResponse.json({ error: "Student ID is required." }, { status: 400 });
     }
+
+    const body = await request.json();
+    const { subject, examName, marksObtained, maxMarks, remarks, writtenExam, notebook, subjectEnrichment, practical } = body;
+
     if (!subject || !examName || marksObtained === undefined || maxMarks === undefined) {
       return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
     }

@@ -221,6 +221,61 @@ export interface MockCalendarEvent {
   createdAt: string;
 }
 
+export interface MockAdmissionApplication {
+  id: string;
+  applicationNo: string;
+  studentName: string;
+  classApplied: string;
+  gender?: string | null;
+  dob?: string | null;
+  aadhaar?: string | null;
+  category?: string | null;
+  religion?: string | null;
+  motherTongue?: string | null;
+  nationality?: string | null;
+  disability?: string | null;
+  bloodGroup?: string | null;
+  photoUrl?: string | null;
+  fatherName: string;
+  fatherMobile: string;
+  fatherOccupation?: string | null;
+  fatherAadhaar?: string | null;
+  motherName?: string | null;
+  motherMobile?: string | null;
+  motherOccupation?: string | null;
+  motherAadhaar?: string | null;
+  parentEmail?: string | null;
+  address: string;
+  emergencyName?: string | null;
+  emergencyPhone?: string | null;
+  familyIncome?: string | null;
+  prevSchoolName?: string | null;
+  prevClassPassed?: string | null;
+  tcNumber?: string | null;
+  transportRequired?: boolean;
+  busStop?: string | null;
+  isRte?: boolean;
+  status: "PENDING" | "UNDER_REVIEW" | "APPROVED" | "REJECTED" | string;
+  rejectionReason?: string | null;
+  adminRemarks?: string | null;
+  assignedSection?: string | null;
+  enrolledStudentId?: string | null;
+  enrolledStudent?: {
+    id: string;
+    admissionNumber: string;
+    rollNumber?: string | null;
+    class?: { name: string; section: string };
+    parentProfile?: { familyCode: string };
+  } | null;
+  reviewedBy?: {
+    id: string;
+    name: string;
+    username: string;
+  } | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface AuthContextType {
   user: MockUser | null;
   activeRole: Role | null;
@@ -233,6 +288,7 @@ interface AuthContextType {
   homeworks: MockHomework[];
   leaveRequests: MockLeaveRequest[];
   notices: MockNotice[];
+  admissionApplications: MockAdmissionApplication[];
   ledgerEntries: MockLedgerEntry[];
   receipts: MockReceipt[];
   feeHeads: { name: string; frequency: string }[];
@@ -369,6 +425,12 @@ interface AuthContextType {
   refreshLeave: () => Promise<void>;
   refreshEvents: () => Promise<void>;
   refreshNotices: () => Promise<void>;
+  refreshAdmissionApplications: () => Promise<void>;
+  createAdmissionApplication: (data: any) => Promise<{ success: boolean; applicationNo?: string; error?: string }>;
+  updateAdmissionApplication: (id: string, data: any) => Promise<boolean>;
+  approveAdmissionApplication: (id: string, approvalData?: any) => Promise<{ success: boolean; message?: string; student?: any; error?: string }>;
+  rejectAdmissionApplication: (id: string, reason: string) => Promise<boolean>;
+  deleteAdmissionApplication: (id: string) => Promise<boolean>;
   refreshSchool: () => Promise<void>;
   refreshUsers: () => Promise<void>;
   refreshAudits: () => Promise<void>;
@@ -432,6 +494,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [homeworks, setHomeworks] = useState<MockHomework[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<MockLeaveRequest[]>([]);
   const [notices, setNotices] = useState<MockNotice[]>([]);
+  const [admissionApplications, setAdmissionApplications] = useState<MockAdmissionApplication[]>([]);
   const [ledgerEntries, setLedgerEntries] = useState<MockLedgerEntry[]>([]);
   const [receipts, setReceipts] = useState<MockReceipt[]>([]);
   const [feeHeads, setFeeHeads] = useState<{ name: string; frequency: string }[]>([]);
@@ -579,6 +642,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         apiFetch("/api/homework", {}, 12000, true).then((data) => data && setHomeworks(data));
         apiFetch("/api/leave", {}, 12000, true).then((data) => data && setLeaveRequests(data));
         apiFetch("/api/notice", {}, 12000, true).then((data) => data && setNotices(data));
+        apiFetch("/api/admissions", {}, 12000, true).then((data) => data && data.applications && setAdmissionApplications(data.applications));
         apiFetch("/api/events", {}, 12000, true).then((data) => data && setEventsList(data));
         apiFetch("/api/users", {}, 12000, true).then((data) => data && setUsersList(data));
         apiFetch("/api/audits").then((data) => data && setAuditLogs(data));
@@ -593,6 +657,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         });
         apiFetch("/api/notice", {}, 12000, true).then((data) => data && setNotices(data));
+        apiFetch("/api/admissions", {}, 12000, true).then((data) => data && data.applications && setAdmissionApplications(data.applications));
         apiFetch("/api/events", {}, 12000, true).then((data) => data && setEventsList(data));
       } else if (role === "TEACHER") {
         apiFetch("/api/students", {}, 12000, true).then((data) => data && setStudents(data)).then(() => setStudentsLoaded(true));
@@ -680,6 +745,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshNotices = async () => {
     const data = await apiFetch("/api/notice");
     if (data) setNotices(data);
+  };
+
+  const refreshAdmissionApplications = async () => {
+    const data = await apiFetch("/api/admissions");
+    if (data && data.applications) setAdmissionApplications(data.applications);
   };
 
   const refreshSchool = async () => {
@@ -1124,6 +1194,98 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const createAdmissionApplication = async (formData: any): Promise<{ success: boolean; applicationNo?: string; error?: string }> => {
+    try {
+      const res = await fetch("/api/admissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        await refreshAdmissionApplications();
+        return { success: true, applicationNo: data.applicationNo };
+      }
+      return { success: false, error: data.error || "Failed to submit application" };
+    } catch (err: any) {
+      console.error("Create admission application failed:", err);
+      return { success: false, error: err.message || "Network error" };
+    }
+  };
+
+  const updateAdmissionApplication = async (id: string, data: any): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/admissions/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (res.ok) {
+        await refreshAdmissionApplications();
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error("Update admission application failed:", err);
+      return false;
+    }
+  };
+
+  const approveAdmissionApplication = async (id: string, approvalData?: any): Promise<{ success: boolean; message?: string; student?: any; error?: string }> => {
+    try {
+      const res = await fetch(`/api/admissions/${id}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(approvalData || {}),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        await refreshAdmissionApplications();
+        await refreshStudents();
+        await refreshBilling();
+        return { success: true, message: data.message, student: data.student };
+      }
+      return { success: false, error: data.error || "Failed to approve admission" };
+    } catch (err: any) {
+      console.error("Approve admission application failed:", err);
+      return { success: false, error: err.message || "Network error" };
+    }
+  };
+
+  const rejectAdmissionApplication = async (id: string, reason: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/admissions/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "REJECTED", rejectionReason: reason }),
+      });
+      if (res.ok) {
+        await refreshAdmissionApplications();
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error("Reject admission application failed:", err);
+      return false;
+    }
+  };
+
+  const deleteAdmissionApplication = async (id: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/admissions/${id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        await refreshAdmissionApplications();
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error("Delete admission application failed:", err);
+      return false;
+    }
+  };
+
   const recordItemizedPayment = async (
     studentId: string | null,
     items: { ledgerEntryId: string; payAmount: number; discountAmount: number }[],
@@ -1464,6 +1626,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         homeworks,
         leaveRequests,
         notices,
+        admissionApplications,
         ledgerEntries,
         receipts,
         feeHeads,
@@ -1486,6 +1649,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         addNotice,
         updateNotice,
         deleteNotice,
+        createAdmissionApplication,
+        updateAdmissionApplication,
+        approveAdmissionApplication,
+        rejectAdmissionApplication,
+        deleteAdmissionApplication,
         recordItemizedPayment,
         addStudent,
         bulkImportStudents,
@@ -1522,6 +1690,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         refreshLeave,
         refreshEvents,
         refreshNotices,
+        refreshAdmissionApplications,
         refreshSchool,
         refreshUsers,
         refreshAudits,

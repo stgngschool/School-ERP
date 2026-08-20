@@ -211,6 +211,8 @@ export async function GET(
       }
     }
 
+    const isFinancialStaffOrParent = authUser.role === "ADMIN" || authUser.role === "ACCOUNTANT" || authUser.role === "PARENT";
+
     // Format output
     const formatted = {
       id: student.id,
@@ -308,7 +310,7 @@ export async function GET(
         createdAt: leave.createdAt,
       })),
 
-      ledgerEntries: student.ledgerEntries.map((entry) => ({
+      ledgerEntries: isFinancialStaffOrParent ? student.ledgerEntries.map((entry) => ({
         id: entry.id,
         entryType: entry.entryType,
         amount: entry.amount, // in Paisa
@@ -320,9 +322,9 @@ export async function GET(
         } : null,
         createdBy: entry.createdBy.name,
         createdAt: entry.createdAt,
-      })),
+      })) : [],
 
-      receipts: student.receipts.map((rec) => ({
+      receipts: isFinancialStaffOrParent ? student.receipts.map((rec) => ({
         id: rec.id,
         receiptNumber: rec.receiptNumber,
         paymentMethod: rec.paymentMethod,
@@ -338,7 +340,7 @@ export async function GET(
           feeHead: item.ledgerEntry.feeHead?.name || "Other Dues",
           description: item.ledgerEntry.description,
         })),
-      })),
+      })) : [],
     };
 
     return NextResponse.json(formatted);

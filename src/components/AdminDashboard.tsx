@@ -17,6 +17,7 @@ import {
 } from "@/lib/whatsapp";
 import {
   Users,
+  UserPlus,
   Bell,
   CheckCircle,
   AlertOctagon,
@@ -228,6 +229,7 @@ export default function AdminDashboard() {
     updateNotice,
     deleteNotice,
     notices,
+    admissionApplications,
     addStudent,
     bulkImportStudents,
     students,
@@ -5030,7 +5032,7 @@ export default function AdminDashboard() {
                             <option value="ACADEMIC">Academic & PTM</option>
                             <option value="ADMISSION">Admissions</option>
                             <option value="HOLIDAY">Holiday & Events</option>
-                            <option value="FEE">Fee Counter Alert</option>
+                            <option value="FEE">Fee & Accounts Circular</option>
                           </select>
                         </div>
 
@@ -5313,7 +5315,7 @@ export default function AdminDashboard() {
                             <option value="ACADEMIC">Academic & PTM</option>
                             <option value="ADMISSION">Admissions</option>
                             <option value="HOLIDAY">Holiday & Events</option>
-                            <option value="FEE">Fee Counter Alert</option>
+                            <option value="FEE">Fee & Accounts Circular</option>
                           </select>
                         </div>
 
@@ -5418,6 +5420,20 @@ export default function AdminDashboard() {
                     </button>
                   );
                 })}
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("enquiries")}
+                  className="flex items-center gap-1.5 px-4 py-2 border border-indigo-200/80 bg-indigo-50/70 hover:bg-indigo-100/80 rounded-2xl text-xs font-black text-indigo-700 transition-all cursor-pointer shadow-2xs ml-auto"
+                >
+                  <UserPlus className="h-3.5 w-3.5" />
+                  <span>Online Admissions Review Desk</span>
+                  {admissionApplications.filter((a) => a.status === "PENDING").length > 0 && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-600 text-white animate-pulse">
+                      {admissionApplications.filter((a) => a.status === "PENDING").length} New
+                    </span>
+                  )}
+                </button>
               </div>
 
               {importMode === "directory" ? (

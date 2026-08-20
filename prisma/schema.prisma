@@ -69,6 +69,7 @@ model User {
   createdReceipts   Receipt[]          @relation("ReceiptCreator")
   createdLedger     LedgerEntry[]      @relation("LedgerCreator")
   createdNotices    Notice[]           @relation("NoticeCreator")
+  reviewedAdmissions AdmissionApplication[] @relation("AdmissionReviewer")
 }
 
 model TeacherProfile {
@@ -163,6 +164,7 @@ model Student {
   photoUrl        String?
   marks           Mark[]
   studentSessions StudentSession[]
+  admissionApplications AdmissionApplication[]
 
   @@index([parentProfileId])
   @@index([classId])
@@ -463,4 +465,67 @@ model AdmissionEnquiry {
   @@index([status])
   @@index([createdAt])
 }
+
+model AdmissionApplication {
+  id                String    @id @default(uuid())
+  applicationNo     String    @unique // e.g. ADM-2026-0001
+  studentName       String
+  classApplied      String
+  gender            String?
+  dob               DateTime?
+  aadhaar           String?
+  category          String?   // GENERAL, OBC, SC, ST, EWS
+  religion          String?
+  motherTongue      String?
+  nationality       String?   @default("Indian")
+  disability        String?
+  bloodGroup        String?
+  photoUrl          String?
+  
+  // Parents Information
+  fatherName        String
+  fatherMobile      String
+  fatherOccupation  String?
+  fatherAadhaar     String?
+  motherName        String?
+  motherMobile      String?
+  motherOccupation  String?
+  motherAadhaar     String?
+  parentEmail       String?
+  address           String
+  emergencyName     String?
+  emergencyPhone    String?
+  familyIncome      String?
+  
+  // Previous Academic & Transport
+  prevSchoolName    String?
+  prevClassPassed   String?
+  tcNumber          String?
+  transportRequired Boolean   @default(false)
+  busStop           String?
+  isRte             Boolean   @default(false)
+  
+  // Workflow & Status
+  status            String    @default("PENDING") // "PENDING", "UNDER_REVIEW", "APPROVED", "REJECTED"
+  rejectionReason   String?
+  adminRemarks      String?
+  assignedSection   String?   // "A", "B", etc.
+  
+  // Enrollment Link
+  enrolledStudentId String?
+  enrolledStudent   Student?  @relation(fields: [enrolledStudentId], references: [id], onDelete: SetNull)
+  reviewedById      String?
+  reviewedBy        User?     @relation("AdmissionReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([status])
+  @@index([classApplied])
+  @@index([fatherMobile])
+  @@index([createdAt])
+  @@index([enrolledStudentId])
+  @@index([reviewedById])
+}
+
 

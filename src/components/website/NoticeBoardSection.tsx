@@ -126,7 +126,7 @@ export default function NoticeBoardSection() {
     { key: "ACADEMIC", label: "Academic & PTM" },
     { key: "ADMISSION", label: "Admissions" },
     { key: "HOLIDAY", label: "Events & Holidays" },
-    { key: "FEE", label: "Fee Counter" },
+    { key: "FEE", label: "Fee Circulars" },
     { key: "GENERAL", label: "General Alerts" },
   ];
 

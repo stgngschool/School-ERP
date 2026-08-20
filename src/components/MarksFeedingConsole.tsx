@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 
 export default function MarksFeedingConsole() {
-  const { students, schoolInfo, refreshStudents } = useAuth();
+  const { user, students, schoolInfo, refreshStudents } = useAuth();
 
   const availableClasses = Array.from(
     new Set(students.map((s) => `${s.class}-${s.section}`))
@@ -34,8 +34,6 @@ export default function MarksFeedingConsole() {
   const [isCustomSubjectMode, setIsCustomSubjectMode] = useState(false);
   const [maxMarks, setMaxMarks] = useState("100");
   const [studentSearch, setStudentSearch] = useState("");
-
-  
 
   const [marksRoster, setMarksRoster] = useState<{
     [studentId: string]: {
@@ -64,13 +62,23 @@ export default function MarksFeedingConsole() {
   const splitComponents = examConfig.components || [];
 
   useEffect(() => {
-    if (availableClasses.length > 0 && !selectedClass) {
-      setSelectedClass(availableClasses[0]);
+    if (!selectedClass) {
+      if (user?.teacherProfile?.classes && user.teacherProfile.classes.length > 0) {
+        const tClass = user.teacherProfile.classes[0];
+        const targetStr = `${tClass.name}-${tClass.section}`;
+        if (availableClasses.includes(targetStr)) {
+          setSelectedClass(targetStr);
+          return;
+        }
+      }
+      if (availableClasses.length > 0) {
+        setSelectedClass(availableClasses[0]);
+      }
     }
     if (availableExams.length > 0 && !selectedExam) {
       setSelectedExam(availableExams[0]);
     }
-  }, [availableClasses, availableExams]);
+  }, [user, availableClasses, availableExams]);
 
   useEffect(() => {
     if (selectedExam) {

@@ -95,7 +95,7 @@ const getNavItems = (activeRole: string): NavItem[] => {
         { category: "Finance & Fees", name: "Fee Structure Setup", shortName: "Fee Setup", icon: Settings, tab: "structures", desktopOnly: true },
         { category: "System & Communication", name: "Website Photos & Media", shortName: "Media", icon: Camera, tab: "website_media" },
         { category: "System & Communication", name: "Notices & Announcements", shortName: "Notices", icon: Bell, tab: "notices" },
-        { category: "System & Communication", name: "Admission Leads / Enquiries", shortName: "Enquiries", icon: UserPlus, tab: "enquiries" },
+        { category: "Student & Academics", name: "Admissions & Applications", shortName: "Admissions", icon: UserPlus, tab: "enquiries" },
         { category: "System & Communication", name: "User Access Control", shortName: "Users", icon: ShieldCheck, tab: "users", desktopOnly: true },
         { category: "System & Communication", name: "School Settings", shortName: "Settings", icon: Building2, tab: "school", desktopOnly: true },
         { category: "System & Communication", name: "System Audit Logs", shortName: "Audit", icon: FileSpreadsheet, tab: "audit", desktopOnly: true },

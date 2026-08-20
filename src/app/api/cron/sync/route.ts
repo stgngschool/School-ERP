@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { syncStudentsToSheet, syncLedgerToSheet } from "@/lib/google";
+import { getAuthUser } from "@/lib/auth";
 import fs from "fs";
 import path from "path";
 
@@ -12,12 +13,26 @@ export async function GET(request: Request) {
     // Validate Cron Secret or Staff Authorization
     const cronSecret = process.env.CRON_SECRET;
     const authHeader = request.headers.get("authorization");
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-      const url = new URL(request.url);
-      const queryKey = url.searchParams.get("key");
-      if (queryKey !== cronSecret) {
-        return NextResponse.json({ error: "Unauthorized cron execution." }, { status: 401 });
+    const url = new URL(request.url);
+    const queryKey = url.searchParams.get("key");
+
+    let isAuthorized = false;
+
+    if (cronSecret && cronSecret.length >= 8) {
+      if (authHeader === `Bearer ${cronSecret}` || queryKey === cronSecret) {
+        isAuthorized = true;
       }
+    }
+
+    if (!isAuthorized) {
+      const authUser = await getAuthUser(request);
+      if (authUser && (authUser.role === "ADMIN" || authUser.role === "ACCOUNTANT")) {
+        isAuthorized = true;
+      }
+    }
+
+    if (!isAuthorized) {
+      return NextResponse.json({ error: "Unauthorized cron execution." }, { status: 401 });
     }
 
     let countStudents = 0;

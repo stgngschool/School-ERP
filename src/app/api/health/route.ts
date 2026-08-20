@@ -1,24 +1,23 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
-    const studentCount = await db.student.count();
+    await db.$queryRaw`SELECT 1`;
     return NextResponse.json({
       status: "ok",
-      system: "School Finance OS",
-      database: "connected",
-      studentCount,
+      uptime: process.uptime(),
       timestamp: new Date().toISOString(),
     });
-  } catch (error: any) {
+  } catch {
     return NextResponse.json(
       {
-        status: "error",
-        message: error?.message || "Health check failed",
+        status: "degraded",
         timestamp: new Date().toISOString(),
       },
-      { status: 500 }
+      { status: 503 }
     );
   }
 }
