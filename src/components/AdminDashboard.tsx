@@ -296,8 +296,13 @@ export default function AdminDashboard() {
     if (!validTabs.includes(activeTab)) {
       setActiveTab("dashboard");
     } else {
+      if (activeTab === "dashboard") {
+        if (!studentsLoaded) refreshStudents();
+        if (!billingLoaded) refreshBilling();
+        if (!attendanceLoaded) refreshAttendance();
+      }
       if (activeTab === "students" && !studentsLoaded) refreshStudents();
-      if (activeTab === "collect" && !billingLoaded) refreshBilling();
+      if ((activeTab === "collect" || activeTab === "defaulters" || activeTab === "ledger") && !billingLoaded) refreshBilling();
       if (activeTab === "attendance" && !attendanceLoaded) refreshAttendance();
     }
   }, [activeTab, studentsLoaded, billingLoaded, attendanceLoaded]);
@@ -2391,19 +2396,34 @@ export default function AdminDashboard() {
                           <TrendingUp className="w-5 h-5" />
                         </span>
                       </div>
-                      <h3 className="text-2xl font-black text-slate-800 tracking-tight mt-4">{formatP(totalEarnings)}</h3>
+                      {!billingLoaded ? (
+                        <div className="mt-4 animate-pulse">
+                          <div className="h-8 w-28 bg-slate-200/70 rounded-xl" />
+                        </div>
+                      ) : (
+                        <h3 className="text-2xl font-black text-slate-800 tracking-tight mt-4">{formatP(totalEarnings)}</h3>
+                      )}
                     </div>
                     <div className="mt-5 pt-4 border-t border-slate-100/80">
-                      <div className="flex items-center justify-between text-xs mb-1.5">
-                        <span className="text-slate-400 font-semibold">Collected Ratio</span>
-                        <span className="text-indigo-600 font-black">{collectionEfficiency}%</span>
-                      </div>
-                      <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-indigo-600 rounded-full" style={{ width: `${collectionEfficiency}%` }}></div>
-                      </div>
-                      <div className="flex items-center justify-between mt-2.5 text-[10px] text-slate-400 font-medium">
-                        <span>This month: <strong className="text-slate-600">+{formatP(monthlyTotal)}</strong></span>
-                      </div>
+                      {!billingLoaded ? (
+                        <div className="space-y-2 animate-pulse">
+                          <div className="h-3 w-full bg-slate-100 rounded-full" />
+                          <div className="h-2.5 w-24 bg-slate-100 rounded-md mt-1" />
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex items-center justify-between text-xs mb-1.5">
+                            <span className="text-slate-400 font-semibold">Collected Ratio</span>
+                            <span className="text-indigo-600 font-black">{collectionEfficiency}%</span>
+                          </div>
+                          <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div className="h-full bg-indigo-600 rounded-full" style={{ width: `${collectionEfficiency}%` }}></div>
+                          </div>
+                          <div className="flex items-center justify-between mt-2.5 text-[10px] text-slate-400 font-medium">
+                            <span>This month: <strong className="text-slate-600">+{formatP(monthlyTotal)}</strong></span>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -2416,20 +2436,35 @@ export default function AdminDashboard() {
                           <Users className="w-5 h-5" />
                         </span>
                       </div>
-                      <h3 className="text-2xl font-black text-slate-800 tracking-tight mt-4">{totalStudents}</h3>
+                      {!studentsLoaded ? (
+                        <div className="mt-4 animate-pulse">
+                          <div className="h-8 w-20 bg-slate-200/70 rounded-xl" />
+                        </div>
+                      ) : (
+                        <h3 className="text-2xl font-black text-slate-800 tracking-tight mt-4">{totalStudents}</h3>
+                      )}
                     </div>
                     <div className="mt-5 pt-4 border-t border-slate-100/80">
-                      <div className="flex justify-between items-center text-xs mb-1.5 font-semibold">
-                        <span className="text-blue-600">{boysCount} Boys ({boysPct}%)</span>
-                        <span className="text-pink-500">{girlsCount} Girls ({girlsPct}%)</span>
-                      </div>
-                      <div className="w-full h-1.5 bg-slate-100 rounded-full flex overflow-hidden">
-                        <div className="h-full bg-blue-500" style={{ width: `${boysPct}%` }}></div>
-                        <div className="h-full bg-pink-400" style={{ width: `${girlsPct}%` }}></div>
-                      </div>
-                      <div className="flex items-center justify-between mt-2.5 text-[10px] text-slate-400 font-medium">
-                        <span>New admissions: <strong className="text-slate-600">{newAdmissionsCount}</strong></span>
-                      </div>
+                      {!studentsLoaded ? (
+                        <div className="space-y-2 animate-pulse">
+                          <div className="h-3 w-full bg-slate-100 rounded-full" />
+                          <div className="h-2.5 w-24 bg-slate-100 rounded-md mt-1" />
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex justify-between items-center text-xs mb-1.5 font-semibold">
+                            <span className="text-blue-600">{boysCount} Boys ({boysPct}%)</span>
+                            <span className="text-pink-500">{girlsCount} Girls ({girlsPct}%)</span>
+                          </div>
+                          <div className="w-full h-1.5 bg-slate-100 rounded-full flex overflow-hidden">
+                            <div className="h-full bg-blue-500" style={{ width: `${boysPct}%` }}></div>
+                            <div className="h-full bg-pink-400" style={{ width: `${girlsPct}%` }}></div>
+                          </div>
+                          <div className="flex items-center justify-between mt-2.5 text-[10px] text-slate-400 font-medium">
+                            <span>New admissions: <strong className="text-slate-600">{newAdmissionsCount}</strong></span>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -2442,20 +2477,35 @@ export default function AdminDashboard() {
                           <AlertTriangle className="w-5 h-5" />
                         </span>
                       </div>
-                      <h3 className="text-2xl font-black text-rose-600 tracking-tight mt-4">{formatP(totalDues)}</h3>
+                      {!billingLoaded ? (
+                        <div className="mt-4 animate-pulse">
+                          <div className="h-8 w-28 bg-slate-200/70 rounded-xl" />
+                        </div>
+                      ) : (
+                        <h3 className="text-2xl font-black text-rose-600 tracking-tight mt-4">{formatP(totalDues)}</h3>
+                      )}
                     </div>
                     <div className="mt-5 pt-4 border-t border-slate-100/80">
-                      <div className="flex items-center justify-between text-xs mb-1.5">
-                        <span className="text-slate-400 font-semibold">Pending Ratio</span>
-                        <span className="text-rose-600 font-black">{100 - collectionEfficiency}%</span>
-                      </div>
-                      <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-rose-500 rounded-full" style={{ width: `${100 - collectionEfficiency}%` }} />
-                      </div>
-                      <div className="flex items-center justify-between mt-2.5 text-[10px] text-slate-400 font-medium">
-                        <span>Invoices: <strong className="text-slate-600">{dueItems.filter(d => d.status === "UNPAID").length} unpaid</strong></span>
-                        <button onClick={() => setActiveTab("defaulters")} className="text-indigo-600 hover:underline font-bold cursor-pointer">View List</button>
-                      </div>
+                      {!billingLoaded ? (
+                        <div className="space-y-2 animate-pulse">
+                          <div className="h-3 w-full bg-slate-100 rounded-full" />
+                          <div className="h-2.5 w-20 bg-slate-100 rounded-md mt-1" />
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex items-center justify-between text-xs mb-1.5">
+                            <span className="text-slate-400 font-semibold">Pending Ratio</span>
+                            <span className="text-rose-600 font-black">{100 - collectionEfficiency}%</span>
+                          </div>
+                          <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div className="h-full bg-rose-500 rounded-full" style={{ width: `${100 - collectionEfficiency}%` }} />
+                          </div>
+                          <div className="flex items-center justify-between mt-2.5 text-[10px] text-slate-400 font-medium">
+                            <span>Invoices: <strong className="text-slate-600">{dueItems.filter(d => d.status === "UNPAID").length} unpaid</strong></span>
+                            <button onClick={() => setActiveTab("defaulters")} className="text-indigo-600 hover:underline font-bold cursor-pointer">View List</button>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -2468,27 +2518,37 @@ export default function AdminDashboard() {
                           <UserCheck className="w-5 h-5" />
                         </span>
                       </div>
-                      <h3 className="text-2xl font-black text-emerald-600 tracking-tight mt-4">{attendanceRate}%</h3>
+                      {!attendanceLoaded ? (
+                        <div className="mt-4 animate-pulse">
+                          <div className="h-8 w-20 bg-slate-200/70 rounded-xl" />
+                        </div>
+                      ) : (
+                        <h3 className="text-2xl font-black text-emerald-600 tracking-tight mt-4">{attendanceRate}%</h3>
+                      )}
                     </div>
                     <div className="mt-5 pt-4 border-t border-slate-100/80">
-                      <div className="grid grid-cols-4 gap-1 text-center text-[10px] font-bold text-slate-500">
-                        <div className="bg-emerald-50 text-emerald-700 py-1 rounded">
-                          <p className="text-[8px] uppercase">Pres</p>
-                          <p>{presentCount}</p>
+                      {!attendanceLoaded ? (
+                        <div className="h-8 w-full bg-slate-100 rounded-xl animate-pulse" />
+                      ) : (
+                        <div className="grid grid-cols-4 gap-1 text-center text-[10px] font-bold text-slate-500">
+                          <div className="bg-emerald-50 text-emerald-700 py-1 rounded">
+                            <p className="text-[8px] uppercase">Pres</p>
+                            <p>{presentCount}</p>
+                          </div>
+                          <div className="bg-rose-50 text-rose-700 py-1 rounded">
+                            <p className="text-[8px] uppercase">Abs</p>
+                            <p>{absentCount}</p>
+                          </div>
+                          <div className="bg-amber-50 text-amber-700 py-1 rounded">
+                            <p className="text-[8px] uppercase">Late</p>
+                            <p>{lateCount}</p>
+                          </div>
+                          <div className="bg-blue-50 text-blue-700 py-1 rounded">
+                            <p className="text-[8px] uppercase">Lv</p>
+                            <p>{leaveCount}</p>
+                          </div>
                         </div>
-                        <div className="bg-rose-50 text-rose-700 py-1 rounded">
-                          <p className="text-[8px] uppercase">Abs</p>
-                          <p>{absentCount}</p>
-                        </div>
-                        <div className="bg-amber-50 text-amber-700 py-1 rounded">
-                          <p className="text-[8px] uppercase">Late</p>
-                          <p>{lateCount}</p>
-                        </div>
-                        <div className="bg-blue-50 text-blue-700 py-1 rounded">
-                          <p className="text-[8px] uppercase">Lv</p>
-                          <p>{leaveCount}</p>
-                        </div>
-                      </div>
+                      )}
                     </div>
                   </div>
                 </div>

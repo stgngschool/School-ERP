@@ -524,42 +524,78 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
-  const apiFetch = async (url: string, options: RequestInit = {}, timeoutMs = 12000, useCache = false) => {
+  const apiFetch = async (
+    url: string,
+    options: RequestInit = {},
+    timeoutMs = 15000,
+    useCache = false,
+    retries = 1
+  ): Promise<any> => {
+    // 1. Check Session Cache (never serve empty array if cached accidentally)
     if (useCache && typeof window !== 'undefined') {
       const cacheKey = '__api_cache_' + url;
       const cachedStr = sessionStorage.getItem(cacheKey);
       if (cachedStr) {
         try {
           const cached = JSON.parse(cachedStr);
-          // 5-minute memory cache with background revalidation capability
-          if (Date.now() - cached.timestamp < 1000 * 60 * 5) return cached.data;
-        } catch(e) {}
+          const hasValidData = Array.isArray(cached.data) ? cached.data.length > 0 : !!cached.data;
+          if (hasValidData && Date.now() - cached.timestamp < 1000 * 60 * 5) {
+            return cached.data;
+          }
+        } catch (e) {}
       }
     }
-    const controller = new AbortController();
-    const tid = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      const res = await fetch(url, {
-        ...options,
-        credentials: "include",
-        cache: options.cache ?? "no-store",
-        signal: controller.signal,
-      });
-      clearTimeout(tid);
-      if (!res.ok) return null;
-      const data = await res.json();
-      if (useCache && typeof window !== 'undefined') {
-        sessionStorage.setItem('__api_cache_' + url, JSON.stringify({ data, timestamp: Date.now() }));
+
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      if (attempt > 0) {
+        await new Promise((resolve) => setTimeout(resolve, 800 * attempt));
       }
-      return data;
-    } catch (err) {
-      clearTimeout(tid);
-      return null;
+
+      const controller = new AbortController();
+      const tid = setTimeout(() => controller.abort(), timeoutMs);
+
+      try {
+        const res = await fetch(url, {
+          ...options,
+          credentials: "include",
+          cache: options.cache ?? "no-store",
+          signal: controller.signal,
+        });
+        clearTimeout(tid);
+
+        if (!res.ok) {
+          console.warn(`[apiFetch] ${url} returned ${res.status} on attempt ${attempt + 1}/${retries + 1}`);
+          if (attempt < retries) continue;
+          return null;
+        }
+
+        const data = await res.json();
+
+        // 2. Only cache non-empty valid payloads
+        if (useCache && typeof window !== 'undefined' && data) {
+          const shouldCache = Array.isArray(data) ? data.length > 0 : Object.keys(data).length > 0;
+          if (shouldCache) {
+            try {
+              sessionStorage.setItem(
+                '__api_cache_' + url,
+                JSON.stringify({ data, timestamp: Date.now() })
+              );
+            } catch (e) {}
+          }
+        }
+
+        return data;
+      } catch (err: any) {
+        clearTimeout(tid);
+        console.warn(`[apiFetch] ${url} failed on attempt ${attempt + 1}/${retries + 1}:`, err.message);
+        if (attempt < retries) continue;
+        return null;
+      }
     }
+    return null;
   };
 
-
-  // Fetch live database records scoped by user role & needs
+  // Fetch live database records scoped by user role & needs in controlled stages
   const refreshData = useCallback(async (targetUser?: MockUser | null) => {
     const userToFetch = targetUser !== undefined ? targetUser : user;
     if (!userToFetch) {
@@ -603,10 +639,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setCurrentStage("STUDENTS FETCH START");
       const isStaff = userToFetch.role === "ADMIN" || userToFetch.role === "ACCOUNTANT";
 
-      const criticalLoads = [
-        apiFetch("/api/school", {}, 12000, true).then((data) => { if (data) setSchoolInfo(data); }),
-        apiFetch("/api/classes", {}, 12000, true).then((data) => data && setClasses(data)),
-        apiFetch("/api/fee-config", {}, 12000, true).then((feeData) => {
+      // ─── STAGE 1: Core System Metadata (Fastest) ───
+      const stage1Loads = [
+        apiFetch("/api/school", {}, 10000, true).then((data) => { if (data) setSchoolInfo(data); }),
+        apiFetch("/api/classes", {}, 10000, true).then((data) => data && setClasses(data)),
+        apiFetch("/api/fee-config", {}, 10000, true).then((feeData) => {
           if (feeData) {
             setFeeHeads(feeData.feeHeads || []);
             setFeeStructures(feeData.feeStructures || []);
@@ -615,72 +652,76 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       ];
 
       if (isStaff) {
-        criticalLoads.push(
-          apiFetch("/api/transport", {}, 12000, true).then((transData) => {
+        stage1Loads.push(
+          apiFetch("/api/transport", {}, 10000, true).then((transData) => {
             if (transData) setTransportStops(transData.map((d: any) => ({ ...d, amount: d.amount / 100 })));
           }),
-          apiFetch("/api/concessions", {}, 12000, true).then((data) => data && setConcessions(data))
+          apiFetch("/api/concessions", {}, 10000, true).then((data) => data && setConcessions(data))
         );
       }
 
-      await Promise.allSettled(criticalLoads);
+      await Promise.allSettled(stage1Loads);
+
+      // ─── STAGE 2: Core Dashboard Data (Students + Billing + Attendance) ───
+      const role = userToFetch.role;
+
+      const fetchStudentsPromise = apiFetch("/api/students", {}, 15000, true, 2)
+        .then((data) => {
+          if (data && Array.isArray(data)) {
+            setStudents(data);
+            setStudentsLoaded(true);
+          }
+        });
+
+      const fetchBillingPromise = apiFetch("/api/billing", {}, 15000, false, 2)
+        .then((data) => {
+          if (data) {
+            setLedgerEntries(data.ledgerEntries || []);
+            setReceipts(data.receipts || []);
+            setDueItems(data.dueItems || []);
+            setBillingLoaded(true);
+          }
+        });
+
+      const fetchAttendancePromise = apiFetch("/api/attendance", {}, 12000, false, 1)
+        .then((data) => {
+          if (data && Array.isArray(data)) {
+            setAttendances(data);
+            setAttendanceLoaded(true);
+          }
+        });
+
+      const fetchNoticesPromise = apiFetch("/api/notice", {}, 10000, true, 1)
+        .then((data) => data && setNotices(data));
+
+      await Promise.allSettled([
+        fetchStudentsPromise,
+        fetchBillingPromise,
+        fetchAttendancePromise,
+        fetchNoticesPromise,
+      ]);
+
       setCurrentStage("DASHBOARD READY");
 
-      // Trigger background loads asynchronously based on role to avoid blocking render
-      const role = userToFetch.role;
-      if (role === "ADMIN") {
-        apiFetch("/api/students", {}, 12000, true).then((data) => data && setStudents(data)).then(() => setStudentsLoaded(true));
-        apiFetch("/api/billing").then((data) => {
-          if (data) {
-            setLedgerEntries(data.ledgerEntries || []);
-            setReceipts(data.receipts || []);
-            setDueItems(data.dueItems || []);
-            setBillingLoaded(true);
-          }
-        });
-        apiFetch("/api/attendance").then((data) => data && setAttendances(data)).then(() => setAttendanceLoaded(true));
-        apiFetch("/api/homework", {}, 12000, true).then((data) => data && setHomeworks(data));
-        apiFetch("/api/leave", {}, 12000, true).then((data) => data && setLeaveRequests(data));
-        apiFetch("/api/notice", {}, 12000, true).then((data) => data && setNotices(data));
-        apiFetch("/api/admissions", {}, 12000, true).then((data) => data && data.applications && setAdmissionApplications(data.applications));
-        apiFetch("/api/events", {}, 12000, true).then((data) => data && setEventsList(data));
-        apiFetch("/api/users", {}, 12000, true).then((data) => data && setUsersList(data));
-        apiFetch("/api/audits").then((data) => data && setAuditLogs(data));
-      } else if (role === "ACCOUNTANT") {
-        apiFetch("/api/students", {}, 12000, true).then((data) => data && setStudents(data)).then(() => setStudentsLoaded(true));
-        apiFetch("/api/billing").then((data) => {
-          if (data) {
-            setLedgerEntries(data.ledgerEntries || []);
-            setReceipts(data.receipts || []);
-            setDueItems(data.dueItems || []);
-            setBillingLoaded(true);
-          }
-        });
-        apiFetch("/api/notice", {}, 12000, true).then((data) => data && setNotices(data));
-        apiFetch("/api/admissions", {}, 12000, true).then((data) => data && data.applications && setAdmissionApplications(data.applications));
-        apiFetch("/api/events", {}, 12000, true).then((data) => data && setEventsList(data));
-      } else if (role === "TEACHER") {
-        apiFetch("/api/students", {}, 12000, true).then((data) => data && setStudents(data)).then(() => setStudentsLoaded(true));
-        apiFetch("/api/attendance").then((data) => data && setAttendances(data)).then(() => setAttendanceLoaded(true));
-        apiFetch("/api/homework", {}, 12000, true).then((data) => data && setHomeworks(data));
-        apiFetch("/api/leave", {}, 12000, true).then((data) => data && setLeaveRequests(data));
-        apiFetch("/api/notice", {}, 12000, true).then((data) => data && setNotices(data));
-      } else if (role === "PARENT") {
-        apiFetch("/api/students", {}, 12000, true).then((data) => data && setStudents(data)).then(() => setStudentsLoaded(true));
-        apiFetch("/api/billing").then((data) => {
-          if (data) {
-            setLedgerEntries(data.ledgerEntries || []);
-            setReceipts(data.receipts || []);
-            setDueItems(data.dueItems || []);
-            setBillingLoaded(true);
-          }
-        });
-        apiFetch("/api/attendance").then((data) => data && setAttendances(data)).then(() => setAttendanceLoaded(true));
-        apiFetch("/api/homework", {}, 12000, true).then((data) => data && setHomeworks(data));
-        apiFetch("/api/leave", {}, 12000, true).then((data) => data && setLeaveRequests(data));
-        apiFetch("/api/notice", {}, 12000, true).then((data) => data && setNotices(data));
-        apiFetch("/api/events", {}, 12000, true).then((data) => data && setEventsList(data));
-      }
+      // ─── STAGE 3: Staggered Secondary Data (On-Demand / Non-blocking) ───
+      setTimeout(() => {
+        if (role === "ADMIN" || role === "ACCOUNTANT") {
+          apiFetch("/api/admissions", {}, 10000, false, 1).then(
+            (data) => data?.applications && setAdmissionApplications(data.applications)
+          );
+          apiFetch("/api/events", {}, 10000, true, 1).then((data) => data && setEventsList(data));
+        }
+
+        if (role === "ADMIN") {
+          apiFetch("/api/users", {}, 10000, true, 1).then((data) => data && setUsersList(data));
+          apiFetch("/api/audits", {}, 10000, false, 1).then((data) => data && setAuditLogs(data));
+        }
+
+        if (role === "TEACHER" || role === "PARENT") {
+          apiFetch("/api/homework", {}, 10000, true, 1).then((data) => data && setHomeworks(data));
+          apiFetch("/api/leave", {}, 10000, true, 1).then((data) => data && setLeaveRequests(data));
+        }
+      }, 500);
     } catch (err) {
       console.error("[AuthContext] refreshData EXCEPTION:", err);
     }

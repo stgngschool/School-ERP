@@ -14,23 +14,18 @@ if (!connectionString) {
 // We use a safe connection pool per instance to prevent exhausting Supavisor session limit while supporting concurrent dashboard requests.
 const poolConfig = {
   connectionString,
-  max: 5, // 5 connections per worker prevents deadlock on concurrent API requests & transactions
+  max: 3, // Conservative connection limit per serverless instance prevents exhausting Supavisor limits
   idleTimeoutMillis: 10000,
-  connectionTimeoutMillis: 10000,
+  connectionTimeoutMillis: 5000,
 };
 
-if (process.env.NODE_ENV === "production") {
+// Re-use global singleton across both development and warm production serverless invocations
+if (!(global as any).prismaGlobal) {
   const pool = new pg.Pool(poolConfig);
   const adapter = new PrismaPg(pool);
-  basePrisma = new PrismaClient({ adapter });
-} else {
-  if (!(global as any).prismaGlobal) {
-    const pool = new pg.Pool(poolConfig);
-    const adapter = new PrismaPg(pool);
-    (global as any).prismaGlobal = new PrismaClient({ adapter });
-  }
-  basePrisma = (global as any).prismaGlobal;
+  (global as any).prismaGlobal = new PrismaClient({ adapter });
 }
+basePrisma = (global as any).prismaGlobal;
 
 const prismaWithLogging = basePrisma.$extends({
   query: {

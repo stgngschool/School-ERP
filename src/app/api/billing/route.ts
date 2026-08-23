@@ -121,16 +121,24 @@ export async function GET(request: Request) {
     chargesWhere.createdAt = { gte: sessionStartDate };
     discountsWhere.createdAt = { gte: sessionStartDate };
 
-    // Execute all database queries concurrently in parallel
-    const [ledger, receipts, charges, discounts] = await Promise.all([
+    // Execute optimized queries concurrently
+    const [ledger, receipts, charges, discounts, paidGroups] = await Promise.all([
       db.ledgerEntry.findMany({
         where: ledgerWhere,
         take: 300,
         orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          studentId: true,
+          entryType: true,
+          amount: true,
+          description: true,
+          createdById: true,
+        },
       }),
       db.receipt.findMany({
         where: receiptWhere,
-        take: 200,
+        take: 300,
         select: {
           id: true,
           studentId: true,
@@ -191,12 +199,8 @@ export async function GET(request: Request) {
           description: true,
           amount: true,
           createdAt: true,
+          sessionId: true,
           session: { select: { name: true, isCurrent: true } },
-          receiptItems: {
-            select: {
-              amount: true,
-            },
-          },
         },
       }),
       db.ledgerEntry.findMany({
@@ -208,6 +212,10 @@ export async function GET(request: Request) {
           description: true,
           amount: true,
         },
+      }),
+      db.receiptItem.groupBy({
+        by: ["ledgerEntryId"],
+        _sum: { amount: true },
       }),
     ]);
 
@@ -221,24 +229,30 @@ export async function GET(request: Request) {
     }));
 
     const formattedReceipts = receipts.map((r) => {
-      const studentIds = Array.from(new Set(r.items.map((i) => i.ledgerEntry.studentId)));
+      const studentIds = Array.from(
+        new Set(r.items.map((i) => i.ledgerEntry?.studentId).filter(Boolean))
+      );
       const studentNames = Array.from(
-        new Set(r.items.map((i) => i.ledgerEntry.student?.name).filter(Boolean))
+        new Set(r.items.map((i) => i.ledgerEntry?.student?.name).filter(Boolean))
       );
       const classSections = Array.from(
         new Set(
           r.items
             .map((i) => {
-              const cls = i.ledgerEntry.student?.class;
+              const cls = i.ledgerEntry?.student?.class;
               return cls ? `${cls.name}-${cls.section}` : "";
             })
             .filter(Boolean)
         )
       );
 
+      const sClass = r.student?.class
+        ? `${r.student.class.name}-${r.student.class.section}`
+        : classSections.join(", ");
+
       return {
         id: r.id,
-        studentId: r.studentId || (studentIds.length === 1 ? studentIds[0] : null),
+        studentId: r.studentId || (studentIds.length === 1 ? (studentIds[0] as string) : null),
         studentIds,
         receiptNo: r.receiptNumber,
         amount: r.amountPaid,
@@ -247,35 +261,40 @@ export async function GET(request: Request) {
         transactionRef: r.transactionReference || "",
         createdAt: r.createdAt.toISOString().split("T")[0],
         studentName: r.student?.name || studentNames.join(", "),
-        classSection: r.student
-          ? `${r.student.class.name}-${r.student.class.section}`
-          : classSections.join(", "),
+        classSection: sClass,
         collectedBy: r.createdBy?.name || "System",
         collectedByRole: r.createdBy?.role || "ADMIN",
         createdById: r.createdById,
         details: r.items
           .map((i) => {
-            const sName = i.ledgerEntry.student?.name || "Student";
-            const desc = i.ledgerEntry.description
+            const sName = i.ledgerEntry?.student?.name || "Student";
+            const desc = (i.ledgerEntry?.description || "")
               .replace("Payment for: Assigned: ", "")
               .replace("Payment for: ", "");
             return `${sName}: ${desc} (Rs. ${i.amount / 100})`;
           })
           .join(" + "),
         items: r.items.map((i) => ({
-          name: `${i.ledgerEntry.student?.name || "Student"}: ${i.ledgerEntry.description}`,
+          name: `${i.ledgerEntry?.student?.name || "Student"}: ${i.ledgerEntry?.description || ""}`,
           amount: i.amount,
         })),
       };
     });
 
-    // Optimize discount lookup by grouping by studentId
-    const discountsByStudent = new Map<string, typeof discounts>();
-    for (const d of discounts) {
-      if (!discountsByStudent.has(d.studentId)) {
-        discountsByStudent.set(d.studentId, []);
+    // O(1) paid lookup map
+    const paidMap = new Map<string, number>();
+    for (const p of paidGroups) {
+      if (p.ledgerEntryId) {
+        paidMap.set(p.ledgerEntryId, p._sum.amount || 0);
       }
-      discountsByStudent.get(d.studentId)!.push(d);
+    }
+
+    // O(1) discount lookup map by studentId + chargeName
+    const discountMap = new Map<string, number>();
+    for (const d of discounts) {
+      const dName = d.description.replace("Discount for: ", "").replace(/.*: /, "").trim().toLowerCase();
+      const key = `${d.studentId}||${dName}`;
+      discountMap.set(key, (discountMap.get(key) || 0) + Math.abs(d.amount));
     }
 
     const configPath = path.join(process.cwd(), "src/data/school.json");
@@ -285,65 +304,66 @@ export async function GET(request: Request) {
         schoolConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
       }
     } catch (e) {
-      console.error("Failed to read school config inside billing API:", e);
+      // Graceful fallback to default config
     }
 
-    const formattedDues = charges
-      .map((c) => {
-        // Calculate total payments applied to this specific charge
-        const totalPaid = c.receiptItems.reduce((sum, item) => sum + item.amount, 0);
+    const now = Date.now();
+    const graceDays = schoolConfig.lateFeeGraceDays ?? 10;
+    const isLateFeeEnabled = !!schoolConfig.enableLateFee;
+    const isDailyFine = schoolConfig.lateFeeType === "DAILY";
+    const baseFineAmount = (schoolConfig.lateFeeAmount ?? 50) * 100;
+    const dailyFineUnit = (schoolConfig.lateFeeAmount ?? 5) * 100;
 
-        // Find any ad-hoc discounts applied to this charge description
-        const chargeName = c.description.replace("Assigned: ", "");
-        const studentDiscounts = discountsByStudent.get(c.studentId) || [];
-        const associatedDiscounts = studentDiscounts
-          .filter((d) => d.description.endsWith(`: ${chargeName}`) || d.description === `Discount for: ${chargeName}`)
-          .reduce((sum, d) => sum + Math.abs(d.amount), 0);
+    const formattedDues = charges.map((c) => {
+      const chargeName = c.description.replace("Assigned: ", "").trim();
+      const totalPaid = paidMap.get(c.id) || 0;
+      const dKey = `${c.studentId}||${chargeName.toLowerCase()}`;
+      const totalDiscount = discountMap.get(dKey) || 0;
 
+      const outstanding = c.amount - totalDiscount - totalPaid;
+      const cTime = c.createdAt.getTime();
+      const dueTime = cTime + 15 * 24 * 60 * 60 * 1000;
+      const graceTime = dueTime + graceDays * 24 * 60 * 60 * 1000;
 
-        const outstanding = c.amount - associatedDiscounts - totalPaid;
-
-        const graceDays = schoolConfig.lateFeeGraceDays ?? 10;
-        const dueTime = c.createdAt.getTime() + 15 * 24 * 60 * 60 * 1000;
-        const graceTime = dueTime + graceDays * 24 * 60 * 60 * 1000;
-
-        let fineAmount = 0;
-        if (schoolConfig.enableLateFee && Date.now() > graceTime && outstanding > 0) {
-          if (schoolConfig.lateFeeType === "DAILY") {
-            const msDiff = Date.now() - graceTime;
-            const daysOver = Math.floor(msDiff / (24 * 60 * 60 * 1000)) + 1; // At least 1 day over
-            fineAmount = daysOver * (schoolConfig.lateFeeAmount ?? 5) * 100;
-          } else {
-            fineAmount = (schoolConfig.lateFeeAmount ?? 50) * 100;
-          }
+      let fineAmount = 0;
+      if (isLateFeeEnabled && now > graceTime && outstanding > 0) {
+        if (isDailyFine) {
+          const daysOver = Math.floor((now - graceTime) / (24 * 60 * 60 * 1000)) + 1;
+          fineAmount = daysOver * dailyFineUnit;
+        } else {
+          fineAmount = baseFineAmount;
         }
+      }
 
-        const chargeDueDate = getChargeDueDate(chargeName, c.createdAt.getTime() + 15 * 24 * 60 * 60 * 1000);
+      const chargeDueDate = getChargeDueDate(chargeName, dueTime);
 
-        return {
-          id: c.id,
-          studentId: c.studentId,
-          name: chargeName,
-          amount: Math.max(0, outstanding),
-          originalAmount: c.amount,
-          totalPaid: totalPaid,
-          totalDiscount: associatedDiscounts,
-          dueDate: chargeDueDate,
-          sessionName: c.session?.name,
-          isCurrentSession: c.session?.isCurrent !== false, // Default true if session is missing
-          status: outstanding <= 0 ? "PAID" : "UNPAID",
-          fine: fineAmount,
-        };
-      });
+      return {
+        id: c.id,
+        studentId: c.studentId,
+        name: chargeName,
+        amount: Math.max(0, outstanding),
+        originalAmount: c.amount,
+        totalPaid: totalPaid,
+        totalDiscount: totalDiscount,
+        dueDate: chargeDueDate,
+        sessionName: c.session?.name,
+        isCurrentSession: c.session?.isCurrent !== false,
+        status: (outstanding <= 0 ? "PAID" : "UNPAID") as "PAID" | "UNPAID",
+        fine: fineAmount,
+      };
+    });
 
     return NextResponse.json({
       ledgerEntries: formattedLedger,
       receipts: formattedReceipts,
       dueItems: formattedDues,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Fetch billing error:", error);
-    return NextResponse.json({ error: "Failed to fetch billing ledger" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to fetch billing ledger: " + (error?.message || "Unknown error") },
+      { status: 500 }
+    );
   }
 }
 

@@ -156,6 +156,8 @@ export default function AccountantDashboard() {
     classes,
     studentsLoaded,
     billingLoaded,
+    refreshStudents,
+    refreshBilling,
   } = useAuth();
 
   const validTabs = ["dashboard", "collect", "attendance", "defaulters", "ledger", "structures", "students", "idcards", "audit", "print_marksheets", "marks", "notices"];
@@ -164,8 +166,11 @@ export default function AccountantDashboard() {
   React.useEffect(() => {
     if (!validTabs.includes(activeTab)) {
       setActiveTab("collect");
+    } else {
+      if (!studentsLoaded) refreshStudents();
+      if (!billingLoaded) refreshBilling();
     }
-  }, [activeTab]);
+  }, [activeTab, studentsLoaded, billingLoaded]);
   
   // Payment Form States
   const [selectedStudentId, setSelectedStudentId] = useState("");
