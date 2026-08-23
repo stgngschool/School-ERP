@@ -5,16 +5,20 @@ export async function getNextFamilyCode(tx?: any): Promise<string> {
   const year = new Date().getFullYear();
   const prefix = `FAM-${year}-`;
 
-  const latest = await client.parentProfile.findFirst({
+  const parents = await client.parentProfile.findMany({
     where: { familyCode: { startsWith: prefix } },
-    orderBy: { familyCode: "desc" },
     select: { familyCode: true },
   });
 
   let maxNum = 0;
-  if (latest?.familyCode) {
-    const num = parseInt(latest.familyCode.replace(prefix, ""), 10);
-    if (!isNaN(num)) maxNum = num;
+  for (const p of parents) {
+    const raw = p.familyCode.replace(prefix, "");
+    if (/^\d+$/.test(raw)) {
+      const num = parseInt(raw, 10);
+      if (!isNaN(num) && num > maxNum) {
+        maxNum = num;
+      }
+    }
   }
 
   return `${prefix}${String(maxNum + 1).padStart(4, "0")}`;
@@ -25,16 +29,20 @@ export async function getNextAdmissionNumber(tx?: any): Promise<string> {
   const year = new Date().getFullYear();
   const prefix = `ADM-${year}-`;
 
-  const latest = await client.student.findFirst({
+  const students = await client.student.findMany({
     where: { admissionNumber: { startsWith: prefix } },
-    orderBy: { admissionNumber: "desc" },
     select: { admissionNumber: true },
   });
 
   let maxNum = 0;
-  if (latest?.admissionNumber) {
-    const num = parseInt(latest.admissionNumber.replace(prefix, ""), 10);
-    if (!isNaN(num)) maxNum = num;
+  for (const s of students) {
+    const raw = s.admissionNumber.replace(prefix, "");
+    if (/^\d+$/.test(raw)) {
+      const num = parseInt(raw, 10);
+      if (!isNaN(num) && num > maxNum) {
+        maxNum = num;
+      }
+    }
   }
 
   return `${prefix}${String(maxNum + 1).padStart(4, "0")}`;
@@ -45,16 +53,20 @@ export async function getNextReceiptNumber(tx?: any): Promise<string> {
   const year = new Date().getFullYear();
   const prefix = `REC-${year}-`;
 
-  const latest = await client.receipt.findFirst({
+  const receipts = await client.receipt.findMany({
     where: { receiptNumber: { startsWith: prefix } },
-    orderBy: { receiptNumber: "desc" },
     select: { receiptNumber: true },
   });
 
   let maxNum = 0;
-  if (latest?.receiptNumber) {
-    const num = parseInt(latest.receiptNumber.replace(prefix, ""), 10);
-    if (!isNaN(num)) maxNum = num;
+  for (const r of receipts) {
+    const raw = r.receiptNumber.replace(prefix, "");
+    if (/^\d+$/.test(raw)) {
+      const num = parseInt(raw, 10);
+      if (!isNaN(num) && num > maxNum) {
+        maxNum = num;
+      }
+    }
   }
 
   return `${prefix}${String(maxNum + 1).padStart(5, "0")}`;

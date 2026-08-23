@@ -1,12 +1,12 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: var(--font-plus-jakarta), var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-sans: var(--font-inter), var(--font-plus-jakarta), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #0f172a;
   /* Safe area insets for notch/home-indicator devices */
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -17,7 +17,7 @@
 }
 
 /* ─────────────────────────────────────────
-   BASE RESET & TEXT CRISPNESS OPTIMIZATIONS
+   BASE RESET & PREMIUM TYPOGRAPHY ENHANCEMENTS
 ───────────────────────────────────────── */
 *, *::before, *::after {
   box-sizing: border-box;
@@ -28,17 +28,38 @@ html {
   overflow-x: hidden;
   overscroll-behavior-y: contain;
   overscroll-behavior-x: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01";
+}
+
+body, button, input, select, textarea {
+  font-family: var(--font-inter), var(--font-plus-jakarta), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Solid, High-Definition Bold & Black Headings */
+h1, h2, h3, h4, h5, h6, .font-bold, .font-extrabold, .font-black {
+  text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-body, button, input, select, textarea {
-  font-family: var(--font-plus-jakarta), var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+/* Crisp contrast for secondary labels */
+.text-slate-400 {
+  color: #64748b;
+}
+
+/* Prevent GPU compositing subpixel text blur inside card containers and tables */
+.stripe-card, .linear-table, .mobile-card, table, form {
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
 }
 
 body {
   background: var(--background);
-  color: var(--foreground);
+  color: #0f172a;
   min-height: 100vh;
   min-height: -webkit-fill-available;
   min-height: 100dvh;

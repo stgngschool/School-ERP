@@ -128,7 +128,7 @@ export async function POST(request: Request) {
             });
           }
 
-          const itemAmountPaisa = Math.round(Number(item.amount) * 100);
+          const itemAmountPaisa = Math.round(Number(item.amount) || 0);
 
           await db.feeStructureItem.create({
             data: {

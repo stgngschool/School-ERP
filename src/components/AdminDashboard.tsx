@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { formatP, toPaisa, toRupees } from "@/lib/currency";
+import { formatP, toPaisa, toRupees, numberToIndianWords } from "@/lib/currency";
 import StudentProfileModal from "@/components/StudentProfileModal";
 import MarksFeedingConsole from "@/components/MarksFeedingConsole";
 import PrintMarksheets from "@/components/PrintMarksheets";
@@ -76,6 +76,7 @@ import {
   Megaphone,
   GraduationCap,
   Globe,
+  QrCode,
 } from "lucide-react";
 
 const getLocalDateString = () => {
@@ -729,6 +730,10 @@ export default function AdminDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [transactionRef, setTransactionRef] = useState("");
+  const [chequeNo, setChequeNo] = useState("");
+  const [chequeBank, setChequeBank] = useState("");
+  const [chequeDate, setChequeDate] = useState("");
+  const [transferMode, setTransferMode] = useState("NEFT");
   const [activeSiblingTabId, setActiveSiblingTabId] = useState("");
   const [fifoAmount, setFifoAmount] = useState("");
 
@@ -769,6 +774,7 @@ export default function AdminDashboard() {
   const [ledgerSubTab, setLedgerSubTab] = useState<"receipts" | "raw">("receipts");
   const [ledgerSearch, setLedgerSearch] = useState("");
   const [ledgerDate, setLedgerDate] = useState("");
+  const [ledgerStaffFilter, setLedgerStaffFilter] = useState("All");
   const [visibleReceiptsCount, setVisibleReceiptsCount] = useState(25);
   const [visibleLedgerCount, setVisibleLedgerCount] = useState(30);
 
@@ -1315,8 +1321,8 @@ export default function AdminDashboard() {
   };
 
   const handleFIFOAllocate = (amountStr: string) => {
-    const totalAmountToAllocate = Number(amountStr) || 0;
-    if (totalAmountToAllocate <= 0) {
+    const totalAmountToAllocateRupees = Number(amountStr) || 0;
+    if (totalAmountToAllocateRupees <= 0) {
       setSelectedDueIds([]);
       setPayingState({});
       setDiscountsState({});
@@ -1328,7 +1334,7 @@ export default function AdminDashboard() {
       return new Date(a.dueDate || 0).getTime() - new Date(b.dueDate || 0).getTime();
     });
 
-    let remaining = totalAmountToAllocate;
+    let remaining = toPaisa(totalAmountToAllocateRupees);
     const newSelectedIds: string[] = [];
     const newPayingState: Record<string, number> = {};
     const newDiscountsState: Record<string, number> = {};
@@ -1351,6 +1357,87 @@ export default function AdminDashboard() {
     setSelectedDueIds(newSelectedIds);
     setPayingState(newPayingState);
     setDiscountsState(newDiscountsState);
+  };
+
+  const handleSelectQuickFilter = (type: "Q1" | "Q2" | "Q3" | "Q4" | "TUITION" | "FULL_YEAR") => {
+    const activeChildId = activeSiblingTabId || selectedStudentId;
+    const childDues = selectedStudentDues.filter((d) => d.studentId === activeChildId);
+    if (childDues.length === 0) return;
+
+    let targetDues: typeof childDues = [];
+    if (type === "Q1") {
+      targetDues = childDues.filter(d => {
+        const name = d.name.toLowerCase();
+        return name.includes("april") || name.includes("may") || name.includes("june") || name.includes("previous") || name.includes("past") || name.includes("annual") || name.includes("m/s");
+      });
+    } else if (type === "Q2") {
+      targetDues = childDues.filter(d => {
+        const name = d.name.toLowerCase();
+        return name.includes("july") || name.includes("august") || name.includes("september");
+      });
+    } else if (type === "Q3") {
+      targetDues = childDues.filter(d => {
+        const name = d.name.toLowerCase();
+        return name.includes("october") || name.includes("november") || name.includes("december");
+      });
+    } else if (type === "Q4") {
+      targetDues = childDues.filter(d => {
+        const name = d.name.toLowerCase();
+        return name.includes("january") || name.includes("february") || name.includes("march");
+      });
+    } else if (type === "TUITION") {
+      targetDues = childDues.filter(d => d.name.toLowerCase().includes("tuition"));
+    } else if (type === "FULL_YEAR") {
+      targetDues = childDues;
+    }
+
+    if (targetDues.length === 0) return;
+
+    const targetIds = targetDues.map(d => d.id);
+    setSelectedDueIds(prev => Array.from(new Set([...prev, ...targetIds])));
+    setDiscountsState(prev => {
+      const next = { ...prev };
+      targetDues.forEach(d => { if (next[d.id] === undefined) next[d.id] = 0; });
+      return next;
+    });
+    setPayingState(prev => {
+      const next = { ...prev };
+      targetDues.forEach(d => { if (next[d.id] === undefined) next[d.id] = d.amount; });
+      return next;
+    });
+  };
+
+  const handleSendReceiptWhatsApp = (rec: any) => {
+    const std = students.find((s) => s.id === rec.studentId) || students.find((s) => s.name === rec.studentName) || students.find((s) => siblingStudentIds.includes(s.id));
+    const phone = std?.fatherMobile || std?.parentPhone || "";
+    const parentName = std?.parentName || "Parent";
+
+    const itemsText = rec.items && rec.items.length > 0
+      ? rec.items.map((i: any) => `• ${i.name || i.description}: ${formatP(i.amount)}${i.discount > 0 ? ` (Disc: ${formatP(i.discount)})` : ""}`).join("\n")
+      : `• Details: ${rec.details || "Fee Payment"}`;
+
+    const message = `🏛️ *ST. GNG SCHOOL - FEE PAYMENT RECEIPT*\n\n` +
+      `Dear ${parentName},\n` +
+      `Fee payment has been successfully recorded.\n\n` +
+      `📄 *Receipt No:* ${rec.receiptNo}\n` +
+      `👦 *Student / Family:* ${rec.studentName} (${rec.classSection})\n` +
+      `💳 *Payment Method:* ${rec.method} Counter\n` +
+      `📅 *Date:* ${rec.createdAt || new Date().toISOString().split("T")[0]}\n\n` +
+      `*Fee Breakdown:*\n${itemsText}\n\n` +
+      `💰 *Total Paid:* ${formatP(rec.amount)}\n` +
+      (rec.discount > 0 ? `🏷️ *Total Discount:* ${formatP(rec.discount)}\n` : ``) +
+      (rec.arrears > 0 ? `⚠️ *Remaining Balance:* ${formatP(rec.arrears)}\n` : `✅ *All Dues Cleared*\n`) +
+      `\nThank you!\n*St. GNG School Finance Office*`;
+
+    const encoded = encodeURIComponent(message);
+    const numericPhone = phone.replace(/\D/g, "");
+    const finalPhone = numericPhone.length === 10 ? `91${numericPhone}` : numericPhone;
+
+    if (finalPhone) {
+      window.open(`https://wa.me/${finalPhone}?text=${encoded}`, "_blank");
+    } else {
+      window.open(`https://wa.me/?text=${encoded}`, "_blank");
+    }
   };
 
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
@@ -1381,32 +1468,47 @@ export default function AdminDashboard() {
         return;
       }
 
+      let finalTransactionRef = transactionRef;
+      if (payMethod === "CHEQUE") {
+        finalTransactionRef = `Cheque No: ${chequeNo || "N/A"} | Bank: ${chequeBank || "N/A"}${chequeDate ? ` | Date: ${chequeDate}` : ""}`;
+      } else if (payMethod === "BANK_TRANSFER") {
+        finalTransactionRef = `${transferMode} Ref: ${transactionRef || "N/A"}${chequeBank ? ` | Bank: ${chequeBank}` : ""}`;
+      } else if (payMethod === "UPI" && transactionRef) {
+        finalTransactionRef = `UPI UTR: ${transactionRef}`;
+      }
+
       // Send null for studentId to trigger unified family checkout
-      const success = await recordItemizedPayment(null, items, payMethod, transactionRef);
-      if (!success) {
-        alert("Payment failed. Please check backend logs or try again.");
+      const payRes = await recordItemizedPayment(null, items, payMethod, finalTransactionRef);
+      if (!payRes.success) {
+        alert(payRes.error || "Payment failed. Please check backend logs or try again.");
         setIsSubmittingPayment(false);
         return;
       }
 
-      // Calculate remaining arrears for the family
+      // Calculate remaining arrears on selected invoices vs other family dues
+      const totalRemainingOnSelectedInvoices = remainingArrears;
       const familyOtherDuesSum = dueItems
         .filter((d) => siblingStudentIds.includes(d.studentId) && d.status === "UNPAID" && !selectedDueIds.includes(d.id))
         .reduce((sum, item) => sum + item.amount, 0);
 
-      const totalRemainingArrears = familyOtherDuesSum + remainingArrears;
       const isSingleSibling = siblingStudents.length === 1;
 
-      // Receipt Details for modal
+      // Receipt Details for modal using real database receipt number
       const matchedReceipt = {
-        receiptNo: `REC-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+        receiptNo: payRes.receipt?.receiptNo || `REC-2026-${Math.floor(1000 + Math.random() * 9000)}`,
         studentName: isSingleSibling ? student.name : `Family (Siblings: ${siblingStudents.map(s => s.name).join(", ")})`,
         classSection: isSingleSibling ? `${student.class}-${student.section}` : "Unified Family",
         admissionNo: isSingleSibling ? student.admissionNo : student.familyCode || "Multi",
+        fatherName: student.fatherName || student.parentName || "Parent",
+        subtotal: originalDueSum,
         amount: totalPaid,
         method: payMethod,
         discount: totalDiscount,
-        arrears: totalRemainingArrears,
+        arrears: totalRemainingOnSelectedInvoices,
+        otherArrears: familyOtherDuesSum,
+        totalFamilyDueRemaining: familyOtherDuesSum + totalRemainingOnSelectedInvoices,
+        transactionRef: finalTransactionRef || "",
+        amountInWords: numberToIndianWords(totalPaid),
         details: items
           .map((i) => {
             const itemObj = unpaidItems.find((ui) => ui.id === i.ledgerEntryId);
@@ -1420,10 +1522,14 @@ export default function AdminDashboard() {
           const itemObj = unpaidItems.find((ui) => ui.id === i.ledgerEntryId);
           const itemDesc = itemObj?.name || "";
           const child = students.find(s => s.id === itemObj?.studentId);
+          const origAmt = itemObj?.amount || 0;
+          const bal = Math.max(0, origAmt - i.payAmount - i.discountAmount);
           return {
             name: child ? `${child.name}: ${itemDesc}` : itemDesc,
+            originalAmount: origAmt,
             amount: i.payAmount,
-            discount: i.discountAmount
+            discount: i.discountAmount,
+            balance: bal,
           };
         }),
         createdAt: getLocalDateString(),
@@ -3387,6 +3493,57 @@ export default function AdminDashboard() {
                         )}
                       </div>
 
+                      {/* Quick Select Term & Quarter Filters */}
+                      {selectedStudentDues.length > 0 && (
+                        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[9px] font-black uppercase tracking-wider touch-scroll-x bg-slate-50/80 p-2 rounded-xl border border-slate-200/60">
+                          <span className="text-slate-400 flex items-center gap-1 shrink-0 mr-1 font-bold">
+                            <Sparkles className="h-3 w-3 text-amber-500" /> Fast Select:
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleSelectQuickFilter("Q1")}
+                            className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 active:scale-95 text-indigo-700 border border-indigo-200/80 rounded-lg transition-all cursor-pointer shrink-0 shadow-2xs"
+                          >
+                            Q1 (Apr-Jun)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSelectQuickFilter("Q2")}
+                            className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 active:scale-95 text-indigo-700 border border-indigo-200/80 rounded-lg transition-all cursor-pointer shrink-0 shadow-2xs"
+                          >
+                            Q2 (Jul-Sep)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSelectQuickFilter("Q3")}
+                            className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 active:scale-95 text-indigo-700 border border-indigo-200/80 rounded-lg transition-all cursor-pointer shrink-0 shadow-2xs"
+                          >
+                            Q3 (Oct-Dec)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSelectQuickFilter("Q4")}
+                            className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 active:scale-95 text-indigo-700 border border-indigo-200/80 rounded-lg transition-all cursor-pointer shrink-0 shadow-2xs"
+                          >
+                            Q4 (Jan-Mar)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSelectQuickFilter("TUITION")}
+                            className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 active:scale-95 text-purple-700 border border-purple-200/80 rounded-lg transition-all cursor-pointer shrink-0 shadow-2xs"
+                          >
+                            Tuition Only
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSelectQuickFilter("FULL_YEAR")}
+                            className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 active:scale-95 text-emerald-700 border border-emerald-200/80 rounded-lg transition-all cursor-pointer shrink-0 shadow-2xs"
+                          >
+                            Full Year
+                          </button>
+                        </div>
+                      )}
+
                       {/* Focused Child Invoice List */}
                       <div>
                         {(() => {
@@ -3509,7 +3666,12 @@ export default function AdminDashboard() {
                                                 const discRupees = Math.max(0, Math.min(toRupees(due.amount), Number(raw) || 0));
                                                 const discPaisa = toPaisa(discRupees);
                                                 setDiscountsState((d) => ({ ...d, [due.id]: raw === "" ? 0 : discPaisa }));
-                                                setPayingState((p) => ({ ...p, [due.id]: due.amount - (raw === "" ? 0 : discPaisa) }));
+                                                
+                                                setPayingState((p) => {
+                                                  const currentPay = p[due.id] ?? due.amount;
+                                                  const maxPayAllowed = due.amount - (raw === "" ? 0 : discPaisa);
+                                                  return { ...p, [due.id]: Math.min(currentPay, maxPayAllowed) };
+                                                });
                                               }}
                                               className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:bg-white focus:border-indigo-500 shadow-2xs"
                                             />
@@ -3531,18 +3693,31 @@ export default function AdminDashboard() {
                                                   const payPaisa = toPaisa(payRupees);
                                                   setPayingState((p) => ({ ...p, [due.id]: raw === "" ? 0 : payPaisa }));
                                                 }}
-                                                className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:bg-white focus:border-indigo-500 pr-12 shadow-2xs"
+                                                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:bg-white focus:border-indigo-500 pr-24 shadow-2xs"
                                               />
-                                              <button
-                                                type="button"
-                                                onClick={() => {
-                                                  const disc = discountsState[due.id] ?? 0;
-                                                  setPayingState(p => ({ ...p, [due.id]: due.amount - disc }));
-                                                }}
-                                                className="absolute right-1 top-1.5 bottom-1.5 px-2 bg-indigo-50 hover:bg-indigo-100 text-[8px] font-black text-indigo-700 rounded-lg transition-colors cursor-pointer"
-                                              >
-                                                FULL
-                                              </button>
+                                              <div className="absolute right-1.5 top-1.5 bottom-1.5 flex items-center gap-1">
+                                                <button
+                                                  type="button"
+                                                  title="Set paying amount to ₹0 (Waiver / Discount only)"
+                                                  onClick={() => {
+                                                    setPayingState(p => ({ ...p, [due.id]: 0 }));
+                                                  }}
+                                                  className="px-2 py-0.5 bg-slate-200/90 hover:bg-slate-300 active:scale-95 text-[10px] font-black text-slate-750 rounded-lg transition-all cursor-pointer shadow-2xs"
+                                                >
+                                                  ₹0
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  title="Pay full remaining amount"
+                                                  onClick={() => {
+                                                    const disc = discountsState[due.id] ?? 0;
+                                                    setPayingState(p => ({ ...p, [due.id]: due.amount - disc }));
+                                                  }}
+                                                  className="px-2.5 py-0.5 bg-indigo-100 hover:bg-indigo-200 active:scale-95 text-[10px] font-black text-indigo-800 border border-indigo-300/70 rounded-lg transition-all cursor-pointer shadow-2xs"
+                                                >
+                                                  FULL
+                                                </button>
+                                              </div>
                                             </div>
                                           </div>
                                           <div className="flex flex-col justify-end text-right">
@@ -3575,9 +3750,12 @@ export default function AdminDashboard() {
                                   const std = students.find(s => s.id === rec.studentId);
                                   setActiveReceipt({
                                     ...rec,
-                                    admissionNo: std ? std.admissionNo : "Unified/Family",
-                                    discount: 0,
-                                    arrears: 0,
+                                    admissionNo: rec.admissionNo || (std ? std.admissionNo : "Unified/Family"),
+                                    fatherName: rec.fatherName || std?.fatherName || std?.parentName || "",
+                                    subtotal: rec.subtotal || rec.amount,
+                                    discount: rec.discount || 0,
+                                    arrears: rec.arrears || 0,
+                                    amountInWords: rec.amountInWords || numberToIndianWords(rec.amount),
                                   });
                                   setShowReceiptModal(true);
                                 }}
@@ -3651,6 +3829,41 @@ export default function AdminDashboard() {
                               <span>Selected Items:</span>
                               <span className="font-bold text-slate-700">{selectedDueIds.length} Invoice(s)</span>
                             </div>
+
+                            {/* Sibling Breakdown if multiple children selected */}
+                            {siblingStudents.length > 1 && selectedDueIds.length > 0 && (
+                              <div className="py-2.5 space-y-1.5 bg-slate-50/70 -mx-4 px-4 border-y border-slate-100">
+                                <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">
+                                  Sibling Breakdown:
+                                </span>
+                                {siblingStudents.map((child) => {
+                                  const childDueIds = selectedDueIds.filter((id) => {
+                                    const item = dueItems.find((d) => d.id === id);
+                                    return item?.studentId === child.id;
+                                  });
+                                  if (childDueIds.length === 0) return null;
+                                  const childPay = childDueIds.reduce((sum, id) => sum + (payingState[id] ?? 0), 0);
+                                  const childDisc = childDueIds.reduce((sum, id) => sum + (discountsState[id] ?? 0), 0);
+
+                                  return (
+                                    <div key={child.id} className="flex items-center justify-between text-xs py-0.5">
+                                      <span className="font-bold text-slate-700 truncate max-w-[130px]">
+                                        {child.name}:
+                                      </span>
+                                      <div className="text-right">
+                                        <span className="font-extrabold text-indigo-600">{formatP(childPay)}</span>
+                                        {childDisc > 0 && (
+                                          <span className="text-[9px] font-bold text-emerald-600 ml-1.5">
+                                            (Disc: {formatP(childDisc)})
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+
                             <div className="flex justify-between items-center py-3 text-xs font-semibold text-slate-500">
                               <span>Total Discount:</span>
                               <span className="font-extrabold text-green-600">
@@ -3699,7 +3912,7 @@ export default function AdminDashboard() {
                           {/* UPI Dynamic QR Code Selector */}
                           {payMethod === "UPI" && (() => {
                             const netPayable = selectedDueIds.reduce((sum, id) => sum + (payingState[id] ?? 0), 0);
-                            const upiLink = `upi://pay?pa=${schoolInfo.upiId || "gngschool@icici"}&pn=${encodeURIComponent(schoolInfo.upiMerchantName || schoolInfo.name || "School Finance")}&am=${netPayable.toFixed(2)}&cu=INR&tn=${encodeURIComponent("School Fees")}`;
+                            const upiLink = `upi://pay?pa=${schoolInfo.upiId || "gngschool@icici"}&pn=${encodeURIComponent(schoolInfo.upiMerchantName || schoolInfo.name || "School Finance")}&am=${(netPayable / 100).toFixed(2)}&cu=INR&tn=${encodeURIComponent("School Fees")}`;
                             const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(upiLink)}`;
                             return (
                               <div className="bg-white p-4 rounded-xl border border-slate-100 flex flex-col items-center justify-center gap-3 text-center animate-in slide-in-from-top-2 duration-200">
@@ -3735,52 +3948,159 @@ export default function AdminDashboard() {
                             );
                           })()}
 
-                          {/* Cheque / Bank Transfer Reference No Input */}
-                          {(payMethod === "CHEQUE" || payMethod === "BANK_TRANSFER") && (
-                            <div className="space-y-1 animate-in slide-in-from-top-2 duration-200">
-                              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">
-                                Transaction reference / Cheque No
-                              </label>
-                              <input
-                                type="text"
-                                required
-                                value={transactionRef}
-                                onChange={(e) => setTransactionRef(e.target.value)}
-                                placeholder="e.g. TXN98765432, CHQ-201..."
-                                className="w-full text-xs font-semibold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-white focus:border-indigo-650 focus:ring-1 focus:ring-indigo-100"
-                              />
+                          {/* Structured Cheque Details Form */}
+                          {payMethod === "CHEQUE" && (
+                            <div className="p-3.5 bg-amber-50/60 border border-amber-200/80 rounded-xl space-y-2.5 text-xs animate-in slide-in-from-top-2 duration-200">
+                              <div className="flex items-center justify-between border-b border-amber-100 pb-1.5">
+                                <span className="text-[9px] font-black uppercase text-amber-800 tracking-wider">Cheque Details</span>
+                                <span className="text-[8px] font-bold text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded">Clearing Verification</span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="text-[8px] font-bold text-slate-500 block mb-1">Cheque Number *</label>
+                                  <input
+                                    type="text"
+                                    required
+                                    placeholder="e.g. 482910"
+                                    value={chequeNo}
+                                    onChange={(e) => setChequeNo(e.target.value)}
+                                    className="w-full text-xs font-bold p-2 bg-white border border-amber-200 rounded-lg focus:outline-none focus:border-amber-500 shadow-2xs"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[8px] font-bold text-slate-500 block mb-1">Bank Name *</label>
+                                  <input
+                                    type="text"
+                                    required
+                                    placeholder="e.g. SBI / HDFC"
+                                    value={chequeBank}
+                                    onChange={(e) => setChequeBank(e.target.value)}
+                                    className="w-full text-xs font-bold p-2 bg-white border border-amber-200 rounded-lg focus:outline-none focus:border-amber-500 shadow-2xs"
+                                  />
+                                </div>
+                              </div>
+                              <div>
+                                <label className="text-[8px] font-bold text-slate-500 block mb-1">Cheque Date</label>
+                                <input
+                                  type="date"
+                                  value={chequeDate}
+                                  onChange={(e) => setChequeDate(e.target.value)}
+                                  className="w-full text-xs font-bold p-2 bg-white border border-amber-200 rounded-lg focus:outline-none focus:border-amber-500 shadow-2xs"
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Structured Bank Transfer Details Form */}
+                          {payMethod === "BANK_TRANSFER" && (
+                            <div className="p-3.5 bg-blue-50/60 border border-blue-200/80 rounded-xl space-y-2.5 text-xs animate-in slide-in-from-top-2 duration-200">
+                              <div className="flex items-center justify-between border-b border-blue-100 pb-1.5">
+                                <span className="text-[9px] font-black uppercase text-blue-800 tracking-wider">Bank Transfer / NEFT / IMPS</span>
+                                <span className="text-[8px] font-bold text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded">Direct Settlement</span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="text-[8px] font-bold text-slate-500 block mb-1">Transfer Mode</label>
+                                  <select
+                                    value={transferMode}
+                                    onChange={(e) => setTransferMode(e.target.value)}
+                                    className="w-full text-xs font-bold p-2 bg-white border border-blue-200 rounded-lg focus:outline-none focus:border-blue-500 shadow-2xs"
+                                  >
+                                    <option value="NEFT">NEFT Transfer</option>
+                                    <option value="IMPS">IMPS Instant</option>
+                                    <option value="RTGS">RTGS High-Value</option>
+                                    <option value="ONLINE">NetBanking / Gateway</option>
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="text-[8px] font-bold text-slate-500 block mb-1">Sender Bank Name</label>
+                                  <input
+                                    type="text"
+                                    placeholder="e.g. ICICI Bank"
+                                    value={chequeBank}
+                                    onChange={(e) => setChequeBank(e.target.value)}
+                                    className="w-full text-xs font-bold p-2 bg-white border border-blue-200 rounded-lg focus:outline-none focus:border-blue-500 shadow-2xs"
+                                  />
+                                </div>
+                              </div>
+                              <div>
+                                <label className="text-[8px] font-bold text-slate-500 block mb-1">UTR / Transaction Ref No. *</label>
+                                <input
+                                  type="text"
+                                  required
+                                  placeholder="Enter UTR reference number..."
+                                  value={transactionRef}
+                                  onChange={(e) => setTransactionRef(e.target.value)}
+                                  className="w-full text-xs font-bold p-2 bg-white border border-blue-200 rounded-lg focus:outline-none focus:border-blue-500 shadow-2xs"
+                                />
+                              </div>
                             </div>
                           )}
 
                           {/* Cash return helper (Only relevant for Cash Counter) */}
-                          {payMethod === "CASH" && (
-                            <div className="grid grid-cols-2 gap-3 bg-white p-3 rounded-xl border border-slate-100 animate-in slide-in-from-top-2 duration-200">
-                              <div>
-                                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                                  Cash Received
-                                </label>
-                                <input
-                                  type="number"
-                                  placeholder="Amount received..."
-                                  value={amountReceived}
-                                  onChange={(e) => setAmountReceived(e.target.value)}
-                                  className="w-full text-xs font-bold py-1.5 px-2 bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:bg-white focus:border-indigo-600"
-                                />
+                          {payMethod === "CASH" && (() => {
+                            const netPayable = selectedDueIds.reduce((sum, id) => sum + (payingState[id] ?? 0), 0);
+                            const netPayableRupees = toRupees(netPayable);
+                            const received = Number(amountReceived) || 0;
+                            const changeDue = received > netPayableRupees ? toPaisa(received - netPayableRupees) : 0;
+
+                            return (
+                              <div className="bg-white p-3 rounded-xl border border-slate-100 space-y-2 animate-in slide-in-from-top-2 duration-200">
+                                <div className="flex items-center justify-between">
+                                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">
+                                    Cash Tender / Received
+                                  </label>
+                                  {/* Quick Note Chips */}
+                                  {netPayableRupees > 0 && (
+                                    <div className="flex items-center gap-1 text-[8px] font-black">
+                                      <button
+                                        type="button"
+                                        onClick={() => setAmountReceived(String(netPayableRupees))}
+                                        className="px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded border border-indigo-200 cursor-pointer"
+                                      >
+                                        Exact ₹{netPayableRupees.toLocaleString("en-IN")}
+                                      </button>
+                                      {netPayableRupees < 2000 && (
+                                        <button
+                                          type="button"
+                                          onClick={() => setAmountReceived("2000")}
+                                          className="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded cursor-pointer"
+                                        >
+                                          ₹2,000
+                                        </button>
+                                      )}
+                                      {netPayableRupees < 5000 && (
+                                        <button
+                                          type="button"
+                                          onClick={() => setAmountReceived("5000")}
+                                          className="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded cursor-pointer"
+                                        >
+                                          ₹5,000
+                                        </button>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="grid grid-cols-2 gap-3 items-center">
+                                  <input
+                                    type="number"
+                                    placeholder="Enter cash given by parent..."
+                                    value={amountReceived}
+                                    onChange={(e) => setAmountReceived(e.target.value)}
+                                    className="w-full text-xs font-bold py-1.5 px-2 bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:bg-white focus:border-indigo-600"
+                                  />
+                                  <div className="text-right">
+                                    <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider block">
+                                      Change Return
+                                    </span>
+                                    <span className="text-sm font-extrabold text-emerald-600 block leading-tight">
+                                      {formatP(changeDue)}
+                                    </span>
+                                  </div>
+                                </div>
                               </div>
-                              <div className="text-right flex flex-col justify-center">
-                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">
-                                  Change Due
-                                </span>
-                                <span className="text-sm font-extrabold text-indigo-600 block mt-0.5">
-                                  {(() => {
-                                    const netPayable = selectedDueIds.reduce((sum, id) => sum + (payingState[id] ?? 0), 0);
-                                    const receivedPaisa = toPaisa(Number(amountReceived) || 0);
-                                    return receivedPaisa > netPayable ? formatP(receivedPaisa - netPayable) : formatP(0);
-                                  })()}
-                                </span>
-                              </div>
-                            </div>
-                          )}
+                            );
+                          })()}
 
                           <button
                             type="submit"
@@ -8003,12 +8323,12 @@ export default function AdminDashboard() {
               </div>
 
               {/* Filters Row */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 {/* Search Bar */}
                 <div className="relative">
                   <input
                     type="text"
-                    placeholder="Search by Name, Receipt #, or Desc..."
+                    placeholder="Search Name, Receipt #, or Desc..."
                     value={ledgerSearch}
                     onChange={(e) => setLedgerSearch(e.target.value)}
                     className="w-full text-xs font-semibold py-2.5 pl-3 pr-8 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600/10 transition-all placeholder-slate-400"
@@ -8025,58 +8345,142 @@ export default function AdminDashboard() {
                   />
                 </div>
 
+                {/* Cashier / Staff Filter */}
+                <div>
+                  <select
+                    value={ledgerStaffFilter}
+                    onChange={(e) => setLedgerStaffFilter(e.target.value)}
+                    className="w-full text-xs font-bold py-2.5 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 transition-all text-slate-700"
+                  >
+                    <option value="All">All Cashiers & Staff</option>
+                    <option value="ME">My Receipts ({user?.name || "Admin"})</option>
+                    {Array.from(new Set(receipts.map(r => r.collectedBy).filter(Boolean))).map((cName) => (
+                      <option key={cName} value={cName}>Cashier: {cName}</option>
+                    ))}
+                  </select>
+                </div>
+
                 {/* Clear Filters Button */}
-                {(ledgerSearch || ledgerDate) && (
+                {(ledgerSearch || ledgerDate || ledgerStaffFilter !== "All") ? (
                   <button
+                    type="button"
                     onClick={() => {
                       setLedgerSearch("");
                       setLedgerDate("");
+                      setLedgerStaffFilter("All");
                     }}
                     className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all self-stretch cursor-pointer border border-slate-200/50"
                   >
                     Clear Filters
                   </button>
+                ) : (
+                  <div className="hidden sm:block" />
                 )}
               </div>
 
               {/* Receipts Book Sub-Tab */}
               {ledgerSubTab === "receipts" && (
                 <div className="space-y-4">
-                  {/* Aggregate Summary Box */}
+                  {/* Day-End Cashier Shift Closing & Reconciliation Summary */}
                   {(() => {
                     const filtered = receipts.filter((r) => {
+                      const matchesStaff =
+                        ledgerStaffFilter === "All"
+                          ? true
+                          : ledgerStaffFilter === "ME"
+                          ? r.createdById === user?.id
+                          : r.collectedBy === ledgerStaffFilter;
                       const matchesSearch =
                         !ledgerSearch.trim() ||
                         r.receiptNo?.toLowerCase().includes(ledgerSearch.toLowerCase()) ||
                         r.studentName?.toLowerCase().includes(ledgerSearch.toLowerCase()) ||
                         r.details?.toLowerCase().includes(ledgerSearch.toLowerCase());
                       const matchesDate = !ledgerDate || r.createdAt.startsWith(ledgerDate);
-                      return matchesSearch && matchesDate;
+                      return matchesStaff && matchesSearch && matchesDate;
                     });
 
                     const totalAmt = filtered.reduce((sum, r) => sum + r.amount, 0);
                     const cashAmt = filtered.filter(r => r.method === "CASH").reduce((sum, r) => sum + r.amount, 0);
                     const upiAmt = filtered.filter(r => r.method === "UPI").reduce((sum, r) => sum + r.amount, 0);
-                    const bankAmt = filtered.filter(r => r.method === "ONLINE" || r.method === "CHEQUE").reduce((sum, r) => sum + r.amount, 0);
+                    const bankAmt = filtered.filter(r => r.method === "ONLINE" || r.method === "CHEQUE" || r.method === "BANK_TRANSFER").reduce((sum, r) => sum + r.amount, 0);
+
+                    // Cashier-wise grouping for Day-End Shift Closing
+                    const cashierMap: { [key: string]: { name: string; role: string; count: number; cash: number; upi: number; bank: number; total: number } } = {};
+                    filtered.forEach(r => {
+                      const cName = r.collectedBy || "Finance Desk";
+                      const cRole = r.collectedByRole || "STAFF";
+                      if (!cashierMap[cName]) {
+                        cashierMap[cName] = { name: cName, role: cRole, count: 0, cash: 0, upi: 0, bank: 0, total: 0 };
+                      }
+                      cashierMap[cName].count += 1;
+                      cashierMap[cName].total += r.amount;
+                      if (r.method === "CASH") cashierMap[cName].cash += r.amount;
+                      else if (r.method === "UPI") cashierMap[cName].upi += r.amount;
+                      else cashierMap[cName].bank += r.amount;
+                    });
+
+                    const cashierList = Object.values(cashierMap);
 
                     return (
-                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                        <div className="p-3 bg-white border border-slate-200/70 rounded-2xl shadow-[0_2px_4px_rgba(0,0,0,0.015)]">
-                          <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">Total Receipts</span>
-                          <span className="text-sm font-black text-slate-800 mt-1 block">{filtered.length} Vouchers</span>
+                      <div className="space-y-3">
+                        {/* Overall Totals */}
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                          <div className="p-3 bg-white border border-slate-200/70 rounded-2xl shadow-2xs">
+                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">Total Receipts</span>
+                            <span className="text-sm font-black text-slate-800 mt-1 block">{filtered.length} Vouchers</span>
+                          </div>
+                          <div className="p-3 bg-white border border-slate-200/70 rounded-2xl shadow-2xs">
+                            <span className="text-[8px] font-black text-indigo-500 uppercase tracking-widest block">Total Collection</span>
+                            <span className="text-sm font-black text-slate-900 mt-1 block">{formatP(totalAmt)}</span>
+                          </div>
+                          <div className="p-3 bg-white border border-slate-200/70 rounded-2xl shadow-2xs">
+                            <span className="text-[8px] font-black text-emerald-500 uppercase tracking-widest block">Cash in Drawer</span>
+                            <span className="text-sm font-black text-emerald-700 mt-1 block">{formatP(cashAmt)}</span>
+                          </div>
+                          <div className="p-3 bg-white border border-slate-200/70 rounded-2xl shadow-2xs">
+                            <span className="text-[8px] font-black text-blue-500 uppercase tracking-widest block">UPI & Bank Transfer</span>
+                            <span className="text-sm font-black text-blue-700 mt-1 block">{formatP(upiAmt + bankAmt)}</span>
+                          </div>
                         </div>
-                        <div className="p-3 bg-white border border-slate-200/70 rounded-2xl shadow-[0_2px_4px_rgba(0,0,0,0.015)]">
-                          <span className="text-[8px] font-black text-indigo-500 uppercase tracking-widest block">Total Collection</span>
-                          <span className="text-sm font-black text-slate-900 mt-1 block">{formatP(totalAmt)}</span>
-                        </div>
-                        <div className="p-3 bg-white border border-slate-200/70 rounded-2xl shadow-[0_2px_4px_rgba(0,0,0,0.015)]">
-                          <span className="text-[8px] font-black text-emerald-500 uppercase tracking-widest block">Cash Collection</span>
-                          <span className="text-sm font-black text-emerald-700 mt-1 block">{formatP(cashAmt)}</span>
-                        </div>
-                        <div className="p-3 bg-white border border-slate-200/70 rounded-2xl shadow-[0_2px_4px_rgba(0,0,0,0.015)]">
-                          <span className="text-[8px] font-black text-blue-500 uppercase tracking-widest block">UPI & Digital</span>
-                          <span className="text-sm font-black text-blue-700 mt-1 block">{formatP(upiAmt + bankAmt)}</span>
-                        </div>
+
+                        {/* Cashier-wise Shift Breakdown Card */}
+                        {cashierList.length > 1 && (
+                          <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-2.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[9px] font-black uppercase text-slate-600 tracking-wider flex items-center gap-1.5">
+                                <Users className="h-3.5 w-3.5 text-indigo-600" /> Cashier-wise Shift Handover & Reconciliation
+                              </span>
+                              <span className="text-[8px] font-bold text-slate-400">
+                                {cashierList.length} Active Staff Counters
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                              {cashierList.map((c) => (
+                                <div key={c.name} className="bg-white border border-slate-200/80 p-2.5 rounded-xl shadow-2xs space-y-1.5 text-xs">
+                                  <div className="flex items-center justify-between border-b border-slate-100 pb-1">
+                                    <div className="flex items-center gap-1.5 truncate">
+                                      <div className="h-5 w-5 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[9px] font-black uppercase">
+                                        {c.name.substring(0, 2)}
+                                      </div>
+                                      <span className="font-extrabold text-slate-900 text-[11px] truncate">{c.name}</span>
+                                    </div>
+                                    <span className="text-[8px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                                      {c.count} Vouchers
+                                    </span>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-1 text-[9px] font-bold text-slate-500">
+                                    <span>Cash: <strong className="text-emerald-700 font-extrabold">{formatP(c.cash)}</strong></span>
+                                    <span>UPI/Bank: <strong className="text-blue-700 font-extrabold">{formatP(c.upi + c.bank)}</strong></span>
+                                  </div>
+                                  <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-[10px] font-black text-slate-900">
+                                    <span>Total Collected:</span>
+                                    <span className="text-indigo-600">{formatP(c.total)}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })()}
@@ -8089,6 +8493,7 @@ export default function AdminDashboard() {
                           <tr className="bg-slate-50/75 border-b border-slate-200 text-[9px] font-bold uppercase text-slate-500 tracking-wider">
                             <th className="py-3 px-4">Receipt No</th>
                             <th className="py-3 px-4">Student & Class</th>
+                            <th className="py-3 px-4">Collected By</th>
                             <th className="py-3 px-4">Description</th>
                             <th className="py-3 px-4">Date</th>
                             <th className="py-3 px-4">Mode</th>
@@ -8099,19 +8504,25 @@ export default function AdminDashboard() {
                         <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-700">
                           {(() => {
                             const filtered = receipts.filter((r) => {
+                              const matchesStaff =
+                                ledgerStaffFilter === "All"
+                                  ? true
+                                  : ledgerStaffFilter === "ME"
+                                  ? r.createdById === user?.id
+                                  : r.collectedBy === ledgerStaffFilter;
                               const matchesSearch =
                                 !ledgerSearch.trim() ||
                                 r.receiptNo?.toLowerCase().includes(ledgerSearch.toLowerCase()) ||
                                 r.studentName?.toLowerCase().includes(ledgerSearch.toLowerCase()) ||
                                 r.details?.toLowerCase().includes(ledgerSearch.toLowerCase());
                               const matchesDate = !ledgerDate || r.createdAt.startsWith(ledgerDate);
-                              return matchesSearch && matchesDate;
+                              return matchesStaff && matchesSearch && matchesDate;
                             });
 
                             if (filtered.length === 0) {
                               return (
                                 <tr>
-                                  <td colSpan={7} className="py-8 text-center text-[11px] text-slate-400 font-semibold italic bg-slate-50/30">
+                                  <td colSpan={8} className="py-8 text-center text-[11px] text-slate-400 font-semibold italic bg-slate-50/30">
                                     No receipts found matching filters.
                                   </td>
                                 </tr>
@@ -8128,6 +8539,12 @@ export default function AdminDashboard() {
                                     <td className="py-3.5 px-4">
                                       <p className="font-extrabold text-slate-900">{rec.studentName}</p>
                                       <p className="text-[9px] text-slate-400 font-bold uppercase">{rec.classSection}</p>
+                                    </td>
+                                    <td className="py-3.5 px-4">
+                                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[9px] font-black bg-indigo-50 text-indigo-700 border border-indigo-100/80">
+                                        <User className="h-3 w-3 text-indigo-500" />
+                                        {rec.collectedBy || "Admin Desk"}
+                                      </span>
                                     </td>
                                     <td className="py-3.5 px-4 max-w-xs truncate text-[10px] text-slate-500 font-medium">
                                       {rec.details}
@@ -8147,13 +8564,17 @@ export default function AdminDashboard() {
                                     </td>
                                     <td className="py-3.5 px-4 text-center">
                                       <button
+                                        type="button"
                                         onClick={() => {
                                           const std = students.find((s) => s.id === rec.studentId);
                                           setActiveReceipt({
                                             ...rec,
-                                            admissionNo: std ? std.admissionNo : "Unified/Family",
-                                            discount: 0,
-                                            arrears: 0,
+                                            admissionNo: rec.admissionNo || (std ? std.admissionNo : "Unified/Family"),
+                                            fatherName: rec.fatherName || std?.fatherName || std?.parentName || "",
+                                            subtotal: rec.subtotal || rec.amount,
+                                            discount: rec.discount || 0,
+                                            arrears: rec.arrears || 0,
+                                            amountInWords: rec.amountInWords || numberToIndianWords(rec.amount),
                                           });
                                           setShowReceiptModal(true);
                                         }}
@@ -8166,7 +8587,7 @@ export default function AdminDashboard() {
                                 ))}
                                 {filtered.length > visibleReceiptsCount && (
                                   <tr>
-                                    <td colSpan={7} className="py-4 text-center bg-slate-50/60 border-t border-slate-100">
+                                    <td colSpan={8} className="py-4 text-center bg-slate-50/60 border-t border-slate-100">
                                       <button
                                         type="button"
                                         onClick={() => setVisibleReceiptsCount((prev) => prev + 30)}
@@ -8382,12 +8803,13 @@ export default function AdminDashboard() {
                 if (expandedStudentId) {
                   const std = filteredDefaulters.find((s) => s.id === expandedStudentId) || students.find((s) => s.id === expandedStudentId);
                   if (std) {
-                    const allDues    = (studentDuesMap.get(std.id) || []).slice().sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || ""));
-                    const unpaidDues = unpaidDuesMap.get(std.id) || [];
-                    const paidDues   = paidDuesMap.get(std.id) || [];
-                    const totalFee   = allDues.reduce((s, d) => s + (d.originalAmount || d.amount), 0);
-                    const totalPaid  = allDues.reduce((s, d) => s + (d.totalPaid || (d.status === "PAID" ? (d.originalAmount || d.amount) : 0)), 0);
-                    const fullYearRemainingDue = Math.max(0, totalFee - totalPaid);
+                    const allDues       = (studentDuesMap.get(std.id) || []).slice().sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || ""));
+                    const unpaidDues    = unpaidDuesMap.get(std.id) || [];
+                    const paidDues      = paidDuesMap.get(std.id) || [];
+                    const totalFee      = allDues.reduce((s, d) => s + (d.originalAmount || d.amount), 0);
+                    const totalPaid     = allDues.reduce((s, d) => s + (d.totalPaid || 0), 0);
+                    const totalDiscount = allDues.reduce((s, d) => s + (d.totalDiscount || 0), 0);
+                    const fullYearRemainingDue = Math.max(0, totalFee - totalPaid - totalDiscount);
                     const overdueTillNow = unpaidDues.reduce((s, d) => s + d.amount, 0);
 
                     return (
@@ -8825,8 +9247,8 @@ export default function AdminDashboard() {
             <style dangerouslySetInnerHTML={{__html: `
               @media print {
                 @page {
-                  size: ${receiptPageSize === "A5" ? "A5 portrait" : "A4 portrait"};
-                  margin: 8mm;
+                  size: ${receiptPageSize === "A5" ? "A5 landscape" : "A4 portrait"};
+                  margin: 6mm;
                 }
                 html, body {
                   background: #ffffff !important;
@@ -8846,142 +9268,104 @@ export default function AdminDashboard() {
                   left: 0 !important;
                   top: 0 !important;
                   width: 100% !important;
-                  height: auto !important;
-                  box-sizing: border-box !important;
-                  padding: ${receiptPageSize === "A5" ? "4mm 6mm" : "6mm 8mm"} !important;
                   margin: 0 !important;
-                  border: 1px solid #cbd5e1 !important;
-                  border-radius: 16px !important;
+                  padding: 14px !important;
+                  border: 1.5px solid #0f172a !important;
+                  border-radius: 8px !important;
                   box-shadow: none !important;
                   background: #ffffff !important;
-                  page-break-after: avoid !important;
-                  page-break-inside: avoid !important;
-                  break-inside: avoid !important;
+                  -webkit-print-color-adjust: exact !important;
+                  print-color-adjust: exact !important;
                 }
               }
             `}} />
-            
+
+            {/* Printable Receipt Canvas */}
             <div
               id="receipt-print-area"
-              className={`border-2 rounded-2xl bg-white text-slate-800 shadow-[0_4px_12px_rgba(0,0,0,0.02)] transition-all ${
+              className={`border rounded-2xl bg-white text-slate-900 shadow-sm relative space-y-3 ${
                 receiptPageSize === "A5"
-                  ? "border-slate-200 p-4 space-y-3 text-[9px]"
-                  : "border-slate-300 p-8 space-y-6 text-sm"
-              } ${
-                (() => {
-                  const text = (activeReceipt.details || activeReceipt.remarks || "").toLowerCase();
-                  const months = ["april", "may", "june", "july", "august", "september", "october", "november", "december", "january", "february", "march"];
-                  let isAnnual = text.includes("full year") || text.includes("annual") || text.includes("1 year") || text.includes("12 months");
-                  if (activeReceipt.items) {
-                    const itemTexts = activeReceipt.items.map((i: any) => (i.name || i.description || "").toLowerCase()).join(" ");
-                    const matches = months.filter(m => itemTexts.includes(m) || text.includes(m));
-                    if (matches.length >= 10) isAnnual = true;
-                  }
-                  return isAnnual ? "border-amber-400 bg-amber-50/10 shadow-md shadow-amber-500/5" : "";
-                })()
+                  ? "border-slate-800 p-4 text-[10px]"
+                  : "border-slate-300 p-6 space-y-4 text-xs"
               }`}
             >
-              {/* Annual Clearance Banner */}
-              {(() => {
-                const text = (activeReceipt.details || activeReceipt.remarks || "").toLowerCase();
-                const months = ["april", "may", "june", "july", "august", "september", "october", "november", "december", "january", "february", "march"];
-                let isAnnual = text.includes("full year") || text.includes("annual") || text.includes("1 year") || text.includes("12 months");
-                if (activeReceipt.items) {
-                  const itemTexts = activeReceipt.items.map((i: any) => (i.name || i.description || "").toLowerCase()).join(" ");
-                  const matches = months.filter(m => itemTexts.includes(m) || text.includes(m));
-                  if (matches.length >= 10) isAnnual = true;
-                }
-                return isAnnual ? (
-                  <div className={`bg-amber-500/10 border border-amber-300 text-amber-700 font-black uppercase py-1 px-2.5 rounded-lg flex items-center justify-center gap-1.5 shrink-0 select-none ${
-                    receiptPageSize === "A5" ? "text-[10px]" : "text-sm py-2"
-                  }`}>
-                    🏆 ★ FULL YEAR ANNUAL CLEARANCE VOUCHER ★ 🏆
-                  </div>
-                ) : null;
-              })()}
-
               {/* Receipt Header */}
-              <div className="flex justify-between items-start border-b border-slate-200 pb-3">
-                <div className="flex items-center gap-2">
+              <div className="flex justify-between items-start border-b-2 border-slate-900 pb-2.5">
+                <div className="flex items-center gap-3">
                   <img src="/logo.png" alt="School Logo" className={`object-contain ${
-                    receiptPageSize === "A5" ? "h-8 w-8" : "h-12 w-12"
+                    receiptPageSize === "A5" ? "h-10 w-10" : "h-12 w-12"
                   }`} />
                   <div className="space-y-0.5">
-                    <h4 className={`font-black text-indigo-700 uppercase tracking-tight leading-tight ${
-                      receiptPageSize === "A5" ? "text-sm" : "text-xl"
-                    }`}>{schoolInfo.name}</h4>
-                    <p className={`text-slate-500 font-semibold leading-tight ${
-                      receiptPageSize === "A5" ? "text-[8px] max-w-[280px]" : "text-xs max-w-[450px]"
-                    }`}>{schoolInfo.address}</p>
-                    <p className={`text-slate-400 font-bold ${
-                      receiptPageSize === "A5" ? "text-[8px]" : "text-xs"
-                    }`}>Phone: {schoolInfo.phone} | Email: {schoolInfo.email}</p>
+                    <h4 className={`font-black text-slate-900 uppercase tracking-tight leading-tight ${
+                      receiptPageSize === "A5" ? "text-base font-black" : "text-xl font-black"
+                    }`}>{schoolInfo.name || "ST. GNG SCHOOL"}</h4>
+                    <p className={`text-slate-600 font-semibold leading-tight ${
+                      receiptPageSize === "A5" ? "text-[8px] max-w-[320px]" : "text-xs max-w-[450px]"
+                    }`}>{schoolInfo.address || "Salarpur, Rasulgarh, Varanasi - 221007"}</p>
+                    <p className={`text-slate-500 font-bold ${
+                      receiptPageSize === "A5" ? "text-[8px]" : "text-[10px]"
+                    }`}>Phone: {schoolInfo.phone || "9452824318"} | Email: {schoolInfo.email || "stgng2005@gmail.com"}</p>
                   </div>
                 </div>
-                <div className="text-right space-y-0.5 shrink-0">
-                  <span className={`bg-indigo-50 border border-indigo-100 text-indigo-700 font-black uppercase rounded-md tracking-wider ${
-                    receiptPageSize === "A5" ? "text-[8px] px-2 py-0.5" : "text-xs px-3.5 py-1"
-                  }`}>
+                <div className="text-right space-y-1 shrink-0">
+                  <span className="bg-slate-900 text-white font-black uppercase rounded-md tracking-wider text-[9px] px-2.5 py-1 block">
                     Official Fee Receipt
                   </span>
-                  <p className={`text-slate-500 font-bold mt-1 ${
-                    receiptPageSize === "A5" ? "text-[9px]" : "text-xs"
-                  }`}>No: <span className="font-extrabold text-slate-900">{activeReceipt.receiptNo}</span></p>
-                  <p className={`text-slate-400 font-bold ${
-                    receiptPageSize === "A5" ? "text-[8px]" : "text-xs"
-                  }`}>Date: <span className="font-extrabold text-slate-850">{activeReceipt.createdAt}</span></p>
+                  <p className="text-slate-500 font-bold text-[9px] mt-0.5">
+                    Receipt No: <span className="font-black text-slate-900">{activeReceipt.receiptNo}</span>
+                  </p>
+                  <p className="text-slate-400 font-bold text-[9px]">
+                    Date: <span className="font-extrabold text-slate-800">{activeReceipt.createdAt}</span>
+                  </p>
                 </div>
               </div>
 
-              {/* Student Metadata Card */}
-              <div className={`grid grid-cols-2 bg-slate-50/70 border border-slate-100/80 rounded-xl gap-x-4 ${
-                receiptPageSize === "A5" ? "text-[9px] p-2.5 gap-y-1.5" : "text-xs p-4 gap-y-2.5"
+              {/* Student & Parent Metadata Card */}
+              <div className={`grid grid-cols-2 bg-slate-50 border border-slate-200 rounded-xl gap-x-4 ${
+                receiptPageSize === "A5" ? "p-2.5 gap-y-1.5 text-[9px]" : "p-3.5 gap-y-2 text-xs"
               }`}>
                 <div className="space-y-0.5">
-                  <p className="text-slate-400 font-bold">Student Name:</p>
-                  <p className={`font-extrabold text-slate-900 truncate leading-tight ${
-                    receiptPageSize === "A5" ? "text-xs" : "text-sm"
-                  }`}>{activeReceipt.studentName}</p>
+                  <span className="text-slate-400 font-bold uppercase text-[8px] block">Student / Family Name:</span>
+                  <p className="font-black text-slate-900 truncate leading-tight">{activeReceipt.studentName}</p>
                 </div>
                 <div className="space-y-0.5 text-right">
-                  <p className="text-slate-400 font-bold">Class / Section:</p>
-                  <p className={`font-extrabold text-slate-900 truncate leading-tight ${
-                    receiptPageSize === "A5" ? "text-xs" : "text-sm"
-                  }`}>{activeReceipt.classSection}</p>
+                  <span className="text-slate-400 font-bold uppercase text-[8px] block">Class & Section:</span>
+                  <p className="font-black text-slate-900 truncate leading-tight">{activeReceipt.classSection}</p>
                 </div>
                 <div className="space-y-0.5">
-                  <p className="text-slate-400 font-bold">Admission / Family ID:</p>
-                  <p className={`font-extrabold text-slate-900 leading-tight ${
-                    receiptPageSize === "A5" ? "" : "text-sm"
-                  }`}>{activeReceipt.admissionNo || activeReceipt.admissionId || "Multi-Child / Family"}</p>
+                  <span className="text-slate-400 font-bold uppercase text-[8px] block">Admission / Family ID:</span>
+                  <p className="font-extrabold text-slate-800 leading-tight">
+                    {activeReceipt.admissionNo || activeReceipt.admissionId || "Multi-Child / Family"}
+                  </p>
                 </div>
                 <div className="space-y-0.5 text-right">
-                  <p className="text-slate-400 font-bold">Payment Method:</p>
-                  <p className={`font-extrabold text-slate-900 uppercase leading-tight ${
-                    receiptPageSize === "A5" ? "" : "text-sm"
-                  }`}>{activeReceipt.method} Counter</p>
+                  <span className="text-slate-400 font-bold uppercase text-[8px] block">Payment Method & Reference:</span>
+                  <p className="font-extrabold text-slate-800 uppercase leading-tight">
+                    {activeReceipt.method} {activeReceipt.transactionRef ? `(${activeReceipt.transactionRef})` : "Counter"}
+                  </p>
                 </div>
               </div>
+
+              {/* Itemized Table */}
               {(() => {
                 const groupedItems = getGroupedReceiptItems(activeReceipt.items || []);
-                const hasDiscounts = groupedItems.some((i: any) => i.discount > 0);
+                const hasDiscounts = groupedItems.some((i: any) => (i.discount || 0) > 0);
                 
                 return (
-                  <div className="space-y-1.5">
-                    <p className={`font-black uppercase text-slate-400 tracking-wider ${
-                      receiptPageSize === "A5" ? "text-[8px]" : "text-[10px]"
-                    }`}>Receipt Breakdown</p>
+                  <div className="space-y-1">
                     <div className="border border-slate-200 rounded-xl overflow-hidden">
                       <table className="w-full text-left border-collapse">
                         <thead>
-                          <tr className={`bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200 ${
-                            receiptPageSize === "A5" ? "text-[8px]" : "text-xs"
+                          <tr className={`bg-slate-100 text-slate-700 font-black uppercase tracking-wider border-b border-slate-200 ${
+                            receiptPageSize === "A5" ? "text-[8px]" : "text-[10px]"
                           }`}>
-                            <th className={receiptPageSize === "A5" ? "py-1.5 px-3" : "py-3 px-4"}>Description</th>
+                            <th className="py-1.5 px-3 w-8">#</th>
+                            <th className="py-1.5 px-3">Fee Particulars</th>
+                            <th className="py-1.5 px-3 text-right">Billed Due</th>
                             {hasDiscounts && (
-                              <th className={`text-right ${receiptPageSize === "A5" ? "py-1.5 px-3" : "py-3 px-4"}`}>Discount</th>
+                              <th className="py-1.5 px-3 text-right text-indigo-700">Concession</th>
                             )}
-                            <th className={`text-right ${receiptPageSize === "A5" ? "py-1.5 px-3" : "py-3 px-4"}`}>Paid Amount</th>
+                            <th className="py-1.5 px-3 text-right text-slate-900">Amount Paid</th>
                           </tr>
                         </thead>
                         <tbody className={`divide-y divide-slate-100 font-semibold text-slate-700 ${
@@ -8989,25 +9373,31 @@ export default function AdminDashboard() {
                         }`}>
                           {groupedItems.length > 0 ? (
                             groupedItems.map((item: any, idx: number) => (
-                              <tr key={idx} className="hover:bg-slate-50/20">
-                                <td className={`max-w-[200px] truncate ${receiptPageSize === "A5" ? "py-1.5 px-3" : "py-3 px-4"}`}>{item.name || item.description}</td>
+                              <tr key={idx} className="hover:bg-slate-50/40">
+                                <td className="py-1.5 px-3 text-slate-400 font-bold w-8">{idx + 1}</td>
+                                <td className="py-1.5 px-3 font-bold text-slate-850 truncate max-w-[220px]">
+                                  {item.name || item.description}
+                                </td>
+                                <td className="py-1.5 px-3 text-right text-slate-500 font-semibold">
+                                  {formatP(item.originalAmount || item.amount)}
+                                </td>
                                 {hasDiscounts && (
-                                  <td className={`text-right text-indigo-650 font-bold ${receiptPageSize === "A5" ? "py-1.5 px-3" : "py-3 px-4"}`}>
-                                    {item.discount > 0 ? `₹${item.discount}` : "-"}
+                                  <td className="py-1.5 px-3 text-right text-indigo-600 font-bold">
+                                    {(item.discount || 0) > 0 ? formatP(item.discount) : "-"}
                                   </td>
                                 )}
-                                <td className={`text-right text-slate-900 font-extrabold ${receiptPageSize === "A5" ? "py-1.5 px-3" : "py-3 px-4"}`}>
+                                <td className="py-1.5 px-3 text-right text-slate-900 font-black">
                                   {formatP(item.amount)}
                                 </td>
                               </tr>
                             ))
                           ) : (
-                            // Fallback parsing if items array is empty
                             <tr>
-                              <td className={`max-w-[200px] truncate ${receiptPageSize === "A5" ? "py-1.5 px-3" : "py-3 px-4"}`}>{activeReceipt.details}</td>
-                              <td className={`text-right text-slate-900 font-extrabold ${receiptPageSize === "A5" ? "py-1.5 px-3" : "py-3 px-4"}`}>
-                                  {formatP(activeReceipt.amount)}
-                              </td>
+                              <td className="py-1.5 px-3 text-slate-400 font-bold">1</td>
+                              <td className="py-1.5 px-3 font-bold text-slate-850">{activeReceipt.details || "Fee Payment"}</td>
+                              <td className="py-1.5 px-3 text-right text-slate-500 font-semibold">{formatP(activeReceipt.amount)}</td>
+                              {hasDiscounts && <td className="py-1.5 px-3 text-right text-indigo-600">-</td>}
+                              <td className="py-1.5 px-3 text-right text-slate-900 font-black">{formatP(activeReceipt.amount)}</td>
                             </tr>
                           )}
                         </tbody>
@@ -9017,81 +9407,125 @@ export default function AdminDashboard() {
                 );
               })()}
 
-              {/* Financial Summary Box */}
-              <div className="flex justify-end pt-0.5">
-                <div className={`font-bold text-slate-500 bg-slate-50/40 border border-slate-100 rounded-xl ${
-                  receiptPageSize === "A5" ? "w-56 p-2.5 space-y-1 text-[9px]" : "w-80 p-4 space-y-2 text-xs"
+              {/* Summary & Amount in Words Grid */}
+              <div className="grid grid-cols-12 gap-3 pt-1 items-start">
+                {/* Left Side: Amount in Words & Dues Clearance Note */}
+                <div className={`col-span-7 bg-slate-50 border border-slate-200/80 rounded-xl p-2.5 space-y-1.5 ${
+                  receiptPageSize === "A5" ? "text-[8px]" : "text-[10px]"
                 }`}>
-                  <div className="flex justify-between items-center">
-                    <span>Subtotal:</span>
-                    <span className="text-slate-800">{formatP(activeReceipt.amount)}</span>
+                  <div>
+                    <span className="text-slate-400 font-bold uppercase block text-[7px]">Amount in Words:</span>
+                    <p className="font-black text-slate-900 italic">
+                      {activeReceipt.amountInWords || numberToIndianWords(activeReceipt.amount)}
+                    </p>
+                  </div>
+                  <div className="border-t border-slate-200/60 pt-1">
+                    {activeReceipt.arrears === 0 ? (
+                      <span className="text-emerald-700 font-black flex items-center gap-1">
+                        ✅ All selected invoice dues are fully settled.
+                      </span>
+                    ) : (
+                      <div className="space-y-0.5">
+                        <span className="text-amber-700 font-bold block">
+                          ⚠️ Balance remaining on this invoice: <strong className="font-black text-slate-900">{formatP(activeReceipt.arrears)}</strong>
+                        </span>
+                        {activeReceipt.otherArrears > 0 && (
+                          <span className="text-slate-400 font-semibold block text-[7px]">
+                            (Other session dues pending: {formatP(activeReceipt.otherArrears)})
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Right Side: Totals Card */}
+                <div className={`col-span-5 bg-slate-50 border border-slate-200 rounded-xl p-2.5 space-y-1 text-right ${
+                  receiptPageSize === "A5" ? "text-[9px]" : "text-xs"
+                }`}>
+                  <div className="flex justify-between items-center text-slate-500 font-bold">
+                    <span>Invoice Total:</span>
+                    <span className="text-slate-800">{formatP(activeReceipt.subtotal || activeReceipt.amount)}</span>
                   </div>
                   {activeReceipt.discount > 0 && (
-                    <div className="flex justify-between items-center text-indigo-600">
-                      <span>Discount:</span>
-                      <span className="font-extrabold">{formatP(activeReceipt.discount)}</span>
+                    <div className="flex justify-between items-center text-indigo-600 font-bold">
+                      <span>Total Concession:</span>
+                      <span className="font-black">-{formatP(activeReceipt.discount)}</span>
                     </div>
                   )}
-                  {activeReceipt.arrears > 0 && (
-                    <div className="flex justify-between items-center text-rose-600">
-                      <span>Remaining Arrears:</span>
-                      <span className="font-extrabold">{formatP(activeReceipt.arrears)}</span>
-                    </div>
-                  )}
-                  <div className={`border-t border-slate-200 pt-1.5 flex justify-between items-center text-emerald-700 font-black ${
-                    receiptPageSize === "A5" ? "text-xs" : "text-sm"
-                  }`}>
+                  <div className="border-t border-slate-300 pt-1 flex justify-between items-center text-emerald-800 font-black text-xs">
                     <span>Total Paid:</span>
-                    <span>{formatP(activeReceipt.amount)}</span>
+                    <span className="text-sm font-black">{formatP(activeReceipt.amount)}</span>
                   </div>
+                  {activeReceipt.arrears > 0 && (
+                    <div className="flex justify-between items-center text-amber-700 font-bold border-t border-slate-200/60 pt-1 text-[8px]">
+                      <span>Balance on Invoice:</span>
+                      <span className="font-black text-rose-600">{formatP(activeReceipt.arrears)}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* Signatures & Computer generated text */}
-              <div className="flex justify-between items-end pt-3">
+              {/* Signatures & Verification Seal */}
+              <div className="flex justify-between items-end pt-2 border-t border-slate-200">
                 <div className={`text-slate-400 leading-tight italic ${
-                  receiptPageSize === "A5" ? "text-[7px] max-w-[200px]" : "text-[10px] max-w-[320px]"
+                  receiptPageSize === "A5" ? "text-[7px] max-w-[240px]" : "text-[9px] max-w-[340px]"
                 }`}>
-                  * Note: This is an officially verified computer-generated fee receipt. No physical signature is required.
+                  * Computer-generated official receipt. Verified electronically by School Finance OS.
                 </div>
-                <div className="text-center w-28 shrink-0">
-                  <div className="h-6 w-full flex items-center justify-center">
-                    <span className={`font-black uppercase text-indigo-600 bg-indigo-50 border border-indigo-100/50 px-2 py-0.5 rounded rotate-[-2deg] ${
-                      receiptPageSize === "A5" ? "text-[7px]" : "text-[10px]"
+                <div className="text-center w-36 shrink-0">
+                  <div className="flex items-center justify-center">
+                    <span className={`font-black uppercase text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 rounded ${
+                      receiptPageSize === "A5" ? "text-[7px]" : "text-[9px]"
                     }`}>
                       SYSTEM VERIFIED
                     </span>
                   </div>
-                  <p className={`text-slate-400 font-bold border-t border-slate-200 pt-0.5 mt-0.5 ${
-                    receiptPageSize === "A5" ? "text-[8px]" : "text-xs"
-                  }`}>
-                    Authorized Cashier
-                  </p>
+                  <div className="border-t border-slate-300 pt-0.5 mt-1 space-y-0.5">
+                    <p className={`font-black text-slate-900 leading-tight ${
+                      receiptPageSize === "A5" ? "text-[8px]" : "text-[10px]"
+                    }`}>
+                      {activeReceipt.collectedBy || user?.name || "Authorized Cashier"}
+                    </p>
+                    <p className={`text-slate-400 font-bold uppercase tracking-wider ${
+                      receiptPageSize === "A5" ? "text-[7px]" : "text-[8px]"
+                    }`}>
+                      {activeReceipt.collectedByRole || user?.role || "Finance Desk"}
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
 
             <div className="flex gap-2">
               <button
+                type="button"
+                onClick={() => handleSendReceiptWhatsApp(activeReceipt)}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-md shadow-emerald-600/15"
+              >
+                <Send className="h-4 w-4" /> WhatsApp Receipt
+              </button>
+              <button
+                type="button"
                 onClick={() => window.print()}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2 border border-slate-200 hover:bg-slate-50 text-slate-650 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs"
               >
                 <Printer className="h-4 w-4" /> Print Voucher
               </button>
               <button
+                type="button"
                 onClick={() => {
                   setShowReceiptModal(false);
                   setActiveReceipt(null);
                 }}
-                className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-500/10 cursor-pointer"
+                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
               >
-                Dismiss Receipt
+                Close
               </button>
             </div>
           </div>
         </div>
       )}
-
 
 
       {/* 2. Edit Profile Modal */}

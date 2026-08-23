@@ -159,12 +159,25 @@ export interface MockReceipt {
   studentId: string;
   receiptNo: string;
   amount: number;
+  subtotal?: number;
+  discount?: number;
+  arrears?: number;
+  otherArrears?: number;
+  amountInWords?: string;
   paymentMethod: string;
   transactionRef: string;
   createdAt: string;
-  items: { name: string; amount: number }[];
+  items: {
+    name: string;
+    amount: number;
+    originalAmount?: number;
+    discount?: number;
+    balance?: number;
+  }[];
   studentName?: string;
   classSection?: string;
+  admissionNo?: string;
+  fatherName?: string;
   details?: string;
   method?: string;
   studentIds?: string[];
@@ -1328,8 +1341,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const data = await res.json();
       if (res.ok) {
-        // Run refreshData in background without blocking receipt modal generation
-        refreshBilling().catch((err: any) => console.error("Background refresh error:", err));
+        await refreshBilling().catch((err: any) => console.error("Billing refresh error:", err));
         return { success: true, receipt: data.receipt };
       }
       return { success: false, error: data.error || "Payment checkout failed." };

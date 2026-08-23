@@ -146,11 +146,15 @@ export async function GET(request: Request) {
           paymentMethod: true,
           transactionReference: true,
           amountPaid: true,
+          remarks: true,
           createdAt: true,
           createdById: true,
           student: {
             select: {
+              id: true,
               name: true,
+              admissionNumber: true,
+              fatherName: true,
               class: {
                 select: {
                   name: true,
@@ -170,11 +174,16 @@ export async function GET(request: Request) {
               amount: true,
               ledgerEntry: {
                 select: {
+                  id: true,
                   studentId: true,
                   description: true,
+                  amount: true,
                   student: {
                     select: {
+                      id: true,
                       name: true,
+                      admissionNumber: true,
+                      fatherName: true,
                       class: {
                         select: {
                           name: true,
@@ -227,17 +236,17 @@ export async function GET(request: Request) {
       createdById: l.createdById,
     }));
 
-    const formattedReceipts = receipts.map((r) => {
+    const formattedReceipts = receipts.map((r: any) => {
       const studentIds = Array.from(
-        new Set(r.items.map((i) => i.ledgerEntry?.studentId).filter(Boolean))
+        new Set(r.items.map((i: any) => i.ledgerEntry?.studentId).filter(Boolean))
       );
       const studentNames = Array.from(
-        new Set(r.items.map((i) => i.ledgerEntry?.student?.name).filter(Boolean))
+        new Set(r.items.map((i: any) => i.ledgerEntry?.student?.name).filter(Boolean))
       );
       const classSections = Array.from(
         new Set(
           r.items
-            .map((i) => {
+            .map((i: any) => {
               const cls = i.ledgerEntry?.student?.class;
               return cls ? `${cls.name}-${cls.section}` : "";
             })
@@ -249,23 +258,75 @@ export async function GET(request: Request) {
         ? `${r.student.class.name}-${r.student.class.section}`
         : classSections.join(", ");
 
+      let meta: any = null;
+      if (r.remarks) {
+        try {
+          meta = JSON.parse(r.remarks);
+        } catch {}
+      }
+
+      const fallbackSubtotal = r.items.reduce(
+        (sum: number, i: any) => sum + (i.ledgerEntry?.amount || i.amount),
+        0
+      );
+      const subtotal = meta?.subtotal ?? (fallbackSubtotal > r.amountPaid ? fallbackSubtotal : r.amountPaid);
+      const discount = meta?.discount ?? 0;
+      const arrears = meta?.arrears ?? Math.max(0, subtotal - r.amountPaid - discount);
+
+      const fallbackItems = r.items.map((i: any) => {
+        const sName = i.ledgerEntry?.student?.name ? `${i.ledgerEntry.student.name}: ` : "";
+        const desc = (i.ledgerEntry?.description || "")
+          .replace("Payment for: Assigned: ", "")
+          .replace("Payment for: ", "");
+        const orig = i.ledgerEntry?.amount || i.amount;
+        return {
+          name: `${sName}${desc || "Fee Particular"}`,
+          originalAmount: orig,
+          amount: i.amount,
+          discount: 0,
+          balance: Math.max(0, orig - i.amount),
+        };
+      });
+
+      const items =
+        meta?.items && Array.isArray(meta.items) && meta.items.length > 0
+          ? meta.items
+          : fallbackItems;
+
+      const admissionNo =
+        meta?.admissionNo ||
+        r.student?.admissionNumber ||
+        r.items[0]?.ledgerEntry?.student?.admissionNumber ||
+        "Unified Family";
+
+      const fatherName =
+        meta?.fatherName ||
+        r.student?.fatherName ||
+        r.items[0]?.ledgerEntry?.student?.fatherName ||
+        "";
+
       return {
         id: r.id,
         studentId: r.studentId || (studentIds.length === 1 ? (studentIds[0] as string) : null),
         studentIds,
         receiptNo: r.receiptNumber,
         amount: r.amountPaid,
+        subtotal,
+        discount,
+        arrears,
         paymentMethod: r.paymentMethod,
         method: r.paymentMethod,
         transactionRef: r.transactionReference || "",
         createdAt: r.createdAt.toISOString().split("T")[0],
         studentName: r.student?.name || studentNames.join(", "),
         classSection: sClass,
+        admissionNo,
+        fatherName,
         collectedBy: r.createdBy?.name || "System",
         collectedByRole: r.createdBy?.role || "ADMIN",
         createdById: r.createdById,
         details: r.items
-          .map((i) => {
+          .map((i: any) => {
             const sName = i.ledgerEntry?.student?.name || "Student";
             const desc = (i.ledgerEntry?.description || "")
               .replace("Payment for: Assigned: ", "")
@@ -273,10 +334,7 @@ export async function GET(request: Request) {
             return `${sName}: ${desc} (Rs. ${i.amount / 100})`;
           })
           .join(" + "),
-        items: r.items.map((i) => ({
-          name: `${i.ledgerEntry?.student?.name || "Student"}: ${i.ledgerEntry?.description || ""}`,
-          amount: i.amount,
-        })),
+        items,
       };
     });
 
@@ -473,9 +531,9 @@ export async function POST(request: Request) {
 
       for (const item of items) {
         const { ledgerEntryId, payAmount, discountAmount, fineAmount } = item;
-        const requestedPayPaisa = Math.round(Number(payAmount) * 100);
-        const discountAmountPaisa = Math.round(Number(discountAmount) * 100);
-        const fineAmountPaisa = Math.round(Number(fineAmount || 0) * 100);
+        const requestedPayPaisa = Math.max(0, Math.round(Number(payAmount) || 0));
+        const requestedDiscountPaisa = Math.max(0, Math.round(Number(discountAmount) || 0));
+        const fineAmountPaisa = Math.max(0, Math.round(Number(fineAmount || 0)));
 
         const charge = await tx.ledgerEntry.findUnique({
           where: { id: ledgerEntryId },
@@ -484,7 +542,7 @@ export async function POST(request: Request) {
 
         if (!charge) continue;
 
-        const chargeName = charge.description.replace("Assigned: ", "");
+        const chargeName = charge.description.replace("Assigned: ", "").trim();
         const itemStudentId = charge.studentId;
 
         // Calculate existing paid and discounts
@@ -498,8 +556,12 @@ export async function POST(request: Request) {
 
         const outstandingPaisa = Math.max(0, charge.amount - associatedDiscounts - existingPaid);
 
-        // Cap payment amount to outstanding balance to prevent overpayment
-        const payAmountPaisa = Math.min(requestedPayPaisa, outstandingPaisa);
+        // Cap discount to outstanding balance
+        const discountAmountPaisa = Math.min(requestedDiscountPaisa, outstandingPaisa);
+
+        // Cap payment amount to remaining balance after discount
+        const maxPayablePaisa = Math.max(0, outstandingPaisa - discountAmountPaisa);
+        const payAmountPaisa = Math.min(requestedPayPaisa, maxPayablePaisa);
 
         actualTotalPayPaisa += payAmountPaisa + fineAmountPaisa;
 
@@ -514,6 +576,23 @@ export async function POST(request: Request) {
       }
 
       // 2. Create Receipt with actual total paid
+      const totalOriginalDues = validatedItems.reduce((sum, vi) => sum + vi.charge.amount, 0);
+      const totalDiscountPaisa = validatedItems.reduce((sum, vi) => sum + vi.discountAmountPaisa, 0);
+      const remainingArrearsPaisa = Math.max(0, totalOriginalDues - actualTotalPayPaisa - totalDiscountPaisa);
+
+      const snapshot = {
+        subtotal: totalOriginalDues,
+        discount: totalDiscountPaisa,
+        arrears: remainingArrearsPaisa,
+        items: validatedItems.map((vi) => ({
+          name: vi.chargeName,
+          originalAmount: vi.charge.amount,
+          amount: vi.payAmountPaisa,
+          discount: vi.discountAmountPaisa,
+          balance: Math.max(0, vi.charge.amount - vi.payAmountPaisa - vi.discountAmountPaisa),
+        })),
+      };
+
       const receipt = await tx.receipt.create({
         data: {
           studentId: resolvedStudentId,
@@ -522,6 +601,7 @@ export async function POST(request: Request) {
           paymentMethod: paymentMethod as PaymentMethod,
           transactionReference: transactionRef || null,
           amountPaid: actualTotalPayPaisa,
+          remarks: JSON.stringify(snapshot),
           createdById: creatorUserId,
         },
       });
@@ -572,6 +652,7 @@ export async function POST(request: Request) {
               feeHeadId: charge.feeHeadId,
               entryType: EntryType.DISCOUNT,
               amount: -discountAmountPaisa,
+              referenceId: receipt.id,
               description: `Discount for: ${chargeName}`,
               createdById: creatorUserId,
             },
@@ -613,20 +694,27 @@ export async function POST(request: Request) {
         })
       : null;
 
+    const collectorUser = await db.user.findUnique({
+      where: { id: authUser.userId },
+      select: { name: true, role: true },
+    });
+
     return NextResponse.json({
       success: true,
       receipt: {
         id: result.id,
         studentId: result.studentId,
         receiptNo: result.receiptNumber,
-        amount: result.amountPaid / 100,
+        amount: result.amountPaid,
         paymentMethod: result.paymentMethod,
         transactionRef: result.transactionReference || "",
         createdAt: result.createdAt.toISOString().split("T")[0],
         studentName: student?.name || "Multiple Siblings",
         classSection: student ? `${student.class.name}-${student.class.section}` : "Unified Family",
+        collectedBy: collectorUser?.name || authUser.username || "Finance Staff",
+        collectedByRole: collectorUser?.role || authUser.role || "ADMIN",
         items: items.map((i: any) => ({
-          name: `Payment applied (incl. discount: Rs. ${i.discountAmount})`,
+          name: `Payment applied (incl. discount: Rs. ${(Number(i.discountAmount) || 0) / 100})`,
           amount: i.payAmount,
         })),
       },
