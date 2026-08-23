@@ -200,7 +200,6 @@ export async function GET(request: Request) {
           amount: true,
           createdAt: true,
           sessionId: true,
-          session: { select: { name: true, isCurrent: true } },
         },
       }),
       db.ledgerEntry.findMany({
@@ -346,8 +345,8 @@ export async function GET(request: Request) {
         totalPaid: totalPaid,
         totalDiscount: totalDiscount,
         dueDate: chargeDueDate,
-        sessionName: c.session?.name,
-        isCurrentSession: c.session?.isCurrent !== false,
+        sessionName: acYear,
+        isCurrentSession: true,
         status: (outstanding <= 0 ? "PAID" : "UNPAID") as "PAID" | "UNPAID",
         fine: fineAmount,
       };

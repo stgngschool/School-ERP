@@ -166,11 +166,8 @@ export default function AccountantDashboard() {
   React.useEffect(() => {
     if (!validTabs.includes(activeTab)) {
       setActiveTab("collect");
-    } else {
-      if (!studentsLoaded) refreshStudents();
-      if (!billingLoaded) refreshBilling();
     }
-  }, [activeTab, studentsLoaded, billingLoaded]);
+  }, [activeTab]);
   
   // Payment Form States
   const [selectedStudentId, setSelectedStudentId] = useState("");

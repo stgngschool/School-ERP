@@ -638,90 +638,75 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       setCurrentStage("STUDENTS FETCH START");
       const isStaff = userToFetch.role === "ADMIN" || userToFetch.role === "ACCOUNTANT";
-
-      // ─── STAGE 1: Core System Metadata (Fastest) ───
-      const stage1Loads = [
-        apiFetch("/api/school", {}, 10000, true).then((data) => { if (data) setSchoolInfo(data); }),
-        apiFetch("/api/classes", {}, 10000, true).then((data) => data && setClasses(data)),
-        apiFetch("/api/fee-config", {}, 10000, true).then((feeData) => {
-          if (feeData) {
-            setFeeHeads(feeData.feeHeads || []);
-            setFeeStructures(feeData.feeStructures || []);
-          }
-        }),
-      ];
-
-      if (isStaff) {
-        stage1Loads.push(
-          apiFetch("/api/transport", {}, 10000, true).then((transData) => {
-            if (transData) setTransportStops(transData.map((d: any) => ({ ...d, amount: d.amount / 100 })));
-          }),
-          apiFetch("/api/concessions", {}, 10000, true).then((data) => data && setConcessions(data))
-        );
-      }
-
-      await Promise.allSettled(stage1Loads);
-
-      // ─── STAGE 2: Core Dashboard Data (Students + Billing + Attendance) ───
       const role = userToFetch.role;
 
-      const fetchStudentsPromise = apiFetch("/api/students", {}, 15000, true, 2)
-        .then((data) => {
-          if (data && Array.isArray(data)) {
-            setStudents(data);
-            setStudentsLoaded(true);
-          }
+      // ─── Parallel Core Data Hydration (Instant & Progressive) ───
+      // 1. Metadata (Instant cached responses)
+      apiFetch("/api/school", {}, 10000, true).then((data) => { if (data) setSchoolInfo(data); });
+      apiFetch("/api/classes", {}, 10000, true).then((data) => data && setClasses(data));
+      apiFetch("/api/fee-config", {}, 10000, true).then((feeData) => {
+        if (feeData) {
+          setFeeHeads(feeData.feeHeads || []);
+          setFeeStructures(feeData.feeStructures || []);
+        }
+      });
+      apiFetch("/api/notice", {}, 10000, true).then((data) => data && setNotices(data));
+
+      if (isStaff) {
+        apiFetch("/api/transport", {}, 10000, true).then((transData) => {
+          if (transData) setTransportStops(transData.map((d: any) => ({ ...d, amount: d.amount / 100 })));
         });
+        apiFetch("/api/concessions", {}, 10000, true).then((data) => data && setConcessions(data));
+      }
 
-      const fetchBillingPromise = apiFetch("/api/billing", {}, 15000, false, 2)
-        .then((data) => {
-          if (data) {
-            setLedgerEntries(data.ledgerEntries || []);
-            setReceipts(data.receipts || []);
-            setDueItems(data.dueItems || []);
-            setBillingLoaded(true);
-          }
-        });
+      // 2. Core Dashboard Metrics (Students + Billing + Attendance)
+      const studentsLoad = apiFetch("/api/students", {}, 15000, true).then((data) => {
+        if (data && Array.isArray(data)) {
+          setStudents(data);
+          setStudentsLoaded(true);
+        }
+      });
 
-      const fetchAttendancePromise = apiFetch("/api/attendance", {}, 12000, false, 1)
-        .then((data) => {
-          if (data && Array.isArray(data)) {
-            setAttendances(data);
-            setAttendanceLoaded(true);
-          }
-        });
+      const billingLoad = apiFetch("/api/billing", {}, 15000, true).then((data) => {
+        if (data) {
+          setLedgerEntries(data.ledgerEntries || []);
+          setReceipts(data.receipts || []);
+          setDueItems(data.dueItems || []);
+          setBillingLoaded(true);
+        }
+      });
 
-      const fetchNoticesPromise = apiFetch("/api/notice", {}, 10000, true, 1)
-        .then((data) => data && setNotices(data));
+      const attendanceLoad = apiFetch("/api/attendance", {}, 12000, true).then((data) => {
+        if (data && Array.isArray(data)) {
+          setAttendances(data);
+          setAttendanceLoaded(true);
+        }
+      });
 
-      await Promise.allSettled([
-        fetchStudentsPromise,
-        fetchBillingPromise,
-        fetchAttendancePromise,
-        fetchNoticesPromise,
-      ]);
+      // Mark ready as soon as the first core loads arrive
+      Promise.allSettled([studentsLoad, billingLoad, attendanceLoad]).then(() => {
+        setCurrentStage("DASHBOARD READY");
+      });
 
-      setCurrentStage("DASHBOARD READY");
-
-      // ─── STAGE 3: Staggered Secondary Data (On-Demand / Non-blocking) ───
+      // 3. Lazy Secondary Data (Deferred to not block main thread or bandwidth)
       setTimeout(() => {
         if (role === "ADMIN" || role === "ACCOUNTANT") {
-          apiFetch("/api/admissions", {}, 10000, false, 1).then(
+          apiFetch("/api/admissions", {}, 10000, false).then(
             (data) => data?.applications && setAdmissionApplications(data.applications)
           );
-          apiFetch("/api/events", {}, 10000, true, 1).then((data) => data && setEventsList(data));
+          apiFetch("/api/events", {}, 10000, true).then((data) => data && setEventsList(data));
         }
 
         if (role === "ADMIN") {
-          apiFetch("/api/users", {}, 10000, true, 1).then((data) => data && setUsersList(data));
-          apiFetch("/api/audits", {}, 10000, false, 1).then((data) => data && setAuditLogs(data));
+          apiFetch("/api/users", {}, 10000, true).then((data) => data && setUsersList(data));
+          apiFetch("/api/audits", {}, 10000, false).then((data) => data && setAuditLogs(data));
         }
 
         if (role === "TEACHER" || role === "PARENT") {
-          apiFetch("/api/homework", {}, 10000, true, 1).then((data) => data && setHomeworks(data));
-          apiFetch("/api/leave", {}, 10000, true, 1).then((data) => data && setLeaveRequests(data));
+          apiFetch("/api/homework", {}, 10000, true).then((data) => data && setHomeworks(data));
+          apiFetch("/api/leave", {}, 10000, true).then((data) => data && setLeaveRequests(data));
         }
-      }, 500);
+      }, 1000);
     } catch (err) {
       console.error("[AuthContext] refreshData EXCEPTION:", err);
     }
