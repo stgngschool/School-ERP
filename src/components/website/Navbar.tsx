@@ -353,24 +353,24 @@ export default function Navbar({
               <span>Enquiry</span>
             </button>
 
-            <button
-              onClick={handleLoginClick}
+            <Link
+              href={mounted && user && activeRole ? "/?view=erp" : "/login"}
               className="px-4 py-2 rounded-xl text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/20 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
             >
               <LogIn className="w-3.5 h-3.5" />
               <span>{mounted && user && activeRole ? "ERP Dashboard" : "Portal Login"}</span>
-            </button>
+            </Link>
           </div>
 
           {/* Mobile Right Controls */}
           <div className="flex sm:hidden items-center gap-2 shrink-0">
-            <button
-              onClick={handleLoginClick}
+            <Link
+              href={mounted && user && activeRole ? "/?view=erp" : "/login"}
               title={mounted && user && activeRole ? "ERP Dashboard" : "Portal Login"}
               className="p-2 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100 flex items-center justify-center cursor-pointer hover:bg-indigo-100 transition-colors"
             >
               <LogIn className="w-4 h-4" />
-            </button>
+            </Link>
 
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -418,16 +418,14 @@ export default function Navbar({
                 <span>Apply for Admission 2026-27 (Nursery to 8th)</span>
               </button>
 
-              <button
-                onClick={(e) => {
-                  setMobileMenuOpen(false);
-                  handleLoginClick(e);
-                }}
+              <Link
+                href={mounted && user && activeRole ? "/?view=erp" : "/login"}
+                onClick={() => setMobileMenuOpen(false)}
                 className="w-full py-2.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 flex items-center justify-center gap-2 shadow-md cursor-pointer"
               >
                 <LogIn className="w-4 h-4" />
                 <span>{mounted && user && activeRole ? "Open School ERP Dashboard" : "School ERP & Parent Portal Login"}</span>
-              </button>
+              </Link>
             </div>
 
             <div className="pt-2 text-[11px] text-slate-500 flex flex-col gap-1">
