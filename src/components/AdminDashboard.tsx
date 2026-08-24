@@ -73,6 +73,7 @@ import {
   Zap,
   Building2,
   User,
+  ArrowUpDown,
   Award,
   Trophy,
   Ghost,
@@ -785,6 +786,16 @@ export default function AdminDashboard() {
   // Defaulter / Dues Report filters
   const [defaulterSearch, setDefaulterSearch] = useState("");
   const [defaulterClass, setDefaulterClass] = useState("All");
+  const [defaulterSortBy, setDefaulterSortBy] = useState<
+    "NAME_ASC" | "NAME_DESC" | "DUE_DESC" | "DUE_ASC" | "PAID_DESC" | "ROLL_ASC" | "ADM_ASC"
+  >("NAME_ASC");
+  const [defaulterLetter, setDefaulterLetter] = useState("ALL");
+  const [defaulterCategory, setDefaulterCategory] = useState<
+    "ALL" | "ZERO_PAID" | "PARTIAL_PAID" | "HEAVY_DUE" | "CLEARED"
+  >("ALL");
+  const [defaulterAmountRange, setDefaulterAmountRange] = useState<
+    "ALL" | "UNDER_2K" | "2K_5K" | "5K_10K" | "ABOVE_10K"
+  >("ALL");
   const [alertSuccessMsg, setAlertSuccessMsg] = useState("");
   const [expandedStudentId, setExpandedStudentId] = useState<string | null>(null);
   const [defaulterPage, setDefaulterPage] = useState(1);
@@ -8789,28 +8800,182 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              {/* Filters */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <input
-                  type="text"
-                  placeholder="Search by Student Name or Parent..."
-                  value={defaulterSearch}
-                  onChange={(e) => { setDefaulterSearch(e.target.value); setExpandedStudentId(null); setDefaulterPage(1); }}
-                  className="w-full text-xs font-semibold py-2.5 pl-3 pr-8 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600/10 transition-all placeholder-slate-400"
-                />
-                <select
-                  value={defaulterClass}
-                  onChange={(e) => { setDefaulterClass(e.target.value); setExpandedStudentId(null); setDefaulterPage(1); }}
-                  className="w-full text-xs font-bold py-2.5 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 transition-all text-slate-600"
-                >
-                  <option value="All">All Classes (Outstanding)</option>
-                  {Array.from(new Set([
-                    ...classes.map(c => `${c.name}-${c.section}`),
-                    ...students.map(s => `${s.class}-${s.section}`)
-                  ])).filter(Boolean).sort().map((cls) => (
-                    <option key={cls} value={cls}>Class {cls}</option>
-                  ))}
-                </select>
+              {/* Filters Header Block */}
+              <div className="space-y-3 bg-slate-50/80 p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 shadow-2xs">
+                {/* Row 1: Search & Class Filter */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+                  <div className="relative sm:col-span-7">
+                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Search by Name, Father, ADM No, Roll No, Family Code..."
+                      value={defaulterSearch}
+                      onChange={(e) => {
+                        setDefaulterSearch(e.target.value);
+                        setExpandedStudentId(null);
+                        setDefaulterPage(1);
+                      }}
+                      className="w-full text-xs font-semibold py-2.5 pl-9 pr-8 border border-slate-200 rounded-xl outline-none bg-white focus:border-indigo-600 focus:ring-2 focus:ring-indigo-600/10 transition-all placeholder-slate-400 text-slate-800 shadow-2xs"
+                    />
+                    {defaulterSearch && (
+                      <button
+                        onClick={() => { setDefaulterSearch(""); setDefaulterPage(1); }}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer p-0.5"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="sm:col-span-5">
+                    <select
+                      value={defaulterClass}
+                      onChange={(e) => {
+                        setDefaulterClass(e.target.value);
+                        setExpandedStudentId(null);
+                        setDefaulterPage(1);
+                      }}
+                      className="w-full text-xs font-bold py-2.5 px-3 border border-slate-200 rounded-xl outline-none bg-white focus:border-indigo-600 transition-all text-slate-700 shadow-2xs cursor-pointer"
+                    >
+                      <option value="All">All Classes (Outstanding)</option>
+                      {Array.from(
+                        new Set([
+                          ...classes.map((c) => `${c.name}-${c.section}`),
+                          ...students.map((s) => `${s.class}-${s.section}`),
+                        ])
+                      )
+                        .filter(Boolean)
+                        .sort()
+                        .map((cls) => (
+                          <option key={cls} value={cls}>
+                            Class {cls}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Row 2: Sort By & Amount Range Dropdowns + Reset Button */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+                  <div className="sm:col-span-5 flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-3 py-1.5 shadow-2xs">
+                    <ArrowUpDown className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider shrink-0">Sort:</span>
+                    <select
+                      value={defaulterSortBy}
+                      onChange={(e) => {
+                        setDefaulterSortBy(e.target.value as any);
+                        setDefaulterPage(1);
+                      }}
+                      className="w-full text-xs font-bold bg-transparent outline-none text-slate-700 cursor-pointer"
+                    >
+                      <option value="NAME_ASC">Name (A to Z)</option>
+                      <option value="NAME_DESC">Name (Z to A)</option>
+                      <option value="DUE_DESC">Highest Due First (Sabse Jyada)</option>
+                      <option value="DUE_ASC">Lowest Due First (Kam Bakaya)</option>
+                      <option value="PAID_DESC">Highest Paid First</option>
+                      <option value="ROLL_ASC">Roll Number (1 to 100)</option>
+                      <option value="ADM_ASC">Admission Number</option>
+                    </select>
+                  </div>
+
+                  <div className="sm:col-span-5 flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-3 py-1.5 shadow-2xs">
+                    <SlidersHorizontal className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider shrink-0">Due Range:</span>
+                    <select
+                      value={defaulterAmountRange}
+                      onChange={(e) => {
+                        setDefaulterAmountRange(e.target.value as any);
+                        setDefaulterPage(1);
+                      }}
+                      className="w-full text-xs font-bold bg-transparent outline-none text-slate-700 cursor-pointer"
+                    >
+                      <option value="ALL">All Due Amounts</option>
+                      <option value="UNDER_2K">Under ₹2,000</option>
+                      <option value="2K_5K">₹2,000 – ₹5,000</option>
+                      <option value="5K_10K">₹5,000 – ₹10,000</option>
+                      <option value="ABOVE_10K">Above ₹10,000 (Critical)</option>
+                    </select>
+                  </div>
+
+                  <div className="sm:col-span-2 flex items-center">
+                    {(defaulterSearch ||
+                      defaulterClass !== "All" ||
+                      defaulterSortBy !== "NAME_ASC" ||
+                      defaulterLetter !== "ALL" ||
+                      defaulterCategory !== "ALL" ||
+                      defaulterAmountRange !== "ALL") && (
+                      <button
+                        onClick={() => {
+                          setDefaulterSearch("");
+                          setDefaulterClass("All");
+                          setDefaulterSortBy("NAME_ASC");
+                          setDefaulterLetter("ALL");
+                          setDefaulterCategory("ALL");
+                          setDefaulterAmountRange("ALL");
+                          setDefaulterPage(1);
+                        }}
+                        className="w-full flex items-center justify-center gap-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl py-2 px-2 text-[11px] font-bold cursor-pointer transition-all active:scale-95 shadow-2xs"
+                        title="Reset all active filters"
+                      >
+                        <RotateCcw className="h-3 w-3" /> Reset
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Row 3: Quick Status Category Chips */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none pt-0.5">
+                  {[
+                    { id: "ALL", label: "All Defaulters" },
+                    { id: "ZERO_PAID", label: "100% Unpaid (₹0 Paid)" },
+                    { id: "PARTIAL_PAID", label: "Partial Paid" },
+                    { id: "HEAVY_DUE", label: "Heavy Dues (> ₹5,000)" },
+                    { id: "CLEARED", label: "Fully Cleared (₹0 Due)" },
+                  ].map((cat) => {
+                    const active = defaulterCategory === cat.id;
+                    return (
+                      <button
+                        key={cat.id}
+                        onClick={() => {
+                          setDefaulterCategory(cat.id as any);
+                          setDefaulterPage(1);
+                        }}
+                        className={`whitespace-nowrap px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer border ${
+                          active
+                            ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
+                            : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-900"
+                        }`}
+                      >
+                        {cat.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Row 4: A-to-Z Alphabet Ribbon */}
+                <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none border-t border-slate-200/70 pt-2">
+                  <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider mr-1 shrink-0">
+                    A-Z Jump:
+                  </span>
+                  {["ALL", ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("")].map((letter) => {
+                    const active = defaulterLetter === letter;
+                    return (
+                      <button
+                        key={letter}
+                        onClick={() => {
+                          setDefaulterLetter(letter);
+                          setDefaulterPage(1);
+                        }}
+                        className={`min-w-6.5 h-6.5 px-1 rounded-md text-[10px] font-black transition-all cursor-pointer flex items-center justify-center shrink-0 border ${
+                          active
+                            ? "bg-slate-900 text-white border-slate-900 shadow-2xs scale-105"
+                            : "bg-white text-slate-600 border-slate-200 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200"
+                        }`}
+                      >
+                        {letter}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Card Grid */}
@@ -8834,15 +8999,98 @@ export default function AdminDashboard() {
                   }
                 }
 
+                // Global totals before sub-filters
+                const allUnpaidDefaultersCount = students.filter(s => (unpaidDuesMap.get(s.id) || []).length > 0).length;
+                const fullyClearedCount = students.length - allUnpaidDefaultersCount;
+
                 const filteredDefaulters = students.filter((s) => {
+                  const allDues = studentDuesMap.get(s.id) || [];
                   const unpaidDues = unpaidDuesMap.get(s.id) || [];
-                  if (unpaidDues.length === 0) return false;
-                  const matchesSearch = !defaulterSearch.trim() ||
-                    s.name.toLowerCase().includes(defaulterSearch.toLowerCase()) ||
-                    s.parentName.toLowerCase().includes(defaulterSearch.toLowerCase());
+                  const overdueAmt = unpaidDues.reduce((sum, d) => sum + d.amount, 0);
+                  const totalPaid = allDues.reduce((sum, d) => sum + (d.totalPaid || (d.status === "PAID" ? (d.originalAmount || d.amount) : 0)), 0);
+
+                  // A. Category Filter
+                  if (defaulterCategory === "CLEARED") {
+                    if (unpaidDues.length > 0) return false;
+                  } else if (defaulterCategory === "ZERO_PAID") {
+                    if (totalPaid > 0 || unpaidDues.length === 0) return false;
+                  } else if (defaulterCategory === "PARTIAL_PAID") {
+                    if (totalPaid === 0 || unpaidDues.length === 0) return false;
+                  } else if (defaulterCategory === "HEAVY_DUE") {
+                    if (overdueAmt < 500000) return false; // >= ₹5,000 (in Paisa)
+                  } else {
+                    // Default "ALL" defaulters: only students with unpaid dues
+                    if (unpaidDues.length === 0) return false;
+                  }
+
+                  // B. Amount Range Filter
+                  if (defaulterAmountRange === "UNDER_2K" && (overdueAmt <= 0 || overdueAmt > 200000)) return false;
+                  if (defaulterAmountRange === "2K_5K" && (overdueAmt <= 200000 || overdueAmt > 500000)) return false;
+                  if (defaulterAmountRange === "5K_10K" && (overdueAmt <= 500000 || overdueAmt > 1000000)) return false;
+                  if (defaulterAmountRange === "ABOVE_10K" && overdueAmt <= 1000000) return false;
+
+                  // C. Alphabet Letter Filter
+                  if (defaulterLetter !== "ALL") {
+                    const firstLetter = (s.name || "").trim().toUpperCase().charAt(0);
+                    if (firstLetter !== defaulterLetter) return false;
+                  }
+
+                  // D. Search Filter (Multi-field: Name, Parent, ADM, Roll, Family Code)
+                  const q = defaulterSearch.trim().toLowerCase();
+                  if (q) {
+                    const matchesName = (s.name || "").toLowerCase().includes(q);
+                    const matchesParent = (s.parentName || s.fatherName || "").toLowerCase().includes(q);
+                    const matchesAdm = (s.admissionNo || "").toLowerCase().includes(q);
+                    const matchesRoll = (s.rollNo || "").toLowerCase().includes(q);
+                    const matchesFamily = (s.familyCode || "").toLowerCase().includes(q);
+                    if (!matchesName && !matchesParent && !matchesAdm && !matchesRoll && !matchesFamily) {
+                      return false;
+                    }
+                  }
+
+                  // E. Class Filter
                   const sClassVal = `${s.class}-${s.section}`;
                   const matchesClass = defaulterClass === "All" || sClassVal === defaulterClass;
-                  return matchesSearch && matchesClass;
+                  if (!matchesClass) return false;
+
+                  return true;
+                });
+
+                // Sort students dynamically
+                filteredDefaulters.sort((a, b) => {
+                  const unpaidA = (unpaidDuesMap.get(a.id) || []).reduce((sum, d) => sum + d.amount, 0);
+                  const unpaidB = (unpaidDuesMap.get(b.id) || []).reduce((sum, d) => sum + d.amount, 0);
+                  const duesA = studentDuesMap.get(a.id) || [];
+                  const duesB = studentDuesMap.get(b.id) || [];
+                  const paidA = duesA.reduce((sum, d) => sum + (d.totalPaid || (d.status === "PAID" ? (d.originalAmount || d.amount) : 0)), 0);
+                  const paidB = duesB.reduce((sum, d) => sum + (d.totalPaid || (d.status === "PAID" ? (d.originalAmount || d.amount) : 0)), 0);
+
+                  switch (defaulterSortBy) {
+                    case "NAME_ASC":
+                      return (a.name || "").localeCompare(b.name || "");
+                    case "NAME_DESC":
+                      return (b.name || "").localeCompare(a.name || "");
+                    case "DUE_DESC":
+                      return unpaidB - unpaidA;
+                    case "DUE_ASC":
+                      return unpaidA - unpaidB;
+                    case "PAID_DESC":
+                      return paidB - paidA;
+                    case "ROLL_ASC": {
+                      const numA = parseInt((a.rollNo || "").replace(/\D/g, "")) || 0;
+                      const numB = parseInt((b.rollNo || "").replace(/\D/g, "")) || 0;
+                      if (numA && numB) return numA - numB;
+                      return (a.rollNo || "").localeCompare(b.rollNo || "");
+                    }
+                    case "ADM_ASC": {
+                      const admA = parseInt((a.admissionNo || "").replace(/\D/g, "")) || 0;
+                      const admB = parseInt((b.admissionNo || "").replace(/\D/g, "")) || 0;
+                      if (admA && admB) return admA - admB;
+                      return (a.admissionNo || "").localeCompare(b.admissionNo || "");
+                    }
+                    default:
+                      return (a.name || "").localeCompare(b.name || "");
+                  }
                 });
 
                 const totalOutstanding = filteredDefaulters.reduce((sum, s) => {
@@ -9095,9 +9343,9 @@ export default function AdminDashboard() {
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                       {[
                         { label: "Total Students", value: students.length, color: "text-slate-800" },
-                        { label: "With Outstanding Due", value: filteredDefaulters.length, color: "text-rose-600" },
-                        { label: "Fully Cleared", value: students.length - filteredDefaulters.length, color: "text-emerald-600" },
-                        { label: "Total Outstanding", value: `${formatP(totalOutstanding)}`, color: "text-rose-700" },
+                        { label: "Showing Students", value: filteredDefaulters.length, color: "text-indigo-600" },
+                        { label: "Fully Cleared", value: fullyClearedCount, color: "text-emerald-600" },
+                        { label: "Filtered Outstanding", value: `${formatP(totalOutstanding)}`, color: "text-rose-700" },
                       ].map((stat) => (
                         <div key={stat.label} className="bg-white border border-slate-200/70 rounded-xl px-4 py-3 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
                           <span className="text-[8px] font-black uppercase text-slate-400 tracking-widest block">{stat.label}</span>
