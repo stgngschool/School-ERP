@@ -485,43 +485,111 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (activeRole === "ADMIN") setActiveTab("dashboard");
   }, [activeRole]);
 
-  // Database states
-  const [schoolInfo, setSchoolInfo] = useState<MockSchoolInfo>({
-    name: "Loading School Profile...",
-    address: "",
-    phone: "",
-    email: "",
-    upiId: "",
-    upiMerchantName: "",
-    enableTransport: true,
-    enableLateFee: true,
-    lateFeeGraceDays: 10,
-    lateFeeAmount: 50,
-    lateFeeType: "FLAT",
-    exams: [],
-    examConfig: {},
-  });
-  const [students, setStudents] = useState<MockStudent[]>([]);
-  const [dueItems, setDueItems] = useState<MockDueItem[]>([]);
-  const [attendances, setAttendances] = useState<MockAttendance[]>([]);
+  // Client-side instant SWR storage helpers
+  const getLocalCache = <T,>(key: string, fallback: T): T => {
+    if (typeof window === "undefined") return fallback;
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return fallback;
+      const parsed = JSON.parse(raw);
+      return (parsed?.data !== undefined ? parsed.data : parsed) ?? fallback;
+    } catch {
+      return fallback;
+    }
+  };
+
+  const setLocalCache = (key: string, data: any) => {
+    if (typeof window === "undefined" || !data) return;
+    try {
+      localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }));
+    } catch {
+      try {
+        localStorage.removeItem("gng_cached_attendances");
+        localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }));
+      } catch {}
+    }
+  };
+
+  // Database states with instant local cache hydration (0ms UI paint)
+  const [schoolInfo, setSchoolInfo] = useState<MockSchoolInfo>(() =>
+    getLocalCache("gng_cached_schoolInfo", {
+      name: "Loading School Profile...",
+      address: "",
+      phone: "",
+      email: "",
+      upiId: "",
+      upiMerchantName: "",
+      enableTransport: true,
+      enableLateFee: true,
+      lateFeeGraceDays: 10,
+      lateFeeAmount: 50,
+      lateFeeType: "FLAT",
+      exams: [],
+      examConfig: {},
+    })
+  );
+  const [students, setStudents] = useState<MockStudent[]>(() =>
+    getLocalCache("gng_cached_students", [])
+  );
+  const [dueItems, setDueItems] = useState<MockDueItem[]>(() =>
+    getLocalCache("gng_cached_dueItems", [])
+  );
+  const [attendances, setAttendances] = useState<MockAttendance[]>(() =>
+    getLocalCache("gng_cached_attendances", [])
+  );
   const [homeworks, setHomeworks] = useState<MockHomework[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<MockLeaveRequest[]>([]);
-  const [notices, setNotices] = useState<MockNotice[]>([]);
+  const [notices, setNotices] = useState<MockNotice[]>(() =>
+    getLocalCache("gng_cached_notices", [])
+  );
   const [admissionApplications, setAdmissionApplications] = useState<MockAdmissionApplication[]>([]);
-  const [ledgerEntries, setLedgerEntries] = useState<MockLedgerEntry[]>([]);
-  const [receipts, setReceipts] = useState<MockReceipt[]>([]);
-  const [feeHeads, setFeeHeads] = useState<{ name: string; frequency: string }[]>([]);
-  const [feeStructures, setFeeStructures] = useState<{ name: string; frequency: string; total: number; className: string; items?: { headName: string; amount: number }[] }[]>([]);
-  const [classes, setClasses] = useState<{ id: string; name: string; section: string }[]>([]);
+  const [ledgerEntries, setLedgerEntries] = useState<MockLedgerEntry[]>(() =>
+    getLocalCache("gng_cached_ledgerEntries", [])
+  );
+  const [receipts, setReceipts] = useState<MockReceipt[]>(() =>
+    getLocalCache("gng_cached_receipts", [])
+  );
+  const [feeHeads, setFeeHeads] = useState<{ name: string; frequency: string }[]>(() =>
+    getLocalCache("gng_cached_feeHeads", [])
+  );
+  const [feeStructures, setFeeStructures] = useState<{ name: string; frequency: string; total: number; className: string; items?: { headName: string; amount: number }[] }[]>(() =>
+    getLocalCache("gng_cached_feeStructures", [])
+  );
+  const [classes, setClasses] = useState<{ id: string; name: string; section: string }[]>(() =>
+    getLocalCache("gng_cached_classes", [])
+  );
   const [auditLogs, setAuditLogs] = useState<MockAuditLog[]>([]);
   const [eventsList, setEventsList] = useState<MockCalendarEvent[]>([]);
   const [transportStops, setTransportStops] = useState<{ id: string; name: string; amount: number }[]>([]);
   const [concessions, setConcessions] = useState<{ id: string; name: string; percentage: number; feeHeadName: string }[]>([]);
 
-  const [studentsLoaded, setStudentsLoaded] = useState(false);
-  const [billingLoaded, setBillingLoaded] = useState(false);
-  const [attendanceLoaded, setAttendanceLoaded] = useState(false);
-
+  const [studentsLoaded, setStudentsLoaded] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      const cached = localStorage.getItem("gng_cached_students");
+      return !!cached && (JSON.parse(cached)?.data?.length > 0 || JSON.parse(cached)?.length > 0);
+    } catch {
+      return false;
+    }
+  });
+  const [billingLoaded, setBillingLoaded] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      const cached = localStorage.getItem("gng_cached_dueItems");
+      return !!cached && (JSON.parse(cached)?.data?.length > 0 || JSON.parse(cached)?.length > 0);
+    } catch {
+      return false;
+    }
+  });
+  const [attendanceLoaded, setAttendanceLoaded] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      const cached = localStorage.getItem("gng_cached_attendances");
+      return !!cached && (JSON.parse(cached)?.data?.length > 0 || JSON.parse(cached)?.length > 0);
+    } catch {
+      return false;
+    }
+  });
 
   const clearApiCache = (urlPrefix?: string) => {
     if (typeof window === 'undefined') return;
@@ -655,15 +723,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // ─── Parallel Core Data Hydration (Instant & Progressive) ───
       // 1. Metadata (Instant cached responses)
-      apiFetch("/api/school", {}, 10000, true).then((data) => { if (data) setSchoolInfo(data); });
-      apiFetch("/api/classes", {}, 10000, true).then((data) => data && setClasses(data));
+      apiFetch("/api/school", {}, 10000, true).then((data) => {
+        if (data) {
+          setSchoolInfo(data);
+          setLocalCache("gng_cached_schoolInfo", data);
+        }
+      });
+      apiFetch("/api/classes", {}, 10000, true).then((data) => {
+        if (data) {
+          setClasses(data);
+          setLocalCache("gng_cached_classes", data);
+        }
+      });
       apiFetch("/api/fee-config", {}, 10000, true).then((feeData) => {
         if (feeData) {
           setFeeHeads(feeData.feeHeads || []);
           setFeeStructures(feeData.feeStructures || []);
+          setLocalCache("gng_cached_feeHeads", feeData.feeHeads || []);
+          setLocalCache("gng_cached_feeStructures", feeData.feeStructures || []);
         }
       });
-      apiFetch("/api/notice", {}, 10000, true).then((data) => data && setNotices(data));
+      apiFetch("/api/notice", {}, 10000, true).then((data) => {
+        if (data) {
+          setNotices(data);
+          setLocalCache("gng_cached_notices", data);
+        }
+      });
 
       if (isStaff) {
         apiFetch("/api/transport", {}, 10000, true).then((transData) => {
@@ -677,6 +762,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (data && Array.isArray(data)) {
           setStudents(data);
           setStudentsLoaded(true);
+          setLocalCache("gng_cached_students", data);
         }
       });
 
@@ -686,6 +772,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setReceipts(data.receipts || []);
           setDueItems(data.dueItems || []);
           setBillingLoaded(true);
+          setLocalCache("gng_cached_dueItems", data.dueItems || []);
+          setLocalCache("gng_cached_receipts", data.receipts || []);
+          setLocalCache("gng_cached_ledgerEntries", data.ledgerEntries || []);
         }
       });
 
@@ -693,6 +782,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (data && Array.isArray(data)) {
           setAttendances(data);
           setAttendanceLoaded(true);
+          setLocalCache("gng_cached_attendances", data);
         }
       });
 
@@ -732,6 +822,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const feeData = await feeRes.json();
         setFeeHeads(feeData.feeHeads);
         setFeeStructures(feeData.feeStructures);
+        setLocalCache("gng_cached_feeHeads", feeData.feeHeads || []);
+        setLocalCache("gng_cached_feeStructures", feeData.feeStructures || []);
       }
     } catch (err) {
       console.error("Fee config refresh failed:", err);
@@ -742,19 +834,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshStudents = async () => {
     clearApiCache("/api/students");
     const data = await apiFetch("/api/students");
-    if (data) {
+    if (data && Array.isArray(data)) {
       setStudents(data);
       setStudentsLoaded(true);
+      setLocalCache("gng_cached_students", data);
     }
   };
 
   const refreshBilling = async () => {
+    clearApiCache("/api/billing");
     const data = await apiFetch("/api/billing");
     if (data) {
       setLedgerEntries(data.ledgerEntries || []);
       setReceipts(data.receipts || []);
       setDueItems(data.dueItems || []);
       setBillingLoaded(true);
+      setLocalCache("gng_cached_dueItems", data.dueItems || []);
+      setLocalCache("gng_cached_receipts", data.receipts || []);
+      setLocalCache("gng_cached_ledgerEntries", data.ledgerEntries || []);
     }
   };
 

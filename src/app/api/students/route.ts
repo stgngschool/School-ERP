@@ -8,17 +8,32 @@ import { getAuthUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
+const serverStudentsCache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_TTL_MS = 25000; // 25 seconds
+
+function clearServerStudentsCache() {
+  serverStudentsCache.clear();
+}
+
 export async function GET(request: Request) {
   const reqId = `std_${Math.random().toString(36).substring(2, 9)}`;
   const startTime = performance.now();
-  console.log(`[DIAGNOSTIC][API][START] GET /api/students [${reqId}] | timestamp: ${new Date().toISOString()}`);
 
   try {
     const authUser = await getAuthUser(request);
     if (!authUser) {
-      const duration = (performance.now() - startTime).toFixed(2);
-      console.warn(`[DIAGNOSTIC][API][END] GET /api/students [${reqId}] | status: 401 | duration: ${duration}ms | authenticated: false | reason: Unauthorized access`);
       return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
+    }
+
+    const cacheKey = `${authUser.role}_${authUser.userId}`;
+    const cached = serverStudentsCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+      return NextResponse.json(cached.data, {
+        headers: {
+          "Cache-Control": "private, max-age=15, stale-while-revalidate=30",
+          "X-Server-Cache": "HIT",
+        },
+      });
     }
 
     let whereClause = {};
@@ -100,11 +115,17 @@ export async function GET(request: Request) {
       } : null,
     }));
 
-    const responseStr = JSON.stringify(formatted);
-    const duration = (performance.now() - startTime).toFixed(2);
-    console.log(`[DIAGNOSTIC][API][END] GET /api/students [${reqId}] | status: 200 | duration: ${duration}ms | dbDuration: ${dbDuration}ms | authenticatedUser: ${authUser.username} (${authUser.role}) | size: ${responseStr.length}B`);
+    serverStudentsCache.set(cacheKey, {
+      data: formatted,
+      timestamp: Date.now(),
+    });
 
-    return NextResponse.json(formatted);
+    return NextResponse.json(formatted, {
+      headers: {
+        "Cache-Control": "private, max-age=15, stale-while-revalidate=30",
+        "X-Server-Cache": "MISS",
+      },
+    });
   } catch (error: any) {
     const duration = (performance.now() - startTime).toFixed(2);
     console.error(`[DIAGNOSTIC][API][ERROR] GET /api/students [${reqId}] | status: 500 | duration: ${duration}ms | error: ${error.message}`);
@@ -118,6 +139,9 @@ export async function POST(request: Request) {
     if (!authUser || (authUser.role !== "ADMIN" && authUser.role !== "ACCOUNTANT")) {
       return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
     }
+
+    // Invalidate server cache on student creation
+    clearServerStudentsCache();
 
     const body = await request.json();
     const {

@@ -9,6 +9,14 @@ import fs from "fs";
 import path from "path";
 import { getAcademicYear } from "@/lib/generateYearlyCharges";
 
+// Server-side in-memory cache for ultra-fast response times & zero Supabase overload
+const serverBillingCache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_TTL_MS = 20000; // 20s TTL
+
+function clearServerBillingCache() {
+  serverBillingCache.clear();
+}
+
 function getChargeDueDate(chargeName: string, fallbackTime: number): string {
   const nameLower = chargeName.toLowerCase();
   
@@ -48,6 +56,18 @@ export async function GET(request: Request) {
     const authUser = await getAuthUser(request);
     if (!authUser) {
       return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
+    }
+
+    // Fast server memory cache hit (0ms)
+    const cacheKey = `${authUser.role}_${authUser.userId}`;
+    const cached = serverBillingCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+      return NextResponse.json(cached.data, {
+        headers: {
+          "Cache-Control": "private, max-age=10, stale-while-revalidate=20",
+          "X-Server-Cache": "HIT",
+        },
+      });
     }
 
     let ledgerWhere: any = {};
@@ -121,11 +141,11 @@ export async function GET(request: Request) {
     chargesWhere.createdAt = { gte: sessionStartDate };
     discountsWhere.createdAt = { gte: sessionStartDate };
 
-    // Execute optimized queries concurrently
+    // Execute optimized queries concurrently with minimal join overhead
     const [ledger, receipts, charges, discounts, paidGroups] = await Promise.all([
       db.ledgerEntry.findMany({
         where: ledgerWhere,
-        take: 300,
+        take: 150,
         orderBy: { createdAt: "desc" },
         select: {
           id: true,
@@ -138,7 +158,7 @@ export async function GET(request: Request) {
       }),
       db.receipt.findMany({
         where: receiptWhere,
-        take: 300,
+        take: 150,
         select: {
           id: true,
           studentId: true,
@@ -180,16 +200,9 @@ export async function GET(request: Request) {
                   amount: true,
                   student: {
                     select: {
-                      id: true,
                       name: true,
                       admissionNumber: true,
                       fatherName: true,
-                      class: {
-                        select: {
-                          name: true,
-                          section: true,
-                        },
-                      },
                     },
                   },
                 },
@@ -208,7 +221,6 @@ export async function GET(request: Request) {
           description: true,
           amount: true,
           createdAt: true,
-          sessionId: true,
         },
       }),
       db.ledgerEntry.findMany({
@@ -410,10 +422,22 @@ export async function GET(request: Request) {
       };
     });
 
-    return NextResponse.json({
+    const result = {
       ledgerEntries: formattedLedger,
       receipts: formattedReceipts,
       dueItems: formattedDues,
+    };
+
+    serverBillingCache.set(cacheKey, {
+      data: result,
+      timestamp: Date.now(),
+    });
+
+    return NextResponse.json(result, {
+      headers: {
+        "Cache-Control": "private, max-age=10, stale-while-revalidate=20",
+        "X-Server-Cache": "MISS",
+      },
     });
   } catch (error: any) {
     console.error("Fetch billing error:", error);
@@ -431,6 +455,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized. Please log in." }, { status: 401 });
     }
     const creatorUserId = authUser.userId;
+
+    // Invalidate server cache on mutations
+    clearServerBillingCache();
 
     const body = await request.json();
     const { action, studentId, parentProfileId, items, paymentMethod, transactionRef, title, amount, headName } = body;
