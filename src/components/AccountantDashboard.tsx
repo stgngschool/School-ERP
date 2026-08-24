@@ -48,6 +48,10 @@ import {
   isDueUpToCurrentMonth,
   getCurrentMonthName,
 } from "@/lib/whatsapp";
+import {
+  exportMasterFeeRegisterXLS,
+  exportSingleStudentStatementXLS,
+} from "@/lib/exportFeeXLS";
 
 
 // Groups multiple months or siblings into a single row if the list grows too long (> 4 items)
@@ -1805,12 +1809,42 @@ export default function AccountantDashboard() {
                   Click on any student card to view detailed fee breakdown.
                 </p>
               </div>
-              <button 
-                onClick={() => alert(`Exporting XLS report...`)}
-                className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl py-2 px-3 text-[10px] font-bold text-slate-600 self-start sm:self-auto cursor-pointer transition-all"
-              >
-                <FileSpreadsheet className="h-3.5 w-3.5" /> Export XLS
-              </button>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button 
+                  onClick={() => {
+                    exportMasterFeeRegisterXLS({
+                      students,
+                      dueItems,
+                      receipts,
+                      schoolInfo,
+                      selectedClass: defaulterClass,
+                      searchQuery: defaulterSearch,
+                    });
+                  }}
+                  className="flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 active:scale-95 border border-emerald-200/80 rounded-xl py-2 px-3.5 text-[11px] font-bold text-emerald-800 self-start sm:self-auto cursor-pointer transition-all shadow-2xs"
+                  title="Export complete Multi-Sheet Excel Workbook (.xlsx) with student-by-student monthly fee breakdown"
+                >
+                  <FileSpreadsheet className="h-4 w-4 text-emerald-600" /> Export XLS {defaulterClass !== "All" ? `(Class ${defaulterClass})` : "(All Students)"}
+                </button>
+                {defaulterClass !== "All" && (
+                  <button
+                    onClick={() => {
+                      exportMasterFeeRegisterXLS({
+                        students,
+                        dueItems,
+                        receipts,
+                        schoolInfo,
+                        selectedClass: "All",
+                        searchQuery: "",
+                      });
+                    }}
+                    className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 active:scale-95 border border-slate-200 rounded-xl py-2 px-3 text-[10px] font-bold text-slate-600 cursor-pointer transition-all"
+                    title="Export all classes and all students to Excel"
+                  >
+                    <Download className="h-3.5 w-3.5 text-slate-500" /> Export All Classes
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Filters Row */}
@@ -2099,10 +2133,18 @@ export default function AccountantDashboard() {
                             <CreditCard className="h-4 w-4" /> Collect Fee
                           </button>
                           <button
-                            onClick={() => alert("Exporting statement...")}
-                            className="flex items-center gap-1.5 py-2 px-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 text-xs font-bold transition-all cursor-pointer shadow-sm"
+                            onClick={() =>
+                              exportSingleStudentStatementXLS({
+                                student: std,
+                                dueItems,
+                                receipts,
+                                schoolInfo,
+                              })
+                            }
+                            className="flex items-center gap-1.5 py-2 px-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition-all cursor-pointer shadow-sm active:scale-95"
+                            title="Download student fee statement Excel file"
                           >
-                            <Download className="h-4 w-4 text-slate-500" /> Export CSV
+                            <FileSpreadsheet className="h-4 w-4 text-emerald-600" /> Export XLS
                           </button>
                         </div>
                       </div>
