@@ -311,16 +311,20 @@ export async function POST(request: Request) {
     }
 
     // 9. Generate full-year billing charges in bulk for imported students
+    let billingResult = null;
     if (systemUser && backfillMap.length > 0) {
-      await generateYearlyChargesBulk(backfillMap, systemUser.id, getAcademicYear());
+      billingResult = await generateYearlyChargesBulk(backfillMap, systemUser.id, getAcademicYear());
     }
 
     return NextResponse.json({
       success: true,
-      count: studentsToCreate.length,
+      importedCount: studentsToCreate.length,
+      totalSubmitted: students.length,
+      billingGenerated: billingResult?.generated || 0,
+      billingSkipped: billingResult?.skipped || 0,
     });
   } catch (error: any) {
     console.error("Bulk import error detailed:", error);
-    return NextResponse.json({ error: error?.message || "Failed to import students" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to import students. Please check your data format and try again." }, { status: 500 });
   }
 }

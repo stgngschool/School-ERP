@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
 
+import { boundPagination, getSafeErrorMessage } from "@/lib/validation";
+
 export async function GET(request: Request) {
   try {
     const authUser = await getAuthUser(request);
@@ -9,8 +11,12 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
     }
 
+    const { searchParams } = new URL(request.url);
+    const { limit, offset } = boundPagination(searchParams, { defaultLimit: 200, maxLimit: 500 });
+
     const logs = await db.auditLog.findMany({
-      take: 200,
+      take: limit,
+      skip: offset,
       include: { user: true },
       orderBy: { createdAt: "desc" },
     });
@@ -20,8 +26,8 @@ export async function GET(request: Request) {
       const timestamp = d.toLocaleDateString() + " " + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       return {
         id: log.id,
-        userName: `${log.user.name} (${log.user.role})`,
-        role: log.user.role,
+        userName: log.user ? `${log.user.name} (${log.user.role})` : "System / Deleted User",
+        role: log.user ? log.user.role : "UNKNOWN",
         action: log.action,
         createdAt: timestamp,
       };
@@ -30,7 +36,8 @@ export async function GET(request: Request) {
     return NextResponse.json(formatted);
   } catch (error) {
     console.error("Fetch audits error:", error);
-    return NextResponse.json({ error: "Failed to fetch audit logs" }, { status: 500 });
+    const safeError = getSafeErrorMessage(error, "Failed to fetch audit logs.");
+    return NextResponse.json({ error: safeError }, { status: 500 });
   }
 }
 

@@ -33,17 +33,26 @@ export function toRupees(paisa: number): number {
 
 /**
  * Convert paisa into capitalized Indian Currency words string.
- * @example numberToIndianWords(1200000) → "Twelve Thousand Rupees Only"
+ * @example numberToIndianWords(10000) → "One Hundred Rupees Only"
+ * @example numberToIndianWords(10050) → "One Hundred Rupees and Fifty Paise Only"
+ * @example numberToIndianWords(123475) → "One Thousand Two Hundred Thirty Four Rupees and Seventy Five Paise Only"
+ * @example numberToIndianWords(50) → "Fifty Paise Only"
+ * @example numberToIndianWords(0) → "Zero Rupees Only"
  */
 export function numberToIndianWords(paisa: number): string {
-  const rupees = Math.floor(Math.abs(paisa || 0) / 100);
-  if (rupees === 0) return "Zero Rupees Only";
+  const totalPaisa = Math.round(Math.abs(paisa || 0));
+  const rupees = Math.floor(totalPaisa / 100);
+  const remainingPaise = totalPaisa % 100;
+
+  // ── LC-02: Use "Zero Rupees and Zero Paise Only" for natural receipt language
+  if (rupees === 0 && remainingPaise === 0) return "Zero Rupees and Zero Paise Only";
 
   const ones = [
     "", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine",
     "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen",
     "Seventeen", "Eighteen", "Nineteen"
   ];
+
   const tens = [
     "", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"
   ];
@@ -79,5 +88,14 @@ export function numberToIndianWords(paisa: number): string {
   if (thousand > 0) parts.push(`${convertTwoDigits(thousand)} Thousand`);
   if (remainder > 0) parts.push(convertThreeDigits(remainder));
 
-  return parts.join(" ") + " Rupees Only";
+  const rupeeString = parts.length > 0 ? parts.join(" ") + " Rupees" : (rupees > 0 ? "Zero Rupees" : "");
+  const paiseString = remainingPaise > 0 ? `${convertTwoDigits(remainingPaise)} Paise` : "";
+
+  if (rupeeString && paiseString) {
+    return `${rupeeString} and ${paiseString} Only`;
+  } else if (rupeeString) {
+    return `${rupeeString} Only`;
+  } else {
+    return `${paiseString} Only`;
+  }
 }

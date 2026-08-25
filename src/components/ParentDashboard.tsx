@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { formatP, numberToIndianWords } from "@/lib/currency";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -26,95 +26,7 @@ import {
 import StudentProfileModal from "@/components/StudentProfileModal";
 import NoticeBoardView from "@/components/NoticeBoardView";
 import ModernDatePicker from "@/components/ModernDatePicker";
-
-// Groups multiple months or siblings into a single row if the list grows too long (> 4 items)
-const getGroupedReceiptItems = (items: any[]) => {
-  if (!items || items.length === 0) return [];
-  if (items.length <= 4) return items;
-
-  const groups: { [key: string]: { name: string; studentPrefix: string; baseFeeHead: string; months: string[]; amount: number; discount: number } } = {};
-
-  items.forEach((item) => {
-    const rawName = item.name || item.description || "";
-    let studentPrefix = "";
-    let rest = rawName;
-
-    if (rawName.includes(":")) {
-      const parts = rawName.split(":");
-      studentPrefix = parts[0].trim();
-      rest = parts.slice(1).join(":").trim();
-    }
-
-    let baseFeeHead = rest;
-    let month = "";
-    const monthsList = [
-      "january", "february", "march", "april", "may", "june",
-      "july", "august", "september", "october", "november", "december"
-    ];
-
-    if (rest.includes("-")) {
-      const parts = rest.split("-");
-      let monthPartIndex = -1;
-      for (let i = parts.length - 1; i >= 0; i--) {
-        const partLower = parts[i].toLowerCase();
-        const hasMonth = monthsList.some((m) => partLower.includes(m));
-        if (hasMonth) {
-          monthPartIndex = i;
-          break;
-        }
-      }
-
-      if (monthPartIndex !== -1) {
-        month = parts.slice(monthPartIndex).join("-").trim();
-        baseFeeHead = parts.slice(0, monthPartIndex).join("-").trim();
-      }
-    }
-
-    const key = `${studentPrefix}||${baseFeeHead}`;
-
-    if (!groups[key]) {
-      groups[key] = {
-        name: baseFeeHead,
-        studentPrefix,
-        baseFeeHead,
-        months: [],
-        amount: 0,
-        discount: 0,
-      };
-    }
-
-    if (month) {
-      const monthLower = month.toLowerCase();
-      const matchedMonth = monthsList.find((m) => monthLower.includes(m));
-      if (matchedMonth) {
-        const capMonth = matchedMonth.charAt(0).toUpperCase() + matchedMonth.slice(1);
-        groups[key].months.push(capMonth);
-      }
-    }
-    groups[key].amount += item.amount;
-    groups[key].discount += item.discount || 0;
-  });
-
-  return Object.values(groups).map((g) => {
-    let finalName = "";
-    if (g.studentPrefix) {
-      finalName += `${g.studentPrefix}: `;
-    }
-    finalName += g.baseFeeHead;
-    if (g.months.length > 0) {
-      if (g.months.length >= 3) {
-        finalName += ` (${g.months[0]} to ${g.months[g.months.length - 1]})`;
-      } else {
-        finalName += ` (${g.months.join(", ")})`;
-      }
-    }
-    return {
-      name: finalName,
-      amount: g.amount,
-      discount: g.discount,
-    };
-  });
-};
+import { getGroupedReceiptItems } from "@/lib/receipts";
 
 export default function ParentDashboard() {
   const {
@@ -135,27 +47,22 @@ export default function ParentDashboard() {
     attendanceLoaded,
   } = useAuth();
 
-  // Filter students belonging to this parent dynamically
-  const parentStudents = (user?.role === "PARENT" && students.length > 0)
-    ? students
-    : students.filter((s) => {
-        if (!user) return false;
-        const norm = (str?: string) => (str ? str.replace(/\D/g, "").slice(-10) : "");
-        const userPhone = norm(user.phone || user.username);
-        const sFatherPhone = norm(s.fatherMobile || s.parentPhone);
-        const sMotherPhone = norm(s.motherMobile);
-        if (userPhone && (userPhone === sFatherPhone || userPhone === sMotherPhone)) return true;
-        if (user.name && s.parentName && user.name.toLowerCase().trim() === s.parentName.toLowerCase().trim()) return true;
-        if (user.name && s.fatherName && user.name.toLowerCase().trim() === s.fatherName.toLowerCase().trim()) return true;
-        return false;
-      });
-  
-  const [selectedChildId, setSelectedChildId] = useState(
-    parentStudents.length > 0 ? parentStudents[0].id : ""
-  );
+  // ── PD-01 / A-06: parentStudents must contain ONLY this parent's own children.
+  //
+  // Server-side boundary is authoritative: /api/students returns ONLY the students
+  // belonging to this parent's parentProfileId when role === "PARENT".
+  // For non-PARENT roles (e.g. admin previewing without a parent profile),
+  // we return [] rather than fuzzy-matching across unrelated families by name/phone.
+  const parentStudents = (user?.role === "PARENT") ? students : [];
+
+  // ── PD-08: Initialize selectedChildId as "" — parentStudents is [] on mount
+  // (students not yet loaded from context). The useEffect below syncs it once
+  // data arrives, preventing a brief render of incorrect/empty child state.
+  const [selectedChildId, setSelectedChildId] = useState("");
 
   React.useEffect(() => {
     if (parentStudents.length > 0) {
+      // Select first child if no valid child is currently selected
       if (!selectedChildId || !parentStudents.some((s) => s.id === selectedChildId)) {
         setSelectedChildId(parentStudents[0].id);
       }
@@ -164,7 +71,7 @@ export default function ParentDashboard() {
 
   const [showFullProfile, setShowFullProfile] = useState(false);
 
-  const child = students.find((s) => s.id === selectedChildId) || parentStudents[0];
+  const child = parentStudents.find((s) => s.id === selectedChildId) || parentStudents[0];
 
   // Child-specific datasets
   const childDues = child 
@@ -178,14 +85,22 @@ export default function ParentDashboard() {
         })
     : [];
   const childAttendances = child ? attendances.filter((a) => a.studentId === child.id) : [];
-  const childHomework = child ? homeworks.filter(
-    (h) => {
-      const childClass = (child.class || "").toLowerCase().replace(/\s+/g, "");
-      const childSection = (child.section || "").toLowerCase().replace(/\s+/g, "");
-      const hwCS = (h.classSection || "").toLowerCase().replace(/\s+/g, "");
-      return hwCS.includes(childClass) || hwCS === `${childClass}-${childSection}`;
-    }
-  ) : [];
+  const childHomework = child ? homeworks.filter((h) => {
+    // ── PD-04: Exact normalized class and section matching (Class "3" must never match "Class 13")
+    const childClassNorm = (child.class || "").toLowerCase().replace(/^class\s*/i, "").replace(/\s+/g, "");
+    const childSecNorm = (child.section || "").toLowerCase().trim();
+
+    const rawHwCS = (h.classSection || "").toLowerCase().trim();
+    if (!rawHwCS) return false;
+
+    const parts = rawHwCS.split("-").map((p: string) => p.replace(/^class\s*/i, "").trim());
+    const hwClass = parts[0];
+    const hwSec = parts[1] || "";
+
+    if (hwClass !== childClassNorm) return false;
+    if (!hwSec || hwSec === "all") return true;
+    return hwSec === childSecNorm;
+  }) : [];
   const childLeaves = child ? leaveRequests.filter((l) => l.studentId === child.id) : [];
 
   // Selection state for payment checkouts
@@ -193,7 +108,13 @@ export default function ParentDashboard() {
   const [payMethod, setPayMethod] = useState("UPI");
   const [showPayModal, setShowPayModal] = useState(false);
   const [payLoading, setPayLoading] = useState(false);
-  
+  // ── PD-02: Synchronous guard to prevent concurrent payment submissions ──────
+  // React state updates are async, so setPayLoading(true) alone cannot prevent
+  // a rapid double-click from firing two concurrent requests. A ref is
+  // synchronously readable/writable within the same event-loop tick.
+  const isSubmittingPayment = useRef(false);
+  // ─────────────────────────────────────────────────────────────────────────────
+
   // Printable Invoice Receipt States
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [activeReceipt, setActiveReceipt] = useState<any>(null);
@@ -255,7 +176,8 @@ export default function ParentDashboard() {
   const monthlyLeave = monthlyLogs.filter((a) => a.status === "LEAVE").length;
   const monthlyLate = monthlyLogs.filter((a) => a.status === "LATE").length;
   const monthlyTotal = monthlyLogs.length;
-  const monthlyRate = monthlyTotal > 0 ? Math.round(((monthlyPresent + monthlyLeave + monthlyLate) / monthlyTotal) * 100) : 100;
+  // ── PD-07: On-time attendance pass-rate calculation strictly uses PRESENT without inflating with LATE
+  const monthlyRate = monthlyTotal > 0 ? Math.round((monthlyPresent / monthlyTotal) * 100) : 100;
 
   const handlePrevMonth = () => {
     if (selectedMonth === 1) {
@@ -279,7 +201,10 @@ export default function ParentDashboard() {
 
   React.useEffect(() => {
     if (child?.id) {
-      fetch(`/api/students/${child.id}/marks`)
+      // ── PD-03: Include credentials so authenticated parent requests succeed
+      fetch(`/api/students/${child.id}/marks`, {
+        credentials: "include",
+      })
         .then(res => res.json())
         .then(data => {
            if (Array.isArray(data)) setChildMarks(data);
@@ -304,10 +229,22 @@ export default function ParentDashboard() {
   const handleSimulatePayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!child) return;
+
+    // ── PD-02: Prevent concurrent payment submissions ─────────────────────────
+    // isSubmittingPayment.current is synchronously readable/writable, so this
+    // check correctly blocks a rapid double-click even before the first setState
+    // call re-renders the button into its disabled state.
+    if (isSubmittingPayment.current) return;
+    isSubmittingPayment.current = true;
+    // ─────────────────────────────────────────────────────────────────────────
+
     const unpaidItems = childDues.filter((d) => selectedDueIds.includes(d.id));
     const totalAmount = unpaidItems.reduce((sum, item) => sum + item.amount, 0);
 
-    if (totalAmount <= 0) return;
+    if (totalAmount <= 0) {
+      isSubmittingPayment.current = false;
+      return;
+    }
 
     const items = unpaidItems.map((d) => ({
       ledgerEntryId: d.id,
@@ -319,15 +256,30 @@ export default function ParentDashboard() {
     try {
       const payRes = await recordItemizedPayment(child.id, items, payMethod);
       if (payRes.success) {
+        // AD-02: Never fabricate a receipt number — if the server did not return one,
+        // surface a clear error instead of displaying an invalid financial document.
+        if (!payRes.receipt?.receiptNo) {
+          alert("Payment recorded but the server did not return a valid receipt number. Please contact your school administrator.");
+          setSelectedDueIds([]);
+          setShowPayModal(false);
+          return;
+        }
+        const serverRec = payRes.receipt;
         const matchedReceipt = {
-          receiptNo: payRes.receipt?.receiptNo || `REC-2026-${Math.floor(1000 + Math.random() * 9000)}`,
-          studentName: child.name,
-          classSection: `${child.class}-${child.section}`,
-          admissionNo: child.admissionNo,
-          amount: totalAmount,
-          method: payMethod,
-          details: unpaidItems.map((i) => `${i.name} (${formatP(i.amount)})`).join(" + "),
-          createdAt: new Date().toISOString().split("T")[0],
+          receiptNo: serverRec.receiptNo,
+          studentName: serverRec.studentName || child.name,
+          classSection: serverRec.classSection || `${child.class}-${child.section}`,
+          admissionNo: serverRec.admissionNo || child.admissionNo,
+          fatherName: serverRec.fatherName || child.fatherName || "",
+          subtotal: serverRec.subtotal !== undefined ? serverRec.subtotal : totalAmount,
+          amount: serverRec.amount !== undefined ? serverRec.amount : totalAmount,
+          discount: serverRec.discount !== undefined ? serverRec.discount : 0,
+          arrears: serverRec.arrears !== undefined ? serverRec.arrears : 0,
+          method: serverRec.paymentMethod || payMethod,
+          transactionRef: serverRec.transactionRef || "",
+          details: serverRec.details || unpaidItems.map((i) => `${i.name} (${formatP(i.amount)})`).join(" + "),
+          items: serverRec.items || unpaidItems.map((i) => ({ name: i.name, amount: i.amount, originalAmount: i.amount, discount: 0, balance: 0 })),
+          createdAt: serverRec.createdAt ? new Date(serverRec.createdAt).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
         };
 
         setActiveReceipt(matchedReceipt);
@@ -341,8 +293,12 @@ export default function ParentDashboard() {
       console.error("Payment error:", err);
     } finally {
       setPayLoading(false);
+      // ── PD-02: Release the submission guard so the button becomes clickable
+      //    again after the request completes (success or failure).
+      isSubmittingPayment.current = false;
     }
   };
+
 
   const handleApplyLeave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1524,7 +1480,7 @@ export default function ParentDashboard() {
             </div>
 
             {/* Print Styling Override */}
-            <style dangerouslySetInnerHTML={{__html: `
+            <style>{`
               @media print {
                 @page {
                   size: ${receiptPageSize === "A5" ? "A5 landscape" : "A4 portrait"};
@@ -1558,7 +1514,7 @@ export default function ParentDashboard() {
                   print-color-adjust: exact !important;
                 }
               }
-            `}} />
+            `}</style>
 
             {/* Printable Receipt Canvas */}
             <div

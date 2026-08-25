@@ -263,9 +263,9 @@ export async function GET(
       
       parent: student.parentProfile ? {
         id: student.parentProfile.id,
-        name: student.parentProfile.user.name,
-        email: student.parentProfile.user.email,
-        phone: student.parentProfile.user.phone || "",
+        name: student.parentProfile.user?.name || student.fatherName || "",
+        email: student.parentProfile.user?.email || "",
+        phone: student.parentProfile.user?.phone || student.fatherMobile || "",
         address: student.parentProfile.address || "",
         familyCode: student.parentProfile.familyCode,
       } : null,

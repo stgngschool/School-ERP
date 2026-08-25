@@ -10,7 +10,8 @@ export type LeaveStatus = "PENDING" | "APPROVED" | "REJECTED";
 
 export type AuthStage =
   | "APP STARTED"
-  | "SUPABASE CLIENT CREATED"
+  // ── AC-07: Renamed from the vestigial Supabase stage — app uses JWT/cookie auth, not Supabase auth.
+  | "AUTH GATEWAY READY"
   | "CHECKING SESSION"
   | "SESSION FOUND"
   | "AUTH USER LOADED"
@@ -105,6 +106,8 @@ export interface MockAttendance {
   studentId: string;
   date: string;
   status: AttendanceStatus;
+  // ── AT-04: Server-provided concurrency token. Sent back as expectedUpdatedAt on save.
+  updatedAt?: string;
 }
 
 export interface MockHomework {
@@ -317,9 +320,9 @@ interface AuthContextType {
   deleteUser: (userId: string) => Promise<{ success: boolean; error?: string }>;
   updateAdminProfile: (userId: string, data: { name: string; username: string; email: string; phone?: string }) => Promise<{ success: boolean; error?: string }>;
   registerNewStaff: (data: any) => Promise<{ success: boolean; error?: string }>;
-  updateSchoolInfo: (info: MockSchoolInfo) => Promise<void>;
+  updateSchoolInfo: (info: Partial<MockSchoolInfo>) => Promise<void>;
   markAttendance: (studentId: string, date: string, status: AttendanceStatus) => Promise<void>;
-  markBatchAttendance: (records: { studentId: string; date: string; status: AttendanceStatus }[]) => Promise<void>;
+  markBatchAttendance: (records: { studentId: string; date: string; status: AttendanceStatus; expectedUpdatedAt?: string }[]) => Promise<void>;
   addHomework: (
     classSection: string,
     subject: string,
@@ -398,9 +401,10 @@ interface AuthContextType {
       busRoute: string;
       busStop: string;
       familyCode?: string;
+      isRte?: boolean;
     },
     initialDues?: { name: string; amount: number }[]
-  ) => Promise<void>;
+  ) => Promise<{ success: boolean; student?: any; error?: string }>;
   bulkImportStudents: (
     studentsList: any[],
     onProgress?: (processed: number, total: number, currentBatch: number, totalBatches: number) => void
@@ -433,6 +437,7 @@ interface AuthContextType {
   refreshData: () => Promise<void>;
   refreshStudents: () => Promise<void>;
   refreshBilling: () => Promise<void>;
+  fetchBillingSummary: () => Promise<any>;
   refreshAttendance: () => Promise<void>;
   refreshHomework: () => Promise<void>;
   refreshLeave: () => Promise<void>;
@@ -612,17 +617,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     useCache = false,
     retries = 1
   ): Promise<any> => {
-    // 1. Check Session Cache (never serve empty array if cached accidentally)
+    // ── AC-02: Helper to determine whether a response payload has meaningful
+    //    data worth caching. For plain arrays: must be non-empty. For objects
+    //    whose values are arrays (e.g. billing: { ledgerEntries, receipts, dueItems }):
+    //    at least one array value must be non-empty — an object consisting
+    //    entirely of empty arrays is not meaningful cached state and must not
+    //    be returned to callers instead of a fresh fetch after a mutation.
+    const hasSubstantiveData = (d: any): boolean => {
+      if (!d) return false;
+      if (Array.isArray(d)) return d.length > 0;
+      if (typeof d === 'object') {
+        const vals = Object.values(d);
+        // If every value is an empty array, treat as empty
+        const allEmptyArrays = vals.length > 0 && vals.every((v) => Array.isArray(v) && v.length === 0);
+        if (allEmptyArrays) return false;
+        return vals.length > 0;
+      }
+      return !!d;
+    };
+
+    // 1. Check Session Cache (never serve empty-array state if cached accidentally)
     if (useCache && typeof window !== 'undefined') {
       const cacheKey = '__api_cache_' + url;
       const cachedStr = sessionStorage.getItem(cacheKey);
       if (cachedStr) {
         try {
           const cached = JSON.parse(cachedStr);
-          const hasValidData = Array.isArray(cached.data) ? cached.data.length > 0 : !!cached.data;
-          if (hasValidData && Date.now() - cached.timestamp < 1000 * 60 * 5) {
+          if (hasSubstantiveData(cached.data) && Date.now() - cached.timestamp < 1000 * 60 * 5) {
             return cached.data;
           }
+          // Stale or empty-only cache — remove it so next call fetches fresh
+          sessionStorage.removeItem(cacheKey);
         } catch (e) {}
       }
     }
@@ -652,10 +677,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const data = await res.json();
 
-        // 2. Only cache non-empty valid payloads
+        // 2. Only cache substantive non-empty payloads (AC-02)
         if (useCache && typeof window !== 'undefined' && data) {
-          const shouldCache = Array.isArray(data) ? data.length > 0 : Object.keys(data).length > 0;
-          if (shouldCache) {
+          if (hasSubstantiveData(data)) {
             try {
               sessionStorage.setItem(
                 '__api_cache_' + url,
@@ -676,9 +700,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return null;
   };
 
+
+  // ── AC-06: Keep a ref to the latest user so refreshData can be defined with []
+  // dependency (stable across renders) without creating stale closures.
+  const userRef = useRef<MockUser | null>(user);
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
   // Fetch live database records scoped by user role & needs in controlled stages
   const refreshData = useCallback(async (targetUser?: MockUser | null) => {
-    const userToFetch = targetUser !== undefined ? targetUser : user;
+    // Use explicit targetUser if provided; otherwise fall back to the ref (avoids stale closure)
+    const userToFetch = targetUser !== undefined ? targetUser : userRef.current;
     if (!userToFetch) {
       setSchoolInfo({
         name: "Loading School Profile...",
@@ -723,19 +756,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // ─── Parallel Core Data Hydration (Instant & Progressive) ───
       // 1. Metadata (Instant cached responses)
-      apiFetch("/api/school", {}, 10000, true).then((data) => {
+      const schoolLoad = apiFetch("/api/school", {}, 10000, true).then((data) => {
         if (data) {
           setSchoolInfo(data);
           setLocalCache("gng_cached_schoolInfo", data);
         }
       });
-      apiFetch("/api/classes", {}, 10000, true).then((data) => {
+      const classesLoad = apiFetch("/api/classes", {}, 10000, true).then((data) => {
         if (data) {
           setClasses(data);
           setLocalCache("gng_cached_classes", data);
         }
       });
-      apiFetch("/api/fee-config", {}, 10000, true).then((feeData) => {
+      const feeConfigLoad = apiFetch("/api/fee-config", {}, 10000, true).then((feeData) => {
         if (feeData) {
           setFeeHeads(feeData.feeHeads || []);
           setFeeStructures(feeData.feeStructures || []);
@@ -743,19 +776,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setLocalCache("gng_cached_feeStructures", feeData.feeStructures || []);
         }
       });
-      apiFetch("/api/notice", {}, 10000, true).then((data) => {
+      const noticesLoad = apiFetch("/api/notice", {}, 10000, true).then((data) => {
         if (data) {
           setNotices(data);
           setLocalCache("gng_cached_notices", data);
         }
       });
 
-      if (isStaff) {
-        apiFetch("/api/transport", {}, 10000, true).then((transData) => {
-          if (transData) setTransportStops(transData.map((d: any) => ({ ...d, amount: d.amount / 100 })));
-        });
-        apiFetch("/api/concessions", {}, 10000, true).then((data) => data && setConcessions(data));
-      }
+      const transportLoad = isStaff
+        ? apiFetch("/api/transport", {}, 10000, true).then((transData) => {
+            if (transData) setTransportStops(transData.map((d: any) => ({ ...d, amount: d.amount / 100 })));
+          })
+        : Promise.resolve();
+
+      const concessionsLoad = isStaff
+        ? apiFetch("/api/concessions", {}, 10000, true).then((data) => data && setConcessions(data))
+        : Promise.resolve();
 
       // 2. Core Dashboard Metrics (Students + Billing + Attendance)
       const studentsLoad = apiFetch("/api/students", {}, 15000, true).then((data) => {
@@ -786,10 +822,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       });
 
-      // Mark ready as soon as the first core loads arrive
-      Promise.allSettled([studentsLoad, billingLoad, attendanceLoad]).then(() => {
-        setCurrentStage("DASHBOARD READY");
-      });
+      // ── AC-03: Await ALL required core data loads before declaring DASHBOARD READY ──
+      const allCoreLoads = [
+        schoolLoad,
+        classesLoad,
+        feeConfigLoad,
+        noticesLoad,
+        transportLoad,
+        concessionsLoad,
+        studentsLoad,
+        billingLoad,
+        attendanceLoad,
+      ];
+
+      await Promise.allSettled(allCoreLoads);
+      setCurrentStage("DASHBOARD READY");
 
       // 3. Lazy Secondary Data (Deferred to not block main thread or bandwidth)
       setTimeout(() => {
@@ -813,7 +860,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (err) {
       console.error("[AuthContext] refreshData EXCEPTION:", err);
     }
-  }, [user]);
+  // ── AC-06: Empty dependency array — user is accessed via userRef.current (stable ref),
+  // so refreshData is defined once and never recreated when user state changes.
+  }, []);
 
   const refreshFeeConfig = async () => {
     try {
@@ -853,6 +902,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLocalCache("gng_cached_receipts", data.receipts || []);
       setLocalCache("gng_cached_ledgerEntries", data.ledgerEntries || []);
     }
+  };
+
+  // ── P-02: Fetch lightweight server-side calculated financial aggregates
+  const fetchBillingSummary = async () => {
+    return await apiFetch("/api/billing/summary", {}, 10000, true);
   };
 
   const refreshAttendance = async () => {
@@ -968,10 +1022,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const addConcession = async (name: string, percentage: number, feeHeadName: string) => {
     try {
+      // ── C-02: Parse percentage as float to preserve fractional values (e.g. 12.5, 33.33).
+      // The schema stores Float; parseInt would silently truncate 12.5 → 12.
+      const safePct = parseFloat(String(percentage));
       const res = await fetch("/api/concessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, percentage, feeHeadName }),
+        body: JSON.stringify({ name, percentage: safePct, feeHeadName }),
       });
       if (res.ok) {
         await refreshConcessions();
@@ -1097,9 +1154,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const updateSchoolInfo = async (info: Partial<MockSchoolInfo>) => {
     try {
-      const currentRes = await fetch("/api/school");
-      const currentConfig = await currentRes.json();
-      const mergedConfig = { ...currentConfig, ...info };
+      // ── SCH-02: Atomic update — merge `info` with the in-context schoolInfo state
+      // rather than doing a GET→merge→POST sequence that is susceptible to lost-update
+      // race conditions when two concurrent saves run simultaneously.
+      // The backend upserts the merged payload in a single transaction.
+      const mergedConfig = { ...schoolInfo, ...info };
 
       const res = await fetch("/api/school", {
         method: "POST",
@@ -1131,7 +1190,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const markBatchAttendance = async (records: { studentId: string; date: string; status: AttendanceStatus }[]) => {
+  const markBatchAttendance = async (records: { studentId: string; date: string; status: AttendanceStatus; expectedUpdatedAt?: string }[]) => {
     try {
       // Optimistically update attendances state immediately
       setAttendances((prev) => {
@@ -1158,11 +1217,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({ records }),
       });
 
+      if (res.status === 409) {
+        // ── AT-04: Conflict detected — another user saved more recently. Refresh
+        // to get the latest server state, then let the UI surface the conflict.
+        await refreshAttendance();
+        const body = await res.json().catch(() => ({}));
+        throw Object.assign(
+          new Error(body.error || "Attendance conflict: please refresh and try again."),
+          { isConflict: true, conflicts: body.conflicts ?? [] }
+        );
+      }
+
       if (res.ok) {
         await refreshAttendance();
       }
     } catch (err) {
       console.error("Mark batch attendance failed:", err);
+      throw err; // Re-throw so AttendanceConsole can show the error message
     }
   };
 
@@ -1484,7 +1555,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isRte?: boolean;
     },
     initialDues?: { name: string; amount: number }[]
-  ) => {
+  ): Promise<{ success: boolean; student?: any; error?: string }> => {
     try {
       const res = await fetch("/api/students", {
         method: "POST",
@@ -1495,11 +1566,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }),
       });
 
-      if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok && (data.success || data.student)) {
         await Promise.all([refreshStudents(), refreshBilling()]);
+        return { success: true, student: data.student };
       }
-    } catch (err) {
+      return { success: false, error: data.error || "Failed to create student record." };
+    } catch (err: any) {
       console.error("Add student failed:", err);
+      return { success: false, error: err.message || "Network error while creating student." };
     }
   };
 
@@ -1513,50 +1589,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const totalBatches = Math.ceil(total / BATCH_SIZE);
       let totalImported = 0;
 
-      for (let i = 0; i < totalBatches; i++) {
-        if (i > 0) {
-          // Pause 150ms between batches to allow Supabase serverless pooler connections to drain
-          await new Promise((resolve) => setTimeout(resolve, 150));
-        }
+      for (let i = 0; i < total; i += BATCH_SIZE) {
+        const batch = studentsList.slice(i, i + BATCH_SIZE);
+        const currentBatchNum = Math.floor(i / BATCH_SIZE) + 1;
 
-        const chunk = studentsList.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE);
         const res = await fetch("/api/students/bulk", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ students: chunk }),
+          body: JSON.stringify({ students: batch }),
         });
 
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          const errMsg = errData.error || `Batch ${i + 1} of ${totalBatches} failed on server.`;
-          return { success: false, totalImported, error: errMsg };
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || `Failed at batch ${currentBatchNum}`);
         }
 
-        const data = await res.json();
-        const batchCount = typeof data.count === "number" ? data.count : chunk.length;
-        totalImported += batchCount;
-
+        totalImported += data.importedCount || batch.length;
         if (onProgress) {
-          onProgress(totalImported, total, i + 1, totalBatches);
+          onProgress(totalImported, total, currentBatchNum, totalBatches);
         }
       }
 
-      await refreshStudents();
+      await Promise.all([refreshStudents(), refreshBilling()]);
       return { success: true, totalImported };
     } catch (err: any) {
-      console.error("Bulk import students failed:", err);
-      return { success: false, totalImported: 0, error: err?.message || "Network error occurred during import." };
+      console.error("Bulk import failed:", err);
+      return { success: false, totalImported: 0, error: err.message };
     }
   };
 
-  const addFeeHead = async (name: string, frequency?: string) => {
+  const addFeeHead = async (name: string, frequency = "MONTHLY") => {
     try {
       const res = await fetch("/api/fee-config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "ADD_HEAD", name, frequency: frequency || "monthly" }),
+        body: JSON.stringify({ action: "ADD_HEAD", name, frequency }),
       });
-
       if (res.ok) {
         await refreshFeeConfig();
       }
@@ -1568,11 +1636,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const removeFeeHead = async (name: string) => {
     try {
       const res = await fetch("/api/fee-config", {
-        method: "DELETE",
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "DELETE_HEAD", name }),
+        body: JSON.stringify({ action: "REMOVE_HEAD", name }),
       });
-
       if (res.ok) {
         await refreshFeeConfig();
       }
@@ -1586,9 +1653,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const res = await fetch("/api/fee-config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "ADD_STRUCTURE", name, frequency, total, className: className || "All", items: items || [] }),
+        body: JSON.stringify({ action: "ADD_STRUCTURE", name, frequency, total, className, items }),
       });
-
       if (res.ok) {
         await refreshFeeConfig();
       }
@@ -1636,14 +1702,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       if (res.ok) {
         const data = await res.json();
-        // Refresh billing data after generation
-        const billingRes = await fetch("/api/billing");
-        if (billingRes.ok) {
-          const billingData = await billingRes.json();
-          setLedgerEntries(billingData.ledgerEntries);
-          setReceipts(billingData.receipts);
-          setDueItems(billingData.dueItems);
-        }
+        // ── AC-05: Reuse authoritative refreshBilling() instead of duplicate fetch ──
+        await refreshBilling();
         return data;
       }
       return null;
@@ -1820,6 +1880,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         refreshData,
         refreshStudents,
         refreshBilling,
+        fetchBillingSummary,
         refreshAttendance,
         refreshHomework,
         refreshLeave,

@@ -36,20 +36,32 @@ const ACADEMIC_MONTHS = [
 ];
 
 /**
- * Determines whether a given fee charge/due is due up to the reference month (defaults to current date/month).
- * If today is August 2026, April, May, June, July, August are DUE.
- * September, October, November... are FUTURE items and not yet due.
+ * Determines whether a given fee charge/due is due up to the reference month/date (defaults to current date).
+ * - Authoritative signal: If item.dueDate is present, it is checked directly against referenceDate.
+ * - Academic-month items without dueDate: Checked against referenceDate's academic month index (April = 0 ... March = 11).
+ * - Future annual/exam items with future due dates do not prematurely become overdue.
  */
 export function isDueUpToCurrentMonth(
   item: { name?: string; title?: string; dueDate?: string },
   referenceDate = new Date()
 ): boolean {
-  const calMonth = referenceDate.getMonth(); // 0 = Jan, 3 = Apr, 7 = Aug
-  const currentAcademicIndex = (calMonth + 9) % 12; // Apr=0, May=1, ..., Aug=4, ..., Mar=11
+  // ── BL-04: 1. Authoritative signal: Use item's actual dueDate whenever available
+  if (item.dueDate) {
+    const dueTime = new Date(item.dueDate).getTime();
+    if (!isNaN(dueTime)) {
+      // Due date is satisfied once the reference date reaches or passes the due date
+      const endOfDueDay = new Date(item.dueDate);
+      endOfDueDay.setHours(23, 59, 59, 999);
+      return referenceDate.getTime() >= new Date(item.dueDate).setHours(0, 0, 0, 0);
+    }
+  }
 
   const itemName = (item.name || item.title || "").toLowerCase();
 
-  // 1. Check if the item matches any academic month name
+  // ── BL-04: 2. Academic-month fee items without explicit dueDate: evaluate against reference month
+  const calMonth = referenceDate.getMonth(); // 0 = Jan, 3 = Apr, 7 = Aug
+  const currentAcademicIndex = (calMonth + 9) % 12; // Apr=0, May=1, ..., Aug=4, ..., Mar=11
+
   for (let i = 0; i < ACADEMIC_MONTHS.length; i++) {
     const mName = ACADEMIC_MONTHS[i];
     if (itemName.includes(mName)) {
@@ -57,18 +69,19 @@ export function isDueUpToCurrentMonth(
     }
   }
 
-  // 2. Check dueDate if present
-  if (item.dueDate) {
-    const dueTime = new Date(item.dueDate).getTime();
-    if (!isNaN(dueTime)) {
-      // Allow through end of current month
-      const endOfCurrentMonth = new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 0, 23, 59, 59).getTime();
-      return dueTime <= endOfCurrentMonth;
-    }
+  // ── BL-04: 3. Session-start fees without explicit dueDate (Admission, Arrears, M/S, Previous Session)
+  if (
+    itemName.includes("admission") ||
+    itemName.includes("arrear") ||
+    itemName.includes("previous session") ||
+    itemName.includes("m/s") ||
+    itemName.includes("annual")
+  ) {
+    return currentAcademicIndex >= 0;
   }
 
-  // 3. One-time or annual fees default to true
-  return true;
+  // Default: Unknown non-monthly items without dueDate do not default to overdue
+  return false;
 }
 
 export function getCurrentMonthName(date = new Date()): string {
@@ -101,12 +114,10 @@ export function generateFeeReminderText(params: FeeReminderParams): string {
   const activeUnpaidDues = unpaidDues.filter((d) => isDueUpToCurrentMonth(d));
   const totalDue = activeUnpaidDues.reduce((sum, item) => sum + item.amount, 0);
 
+  // ── WA-02: Show all active dues (no silent truncation at 5 items)
   const itemsBreakdown = activeUnpaidDues
-    .slice(0, 5)
     .map((item) => `• ${item.name || item.title || "School Fee"}: ${formatP(item.amount)}`)
     .join("\n");
-  
-  const moreCount = activeUnpaidDues.length > 5 ? `\n• ...and ${activeUnpaidDues.length - 5} other pending item(s)` : "";
 
   const roleDesignation =
     senderRole === "TEACHER"
@@ -123,7 +134,7 @@ Respected Parent of *${student.name}* (Class ${student.class}-${student.section}
 This is a gentle notification from the ${roleDesignation} regarding pending school fee dues:
 
 📌 *Total Outstanding Due (Up to ${currentMonthName}):* ${formatP(totalDue)}
-${itemsBreakdown || "• Pending Tuition / Academic Fee"} ${moreCount}
+${itemsBreakdown || "• Pending Tuition / Academic Fee"}
 
 Kindly deposit the pending fees at the school fee collection counter or online via UPI at your earliest convenience.
 

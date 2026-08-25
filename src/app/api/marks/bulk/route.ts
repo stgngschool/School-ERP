@@ -25,6 +25,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Max marks must be a positive number." }, { status: 400 });
     }
 
+    // ── DB-11: Resolve academic session for marks scoping
+    let targetSessionId = body.sessionId;
+    if (!targetSessionId) {
+      const currentSession = await db.academicSession.findFirst({ where: { isCurrent: true } });
+      targetSessionId = currentSession?.id;
+    }
+    if (!targetSessionId) {
+      return NextResponse.json({ error: "Active academic session not found." }, { status: 400 });
+    }
+
     const upserts = marksList.map((m: any) => {
       const breakdown = m.breakdown || null;
       let obtained = parseFloat(m.marksObtained);
@@ -66,8 +76,9 @@ export async function POST(request: Request) {
 
       return db.mark.upsert({
         where: {
-          studentId_subject_examName: {
+          studentId_sessionId_subject_examName: {
             studentId: m.studentId,
+            sessionId: targetSessionId,
             subject,
             examName,
           },
@@ -84,6 +95,7 @@ export async function POST(request: Request) {
         },
         create: {
           studentId: m.studentId,
+          sessionId: targetSessionId,
           subject,
           examName,
           marksObtained: obtained,
@@ -100,9 +112,12 @@ export async function POST(request: Request) {
 
     await db.$transaction(upserts);
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, count: upserts.length });
   } catch (error: any) {
     console.error("Bulk save student marks error:", error);
-    return NextResponse.json({ error: error.message || "Failed to save marks." }, { status: 500 });
+    const safeMsg = error?.message && error.message.includes("Invalid marks")
+      ? error.message
+      : "Failed to save student marks.";
+    return NextResponse.json({ error: safeMsg }, { status: 500 });
   }
 }

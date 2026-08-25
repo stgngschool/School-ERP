@@ -3,8 +3,9 @@ import db from "@/lib/db";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { generateYearlyCharges, getAcademicYear } from "@/lib/generateYearlyCharges";
-import { getNextFamilyCode, getNextAdmissionNumber, findMatchingParentProfile } from "@/lib/family";
+import { getNextFamilyCode, getNextAdmissionNumber, getNextRollNumber, findMatchingParentProfile } from "@/lib/family";
 import { getAuthUser } from "@/lib/auth";
+import { boundPagination, getSafeErrorMessage } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +37,7 @@ export async function GET(request: Request) {
       });
     }
 
-    let whereClause = {};
+    let whereClause: Record<string, any> = {};
     if (authUser.role === "PARENT") {
       const parentProfile = await db.parentProfile.findUnique({
         where: { userId: authUser.userId }
@@ -45,11 +46,27 @@ export async function GET(request: Request) {
         return NextResponse.json([]);
       }
       whereClause = { parentProfileId: parentProfile.id };
+    } else if (authUser.role === "TEACHER") {
+      // ── U-05: Scope teacher student list to only their assigned classes.
+      // Without this a teacher could enumerate students from other classes.
+      const teacherProfile = await db.teacherProfile.findUnique({
+        where: { userId: authUser.userId },
+        include: { classes: { select: { id: true } } },
+      });
+      if (!teacherProfile || teacherProfile.classes.length === 0) {
+        return NextResponse.json([]);
+      }
+      whereClause = { classId: { in: teacherProfile.classes.map((c: { id: string }) => c.id) } };
     }
+
+    const { searchParams } = new URL(request.url);
+    const { limit, offset } = boundPagination(searchParams, { defaultLimit: 500, maxLimit: 1000 });
 
     const dbStart = performance.now();
     const students = await db.student.findMany({
       where: whereClause,
+      take: limit,
+      skip: offset,
       select: {
         id: true,
         name: true,
@@ -243,109 +260,155 @@ export async function POST(request: Request) {
       }
     }
 
-    if (!parent) {
-      const sanitizedPhone = (fatherMobile || "").replace(/\s+/g, "");
-      const username = `parent_${sanitizedPhone || Date.now()}`;
-      const email = parentEmail || `${username}@school.com`;
+    // ── LF-01 / S-01 / S-02 fix ─────────────────────────────────────────────
+    // All three number-generation steps (family code, admission number, roll
+    // number) and the student row insert run inside a single transaction.
+    // The atomic UPDATE...RETURNING counter pattern acquires row-level locks
+    // that serialise concurrent admissions automatically:
+    //   - Two requests for the same class block on ROLL-<classId>- counter
+    //   - Two requests generating new families block on FAM-<year>- counter
+    //   - Two requests generating admission numbers block on ADM-<year>- counter
+    // If anything inside the transaction fails, all changes roll back cleanly.
 
-      const existingUser = await db.user.findUnique({
-        where: { email },
-      });
-
-      const finalEmail = existingUser ? `parent_${Date.now()}@school.com` : email;
-      const secureRandomPassword = crypto.randomBytes(16).toString("hex");
-      const passwordHash = await bcrypt.hash(secureRandomPassword, 10);
-
-      const user = await db.user.create({
-        data: {
-          username: `parent_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-          email: finalEmail,
-          passwordHash,
-          role: "PARENT",
-          name: fatherName,
-          phone: fatherMobile,
-        },
-      });
-
-      parent = await db.parentProfile.create({
-        data: {
-          userId: user.id,
-          familyCode: await getNextFamilyCode(),
-          address: address || null,
-        },
-        include: { user: true },
-      });
-    }
-
-    // Validate Admission Number logic
-    let admissionNo = (customAdmissionNo || "").trim();
-    if (admissionNo) {
-      const existing = await db.student.findUnique({
-        where: { admissionNumber: admissionNo },
-      });
-      if (existing) {
-        return NextResponse.json(
-          { error: `Admission Number "${admissionNo}" is already taken.` },
-          { status: 400 }
-        );
-      }
-    } else {
-      admissionNo = await getNextAdmissionNumber();
-    }
-
-    // Validate Roll Number logic
-    let rollNumber = (customRollNo || "").trim();
-    if (!rollNumber) {
-      const rollCount = await db.student.count({
-        where: { classId: classObj.id },
-      });
-      const rollNoStr = String(rollCount + 1).padStart(2, "0");
-      rollNumber = `${classVal}-${section}-${rollNoStr}`;
-    }
-
-    const student = await db.student.create({
-      data: {
-        name,
-        admissionNumber: admissionNo,
-        rollNumber,
-        gender: gender || null,
-        dob: dob ? new Date(dob) : null,
-        aadhaar: aadhaar || null,
-        disability: disability || null,
-        fatherName: fatherName || null,
-        motherName: motherName || null,
-        fatherMobile: fatherMobile || null,
-        motherMobile: motherMobile || null,
-        fatherAadhaar: fatherAadhaar || null,
-        category: category || null,
-        religion: religion || null,
-        motherTongue: motherTongue || null,
-        nationality: nationality || null,
-        admissionDate: admissionDate ? new Date(admissionDate) : null,
-        boardRegNo: boardRegNo || null,
-        prevSchoolName: prevSchoolName || null,
-        prevClassPassed: prevClassPassed || null,
-        tcNumber: tcNumber || null,
-        parentOccupation: parentOccupation || null,
-        familyIncome: familyIncome || null,
-        emergencyName: emergencyName || null,
-        emergencyPhone: emergencyPhone || null,
-        motherAadhaar: motherAadhaar || null,
-        transportMode: transportMode || null,
-        busRoute: busRoute || null,
-        busStop: busStop || null,
-        parentProfileId: parent.id,
-        classId: classObj.id,
-        isRte: !!isRte,
-        concessionId: concessionId || null,
-      },
-    });
-
-    // Auto-generate full academic year charges using fee structure for this class
     const systemUser = await db.user.findFirst({
       where: { OR: [{ role: "ADMIN" }, { role: "ACCOUNTANT" }] },
     });
 
+    const { student, parentResult } = await db.$transaction(async (tx) => {
+      // ── Resolve or create the parent profile inside the transaction ─────────
+      let resolvedParent = parent as any;
+
+      if (!resolvedParent) {
+        // Need to create a new parent user + profile atomically
+        const sanitizedPhone = (fatherMobile || "").replace(/\s+/g, "");
+        const username = `parent_${sanitizedPhone || Date.now()}`;
+        const baseEmail = parentEmail || `${username}@school.com`;
+
+        // Check email uniqueness inside transaction (we do a raw SELECT to avoid
+        // re-querying the entire users table outside the tx boundary)
+        const emailConflict: any[] = await tx.$queryRawUnsafe(
+          `SELECT id FROM "User" WHERE email = $1 LIMIT 1`,
+          baseEmail
+        );
+        const finalEmail = emailConflict.length > 0
+          ? `parent_${Date.now()}@school.com`
+          : baseEmail;
+
+        const secureRandomPassword = crypto.randomBytes(16).toString("hex");
+        const passwordHash = await bcrypt.hash(secureRandomPassword, 10);
+
+        const newUser = await tx.user.create({
+          data: {
+            username: `parent_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+            email: finalEmail,
+            passwordHash,
+            role: "PARENT",
+            name: fatherName,
+            phone: fatherMobile,
+          },
+        });
+
+        // ── LF-01 fix: family code generated atomically inside transaction ──
+        const newFamilyCode = await getNextFamilyCode(tx);
+
+        resolvedParent = await tx.parentProfile.create({
+          data: {
+            userId: newUser.id,
+            familyCode: newFamilyCode,
+            address: address || null,
+          },
+          include: { user: true },
+        });
+      } else if (!resolvedParent.user) {
+        // resolvedParent found by findUnique/findMany outside tx — re-fetch
+        // its user inside the tx to have a consistent snapshot
+        const pp = await tx.parentProfile.findUnique({
+          where: { id: resolvedParent.id },
+          include: { user: true },
+        });
+        resolvedParent = pp ?? resolvedParent;
+
+        // Update address if missing
+        if (!resolvedParent.address && address) {
+          await tx.parentProfile.update({
+            where: { id: resolvedParent.id },
+            data: { address },
+          });
+        }
+      }
+
+      // ── S-01 fix: Admission number generated atomically inside transaction ──
+      let admissionNo = (customAdmissionNo || "").trim();
+      if (admissionNo) {
+        // Custom number — check uniqueness inside transaction to prevent races
+        const conflict: any[] = await tx.$queryRawUnsafe(
+          `SELECT id FROM "Student" WHERE "admissionNumber" = $1 LIMIT 1`,
+          admissionNo
+        );
+        if (conflict.length > 0) {
+          throw Object.assign(new Error(`Admission Number "${admissionNo}" is already taken.`), {
+            code: "DUPLICATE_ADMISSION_NO",
+          });
+        }
+      } else {
+        admissionNo = await getNextAdmissionNumber(tx);
+      }
+
+      // ── S-02 fix: Roll number generated atomically inside transaction ────────
+      let rollNumber = (customRollNo || "").trim();
+      if (!rollNumber) {
+        rollNumber = await getNextRollNumber(classObj.id, classVal, section, tx);
+      }
+
+      // ── Create the student record ────────────────────────────────────────────
+      const newStudent = await tx.student.create({
+        data: {
+          name,
+          admissionNumber: admissionNo,
+          rollNumber,
+          gender: gender || null,
+          dob: dob ? new Date(dob) : null,
+          aadhaar: aadhaar || null,
+          disability: disability || null,
+          fatherName: fatherName || null,
+          motherName: motherName || null,
+          fatherMobile: fatherMobile || null,
+          motherMobile: motherMobile || null,
+          fatherAadhaar: fatherAadhaar || null,
+          category: category || null,
+          religion: religion || null,
+          motherTongue: motherTongue || null,
+          nationality: nationality || null,
+          admissionDate: admissionDate ? new Date(admissionDate) : null,
+          boardRegNo: boardRegNo || null,
+          prevSchoolName: prevSchoolName || null,
+          prevClassPassed: prevClassPassed || null,
+          tcNumber: tcNumber || null,
+          parentOccupation: parentOccupation || null,
+          familyIncome: familyIncome || null,
+          emergencyName: emergencyName || null,
+          emergencyPhone: emergencyPhone || null,
+          motherAadhaar: motherAadhaar || null,
+          transportMode: transportMode || null,
+          busRoute: busRoute || null,
+          busStop: busStop || null,
+          parentProfileId: resolvedParent.id,
+          classId: classObj.id,
+          isRte: !!isRte,
+          concessionId: concessionId || null,
+        },
+      });
+
+      return { student: newStudent, parentResult: resolvedParent };
+    }, {
+      // Raise timeout for the admission transaction — it includes bcrypt hashing
+      // for new parents. 30s is safe; this is a one-at-a-time serialized path.
+      timeout: 30000,
+    });
+
+    // Auto-generate full academic year charges OUTSIDE the admission transaction.
+    // generateYearlyCharges is idempotent (skips existing entries) and does not
+    // need to be atomic with the student record creation.
     if (systemUser) {
       await generateYearlyCharges(student.id, classVal, systemUser.id, getAcademicYear(), startingFeeMonth);
       if (previousDues && parseFloat(previousDues) > 0) {
@@ -362,6 +425,22 @@ export async function POST(request: Request) {
       }
     }
 
+    // ── E-02: Structured Audit Logging
+    await db.auditLog.create({
+      data: {
+        userId: authUser.userId,
+        action: "STUDENT_ADMITTED",
+        entityType: "Student",
+        entityId: student.id,
+        newValues: JSON.stringify({
+          name: student.name,
+          admissionNumber: student.admissionNumber,
+          class: classVal,
+          section,
+        }),
+      },
+    }).catch((err) => console.error("Audit log error on student admit:", err));
+
     return NextResponse.json({
       success: true,
       student: {
@@ -371,15 +450,20 @@ export async function POST(request: Request) {
         rollNo: student.rollNumber,
         class: classVal,
         section,
-        parentName: parent.user.name,
-        parentPhone: parent.user.phone || "",
+        parentName: parentResult?.user?.name ?? fatherName,
+        parentPhone: parentResult?.user?.phone ?? fatherMobile ?? "",
       },
     });
   } catch (error: any) {
     console.error("Add student error:", error);
-    return NextResponse.json({ error: "Failed to create student record" }, { status: 500 });
+    if (error.code === "DUPLICATE_ADMISSION_NO") {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    const safeError = getSafeErrorMessage(error, "Failed to create student record.");
+    return NextResponse.json({ error: safeError }, { status: 500 });
   }
 }
+
 
 export async function PATCH(request: Request) {
   try {
@@ -429,7 +513,7 @@ export async function PATCH(request: Request) {
       const targetId = Array.isArray(studentId) ? studentId[0] : studentId;
       const student = await db.student.findUnique({
         where: { id: targetId },
-        include: { parentProfile: true }
+        include: { parentProfile: { include: { user: true } } }
       });
 
       // Check admissionNumber uniqueness if changed
@@ -445,55 +529,231 @@ export async function PATCH(request: Request) {
         }
       }
 
-      const updated = await db.student.update({
-        where: { id: targetId },
-        data: {
-          name: data.name,
-          admissionNumber: data.admissionNo || undefined,
-          rollNumber: data.rollNo || undefined,
-          gender: data.gender !== undefined ? data.gender : undefined,
-          dob: data.dob ? new Date(data.dob) : null,
-          aadhaar: data.aadhaar || null,
-          disability: data.disability || null,
-          fatherName: data.fatherName,
-          motherName: data.motherName || null,
-          fatherMobile: data.fatherMobile,
-          motherMobile: data.motherMobile || null,
-          fatherAadhaar: data.fatherAadhaar || null,
-          category: data.category || null,
-          religion: data.religion || null,
-          motherTongue: data.motherTongue || null,
-          nationality: data.nationality || null,
-          parentOccupation: data.parentOccupation || null,
-          familyIncome: data.familyIncome || null,
-          emergencyName: data.emergencyName || null,
-          emergencyPhone: data.emergencyPhone || null,
-          motherAadhaar: data.motherAadhaar || null,
-          transportMode: data.transportMode || null,
-          busRoute: data.busRoute || null,
-          busStop: data.busStop || null,
-          isRte: data.isRte !== undefined ? !!data.isRte : undefined,
-          concessionId: data.concessionId || null,
-        },
-      });
+      // ── S-05: Parent email must not be silently overwritten ──────────────────
+      if (data.parentEmail && student?.parentProfile?.user) {
+        const existingEmail = student.parentProfile.user.email;
+        const newEmail = data.parentEmail.trim().toLowerCase();
+        if (newEmail && newEmail !== existingEmail.toLowerCase()) {
+          return NextResponse.json(
+            {
+              error:
+                "Parent login email cannot be changed via student profile update. " +
+                "Please use the parent account management page to request a verified email change.",
+            },
+            { status: 400 }
+          );
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────────────
 
-      if (student?.parentProfile) {
-        await db.parentProfile.update({
-          where: { id: student.parentProfile.id },
+      // Capture pre-update state for change-detection (S-03, S-04, C-03, T-03)
+      const wasRte = student?.isRte ?? false;
+      const previousConcessionId = student?.concessionId ?? null;
+      const previousTransportStopId = student?.transportStopId ?? null;
+      const newRte = data.isRte !== undefined ? !!data.isRte : wasRte;
+      const newConcessionId = data.concessionId || null;
+      // ── T-03: Accept transportStopId in the update payload
+      const newTransportStopId = data.transportStopId !== undefined
+        ? (data.transportStopId || null)
+        : previousTransportStopId;
+
+      const rteJustEnabled = !wasRte && newRte;
+      const rteDisabled = wasRte && !newRte;
+      const concessionChanged = newConcessionId !== previousConcessionId;
+      const transportStopChanged = newTransportStopId !== previousTransportStopId;
+
+      // ── C-03 + T-03 + BL-05: Wrap the student update, stale-discount cleanup,
+      // and transport charge management in ONE transaction so the student record and
+      // its financial adjustments are either both committed or both rolled back.
+      let updated = await db.$transaction(async (tx) => {
+        const updatedStudent = await tx.student.update({
+          where: { id: targetId },
           data: {
-            address: data.address || null,
-            user: {
-              update: {
-                email: data.parentEmail || undefined,
-                name: data.fatherName,
-                phone: data.fatherMobile,
+            name: data.name,
+            admissionNumber: data.admissionNo || undefined,
+            rollNumber: data.rollNo || undefined,
+            gender: data.gender !== undefined ? data.gender : undefined,
+            dob: data.dob ? new Date(data.dob) : null,
+            aadhaar: data.aadhaar || null,
+            disability: data.disability || null,
+            fatherName: data.fatherName,
+            motherName: data.motherName || null,
+            fatherMobile: data.fatherMobile,
+            motherMobile: data.motherMobile || null,
+            fatherAadhaar: data.fatherAadhaar || null,
+            category: data.category || null,
+            religion: data.religion || null,
+            motherTongue: data.motherTongue || null,
+            nationality: data.nationality || null,
+            parentOccupation: data.parentOccupation || null,
+            familyIncome: data.familyIncome || null,
+            emergencyName: data.emergencyName || null,
+            emergencyPhone: data.emergencyPhone || null,
+            motherAadhaar: data.motherAadhaar || null,
+            transportMode: data.transportMode || null,
+            busRoute: data.busRoute || null,
+            busStop: data.busStop || null,
+            transportStopId: newTransportStopId,
+            isRte: data.isRte !== undefined ? !!data.isRte : undefined,
+            concessionId: newConcessionId,
+          },
+        });
+
+        if (student?.parentProfile) {
+          await tx.parentProfile.update({
+            where: { id: student.parentProfile.id },
+            data: {
+              address: data.address || null,
+              user: {
+                update: {
+                  name: data.fatherName,
+                  phone: data.fatherMobile,
+                }
               }
             }
-          }
-        });
-      }
+          });
+        }
 
-      if (updated.isRte) {
+        // ── BL-05: When RTE is turned OFF (true → false), remove stale unpaid
+        // "RTE Fee Waiver:" DISCOUNT entries. Committed discounts with receiptItems
+        // are strictly preserved.
+        if (rteDisabled) {
+          const staleRteDiscounts = await tx.ledgerEntry.findMany({
+            where: {
+              studentId: targetId,
+              entryType: "DISCOUNT",
+              description: { startsWith: "RTE Fee Waiver:" },
+            },
+            include: { receiptItems: { select: { id: true } } },
+          });
+
+          const deletableRteIds = staleRteDiscounts
+            .filter((d) => d.receiptItems.length === 0)
+            .map((d) => d.id);
+
+          if (deletableRteIds.length > 0) {
+            await tx.ledgerEntry.deleteMany({ where: { id: { in: deletableRteIds } } });
+          }
+        }
+
+        // ── BL-05: When RTE is turned ON (false → true), remove any stale unpaid
+        // concession waivers so they do not conflict with the 100% RTE fee waiver.
+        if (rteJustEnabled) {
+          const staleConcessionDiscounts = await tx.ledgerEntry.findMany({
+            where: {
+              studentId: targetId,
+              entryType: "DISCOUNT",
+              description: { contains: "Concession Waiver" },
+            },
+            include: { receiptItems: { select: { id: true } } },
+          });
+
+          const deletableConcIds = staleConcessionDiscounts
+            .filter((d) => d.receiptItems.length === 0)
+            .map((d) => d.id);
+
+          if (deletableConcIds.length > 0) {
+            await tx.ledgerEntry.deleteMany({ where: { id: { in: deletableConcIds } } });
+          }
+        }
+
+        // ── C-03: When concession changes, remove stale DISCOUNT entries for the
+        // OLD concession before generating new ones. Only entries with NO receipt
+        // items are removed; committed historical discounts are preserved.
+        if (concessionChanged && previousConcessionId) {
+          const oldConcession = await tx.concession.findUnique({
+            where: { id: previousConcessionId },
+            select: { name: true },
+          });
+          if (oldConcession) {
+            const stalePrefix = `Concession Waiver (${oldConcession.name}):`;
+            const staleDiscounts = await tx.ledgerEntry.findMany({
+              where: {
+                studentId: targetId,
+                entryType: "DISCOUNT",
+                description: { contains: stalePrefix },
+              },
+              include: { receiptItems: { select: { id: true } } },
+            });
+
+            const deletableIds = staleDiscounts
+              .filter((d) => d.receiptItems.length === 0)
+              .map((d) => d.id);
+
+            if (deletableIds.length > 0) {
+              await tx.ledgerEntry.deleteMany({ where: { id: { in: deletableIds } } });
+            }
+          }
+        }
+
+        // ── T-03: When transport stop assignment changes, manage the corresponding
+        // charge entry. Rules:
+        //  - A charge with ANY receipt items is immutable — leave it alone.
+        //  - When assigning a new stop: create or update the unpaid charge to match
+        //    the stop's current amount.
+        //  - When removing the stop (null): delete the unpaid charge if it exists.
+        //  - Idempotent: a repeated update with the same stop produces no extra rows.
+        if (transportStopChanged) {
+          // Find any existing unpaid transport charge for this student
+          const existingTransportCharge = await tx.ledgerEntry.findFirst({
+            where: {
+              studentId: targetId,
+              entryType: "CHARGE",
+              description: { startsWith: "Transport Fee:" },
+            },
+            include: { receiptItems: { select: { id: true } } },
+          });
+
+          if (newTransportStopId) {
+            // Fetch the stop's fee amount
+            const newStop = await tx.transportStop.findUnique({
+              where: { id: newTransportStopId },
+              select: { id: true, name: true, amount: true },
+            });
+
+            if (newStop) {
+              if (existingTransportCharge) {
+                if (existingTransportCharge.receiptItems.length === 0) {
+                  // Fully unpaid — update to new stop/amount
+                  await tx.ledgerEntry.update({
+                    where: { id: existingTransportCharge.id },
+                    data: {
+                      description: `Transport Fee: ${newStop.name}`,
+                      amount: newStop.amount,
+                    },
+                  });
+                }
+                // If partially/fully paid, leave it immutable
+              } else {
+                // Create a new transport charge
+                await tx.ledgerEntry.create({
+                  data: {
+                    studentId: targetId,
+                    entryType: "CHARGE",
+                    description: `Transport Fee: ${newStop.name}`,
+                    amount: newStop.amount,
+                    createdById: authUser.userId,
+                  },
+                });
+              }
+            }
+          } else {
+            // Transport stop removed
+            if (existingTransportCharge && existingTransportCharge.receiptItems.length === 0) {
+              // Fully unpaid — safe to void
+              await tx.ledgerEntry.delete({ where: { id: existingTransportCharge.id } });
+            }
+            // If partially/fully paid, leave it immutable
+          }
+        }
+
+        return updatedStudent;
+      });
+
+      // ── S-03 & BL-05: Regenerate discounts when isRte status changes or concessionId changes
+      // generateYearlyCharges is idempotent: it skips existing charges and only
+      // creates or updates DISCOUNT entries for the current concession or RTE status.
+      if (rteJustEnabled || rteDisabled || concessionChanged) {
         const systemUser = await db.user.findFirst({
           where: { OR: [{ role: "ADMIN" }, { role: "ACCOUNTANT" }] },
         });
@@ -504,14 +764,17 @@ export async function PATCH(request: Request) {
           await generateYearlyCharges(updated.id, studentClass.name, systemUser.id, getAcademicYear());
         }
       }
+      // ─────────────────────────────────────────────────────────────────────────
 
       return NextResponse.json({ success: true, student: updated });
     }
 
+
     return NextResponse.json({ error: "Invalid action." }, { status: 400 });
   } catch (error: any) {
     console.error("Student update error:", error);
-    return NextResponse.json({ error: "Failed to update student: " + error.message }, { status: 500 });
+    const safeError = getSafeErrorMessage(error, "Failed to update student record.");
+    return NextResponse.json({ error: safeError }, { status: 500 });
   }
 }
 

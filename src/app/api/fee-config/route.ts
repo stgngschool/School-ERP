@@ -12,24 +12,10 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
     }
 
-    let heads = await db.feeHead.findMany({ where: { status: "ACTIVE" } });
-    if (heads.length === 0) {
-      const defaults = [
-        { name: "Tuition Fee", frequency: "monthly" },
-        { name: "Admission Fee", frequency: "one_time" },
-        { name: "Exam Fee", frequency: "exam" },
-        { name: "Transport Fee", frequency: "monthly" },
-        { name: "Computer Fee", frequency: "monthly" },
-      ];
-      for (const item of defaults) {
-        await db.feeHead.upsert({
-          where: { name: item.name },
-          update: { frequency: item.frequency },
-          create: { name: item.name, frequency: item.frequency },
-        });
-      }
-      heads = await db.feeHead.findMany({ where: { status: "ACTIVE" } });
-    }
+    // ── F-04: GET must be a pure read operation without database side effects.
+    // Return active fee heads directly without upserting defaults on read.
+    const heads = await db.feeHead.findMany({ where: { status: "ACTIVE" } });
+
 
     const structures = await db.feeStructure.findMany({
       include: {
@@ -69,8 +55,11 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const authUser = await getAuthUser(request);
-    if (!authUser || (authUser.role !== "ADMIN" && authUser.role !== "ACCOUNTANT")) {
-      return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
+    if (!authUser) {
+      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    }
+    if (authUser.role !== "ADMIN" && authUser.role !== "ACCOUNTANT") {
+      return NextResponse.json({ error: "Forbidden. Admin or Accountant access required." }, { status: 403 });
     }
 
     const body = await request.json();
@@ -79,10 +68,11 @@ export async function POST(request: Request) {
     if (action === "ADD_HEAD") {
       if (!name) return NextResponse.json({ error: "Fee head name is required." }, { status: 400 });
       
+      const headName = String(name).trim();
       const head = await db.feeHead.upsert({
-        where: { name },
-        update: { frequency: frequency || "monthly" },
-        create: { name, frequency: frequency || "monthly" },
+        where: { name: headName },
+        update: { frequency: frequency || "monthly", status: "ACTIVE" },
+        create: { name: headName, frequency: frequency || "monthly", status: "ACTIVE" },
       });
 
       return NextResponse.json({ success: true, head });
@@ -94,80 +84,118 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Name and frequency are required." }, { status: 400 });
       }
 
-      let structure = await db.feeStructure.findFirst({
-        where: { name, className: className || "All" },
-      });
+      const structName = String(name).trim();
+      const structClass = className || "All";
 
-      if (structure) {
-        await db.feeStructureItem.deleteMany({
-          where: { feeStructureId: structure.id },
-        });
-        structure = await db.feeStructure.update({
-          where: { id: structure.id },
-          data: { frequency },
-        });
-      } else {
-        structure = await db.feeStructure.create({
-          data: {
-            name,
+      const structure = await db.$transaction(async (tx) => {
+        // ── F-02: Upsert fee heads safely without concurrency collisions
+        const preparedItems: { feeHeadId: string; amount: number }[] = [];
+        if (items && Array.isArray(items) && items.length > 0) {
+          for (const item of items) {
+            const headName = String(item.headName).trim();
+            if (!headName) continue;
+            const feeHead = await tx.feeHead.upsert({
+              where: { name: headName },
+              update: { status: "ACTIVE" },
+              create: { name: headName, frequency: "monthly", status: "ACTIVE" },
+            });
+            const itemAmountPaisa = Math.round(Number(item.amount) || 0);
+            preparedItems.push({ feeHeadId: feeHead.id, amount: itemAmountPaisa });
+          }
+        }
+
+        // Upsert structure uniquely by [name, className]
+        const struct = await tx.feeStructure.upsert({
+          where: {
+            name_className: {
+              name: structName,
+              className: structClass,
+            },
+          },
+          update: { frequency },
+          create: {
+            name: structName,
             frequency,
-            className: className || "All",
+            className: structClass,
           },
         });
-      }
 
-      if (items && Array.isArray(items) && items.length > 0) {
-        for (const item of items) {
-          let feeHead = await db.feeHead.findFirst({
-            where: { name: item.headName },
-          });
+        // Replace items atomically
+        await tx.feeStructureItem.deleteMany({
+          where: { feeStructureId: struct.id },
+        });
 
-          if (!feeHead) {
-            feeHead = await db.feeHead.create({
-              data: { name: item.headName },
-            });
-          }
-
-          const itemAmountPaisa = Math.round(Number(item.amount) || 0);
-
-          await db.feeStructureItem.create({
+        for (const item of preparedItems) {
+          await tx.feeStructureItem.create({
             data: {
-              feeStructureId: structure.id,
-              feeHeadId: feeHead.id,
-              amount: itemAmountPaisa,
+              feeStructureId: struct.id,
+              feeHeadId: item.feeHeadId,
+              amount: item.amount,
             },
           });
-
-          // Syncing of existing unpaid charges and discounts is handled safely by generateYearlyChargesBulk below.
         }
-      }
 
-      // Backfill: regenerate full-year charges for all existing students in this class
+        // ── F-03: Ensure fee assignments point to this active structure and clean up stale assignments
+        const activeSession = await tx.academicSession.findFirst({ where: { isCurrent: true } });
+        if (activeSession) {
+          const targetStudents = await tx.student.findMany({
+            where: {
+              status: "ACTIVE",
+              ...(structClass !== "All" ? { class: { name: structClass } } : {}),
+            },
+            select: { id: true },
+          });
+
+          for (const s of targetStudents) {
+            await tx.feeAssignment.upsert({
+              where: {
+                studentId_feeStructureId_sessionId: {
+                  studentId: s.id,
+                  feeStructureId: struct.id,
+                  sessionId: activeSession.id,
+                },
+              },
+              update: {},
+              create: {
+                studentId: s.id,
+                feeStructureId: struct.id,
+                sessionId: activeSession.id,
+              },
+            });
+          }
+        }
+
+        return struct;
+      });
+
+      // ── F-01 fix: detach bulk backfill from the HTTP request path ──────────
       const targetClass = className || "All";
       const systemUser = await db.user.findFirst({
         where: { OR: [{ role: "ADMIN" }, { role: "ACCOUNTANT" }] },
       });
+
       if (systemUser) {
-        let studentsToBackfill: { id: string; class: { name: string } }[] = [];
-        if (targetClass === "All") {
-          // All students in all classes
-          studentsToBackfill = await db.student.findMany({
-            where: { status: "ACTIVE" },
-            include: { class: true },
-          });
-        } else {
-          // Only students in this specific class
-          studentsToBackfill = await db.student.findMany({
-            where: { status: "ACTIVE", class: { name: targetClass } },
-            include: { class: true },
-          });
-        }
-        if (studentsToBackfill.length > 0) {
-          await generateYearlyChargesBulk(studentsToBackfill, systemUser.id, getAcademicYear());
-        }
+        // Kick off the backfill without blocking the response.
+        void (async () => {
+          try {
+            const studentsToBackfill = await db.student.findMany({
+              where: {
+                status: "ACTIVE",
+                ...(targetClass !== "All" ? { class: { name: targetClass } } : {}),
+              },
+              include: { class: true },
+            });
+            if (studentsToBackfill.length > 0) {
+              await generateYearlyChargesBulk(studentsToBackfill, systemUser.id, getAcademicYear());
+            }
+          } catch (err) {
+            console.error("[fee-config] ADD_STRUCTURE backfill error:", err);
+          }
+        })();
       }
 
       return NextResponse.json({ success: true, structure });
+
     }
 
     if (action === "CLONE_STRUCTURE") {
@@ -185,48 +213,91 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Source class fee structure not found." }, { status: 404 });
       }
 
-      let targetStructure = await db.feeStructure.findFirst({
-        where: { className: toClassName },
-      });
+      const targetStructName = `${toClassName} Fee Structure`;
 
-      if (targetStructure) {
-        await db.feeStructureItem.deleteMany({
-          where: { feeStructureId: targetStructure.id },
-        });
-      } else {
-        targetStructure = await db.feeStructure.create({
-          data: {
-            name: `${toClassName} Fee Structure`,
+      const targetStructure = await db.$transaction(async (tx) => {
+        const target = await tx.feeStructure.upsert({
+          where: {
+            name_className: {
+              name: targetStructName,
+              className: toClassName,
+            },
+          },
+          update: {
+            frequency: sourceStructure.frequency,
+          },
+          create: {
+            name: targetStructName,
             frequency: sourceStructure.frequency,
             className: toClassName,
           },
         });
-      }
 
-      for (const item of sourceStructure.items) {
-        await db.feeStructureItem.create({
-          data: {
-            feeStructureId: targetStructure.id,
-            feeHeadId: item.feeHeadId,
-            amount: item.amount,
-          },
+        await tx.feeStructureItem.deleteMany({
+          where: { feeStructureId: target.id },
         });
-      }
+
+        for (const item of sourceStructure.items) {
+          await tx.feeStructureItem.create({
+            data: {
+              feeStructureId: target.id,
+              feeHeadId: item.feeHeadId,
+              amount: item.amount,
+            },
+          });
+        }
+
+        // ── F-03: Sync fee assignments for target class
+        const activeSession = await tx.academicSession.findFirst({ where: { isCurrent: true } });
+        if (activeSession) {
+          const targetStudents = await tx.student.findMany({
+            where: { status: "ACTIVE", class: { name: toClassName } },
+            select: { id: true },
+          });
+
+          for (const s of targetStudents) {
+            await tx.feeAssignment.upsert({
+              where: {
+                studentId_feeStructureId_sessionId: {
+                  studentId: s.id,
+                  feeStructureId: target.id,
+                  sessionId: activeSession.id,
+                },
+              },
+              update: {},
+              create: {
+                studentId: s.id,
+                feeStructureId: target.id,
+                sessionId: activeSession.id,
+              },
+            });
+          }
+        }
+
+        return target;
+      });
 
       const systemUser = await db.user.findFirst({
         where: { OR: [{ role: "ADMIN" }, { role: "ACCOUNTANT" }] },
       });
       if (systemUser) {
-        const studentsToBackfill = await db.student.findMany({
-          where: { status: "ACTIVE", class: { name: toClassName } },
-          include: { class: true },
-        });
-        if (studentsToBackfill.length > 0) {
-          await generateYearlyChargesBulk(studentsToBackfill, systemUser.id, getAcademicYear());
-        }
+        void (async () => {
+          try {
+            const studentsToBackfill = await db.student.findMany({
+              where: { status: "ACTIVE", class: { name: toClassName } },
+              include: { class: true },
+            });
+            if (studentsToBackfill.length > 0) {
+              await generateYearlyChargesBulk(studentsToBackfill, systemUser.id, getAcademicYear());
+            }
+          } catch (err) {
+            console.error("[fee-config] CLONE_STRUCTURE backfill error:", err);
+          }
+        })();
       }
 
       return NextResponse.json({ success: true });
+
     }
 
     if (action === "GENERATE_STUDENT_LEDGER") {
@@ -264,10 +335,14 @@ export async function POST(request: Request) {
     }
 
     if (action === "CLEANUP_DUPLICATES") {
-      // Clean up duplicate unpaid CHARGE entries for the same student + fee head + description
+      // ── F-02: Clean up genuine duplicate unpaid CHARGE entries within the SAME
+      // academic year/session.
+      // Charges with receiptItems (payment history) are strictly IMMUTABLE and never deleted.
+      // Charges belonging to different academic sessions (e.g. 2025-2026 vs 2026-2027)
+      // are recognized as distinct and preserved.
       const allCharges = await db.ledgerEntry.findMany({
         where: { entryType: "CHARGE" },
-        include: { receiptItems: true },
+        include: { receiptItems: { select: { id: true } } },
         orderBy: { createdAt: "asc" },
       });
 
@@ -275,15 +350,28 @@ export async function POST(request: Request) {
       const duplicateIdsToDelete: string[] = [];
 
       for (const entry of allCharges) {
-        // Build normalized key: studentId_description
-        const normDesc = entry.description.toLowerCase().replace(/[^a-z0-9]/g, "");
-        const key = `${entry.studentId}_${normDesc}`;
+        // Rule 1: Never touch or consider an entry with payment history as a deletable duplicate
+        if (entry.receiptItems.length > 0) {
+          continue;
+        }
+
+        // Rule 2: Derive authoritative session year (from description or createdAt)
+        const yearMatch = entry.description.match(/(20\d{2}-20\d{2}|20\d{2}-\d{2})/);
+        const sessionYear = yearMatch ? yearMatch[1] : getAcademicYear(entry.createdAt);
+
+        // Rule 3: Normalize description without the year or "Assigned:" prefix
+        const cleanDesc = entry.description
+          .replace(/^Assigned:\s*/i, "")
+          .replace(/(20\d{2}-20\d{2}|20\d{2}-\d{2})/g, "")
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, "");
+
+        // Unique charge identity = student + feeHead + academicSession + particular
+        const key = `${entry.studentId}_${entry.feeHeadId || "none"}_${sessionYear}_${cleanDesc}`;
 
         if (seen.has(key)) {
-          // Check if this duplicate entry is unpaid (no receipt items linked)
-          if (entry.receiptItems.length === 0) {
-            duplicateIdsToDelete.push(entry.id);
-          }
+          duplicateIdsToDelete.push(entry.id);
         } else {
           seen.add(key);
         }
@@ -307,10 +395,10 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   const authUser = await getAuthUser(request);
-  if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!authUser) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
-  if (authUser.role !== "ADMIN") {
-    return NextResponse.json({ error: "Forbidden. Admin access required." }, { status: 403 });
+  if (authUser.role !== "ADMIN" && authUser.role !== "ACCOUNTANT") {
+    return NextResponse.json({ error: "Forbidden. Admin or Accountant access required." }, { status: 403 });
   }
 
   try {

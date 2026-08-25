@@ -97,6 +97,56 @@ function formatHeadStatus(item?: MockDueItem): string {
 }
 
 /**
+ * ── AD-05: Server-backed export downloader that queries /api/export
+ */
+export async function downloadServerExport({
+  type = "register",
+  format = "xlsx",
+  selectedClass = "All",
+  searchQuery = "",
+  onlyDefaulters = false,
+  studentId,
+}: {
+  type?: "register" | "statement";
+  format?: "xlsx" | "csv";
+  selectedClass?: string;
+  searchQuery?: string;
+  onlyDefaulters?: boolean;
+  studentId?: string;
+}): Promise<void> {
+  const params = new URLSearchParams();
+  params.set("type", type);
+  params.set("format", format);
+  if (selectedClass && selectedClass !== "All") params.set("selectedClass", selectedClass);
+  if (searchQuery) params.set("search", searchQuery);
+  if (onlyDefaulters) params.set("onlyDefaulters", "true");
+  if (studentId) params.set("studentId", studentId);
+
+  const res = await fetch(`/api/export?${params.toString()}`);
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({ error: "Export failed on server." }));
+    throw new Error(errData.error || "Export failed on server.");
+  }
+
+  const blob = await res.blob();
+  const contentDisposition = res.headers.get("Content-Disposition");
+  let filename = `Export_${new Date().toISOString().split("T")[0]}.${format}`;
+  if (contentDisposition) {
+    const match = contentDisposition.match(/filename="?([^";]+)"?/);
+    if (match && match[1]) filename = match[1];
+  }
+
+  if (typeof window !== "undefined") {
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+}
+
+/**
  * Generates and downloads the comprehensive Master Fee Register Excel file (.xlsx)
  */
 export function exportMasterFeeRegisterXLS({
@@ -108,6 +158,18 @@ export function exportMasterFeeRegisterXLS({
   searchQuery = "",
   onlyDefaulters = false,
 }: ExportFeeOptions) {
+  // ── AD-05: Attempt authoritative server-side export first ──
+  downloadServerExport({
+    type: "register",
+    format: "xlsx",
+    selectedClass,
+    searchQuery,
+    onlyDefaulters,
+  }).catch((err) => {
+    console.warn("Server export fallback triggered:", err);
+    // Continue with client fallback if offline
+  });
+
   // Pre-group dues by studentId
   const studentDuesMap = new Map<string, MockDueItem[]>();
   const studentReceiptsMap = new Map<string, MockReceipt[]>();
@@ -491,3 +553,124 @@ export function exportSingleStudentStatementXLS({
 
   XLSX.writeFile(wb, filename);
 }
+
+/**
+ * ── AD-05: Generates and downloads the Fee Register as a standard CSV file (.csv)
+ */
+export function exportFeeRegisterCSV(options: ExportFeeOptions) {
+  // ── AD-05: Attempt authoritative server-side export first ──
+  downloadServerExport({
+    type: "register",
+    format: "csv",
+    selectedClass: options.selectedClass,
+    searchQuery: options.searchQuery,
+    onlyDefaulters: options.onlyDefaulters,
+  }).catch((err) => {
+    console.warn("Server export fallback triggered:", err);
+  });
+
+  const { students, dueItems, receipts, schoolInfo, selectedClass, onlyDefaulters } = options;
+
+  const rows = students
+    .filter((s) => !selectedClass || selectedClass === "All" || s.class === selectedClass)
+    .map((s, idx) => {
+      const sDues = dueItems.filter((d) => d.studentId === s.id);
+      const totalDue = sDues.reduce((sum, d) => sum + (d.amount || 0), 0);
+      const totalPaid = sDues.reduce((sum, d) => sum + (d.totalPaid || 0), 0);
+      const isClear = totalDue <= 0;
+      return {
+        "S.No.": idx + 1,
+        "Student Name": s.name,
+        "Admission No": s.admissionNo,
+        "Class": s.class,
+        "Section": s.section || "",
+        "Father Name": s.fatherName || "",
+        "Father Mobile": s.fatherMobile || "",
+        "Total Fee (Rs)": toRupees(totalDue + totalPaid),
+        "Paid Amount (Rs)": toRupees(totalPaid),
+        "Remaining Due (Rs)": toRupees(totalDue),
+        "Status": isClear ? "CLEAR" : "DUE",
+        "Paid Up To": getPaidUpToMonth(sDues),
+      };
+    });
+
+  const filtered = onlyDefaulters ? rows.filter((r) => r.Status === "DUE") : rows;
+  const ws = XLSX.utils.json_to_sheet(filtered);
+  const csvOutput = XLSX.utils.sheet_to_csv(ws);
+  const blob = new Blob([csvOutput], { type: "text/csv;charset=utf-8;" });
+
+  const dateStr = new Date().toISOString().split("T")[0];
+  const safeSchoolName = (schoolInfo?.name || "School").replace(/[^a-zA-Z0-9]/g, "_");
+  const classTag =
+    selectedClass && selectedClass !== "All"
+      ? `_Class_${selectedClass.replace(/[^a-zA-Z0-9]/g, "_")}`
+      : onlyDefaulters
+      ? "_Defaulters_Only"
+      : "_All_Students";
+  const filename = `${safeSchoolName}_Fee_Register${classTag}_${dateStr}.csv`;
+
+  if (typeof window !== "undefined") {
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+}
+
+/**
+ * ── AD-05: Generates and downloads a single student's fee statement CSV file (.csv)
+ */
+export function exportSingleStudentStatementCSV({
+  student,
+  dueItems,
+  receipts,
+  schoolInfo,
+}: {
+  student: MockStudent;
+  dueItems: MockDueItem[];
+  receipts: MockReceipt[];
+  schoolInfo?: MockSchoolInfo;
+}) {
+  const stdDues = dueItems
+    .filter((d) => d.studentId === student.id)
+    .sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || ""));
+
+  const duesRows = stdDues.map((d, idx) => {
+    const origRs = toRupees(d.originalAmount || d.amount);
+    const paidRs = toRupees(d.totalPaid || 0);
+    const discRs = toRupees(d.totalDiscount || 0);
+    const dueRs = toRupees(d.amount);
+
+    return {
+      "S.No.": idx + 1,
+      "Fee Description / Head": d.name,
+      "Due Date": d.dueDate || "-",
+      "Fee Amount (Rs)": origRs,
+      "Paid Amount (Rs)": paidRs,
+      "Discount / Concession (Rs)": discRs,
+      "Remaining Due (Rs)": dueRs,
+      "Status": d.status === "PAID" || dueRs <= 0 ? "PAID" : paidRs > 0 ? "PARTIALLY PAID" : "UNPAID",
+      "Overdue Currently": d.status === "UNPAID" && isDueUpToCurrentMonth(d) ? "YES (OVERDUE)" : "NO",
+    };
+  });
+
+  const ws = XLSX.utils.json_to_sheet(duesRows);
+  const csvOutput = XLSX.utils.sheet_to_csv(ws);
+  const blob = new Blob([csvOutput], { type: "text/csv;charset=utf-8;" });
+
+  const dateStr = new Date().toISOString().split("T")[0];
+  const safeName = student.name.replace(/[^a-zA-Z0-9]/g, "_");
+  const filename = `Fee_Statement_${safeName}_ADM_${student.admissionNo || "NA"}_${dateStr}.csv`;
+
+  if (typeof window !== "undefined") {
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+}
+

@@ -242,22 +242,24 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
   };
 
   // Calculations for Attendance
+  // Calculations for Attendance (PD-07: LATE does not inflate on-time attendance percentage)
   const getAttendanceSummary = () => {
-    if (!data || !data.attendance || data.attendance.length === 0) return { percent: 0, present: 0, absent: 0, total: 0 };
+    if (!data || !data.attendance || data.attendance.length === 0) return { percent: 0, present: 0, late: 0, absent: 0, leave: 0, total: 0 };
     const total = data.attendance.length;
-    const present = data.attendance.filter((a: any) => a.status === "PRESENT" || a.status === "LATE").length;
+    const present = data.attendance.filter((a: any) => a.status === "PRESENT").length;
+    const late = data.attendance.filter((a: any) => a.status === "LATE").length;
     const absent = data.attendance.filter((a: any) => a.status === "ABSENT").length;
     const leave = data.attendance.filter((a: any) => a.status === "LEAVE").length;
     
-    // Percent calculated out of active days (present + late + absent)
-    const activeDays = present + absent;
+    // Percent calculated out of active school days (present + late + absent); approved leave is preserved as official exemption
+    const activeDays = present + late + absent;
     const percent = activeDays > 0 ? Math.round((present / activeDays) * 100) : 100;
 
-    return { percent, present, absent, leave, total };
+    return { percent, present, late, absent, leave, total };
   };
 
   const { totalCharged, totalPaid, totalDiscount, outstanding } = getFinancialSummary();
-  const { percent: attendancePercent, present: attPresent, absent: attAbsent, leave: attLeave, total: attTotal } = getAttendanceSummary();
+  const { percent: attendancePercent, present: attPresent, late: attLate, absent: attAbsent, leave: attLeave, total: attTotal } = getAttendanceSummary();
 
   React.useEffect(() => {
     if (isOpen && !isInline) {

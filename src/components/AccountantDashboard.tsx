@@ -57,97 +57,10 @@ import {
 import {
   exportMasterFeeRegisterXLS,
   exportSingleStudentStatementXLS,
+  exportFeeRegisterCSV,
 } from "@/lib/exportFeeXLS";
+import { getGroupedReceiptItems } from "@/lib/receipts";
 
-
-// Groups multiple months or siblings into a single row if the list grows too long (> 4 items)
-const getGroupedReceiptItems = (items: any[]) => {
-  if (!items || items.length === 0) return [];
-  if (items.length <= 4) return items;
-
-  const groups: { [key: string]: { name: string; studentPrefix: string; baseFeeHead: string; months: string[]; amount: number; discount: number } } = {};
-
-  items.forEach((item) => {
-    const rawName = item.name || item.description || "";
-    let studentPrefix = "";
-    let rest = rawName;
-
-    if (rawName.includes(":")) {
-      const parts = rawName.split(":");
-      studentPrefix = parts[0].trim();
-      rest = parts.slice(1).join(":").trim();
-    }
-
-    let baseFeeHead = rest;
-    let month = "";
-    const monthsList = [
-      "january", "february", "march", "april", "may", "june",
-      "july", "august", "september", "october", "november", "december"
-    ];
-
-    if (rest.includes("-")) {
-      const parts = rest.split("-");
-      let monthPartIndex = -1;
-      for (let i = parts.length - 1; i >= 0; i--) {
-        const partLower = parts[i].toLowerCase();
-        const hasMonth = monthsList.some((m) => partLower.includes(m));
-        if (hasMonth) {
-          monthPartIndex = i;
-          break;
-        }
-      }
-
-      if (monthPartIndex !== -1) {
-        month = parts.slice(monthPartIndex).join("-").trim();
-        baseFeeHead = parts.slice(0, monthPartIndex).join("-").trim();
-      }
-    }
-
-    const key = `${studentPrefix}||${baseFeeHead}`;
-
-    if (!groups[key]) {
-      groups[key] = {
-        name: baseFeeHead,
-        studentPrefix,
-        baseFeeHead,
-        months: [],
-        amount: 0,
-        discount: 0,
-      };
-    }
-
-    if (month) {
-      const monthLower = month.toLowerCase();
-      const matchedMonth = monthsList.find((m) => monthLower.includes(m));
-      if (matchedMonth) {
-        const capMonth = matchedMonth.charAt(0).toUpperCase() + matchedMonth.slice(1);
-        groups[key].months.push(capMonth);
-      }
-    }
-    groups[key].amount += item.amount;
-    groups[key].discount += item.discount || 0;
-  });
-
-  return Object.values(groups).map((g) => {
-    let finalName = "";
-    if (g.studentPrefix) {
-      finalName += `${g.studentPrefix}: `;
-    }
-    finalName += g.baseFeeHead;
-    if (g.months.length > 0) {
-      if (g.months.length >= 3) {
-        finalName += ` (${g.months[0]} to ${g.months[g.months.length - 1]})`;
-      } else {
-        finalName += ` (${g.months.join(", ")})`;
-      }
-    }
-    return {
-      name: finalName,
-      amount: g.amount,
-      discount: g.discount,
-    };
-  });
-};
 
 export default function AccountantDashboard() {
   const {
@@ -158,6 +71,7 @@ export default function AccountantDashboard() {
     ledgerEntries,
     feeHeads,
     feeStructures,
+    concessions,
     schoolInfo,
     recordItemizedPayment,
     addFeeHead,
@@ -261,11 +175,19 @@ export default function AccountantDashboard() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Filters students by dues > 0
-  const unpaidStudents = students.filter((s) => {
-    const sDues = dueItems.filter((d) => d.studentId === s.id && d.status === "UNPAID");
-    return sDues.length > 0;
-  });
+  // ── P-04: Index unpaid student IDs in a Set for O(1) membership check
+  // Eliminates O(N * M) nested filter on every render
+  const unpaidStudentIdsSet = React.useMemo(() => {
+    const set = new Set<string>();
+    for (const d of dueItems) {
+      if (d.status === "UNPAID") set.add(d.studentId);
+    }
+    return set;
+  }, [dueItems]);
+
+  const unpaidStudents = React.useMemo(() => {
+    return students.filter((s) => unpaidStudentIdsSet.has(s.id));
+  }, [students, unpaidStudentIdsSet]);
 
   // Calculate matches for name, admission number, parent name, phone, or Family ID
   const suggestions = React.useMemo(() => {
@@ -343,6 +265,37 @@ export default function AccountantDashboard() {
     }
   }, [selectedStudentId]);
 
+  // ── P-04: Memoized student and concession lookup maps for O(1) lookups
+  const studentByIdMap = React.useMemo(() => {
+    const map = new Map<string, any>();
+    for (const s of students) map.set(s.id, s);
+    return map;
+  }, [students]);
+
+  const concessionByIdMap = React.useMemo(() => {
+    const map = new Map<string, any>();
+    for (const c of concessions || []) map.set(c.id, c);
+    return map;
+  }, [concessions]);
+
+  // ── AD-07 & P-04: Helper to compute standing concession discount for a given due item using O(1) map lookups
+  const getEligibleConcessionDiscount = (due: any) => {
+    if (!due) return 0;
+    const student = studentByIdMap.get(due.studentId);
+    if (!student || !student.concessionId) return 0;
+    const concession = concessionByIdMap.get(student.concessionId);
+    if (!concession || concession.percentage <= 0) return 0;
+
+    // Concession applies only to matching fee heads (case-insensitive substring/equality)
+    const feeHeadMatches = due.name.toLowerCase().includes(concession.feeHeadName.toLowerCase());
+    if (!feeHeadMatches) return 0;
+
+    const baseChargeAmount = due.originalAmount || due.amount;
+    const fullEligibleDiscount = Math.round((baseChargeAmount * concession.percentage) / 100);
+    const remainingEligible = Math.max(0, fullEligibleDiscount - (due.totalDiscount || 0));
+    return Math.min(due.amount, remainingEligible);
+  };
+
   const handleToggleDueSelection = (dueId: string) => {
     const due = dueItems.find((d) => d.id === dueId);
     if (!due) return;
@@ -362,8 +315,10 @@ export default function AccountantDashboard() {
         });
         return prev.filter((id) => id !== dueId);
       } else {
-        setDiscountsState((d) => ({ ...d, [dueId]: 0 }));
-        setPayingState((p) => ({ ...p, [dueId]: due.amount }));
+        // ── AD-07: Automatically apply standing concession on selection
+        const autoDiscount = getEligibleConcessionDiscount(due);
+        setDiscountsState((d) => ({ ...d, [dueId]: autoDiscount }));
+        setPayingState((p) => ({ ...p, [dueId]: Math.max(0, due.amount - autoDiscount) }));
         return [...prev, dueId];
       }
     });
@@ -392,11 +347,15 @@ export default function AccountantDashboard() {
       if (remaining <= 0) break;
 
       newSelectedIds.push(due.id);
-      newDiscountsState[due.id] = 0; // Default discount is 0
+      // ── AD-07: Calculate eligible standing concession discount
+      const autoDiscount = getEligibleConcessionDiscount(due);
+      newDiscountsState[due.id] = autoDiscount;
 
-      if (remaining >= due.amount) {
-        newPayingState[due.id] = due.amount;
-        remaining -= due.amount;
+      const payableAfterDiscount = Math.max(0, due.amount - autoDiscount);
+
+      if (remaining >= payableAfterDiscount) {
+        newPayingState[due.id] = payableAfterDiscount;
+        remaining -= payableAfterDiscount;
       } else {
         newPayingState[due.id] = remaining;
         remaining = 0;
@@ -542,22 +501,32 @@ export default function AccountantDashboard() {
 
       const isSingleSibling = siblingStudents.length === 1;
 
-      // Receipt Details for modal using real database receipt number
+      // Receipt Details for modal using real database receipt number.
+      // AD-02: Never fabricate a receipt number — if the server did not return one,
+      // the transaction itself is unreliable and we must surface a clear error.
+      if (!payRes.receipt?.receiptNo) {
+        alert("Payment was recorded but the server did not return a valid receipt number. Please contact your system administrator.");
+        setIsSubmittingPayment(false);
+        await refreshBilling();
+        return;
+      }
+      // ── AD-01: Build receipt modal from authoritative server/DB response values ──
+      const serverRec = payRes.receipt;
       const matchedReceipt = {
-        receiptNo: payRes.receipt?.receiptNo || `REC-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+        receiptNo: serverRec.receiptNo,
         studentName: isSingleSibling ? student.name : `Family (Siblings: ${siblingStudents.map(s => s.name).join(", ")})`,
         classSection: isSingleSibling ? `${student.class}-${student.section}` : "Unified Family",
         admissionNo: isSingleSibling ? student.admissionNo : student.familyCode || "Multi",
         fatherName: student.fatherName || student.parentName || "Parent",
-        subtotal: originalDueSum,
-        amount: totalPaid,
-        method: payMethod,
-        discount: totalDiscount,
-        arrears: totalRemainingOnSelectedInvoices,
-        otherArrears: familyOtherDuesSum,
-        totalFamilyDueRemaining: familyOtherDuesSum + totalRemainingOnSelectedInvoices,
-        transactionRef: finalTransactionRef || "",
-        amountInWords: numberToIndianWords(totalPaid),
+        subtotal: serverRec.subtotal !== undefined ? serverRec.subtotal : originalDueSum,
+        amount: serverRec.amount !== undefined ? serverRec.amount : totalPaid,
+        method: serverRec.paymentMethod || payMethod,
+        discount: serverRec.discount !== undefined ? serverRec.discount : totalDiscount,
+        arrears: serverRec.arrears !== undefined ? serverRec.arrears : totalRemainingOnSelectedInvoices,
+        otherArrears: serverRec.otherArrears !== undefined ? serverRec.otherArrears : familyOtherDuesSum,
+        totalFamilyDueRemaining: serverRec.totalFamilyDueRemaining !== undefined ? serverRec.totalFamilyDueRemaining : (familyOtherDuesSum + totalRemainingOnSelectedInvoices),
+        transactionRef: serverRec.transactionRef || finalTransactionRef || "",
+        amountInWords: serverRec.amountInWords || numberToIndianWords(serverRec.amount !== undefined ? serverRec.amount : totalPaid),
         details: items
           .map((i) => {
             const itemObj = unpaidItems.find((ui) => ui.id === i.ledgerEntryId);
@@ -581,7 +550,7 @@ export default function AccountantDashboard() {
             balance: bal,
           };
         }),
-        createdAt: new Date().toISOString().split("T")[0],
+        createdAt: serverRec.createdAt ? new Date(serverRec.createdAt).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
       };
 
       setActiveReceipt(matchedReceipt);
@@ -754,19 +723,30 @@ export default function AccountantDashboard() {
                 <Coins className="w-5 h-5" />
               </span>
             </div>
+            {/* ── AD-10: Show today's shift total, not the all-time total (myTotalCollections) */}
             <h3 className="text-2xl font-black text-slate-800 tracking-tight mt-4">
-              {formatP(myTotalCollections)}
+              {formatP(myTodayCollections)}
             </h3>
           </div>
           <div className="mt-5 pt-4 border-t border-slate-100/80">
-            <div className="flex justify-between items-center text-[10px] mb-1.5 font-bold">
-              <span className="text-slate-600">Cash: {formatP(myCashTally)}</span>
-              <span className="text-indigo-600">UPI: {formatP(myUpiTally)}</span>
-            </div>
-            <div className="w-full h-1.5 bg-slate-100 rounded-full flex overflow-hidden">
-              <div className="h-full bg-slate-400" style={{ width: `${myTotalCollections > 0 ? (myCashTally/myTotalCollections)*100 : 50}%` }}></div>
-              <div className="h-full bg-indigo-400" style={{ width: `${myTotalCollections > 0 ? (myUpiTally/myTotalCollections)*100 : 50}%` }}></div>
-            </div>
+            {/* ── AD-10: Cash/UPI ratio and labels scoped to today's receipts */}
+            {(() => {
+              const todayCash = myTodayReceipts.filter(r => r.method === "CASH").reduce((sum, r) => sum + r.amount, 0);
+              const todayUpi  = myTodayReceipts.filter(r => r.method === "UPI").reduce((sum, r) => sum + r.amount, 0);
+              const base = myTodayCollections > 0 ? myTodayCollections : 1;
+              return (
+                <>
+                  <div className="flex justify-between items-center text-[10px] mb-1.5 font-bold">
+                    <span className="text-slate-600">Cash: {formatP(todayCash)}</span>
+                    <span className="text-indigo-600">UPI: {formatP(todayUpi)}</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-slate-100 rounded-full flex overflow-hidden">
+                    <div className="h-full bg-slate-400" style={{ width: `${(todayCash / base) * 100}%` }}></div>
+                    <div className="h-full bg-indigo-400" style={{ width: `${(todayUpi / base) * 100}%` }}></div>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
       </div>
@@ -1085,8 +1065,9 @@ export default function AccountantDashboard() {
                               const newD = { ...discountsState };
                               const newP = { ...payingState };
                               selectedStudentDues.forEach(due => {
-                                newD[due.id] = 0;
-                                newP[due.id] = due.amount;
+                                const autoDiscount = getEligibleConcessionDiscount(due);
+                                newD[due.id] = autoDiscount;
+                                newP[due.id] = Math.max(0, due.amount - autoDiscount);
                               });
                               setDiscountsState(newD);
                               setPayingState(newP);
@@ -1113,7 +1094,7 @@ export default function AccountantDashboard() {
                               setDiscountsState(d => {
                                 const next = { ...d };
                                 activeChildDues.forEach(due => {
-                                  next[due.id] = 0;
+                                  next[due.id] = getEligibleConcessionDiscount(due);
                                 });
                                 return next;
                               });
@@ -1121,7 +1102,8 @@ export default function AccountantDashboard() {
                               setPayingState(p => {
                                 const next = { ...p };
                                 activeChildDues.forEach(due => {
-                                  next[due.id] = due.amount;
+                                  const autoDiscount = getEligibleConcessionDiscount(due);
+                                  next[due.id] = Math.max(0, due.amount - autoDiscount);
                                 });
                                 return next;
                               });
@@ -1857,6 +1839,22 @@ export default function AccountantDashboard() {
                 >
                   <FileSpreadsheet className="h-4 w-4 text-emerald-600" /> Export XLS {defaulterClass !== "All" ? `(Class ${defaulterClass})` : "(All Students)"}
                 </button>
+                <button
+                  onClick={() => {
+                    exportFeeRegisterCSV({
+                      students,
+                      dueItems,
+                      receipts,
+                      schoolInfo,
+                      selectedClass: defaulterClass,
+                      searchQuery: defaulterSearch,
+                    });
+                  }}
+                  className="flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 active:scale-95 border border-slate-200 rounded-xl py-2 px-3 text-[11px] font-bold text-slate-700 cursor-pointer transition-all shadow-2xs"
+                  title="Export Fee Register as CSV (.csv)"
+                >
+                  <Download className="h-4 w-4 text-slate-600" /> Export CSV
+                </button>
                 {defaulterClass !== "All" && (
                   <button
                     onClick={() => {
@@ -2224,9 +2222,9 @@ export default function AccountantDashboard() {
                   const overdueTillNow = unpaidDues.reduce((s, d) => s + d.amount, 0);
 
                   return (
-                    <div className="space-y-5 animate-fade-in bg-white border border-slate-200 rounded-2xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.03)]">
+                    <div className="space-y-5 animate-fade-in bg-white border border-slate-200 rounded-2xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.03)] student-statement-print-area">
                       {/* Back navigation */}
-                      <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-4 print:hidden">
                         <button
                           onClick={() => setExpandedStudentId(null)}
                           className="flex items-center gap-1.5 text-xs font-black text-indigo-600 hover:text-indigo-700 transition-colors cursor-pointer group"
@@ -2360,7 +2358,7 @@ export default function AccountantDashboard() {
                         </div>
 
                         {/* Action Buttons */}
-                        <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-slate-100 bg-slate-50/50 flex-wrap">
+                        <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-slate-100 bg-slate-50/50 flex-wrap print:hidden">
                           <button
                             onClick={() => window.print()}
                             className="flex items-center gap-1.5 py-2 px-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition-all cursor-pointer shadow-sm"
@@ -3349,14 +3347,13 @@ export default function AccountantDashboard() {
                 <div className="space-y-2 max-h-[450px] overflow-y-auto pr-1">
                   {(() => {
                     const filtered = ledgerEntries.filter((log) => {
-                      const createdByMe = log.createdById === user?.id;
                       const student = students.find((s) => s.id === log.studentId);
                       const matchesSearch =
                         !ledgerSearch.trim() ||
                         student?.name.toLowerCase().includes(ledgerSearch.toLowerCase()) ||
                         log.description.toLowerCase().includes(ledgerSearch.toLowerCase());
-                      const matchesDate = !ledgerDate || log.createdAt === ledgerDate;
-                      return createdByMe && matchesSearch && matchesDate;
+                      const matchesDate = !ledgerDate || log.createdAt.startsWith(ledgerDate);
+                      return matchesSearch && matchesDate;
                     });
 
                     if (filtered.length === 0) {
@@ -3478,7 +3475,7 @@ export default function AccountantDashboard() {
             </div>
 
             {/* Print Styling Override */}
-            <style dangerouslySetInnerHTML={{__html: `
+            <style>{`
               @media print {
                 @page {
                   size: ${receiptPageSize === "A5" ? "A5 landscape" : "A4 portrait"};
@@ -3494,7 +3491,8 @@ export default function AccountantDashboard() {
                 body * {
                   visibility: hidden !important;
                 }
-                #receipt-print-area, #receipt-print-area * {
+                #receipt-print-area, #receipt-print-area *,
+                .student-statement-print-area, .student-statement-print-area * {
                   visibility: visible !important;
                 }
                 #receipt-print-area {
@@ -3511,8 +3509,21 @@ export default function AccountantDashboard() {
                   -webkit-print-color-adjust: exact !important;
                   print-color-adjust: exact !important;
                 }
+                .student-statement-print-area {
+                  position: fixed !important;
+                  left: 0 !important;
+                  top: 0 !important;
+                  width: 100% !important;
+                  margin: 0 !important;
+                  padding: 10mm !important;
+                  border: none !important;
+                  box-shadow: none !important;
+                  background: #ffffff !important;
+                  -webkit-print-color-adjust: exact !important;
+                  print-color-adjust: exact !important;
+                }
               }
-            `}} />
+            `}</style>
 
             {/* Printable Receipt Canvas */}
             <div

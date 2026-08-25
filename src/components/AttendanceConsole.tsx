@@ -93,10 +93,14 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
   // Attendance state map for current date & class: { [studentId]: AttendanceStatus }
   const [localAttendanceMap, setLocalAttendanceMap] = useState<Record<string, AttendanceStatus>>({});
   const [isModified, setIsModified] = useState<boolean>(false);
+  // ── AT-04: Track the server's updatedAt per studentId for the current date.
+  // Sent as expectedUpdatedAt on save so the server can detect stale writes.
+  const [localAttendanceTimestampMap, setLocalAttendanceTimestampMap] = useState<Record<string, string>>({});
 
   // Initialize attendance map: DEFAULT EVERYTHING TO PRESENT
   useEffect(() => {
     const newMap: Record<string, AttendanceStatus> = {};
+    const newTsMap: Record<string, string> = {};
 
     classStudents.forEach((student) => {
       const existing = attendances.find(
@@ -113,6 +117,10 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
 
       if (existing) {
         newMap[student.id] = existing.status;
+        // ── AT-04: Store the server's updatedAt so we can detect stale saves.
+        if (existing.updatedAt) {
+          newTsMap[student.id] = existing.updatedAt;
+        }
       } else if (hasApprovedLeave) {
         newMap[student.id] = "LEAVE";
       } else {
@@ -121,6 +129,7 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
     });
 
     setLocalAttendanceMap(newMap);
+    setLocalAttendanceTimestampMap(newTsMap);
     setIsModified(false);
   }, [selectedClass, selectedDate, classStudents, attendances, leaveRequests]);
 
@@ -162,10 +171,16 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
     setIsSaving(true);
     setSaveSuccessMessage("");
 
+    // ── AT-04: Include expectedUpdatedAt for records that already exist on the
+    // server so the API can detect concurrent writes from another session/user.
     const records = Object.entries(localAttendanceMap).map(([studentId, status]) => ({
       studentId,
       date: selectedDate,
       status,
+      // Only send expectedUpdatedAt if we loaded this record from the server.
+      ...(localAttendanceTimestampMap[studentId]
+        ? { expectedUpdatedAt: localAttendanceTimestampMap[studentId] }
+        : {}),
     }));
 
     try {
@@ -174,10 +189,20 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
       setIsModified(false);
       setSaveSuccessMessage(`Attendance saved for ${records.length} students`);
       setTimeout(() => setSaveSuccessMessage(""), 3500);
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
       setIsSaving(false);
-      alert("Failed to save attendance. Please try again.");
+      if (err?.isConflict) {
+        // ── AT-04: Another user saved attendance for this class after we loaded it.
+        // attendances state is already refreshed by markBatchAttendance — reset local map.
+        setSaveSuccessMessage("");
+        alert(
+          "Attendance was updated by another user while you were editing. " +
+          "The view has been refreshed with the latest data. Please review and save again."
+        );
+      } else {
+        console.error(err);
+        alert("Failed to save attendance. Please try again.");
+      }
     }
   };
 

@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
+import { ClassStatus } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
     const classes = await db.class.findMany({
-      where: { status: "ACTIVE" },
+      where: { status: ClassStatus.ACTIVE },
       orderBy: [
         { name: "asc" },
         { section: "asc" }
@@ -68,9 +69,10 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "Class ID is required" }, { status: 400 });
     }
 
+    // DB-05: Using ClassStatus enum — only valid enum values can be stored
     await db.class.update({
       where: { id },
-      data: { status: "ARCHIVED" },
+      data: { status: ClassStatus.ARCHIVED },
     });
 
     return NextResponse.json({ success: true });
@@ -79,4 +81,3 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Failed to archive class" }, { status: 500 });
   }
 }
-

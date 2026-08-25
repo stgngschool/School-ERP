@@ -3,6 +3,8 @@ import db from "@/lib/db";
 import { generateYearlyChargesBulk, getAcademicYear } from "@/lib/generateYearlyCharges";
 import { getAuthUser } from "@/lib/auth";
 
+import { getSafeErrorMessage } from "@/lib/validation";
+
 export const dynamic = "force-dynamic";
 
 /**
@@ -32,7 +34,12 @@ export async function POST(request: Request) {
 
     const students = await db.student.findMany({
       where: { status: "ACTIVE" },
-      include: { class: true },
+      // ── GY-02: admissionDate lets bulk generator derive per-student starting month
+      select: {
+        id: true,
+        admissionDate: true,
+        class: { select: { name: true } },
+      },
     });
 
     const result = await generateYearlyChargesBulk(
@@ -41,15 +48,22 @@ export async function POST(request: Request) {
       academicYear
     );
 
+    const hasFailed = (result as any).failed > 0;
+
     return NextResponse.json({
-      success: true,
-      message: `Resync complete for academic year ${academicYear}`,
+      success: !hasFailed,
+      message: hasFailed
+        ? `Resync completed with issues: ${result.generated} generated, ${result.skipped} skipped, ${(result as any).failed} failed`
+        : `Resync complete for academic year ${academicYear}`,
       totalGenerated: result.generated,
       totalSkipped: result.skipped,
+      totalFailed: (result as any).failed || 0,
       studentCount: students.length,
-    });
+      errors: (result as any).errors || [],
+    }, { status: hasFailed ? 207 : 200 });
   } catch (error: any) {
     console.error("Bill resync error:", error);
-    return NextResponse.json({ error: "Failed to resync bills: " + error.message }, { status: 500 });
+    const safeError = getSafeErrorMessage(error, "Failed to resync bills.");
+    return NextResponse.json({ error: safeError }, { status: 500 });
   }
 }

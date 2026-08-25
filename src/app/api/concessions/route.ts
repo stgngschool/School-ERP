@@ -1,17 +1,23 @@
 import { NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { validatePercentage, getSafeErrorMessage } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const authUser = await getAuthUser(request);
+    if (!authUser) {
+      return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
+    }
+
     const concessions = await db.concession.findMany({
       orderBy: { name: "asc" },
     });
     return NextResponse.json(concessions, {
       headers: {
-        "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
+        "Cache-Control": "private, no-cache, no-store, must-revalidate",
       },
     });
   } catch (error) {
@@ -34,11 +40,20 @@ export async function POST(request: Request) {
     }
 
     const nameStr = String(name).trim();
-    const pctVal = parseInt(percentage);
-    const headNameStr = String(feeHeadName).trim();
+    if (!nameStr) {
+      return NextResponse.json({ error: "Concession name cannot be empty." }, { status: 400 });
+    }
 
-    if (isNaN(pctVal) || pctVal < 0 || pctVal > 100) {
-      return NextResponse.json({ error: "Percentage must be between 0 and 100" }, { status: 400 });
+    let pctVal: number;
+    try {
+      pctVal = validatePercentage(percentage, "Percentage");
+    } catch (err: any) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
+    }
+
+    const headNameStr = String(feeHeadName).trim();
+    if (!headNameStr) {
+      return NextResponse.json({ error: "Fee head name cannot be empty." }, { status: 400 });
     }
 
     const concession = await db.concession.upsert({
@@ -47,10 +62,22 @@ export async function POST(request: Request) {
       create: { name: nameStr, percentage: pctVal, feeHeadName: headNameStr },
     });
 
+    // ── E-02: Structured Audit Logging
+    await db.auditLog.create({
+      data: {
+        userId: authUser.userId,
+        action: "CONCESSION_UPDATED",
+        entityType: "Concession",
+        entityId: concession.id,
+        newValues: JSON.stringify({ name: nameStr, percentage: pctVal, feeHeadName: headNameStr }),
+      },
+    }).catch((err) => console.error("Audit log error on concession:", err));
+
     return NextResponse.json({ success: true, concession });
   } catch (error) {
     console.error("Create concession error:", error);
-    return NextResponse.json({ error: "Failed to create concession" }, { status: 500 });
+    const safeError = getSafeErrorMessage(error, "Failed to save concession.");
+    return NextResponse.json({ error: safeError }, { status: 500 });
   }
 }
 
@@ -67,9 +94,13 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "Concession ID is required" }, { status: 400 });
     }
 
-    await db.concession.delete({
-      where: { id },
-    });
+    try {
+      await db.concession.delete({
+        where: { id },
+      });
+    } catch (e: any) {
+      if (e?.code !== "P2025") throw e; // P2025 = Record to delete does not exist
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -77,3 +108,6 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Failed to delete concession" }, { status: 500 });
   }
 }
+
+export const PUT = POST;
+export const PATCH = POST;

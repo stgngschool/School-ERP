@@ -70,15 +70,12 @@ export async function GET() {
     console.log(`[DIAGNOSTIC][DB][${reqId}] db.user.findUnique | duration: ${dbDuration}ms | userId: ${decoded.userId}`);
 
     if (!user) {
-      // CRITICAL: Clear the stale cookie so browser stops sending it in a loop
-      cookieStore.delete("auth_token");
       const duration = (performance.now() - startTime).toFixed(2);
-      console.warn(`[DIAGNOSTIC][API][END] GET /api/auth/me [${reqId}] | status: 401 | duration: ${duration}ms | authenticated: false | reason: User not found in DB (cookie cleared)`);
+      console.warn(`[DIAGNOSTIC][API][END] GET /api/auth/me [${reqId}] | status: 401 | duration: ${duration}ms | authenticated: false | reason: User not found in DB`);
       return noStoreJson({ authenticated: false }, { status: 401 });
     }
 
     if (user.status === "BLOCKED") {
-      cookieStore.delete("auth_token");
       const duration = (performance.now() - startTime).toFixed(2);
       console.warn(`[DIAGNOSTIC][API][END] GET /api/auth/me [${reqId}] | status: 403 | duration: ${duration}ms | user: ${user.username} | status: BLOCKED`);
       return noStoreJson(

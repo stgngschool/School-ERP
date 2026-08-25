@@ -2,38 +2,21 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import db from "@/lib/db";
 import { signToken } from "@/lib/auth";
+import { checkLoginRateLimit, clearLoginRateLimit } from "@/lib/rateLimit";
 import { Role } from "@prisma/client";
-
-// Basic in-memory rate limiter for login
-const rateLimitMap = new Map<string, { count: number; expiresAt: number }>();
-const MAX_ATTEMPTS = 5;
-const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
-
-function checkRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const record = rateLimitMap.get(ip);
-  if (!record) {
-    rateLimitMap.set(ip, { count: 1, expiresAt: now + WINDOW_MS });
-    return true;
-  }
-  if (now > record.expiresAt) {
-    rateLimitMap.set(ip, { count: 1, expiresAt: now + WINDOW_MS });
-    return true;
-  }
-  if (record.count >= MAX_ATTEMPTS) {
-    return false;
-  }
-  record.count++;
-  return true;
-}
 
 export async function POST(request: Request) {
   const reqId = `login_${Math.random().toString(36).substring(2, 9)}`;
   const startTime = performance.now();
   console.log(`[DIAGNOSTIC][API][START] POST /api/auth/login [${reqId}] | timestamp: ${new Date().toISOString()}`);
 
-  const ip = request.headers.get("x-forwarded-for") || "unknown";
-  if (!checkRateLimit(ip)) {
+  const rawIp = request.headers.get("x-forwarded-for") || "unknown";
+
+  // ── A-01 fix: DB-backed rate limiting (shared across all serverless instances)
+  // Replaces the old in-process Map which was reset on cold starts and invisible
+  // to other instances.
+  const allowed = await checkLoginRateLimit(rawIp);
+  if (!allowed) {
     return NextResponse.json(
       { error: "Too many login attempts. Please try again after 15 minutes." },
       { status: 429 }
@@ -111,13 +94,26 @@ export async function POST(request: Request) {
 
     // Authenticate candidate user by password
     let authenticatedUser = null;
+    let isBlockedUser = false;
     for (const candidate of candidateUsers) {
-      if (candidate.status === "BLOCKED") continue;
       const isMatch = await bcrypt.compare(cleanPassword, candidate.passwordHash);
       if (isMatch) {
+        if (candidate.status === "BLOCKED") {
+          isBlockedUser = true;
+          break;
+        }
         authenticatedUser = candidate;
         break;
       }
+    }
+
+    if (isBlockedUser) {
+      const duration = (performance.now() - startTime).toFixed(2);
+      console.warn(`[DIAGNOSTIC][API][END] POST /api/auth/login [${reqId}] | status: 403 | duration: ${duration}ms | status: BLOCKED`);
+      return NextResponse.json(
+        { error: "Your account has been locked/blocked by administrator." },
+        { status: 403 }
+      );
     }
 
     if (!authenticatedUser) {
@@ -129,20 +125,20 @@ export async function POST(request: Request) {
       );
     }
 
-    if (authenticatedUser.status === "BLOCKED") {
-      const duration = (performance.now() - startTime).toFixed(2);
-      console.warn(`[DIAGNOSTIC][API][END] POST /api/auth/login [${reqId}] | status: 403 | duration: ${duration}ms | user: ${authenticatedUser.username} | status: BLOCKED`);
-      return NextResponse.json(
-        { error: "Your account has been locked/blocked by administrator." },
-        { status: 403 }
-      );
-    }
+    // Successful login — clear the rate limit record for this IP
+    // (prevents legitimate users from being locked out after failed attempts
+    //  in the same window before eventual success)
+    void clearLoginRateLimit(rawIp).catch(() => { /* non-critical, ignore */ });
 
-    // Sign JWT token
+    // ── A-02: Sign JWT with current tokenVersion ─────────────────────────────
+    // The tokenVersion is verified on every subsequent request in getAuthUser().
+    // Incrementing tokenVersion (on block/logout/password-reset) immediately
+    // invalidates this and all other tokens for the user.
     const token = signToken({
       userId: authenticatedUser.id,
       username: authenticatedUser.username,
       role: authenticatedUser.role,
+      tokenVersion: authenticatedUser.tokenVersion,
     });
 
     const payload = {

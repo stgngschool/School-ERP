@@ -20,22 +20,28 @@ export async function GET(request: Request) {
     const section = searchParams.get("section");
     const examName = searchParams.get("exam");
     const subject = searchParams.get("subject");
+    const sessionId = searchParams.get("sessionId");
 
     if (!className || !section || !examName || !subject) {
       return NextResponse.json({ error: "Missing required parameters" }, { status: 400 });
     }
 
-    const marks = await db.mark.findMany({
-      where: {
-        examName,
-        subject,
-        student: {
-          class: {
-            name: className,
-            section: section,
-          }
+    const whereClause: any = {
+      examName,
+      subject,
+      student: {
+        class: {
+          name: className,
+          section: section,
         }
-      },
+      }
+    };
+    if (sessionId) {
+      whereClause.sessionId = sessionId;
+    }
+
+    const marks = await db.mark.findMany({
+      where: whereClause,
       select: {
         studentId: true,
         marksObtained: true,

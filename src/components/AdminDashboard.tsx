@@ -1,14 +1,42 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
+import dynamic from "next/dynamic";
 import { useAuth } from "@/context/AuthContext";
 import { formatP, toPaisa, toRupees, numberToIndianWords } from "@/lib/currency";
-import StudentProfileModal from "@/components/StudentProfileModal";
-import MarksFeedingConsole from "@/components/MarksFeedingConsole";
-import PrintMarksheets from "@/components/PrintMarksheets";
-import AttendanceConsole from "@/components/AttendanceConsole";
-import WebsiteMediaManager from "@/components/WebsiteMediaManager";
-import AdmissionLeadsDesk from "@/components/AdmissionLeadsDesk";
+
+const ConsoleLoadingFallback = () => (
+  <div className="flex flex-col items-center justify-center p-12 bg-white rounded-2xl border border-slate-200 min-h-[300px] shadow-xs">
+    <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+    <span className="text-xs font-semibold text-slate-500 mt-3 tracking-wide">Loading module...</span>
+  </div>
+);
+
+// ── P-06: Code-split heavy independent admin sub-tabs into on-demand dynamic chunks
+const MarksFeedingConsole = dynamic(() => import("@/components/MarksFeedingConsole"), {
+  loading: ConsoleLoadingFallback,
+  ssr: false,
+});
+const PrintMarksheets = dynamic(() => import("@/components/PrintMarksheets"), {
+  loading: ConsoleLoadingFallback,
+  ssr: false,
+});
+const AttendanceConsole = dynamic(() => import("@/components/AttendanceConsole"), {
+  loading: ConsoleLoadingFallback,
+  ssr: false,
+});
+const WebsiteMediaManager = dynamic(() => import("@/components/WebsiteMediaManager"), {
+  loading: ConsoleLoadingFallback,
+  ssr: false,
+});
+const AdmissionLeadsDesk = dynamic(() => import("@/components/AdmissionLeadsDesk"), {
+  loading: ConsoleLoadingFallback,
+  ssr: false,
+});
+const StudentProfileModal = dynamic(() => import("@/components/StudentProfileModal"), {
+  ssr: false,
+});
+
 import ModernDatePicker from "@/components/ModernDatePicker";
 import {
   generateFeeReminderWhatsAppUrl,
@@ -18,6 +46,7 @@ import {
 import {
   exportMasterFeeRegisterXLS,
   exportSingleStudentStatementXLS,
+  exportFeeRegisterCSV,
 } from "@/lib/exportFeeXLS";
 import {
   Users,
@@ -86,100 +115,34 @@ import {
   QrCode,
 } from "lucide-react";
 
+import { getGroupedReceiptItems } from "@/lib/receipts";
+
 const getLocalDateString = () => {
   const d = new Date();
   d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
   return d.toISOString().split("T")[0];
 };
 
-// Groups multiple months or siblings into a single row if the list grows too long (> 4 items)
-const getGroupedReceiptItems = (items: any[]) => {
-  if (!items || items.length === 0) return [];
-  if (items.length <= 4) return items;
-
-  const groups: { [key: string]: { name: string; studentPrefix: string; baseFeeHead: string; months: string[]; amount: number; discount: number } } = {};
-
-  items.forEach((item) => {
-    const rawName = item.name || item.description || "";
-    let studentPrefix = "";
-    let rest = rawName;
-
-    if (rawName.includes(":")) {
-      const parts = rawName.split(":");
-      studentPrefix = parts[0].trim();
-      rest = parts.slice(1).join(":").trim();
-    }
-
-    let baseFeeHead = rest;
-    let month = "";
-    const monthsList = [
-      "january", "february", "march", "april", "may", "june",
-      "july", "august", "september", "october", "november", "december"
-    ];
-
-    if (rest.includes("-")) {
-      const parts = rest.split("-");
-      let monthPartIndex = -1;
-      for (let i = parts.length - 1; i >= 0; i--) {
-        const partLower = parts[i].toLowerCase();
-        const hasMonth = monthsList.some((m) => partLower.includes(m));
-        if (hasMonth) {
-          monthPartIndex = i;
-          break;
-        }
-      }
-
-      if (monthPartIndex !== -1) {
-        month = parts.slice(monthPartIndex).join("-").trim();
-        baseFeeHead = parts.slice(0, monthPartIndex).join("-").trim();
-      }
-    }
-
-    const key = `${studentPrefix}||${baseFeeHead}`;
-
-    if (!groups[key]) {
-      groups[key] = {
-        name: baseFeeHead,
-        studentPrefix,
-        baseFeeHead,
-        months: [],
-        amount: 0,
-        discount: 0,
-      };
-    }
-
-    if (month) {
-      const monthLower = month.toLowerCase();
-      const matchedMonth = monthsList.find((m) => monthLower.includes(m));
-      if (matchedMonth) {
-        const capMonth = matchedMonth.charAt(0).toUpperCase() + matchedMonth.slice(1);
-        groups[key].months.push(capMonth);
-      }
-    }
-    groups[key].amount += item.amount;
-    groups[key].discount += item.discount || 0;
-  });
-
-  return Object.values(groups).map((g) => {
-    let finalName = "";
-    if (g.studentPrefix) {
-      finalName += `${g.studentPrefix}: `;
-    }
-    finalName += g.baseFeeHead;
-    if (g.months.length > 0) {
-      if (g.months.length >= 3) {
-        finalName += ` (${g.months[0]} to ${g.months[g.months.length - 1]})`;
-      } else {
-        finalName += ` (${g.months.join(", ")})`;
-      }
-    }
-    return {
-      name: finalName,
-      amount: g.amount,
-      discount: g.discount,
-    };
-  });
-};
+// ── AD-09: validTabs is a static list — defined at module level so it is stable
+// across renders and the useEffect dependency array never captures a stale closure.
+const VALID_ADMIN_TABS = [
+  "dashboard",
+  "collect",
+  "attendance",
+  "marks",
+  "print_marksheets",
+  "defaulters",
+  "ledger",
+  "structures",
+  "students",
+  "users",
+  "idcards",
+  "notices",
+  "enquiries",
+  "school",
+  "audit",
+  "website_media",
+] as const;
 
 export default function AdminDashboard() {
   const [itemsPerPage, setItemsPerPage] = useState(50);
@@ -282,26 +245,9 @@ export default function AdminDashboard() {
     attendanceLoaded,
   } = useAuth();
 
-  const validTabs = [
-    "dashboard",
-    "collect",
-    "attendance",
-    "marks",
-    "print_marksheets",
-    "defaulters",
-    "ledger",
-    "structures",
-    "students",
-    "users",
-    "idcards",
-    "notices",
-    "enquiries",
-    "school",
-    "audit",
-    "website_media",
-  ];
+  // ── AD-09: validTabs moved to module-level VALID_ADMIN_TABS (see above component def)
   React.useEffect(() => {
-    if (!validTabs.includes(activeTab)) {
+    if (!VALID_ADMIN_TABS.includes(activeTab as any)) {
       setActiveTab("dashboard");
     }
   }, [activeTab]);
@@ -441,23 +387,14 @@ export default function AdminDashboard() {
     setLateFeeSaving(true);
     setLateFeeMsg(null);
     try {
-      const currentRes = await fetch("/api/school");
-      const currentConfig = await currentRes.json();
-      const updatedConfig = {
-        ...currentConfig,
+      // ── SCH-02: Merge late-fee fields into the already-loaded schoolInfo state
+      // instead of doing a GET→merge→POST which can cause concurrent-update races.
+      await updateSchoolInfo({
         enableLateFee: lateFeeEnabled,
         lateFeeGraceDays,
         lateFeeAmount,
         lateFeeType,
-      };
-
-      const res = await fetch("/api/school", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updatedConfig),
       });
-
-      if (!res.ok) throw new Error("Failed to save late fee rules");
       setLateFeeMsg("✓ Late fee rules saved successfully!");
     } catch (err: any) {
       setLateFeeMsg(`Error: ${err.message || "Failed to save"}`);
@@ -915,6 +852,19 @@ export default function AdminDashboard() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  // ── P-04: Fast O(1) indexed maps for student and concession lookups
+  const studentByIdMap = React.useMemo(() => {
+    const map = new Map<string, any>();
+    for (const s of students) map.set(s.id, s);
+    return map;
+  }, [students]);
+
+  const concessionByIdMap = React.useMemo(() => {
+    const map = new Map<string, any>();
+    for (const c of concessions || []) map.set(c.id, c);
+    return map;
+  }, [concessions]);
+
   // Memos for Fee Collection (ported from Accountant Dashboard)
   const suggestions = React.useMemo(() => {
     if (!students || students.length === 0) return [];
@@ -1315,6 +1265,24 @@ export default function AdminDashboard() {
     setShowSuggestions(false);
   };
 
+  // ── AD-07: Helper to compute standing concession discount for a given due item
+  const getEligibleConcessionDiscount = (due: any) => {
+    if (!due) return 0;
+    const student = studentByIdMap.get(due.studentId);
+    if (!student || !student.concessionId) return 0;
+    const concession = concessionByIdMap.get(student.concessionId);
+    if (!concession || concession.percentage <= 0) return 0;
+
+    // Concession applies only to matching fee heads (case-insensitive substring/equality)
+    const feeHeadMatches = due.name.toLowerCase().includes(concession.feeHeadName.toLowerCase());
+    if (!feeHeadMatches) return 0;
+
+    const baseChargeAmount = due.originalAmount || due.amount;
+    const fullEligibleDiscount = Math.round((baseChargeAmount * concession.percentage) / 100);
+    const remainingEligible = Math.max(0, fullEligibleDiscount - (due.totalDiscount || 0));
+    return Math.min(due.amount, remainingEligible);
+  };
+
   const handleToggleDueSelection = (dueId: string) => {
     const due = dueItems.find((d) => d.id === dueId);
     if (!due) return;
@@ -1334,8 +1302,10 @@ export default function AdminDashboard() {
         });
         return prev.filter((id) => id !== dueId);
       } else {
-        setDiscountsState((d) => ({ ...d, [dueId]: 0 }));
-        setPayingState((p) => ({ ...p, [dueId]: due.amount }));
+        // ── AD-07: Automatically apply standing concession on selection
+        const autoDiscount = getEligibleConcessionDiscount(due);
+        setDiscountsState((d) => ({ ...d, [dueId]: autoDiscount }));
+        setPayingState((p) => ({ ...p, [dueId]: Math.max(0, due.amount - autoDiscount) }));
         return [...prev, dueId];
       }
     });
@@ -1364,11 +1334,15 @@ export default function AdminDashboard() {
       if (remaining <= 0) break;
 
       newSelectedIds.push(due.id);
-      newDiscountsState[due.id] = 0; // Default discount is 0
+      // ── AD-07: Calculate eligible standing concession discount
+      const autoDiscount = getEligibleConcessionDiscount(due);
+      newDiscountsState[due.id] = autoDiscount;
 
-      if (remaining >= due.amount) {
-        newPayingState[due.id] = due.amount;
-        remaining -= due.amount;
+      const payableAfterDiscount = Math.max(0, due.amount - autoDiscount);
+
+      if (remaining >= payableAfterDiscount) {
+        newPayingState[due.id] = payableAfterDiscount;
+        remaining -= payableAfterDiscount;
       } else {
         newPayingState[due.id] = remaining;
         remaining = 0;
@@ -1514,22 +1488,32 @@ export default function AdminDashboard() {
 
       const isSingleSibling = siblingStudents.length === 1;
 
-      // Receipt Details for modal using real database receipt number
+      // Receipt Details for modal using real database receipt number.
+      // AD-02: Never fabricate a receipt number — if the server did not return one,
+      // the transaction itself is unreliable and we must surface a clear error.
+      if (!payRes.receipt?.receiptNo) {
+        alert("Payment was recorded but the server did not return a valid receipt number. Please contact your system administrator.");
+        setIsSubmittingPayment(false);
+        await refreshBilling();
+        return;
+      }
+      // ── AD-01: Build receipt modal from authoritative server/DB response values ──
+      const serverRec = payRes.receipt;
       const matchedReceipt = {
-        receiptNo: payRes.receipt?.receiptNo || `REC-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+        receiptNo: serverRec.receiptNo,
         studentName: isSingleSibling ? student.name : `Family (Siblings: ${siblingStudents.map(s => s.name).join(", ")})`,
         classSection: isSingleSibling ? `${student.class}-${student.section}` : "Unified Family",
         admissionNo: isSingleSibling ? student.admissionNo : student.familyCode || "Multi",
         fatherName: student.fatherName || student.parentName || "Parent",
-        subtotal: originalDueSum,
-        amount: totalPaid,
-        method: payMethod,
-        discount: totalDiscount,
-        arrears: totalRemainingOnSelectedInvoices,
-        otherArrears: familyOtherDuesSum,
-        totalFamilyDueRemaining: familyOtherDuesSum + totalRemainingOnSelectedInvoices,
-        transactionRef: finalTransactionRef || "",
-        amountInWords: numberToIndianWords(totalPaid),
+        subtotal: serverRec.subtotal !== undefined ? serverRec.subtotal : originalDueSum,
+        amount: serverRec.amount !== undefined ? serverRec.amount : totalPaid,
+        method: serverRec.paymentMethod || payMethod,
+        discount: serverRec.discount !== undefined ? serverRec.discount : totalDiscount,
+        arrears: serverRec.arrears !== undefined ? serverRec.arrears : totalRemainingOnSelectedInvoices,
+        otherArrears: serverRec.otherArrears !== undefined ? serverRec.otherArrears : familyOtherDuesSum,
+        totalFamilyDueRemaining: serverRec.totalFamilyDueRemaining !== undefined ? serverRec.totalFamilyDueRemaining : (familyOtherDuesSum + totalRemainingOnSelectedInvoices),
+        transactionRef: serverRec.transactionRef || finalTransactionRef || "",
+        amountInWords: serverRec.amountInWords || numberToIndianWords(serverRec.amount !== undefined ? serverRec.amount : totalPaid),
         details: items
           .map((i) => {
             const itemObj = unpaidItems.find((ui) => ui.id === i.ledgerEntryId);
@@ -1553,7 +1537,7 @@ export default function AdminDashboard() {
             balance: bal,
           };
         }),
-        createdAt: getLocalDateString(),
+        createdAt: serverRec.createdAt ? new Date(serverRec.createdAt).toISOString().split("T")[0] : getLocalDateString(),
       };
 
       setActiveReceipt(matchedReceipt);
@@ -2072,7 +2056,6 @@ export default function AdminDashboard() {
     }
   };
 
-  // Global Memoized Variables for Students Directory (extracted from IIFE)
   const unpaidStudentIdsSet = React.useMemo(() => new Set(dueItems.filter((d) => d.status === "UNPAID").map((d) => d.studentId)), [dueItems]);
 
   const filteredStudentsMemo = React.useMemo(() => {
@@ -2231,7 +2214,7 @@ export default function AdminDashboard() {
             dueItems.forEach(d => {
               if (d.status === "UNPAID" && isDueUpToCurrentMonth(d)) {
                 if (!studentDueMap[d.studentId]) {
-                  const std = students.find(s => s.id === d.studentId);
+                  const std = studentByIdMap.get(d.studentId);
                   studentDueMap[d.studentId] = {
                     name: std?.name || "Student",
                     classSection: std ? `${std.class}-${std.section}` : "N/A",
@@ -3454,8 +3437,9 @@ export default function AdminDashboard() {
                                 const newD = { ...discountsState };
                                 const newP = { ...payingState };
                                 selectedStudentDues.forEach(due => {
-                                  newD[due.id] = 0;
-                                  newP[due.id] = due.amount;
+                                  const autoDiscount = getEligibleConcessionDiscount(due);
+                                  newD[due.id] = autoDiscount;
+                                  newP[due.id] = Math.max(0, due.amount - autoDiscount);
                                 });
                                 setDiscountsState(newD);
                                 setPayingState(newP);
@@ -3482,7 +3466,7 @@ export default function AdminDashboard() {
                                 setDiscountsState(d => {
                                   const next = { ...d };
                                   activeChildDues.forEach(due => {
-                                    next[due.id] = 0;
+                                    next[due.id] = getEligibleConcessionDiscount(due);
                                   });
                                   return next;
                                 });
@@ -3490,7 +3474,8 @@ export default function AdminDashboard() {
                                 setPayingState(p => {
                                   const next = { ...p };
                                   activeChildDues.forEach(due => {
-                                    next[due.id] = due.amount;
+                                    const autoDiscount = getEligibleConcessionDiscount(due);
+                                    next[due.id] = Math.max(0, due.amount - autoDiscount);
                                   });
                                   return next;
                                 });
@@ -8813,6 +8798,22 @@ export default function AdminDashboard() {
                   >
                     <FileSpreadsheet className="h-4 w-4 text-emerald-600" /> Export XLS {defaulterClass !== "All" ? `(Class ${defaulterClass})` : "(All Students)"}
                   </button>
+                  <button
+                    onClick={() => {
+                      exportFeeRegisterCSV({
+                        students,
+                        dueItems,
+                        receipts,
+                        schoolInfo,
+                        selectedClass: defaulterClass,
+                        searchQuery: defaulterSearch,
+                      });
+                    }}
+                    className="flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 active:scale-95 border border-slate-200 rounded-xl py-2 px-3 text-[11px] font-bold text-slate-700 cursor-pointer transition-all shadow-2xs"
+                    title="Export Fee Register as CSV (.csv)"
+                  >
+                    <Download className="h-4 w-4 text-slate-600" /> Export CSV
+                  </button>
                   {defaulterClass !== "All" && (
                     <button
                       onClick={() => {
@@ -9179,9 +9180,9 @@ export default function AdminDashboard() {
                     const overdueTillNow = unpaidDues.reduce((s, d) => s + d.amount, 0);
 
                     return (
-                      <div className="space-y-5 animate-fade-in bg-white border border-slate-200 rounded-2xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.03)]">
+                      <div className="space-y-5 animate-fade-in bg-white border border-slate-200 rounded-2xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.03)] student-statement-print-area">
                         {/* Back navigation */}
-                        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-4 print:hidden">
                           <button
                             onClick={() => setExpandedStudentId(null)}
                             className="flex items-center gap-1.5 text-xs font-black text-indigo-600 hover:text-indigo-700 transition-colors cursor-pointer group"
@@ -9315,7 +9316,7 @@ export default function AdminDashboard() {
                           </div>
 
                           {/* Action Buttons */}
-                          <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-slate-100 bg-slate-50/50 flex-wrap">
+                          <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-slate-100 bg-slate-50/50 flex-wrap print:hidden">
                             <button
                               onClick={() => window.print()}
                               className="flex items-center gap-1.5 py-2 px-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition-all cursor-pointer shadow-sm"
@@ -9788,7 +9789,7 @@ export default function AdminDashboard() {
             </div>
 
             {/* Print Styling Override */}
-            <style dangerouslySetInnerHTML={{__html: `
+            <style>{`
               @media print {
                 @page {
                   size: ${receiptPageSize === "A5" ? "A5 landscape" : "A4 portrait"};
@@ -9804,7 +9805,8 @@ export default function AdminDashboard() {
                 body * {
                   visibility: hidden !important;
                 }
-                #receipt-print-area, #receipt-print-area * {
+                #receipt-print-area, #receipt-print-area *,
+                .student-statement-print-area, .student-statement-print-area * {
                   visibility: visible !important;
                 }
                 #receipt-print-area {
@@ -9821,8 +9823,21 @@ export default function AdminDashboard() {
                   -webkit-print-color-adjust: exact !important;
                   print-color-adjust: exact !important;
                 }
+                .student-statement-print-area {
+                  position: fixed !important;
+                  left: 0 !important;
+                  top: 0 !important;
+                  width: 100% !important;
+                  margin: 0 !important;
+                  padding: 10mm !important;
+                  border: none !important;
+                  box-shadow: none !important;
+                  background: #ffffff !important;
+                  -webkit-print-color-adjust: exact !important;
+                  print-color-adjust: exact !important;
+                }
               }
-            `}} />
+            `}</style>
 
             {/* Printable Receipt Canvas */}
             <div
@@ -11167,7 +11182,7 @@ export default function AdminDashboard() {
           </div>
 
           {/* Print Styling Override */}
-          <style dangerouslySetInnerHTML={{__html: `
+          <style>{`
             @media print {
               body * {
                 visibility: hidden;
@@ -11197,7 +11212,7 @@ export default function AdminDashboard() {
                 margin: 0;
               }
             }
-          `}} />
+          `}</style>
         </div>
       )}
 

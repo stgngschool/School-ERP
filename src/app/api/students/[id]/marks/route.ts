@@ -29,10 +29,18 @@ export async function GET(
       }
     }
 
+    const { searchParams } = new URL(request.url);
+    const sessionId = searchParams.get("sessionId");
+
+    const whereClause: any = {
+      studentId,
+    };
+    if (sessionId) {
+      whereClause.sessionId = sessionId;
+    }
+
     const marks = await db.mark.findMany({
-      where: {
-        studentId,
-      },
+      where: whereClause,
       orderBy: {
         createdAt: "desc"
       }
@@ -91,10 +99,21 @@ export async function POST(
       return NextResponse.json({ error: "Obtained marks must be between 0 and maximum marks." }, { status: 400 });
     }
 
+    // ── DB-11: Resolve academic session for marks scoping
+    let targetSessionId = body.sessionId;
+    if (!targetSessionId) {
+      const currentSession = await db.academicSession.findFirst({ where: { isCurrent: true } });
+      targetSessionId = currentSession?.id;
+    }
+    if (!targetSessionId) {
+      return NextResponse.json({ error: "Active academic session not found." }, { status: 400 });
+    }
+
     const mark = await db.mark.upsert({
       where: {
-        studentId_subject_examName: {
+        studentId_sessionId_subject_examName: {
           studentId: id,
+          sessionId: targetSessionId,
           subject,
           examName,
         },
@@ -110,6 +129,7 @@ export async function POST(
       },
       create: {
         studentId: id,
+        sessionId: targetSessionId,
         subject,
         examName,
         marksObtained: obtained,

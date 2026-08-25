@@ -314,7 +314,7 @@ export async function POST(
         class: student.class.name,
         section: student.class.section,
         familyCode: student.parentProfile.familyCode,
-        parentName: student.parentProfile.user.name,
+        parentName: student.parentProfile.user?.name || student.fatherName || "Parent",
         fatherMobile: student.fatherMobile,
       },
       application: updatedApplication,

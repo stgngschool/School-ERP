@@ -300,50 +300,48 @@ export default function PrintMarksheets() {
         </div>
       )}
 
-      <style dangerouslySetInnerHTML={{
-        __html: `
-          @media print {
-            body * {
-              visibility: hidden;
-            }
-            .print-area, .print-area * {
-              visibility: visible;
-            }
-            .print-area {
-              position: absolute;
-              left: 0;
-              top: 0;
-              width: 100%;
-              margin: 0 !important;
-              padding: 0 !important;
-            }
-            .no-print {
-              display: none !important;
-            }
-            .print-only-container {
-              position: relative !important;
-              display: block !important;
-              visibility: visible !important;
-              width: 100% !important;
-              max-width: 200mm !important;
-              min-height: 282mm !important;
-              margin: 0 auto !important;
-              padding: 6mm 8mm !important;
-              box-shadow: none !important;
-              border: 2.5px solid #0f172a !important;
-              background-color: #ffffff !important;
-              page-break-after: always !important;
-              page-break-inside: avoid !important;
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-            }
-            @page {
-              size: A4 portrait;
-              margin: 4mm;
-            }
+      <style>{`
+        @media print {
+          body * {
+            visibility: hidden;
           }
-        `
-      }} />
+          .print-area, .print-area * {
+            visibility: visible;
+          }
+          .print-area {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          .no-print {
+            display: none !important;
+          }
+          .print-only-container {
+            position: relative !important;
+            display: block !important;
+            visibility: visible !important;
+            width: 100% !important;
+            max-width: 200mm !important;
+            min-height: 282mm !important;
+            margin: 0 auto !important;
+            padding: 6mm 8mm !important;
+            box-shadow: none !important;
+            border: 2.5px solid #0f172a !important;
+            background-color: #ffffff !important;
+            page-break-after: always !important;
+            page-break-inside: avoid !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          @page {
+            size: A4 portrait;
+            margin: 4mm;
+          }
+        }
+      `}</style>
 
       {!showDistributionLog && (
         <div className="mt-8 flex justify-center print:mt-0 print:block print-area">

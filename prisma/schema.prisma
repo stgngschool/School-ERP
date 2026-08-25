@@ -47,6 +47,22 @@ enum PaymentMethod {
   ONLINE
 }
 
+// ── DB-05: ClassStatus enum ──────────────────────────────────────────────────
+// Replaces the plain String field on Class.status so invalid values cannot
+// be inserted at the database level.
+enum ClassStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+// ── DB-04: ReceiptStatus enum ────────────────────────────────────────────────
+// Replaces the plain String field on Receipt.status so invalid values cannot
+// be inserted at the database level.
+enum ReceiptStatus {
+  ACTIVE
+  REVERSED
+}
+
 model User {
   id                String             @id @default(uuid())
   username          String             @unique
@@ -59,6 +75,12 @@ model User {
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
 
+  // ── A-02: Token version for server-side session revocation ─────────────────
+  // Incremented on block, logout, and password reset.
+  // Every JWT carries the tokenVersion at issuance; getAuthUser rejects tokens
+  // whose version is older than the current DB value.
+  tokenVersion      Int                @default(1)
+
   // Profiles
   teacherProfile    TeacherProfile?
   parentProfile     ParentProfile?
@@ -70,6 +92,8 @@ model User {
   createdLedger     LedgerEntry[]      @relation("LedgerCreator")
   createdNotices    Notice[]           @relation("NoticeCreator")
   reviewedAdmissions AdmissionApplication[] @relation("AdmissionReviewer")
+  // ── DB-10: Relation for attendance records marked by this user
+  markedAttendance  Attendance[]       @relation("AttendanceMarker")
 }
 
 model TeacherProfile {
@@ -84,8 +108,8 @@ model TeacherProfile {
 
 model ParentProfile {
   id          String       @id @default(uuid())
-  userId      String       @unique
-  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String?      @unique
+  user        User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
   familyCode  String       @unique // FAM-YYYY-XXXX
   address     String?
   students    Student[]
@@ -108,7 +132,8 @@ model Class {
   students       Student[]
   studentSessions StudentSession[]
   homeworks      Homework[]
-  status         String         @default("ACTIVE") // "ACTIVE" or "ARCHIVED"
+  // ── DB-05: Changed from plain String to ClassStatus enum ─────────────────
+  status         ClassStatus    @default(ACTIVE)
 
   @@unique([name, section])
 }
@@ -177,14 +202,21 @@ model Attendance {
   student   Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
   date      DateTime         // Date only (no time)
   status    AttendanceStatus
+  // ── DB-10: markedBy FK to User
   markedBy  String           // Teacher user ID
+  marker    User             @relation("AttendanceMarker", fields: [markedBy], references: [id])
   sessionId String?
   session   AcademicSession? @relation(fields: [sessionId], references: [id])
   createdAt DateTime         @default(now())
+  // ── AT-04: Optimistic concurrency guard — Prisma sets this on every upsert/update.
+  // The API returns this to the client; on batch save, the client echoes it back as
+  // expectedUpdatedAt; if the DB value is newer the server returns HTTP 409 Conflict.
+  updatedAt DateTime         @updatedAt @default(now())
 
   @@index([studentId])
   @@index([date])
   @@index([sessionId])
+  @@index([markedBy])
   @@unique([studentId, date])
 }
 
@@ -266,7 +298,8 @@ model TransportStop {
 model Concession {
   id          String    @id @default(uuid())
   name        String    @unique
-  percentage  Int       // e.g. 20 for 20% discount
+  // ── DB-09: Changed from Int to Float to support fractional discount percentages (e.g. 12.5%)
+  percentage  Float     // e.g. 20 for 20%, 12.5 for 12.5%
   feeHeadName String    // e.g. "Tuition Fee"
   createdAt   DateTime  @default(now())
   students    Student[]
@@ -280,6 +313,9 @@ model FeeStructure {
   createdAt   DateTime           @default(now())
   items       FeeStructureItem[]
   assignments FeeAssignment[]
+
+  // ── F-02: Prevent duplicate fee structures for the same class
+  @@unique([name, className])
 }
 
 model FeeStructureItem {
@@ -295,15 +331,18 @@ model FeeStructureItem {
 }
 
 model FeeAssignment {
-  id             String       @id @default(uuid())
+  id             String          @id @default(uuid())
   studentId      String
-  student        Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student        Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
   feeStructureId String
-  feeStructure   FeeStructure @relation(fields: [feeStructureId], references: [id])
+  // ── F-03: Cascade delete on FeeAssignment to avoid stale records when fee structure is modified
+  feeStructure   FeeStructure    @relation(fields: [feeStructureId], references: [id], onDelete: Cascade)
   sessionId      String
   session        AcademicSession @relation(fields: [sessionId], references: [id])
-  createdAt      DateTime     @default(now())
+  createdAt      DateTime        @default(now())
 
+  // ── DB-07: Index on studentId for fast lookup of assigned fee structures
+  @@index([studentId])
   @@index([feeStructureId])
   @@index([sessionId])
   @@unique([studentId, feeStructureId, sessionId])
@@ -317,7 +356,9 @@ model LedgerEntry {
   feeHead      FeeHead?      @relation(fields: [feeHeadId], references: [id])
   entryType    EntryType
   amount       Int           // Positive for dues/charges, Negative for payments/reversals/discounts
+  // ── DB-01: referenceId FK to Receipt with onDelete: SetNull
   referenceId  String?       // Links to receipt ID
+  receipt      Receipt?      @relation(fields: [referenceId], references: [id], onDelete: SetNull)
   description  String
   sessionId    String?
   session      AcademicSession? @relation(fields: [sessionId], references: [id])
@@ -331,6 +372,10 @@ model LedgerEntry {
   @@index([createdAt])
   @@index([studentId, entryType])
   @@index([entryType, createdAt])
+  // ── DB-08: Composite index for student ledger history by entry type ordered by date
+  @@index([studentId, entryType, createdAt])
+  // ── DB-01: Index on referenceId for fast lookup of ledger entries by receipt
+  @@index([referenceId])
   @@index([feeHeadId])
   @@index([sessionId])
   @@index([createdById])
@@ -339,19 +384,26 @@ model LedgerEntry {
 model Receipt {
   id                   String         @id @default(uuid())
   studentId            String?
-  student              Student?       @relation(fields: [studentId], references: [id])
+  // ── DB-02: Added onDelete: SetNull ──────────────────────────────────────────
+  // studentId is nullable; when a student is deleted the receipt's studentId is
+  // set to NULL rather than leaving an orphaned FK or cascading receipt deletion.
+  // Financial records (receipts) must survive student removal for audit purposes.
+  student              Student?       @relation(fields: [studentId], references: [id], onDelete: SetNull)
   parentProfileId      String?
   parentProfile        ParentProfile? @relation(fields: [parentProfileId], references: [id], onDelete: SetNull)
   receiptNumber        String         @unique // REC-YYYY-XXXX
   paymentMethod        PaymentMethod
   transactionReference String?
   amountPaid           Int            // In Paisa
-  status               String         @default("ACTIVE") // "ACTIVE", "REVERSED"
+  // ── DB-04: Changed from plain String to ReceiptStatus enum ──────────────────
+  status               ReceiptStatus  @default(ACTIVE)
   remarks              String?
   createdById          String
   createdBy            User           @relation("ReceiptCreator", fields: [createdById], references: [id])
   createdAt            DateTime       @default(now())
   items                ReceiptItem[]
+  // ── DB-01: Inverse relation for ledger entries referencing this receipt
+  ledgerEntries        LedgerEntry[]
 
   @@index([studentId])
   @@index([parentProfileId])
@@ -359,22 +411,38 @@ model Receipt {
   @@index([createdById])
 }
 
+// Atomic counter for receipt number generation.
+// One row per year-prefix (e.g. "REC-2026-"). The value column stores the
+// last-assigned sequence number and is incremented atomically via
+// UPDATE ... RETURNING inside the billing transaction.
+model ReceiptCounter {
+  prefix String @id    // e.g. "REC-2026-"
+  value  Int    @default(0)
+}
+
 model ReceiptItem {
   id            String      @id @default(uuid())
   receiptId     String
   receipt       Receipt     @relation(fields: [receiptId], references: [id], onDelete: Cascade)
   ledgerEntryId String
-  ledgerEntry   LedgerEntry @relation(fields: [ledgerEntryId], references: [id])
+  // ── DB-03: Added onDelete: Restrict ─────────────────────────────────────────
+  // A ledger entry that has ReceiptItems is a committed financial record; it must
+  // not be deleted. RESTRICT causes the deletion to fail at the DB level rather
+  // than leaving orphaned ReceiptItem rows pointing at non-existent ledger entries.
+  ledgerEntry   LedgerEntry @relation(fields: [ledgerEntryId], references: [id], onDelete: Restrict)
   amount        Int         // Amount applied to this specific charge
 
   @@index([ledgerEntryId])
   @@unique([receiptId, ledgerEntryId])
 }
 
+// ── U-04: Audit logs must be preserved when a user is deleted ──────────────
+// userId is nullable with SetNull so deleting a staff account does not wipe
+// historical audit entries, maintaining compliance audit trails.
 model AuditLog {
   id         String   @id @default(uuid())
-  userId     String
-  user       User     @relation(fields: [userId], references: [id])
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   action     String
   entityType String
   entityId   String
@@ -411,13 +479,16 @@ model Mark {
   practical         Float?   // e.g. out of 10
   breakdown         Json?    // e.g. {"Written": 75, "Notebook": 5}
   remarks           String?
-  sessionId         String?
-  session           AcademicSession? @relation(fields: [sessionId], references: [id])
+  // ── DB-11: sessionId is required and scopes marks to the academic session
+  sessionId         String
+  session           AcademicSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
   @@index([sessionId])
-  @@unique([studentId, subject, examName])
+  @@index([studentId])
+  // ── DB-11: Session-scoped unique constraint allowing marks across multiple sessions
+  @@unique([studentId, sessionId, subject, examName])
 }
 
 model AcademicSession {
@@ -433,6 +504,9 @@ model AcademicSession {
   marks          Mark[]
   ledgerEntries  LedgerEntry[]
   attendance     Attendance[]
+
+  // ── DB-06: Index on isCurrent for fast lookup of the active academic session
+  @@index([isCurrent])
 }
 
 model StudentSession {
@@ -527,5 +601,22 @@ model AdmissionApplication {
   @@index([enrolledStudentId])
   @@index([reviewedById])
 }
+// ── SCH-01: School configuration persisted in the database ───────────────────
+// Replaces the local src/data/school.json file which was written via
+// fs.writeFileSync — silently failing on Vercel's read-only serverless FS.
+// Single-row pattern: exactly one record with id = "singleton".
+model SchoolConfig {
+  id        String   @id @default("singleton")
+  data      Json     // Full school settings blob (name, UPI ID, late-fee config, etc.)
+  updatedAt DateTime @updatedAt
+}
 
-
+// ── A-01: DB-backed login rate limiting ─────────────────────────────────────
+// Replaces the in-process Map (bypassed by hitting different serverless
+// instances). One row per IP. The count is incremented atomically via
+// raw SQL UPDATE ... RETURNING inside checkLoginRateLimit().
+model LoginAttempt {
+  ip          String   @id  // client IP (x-forwarded-for first value)
+  count       Int      @default(0)
+  windowStart DateTime @default(now())
+}

@@ -166,6 +166,11 @@ export async function PATCH(request: Request) {
     });
 
     if (status === "APPROVED" && leave.startDate && leave.endDate) {
+      // ── AT-02: Collect ALL attendance upserts for this leave range and execute
+      // them in a single transaction.  A crash mid-loop previously left orphaned
+      // partial leave approval state (e.g. 3-of-7 days marked LEAVE).  With a
+      // single $transaction the DB is either fully updated or not at all.
+      const attendanceOps: ReturnType<typeof db.attendance.upsert>[] = [];
       const current = new Date(leave.startDate);
       const end = new Date(leave.endDate);
       const teacherUserId = authUser.userId;
@@ -174,26 +179,32 @@ export async function PATCH(request: Request) {
         const dateStr = current.toISOString().split("T")[0];
         const dateObj = new Date(`${dateStr}T00:00:00.000Z`);
 
-        await db.attendance.upsert({
-          where: {
-            studentId_date: {
+        attendanceOps.push(
+          db.attendance.upsert({
+            where: {
+              studentId_date: {
+                studentId: leave.studentId,
+                date: dateObj,
+              },
+            },
+            update: {
+              status: "LEAVE",
+              markedBy: teacherUserId,
+            },
+            create: {
               studentId: leave.studentId,
               date: dateObj,
+              status: "LEAVE",
+              markedBy: teacherUserId,
             },
-          },
-          update: {
-            status: "LEAVE",
-            markedBy: teacherUserId,
-          },
-          create: {
-            studentId: leave.studentId,
-            date: dateObj,
-            status: "LEAVE",
-            markedBy: teacherUserId,
-          },
-        });
+          })
+        );
 
         current.setDate(current.getDate() + 1);
+      }
+
+      if (attendanceOps.length > 0) {
+        await db.$transaction(attendanceOps);
       }
     }
 

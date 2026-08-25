@@ -19,11 +19,20 @@ export function useAuthLogic(refreshData: (user?: MockUser | null) => Promise<vo
     return null;
   });
 
+  // ── SL-01: Client-side localStorage role tampering must never grant unauthorized roles.
+  // activeRole is only accepted if it matches the authenticated user's genuine role (or if user is ADMIN).
   const [activeRole, setActiveRole] = useState<Role | null>(() => {
     if (typeof window !== "undefined") {
       try {
-        const stored = localStorage.getItem("gng_active_role");
-        return (stored as Role) || null;
+        const storedUserStr = localStorage.getItem("gng_user");
+        const storedUser = storedUserStr ? JSON.parse(storedUserStr) : null;
+        const storedRole = localStorage.getItem("gng_active_role") as Role;
+        if (storedUser && storedRole) {
+          if (storedUser.role === storedRole || storedUser.role === "ADMIN") {
+            return storedRole;
+          }
+          return (storedUser.role as Role) || null;
+        }
       } catch (e) {
         return null;
       }
@@ -61,10 +70,14 @@ export function useAuthLogic(refreshData: (user?: MockUser | null) => Promise<vo
       return;
     }
 
-    setCurrentStage("SUPABASE CLIENT CREATED");
+    // ── AC-07: Stage renamed from the vestigial Supabase auth stage (AC-07)
+    setCurrentStage("AUTH GATEWAY READY");
 
     const MAX_ATTEMPTS = 3;
-    const RETRY_DELAY_MS = 1500;
+    // ── SL-04: Exponential backoff — delay doubles per retry, capped at 8 s.
+    // attempt=2 → 1000ms, attempt=3 → 2000ms (well within the 8s cap).
+    const BASE_RETRY_DELAY_MS = 1000;
+    const MAX_RETRY_DELAY_MS = 8000;
     const ATTEMPT_TIMEOUT_MS = 8000;
 
     let lastError: string | null = null;
@@ -72,7 +85,11 @@ export function useAuthLogic(refreshData: (user?: MockUser | null) => Promise<vo
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
         if (attempt > 1) {
-          await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+          const backoffDelay = Math.min(
+            BASE_RETRY_DELAY_MS * Math.pow(2, attempt - 2),
+            MAX_RETRY_DELAY_MS
+          );
+          await new Promise((resolve) => setTimeout(resolve, backoffDelay));
         }
 
         if (currentVersion !== sessionVersionRef.current) {
@@ -250,6 +267,15 @@ export function useAuthLogic(refreshData: (user?: MockUser | null) => Promise<vo
                   if (typeof window !== "undefined" && window.location.search.includes("view=erp")) {
                     window.location.replace("/login");
                   }
+                } else {
+                  // ── SL-02: Re-verify authentication AND refresh stale application data
+                  res.json().then((data) => {
+                    if (data?.user) {
+                      setUser(data.user);
+                      setActiveRole((current) => (data.user.role === "ADMIN" && current ? current : data.user.role));
+                      refreshDataRef.current(data.user);
+                    }
+                  }).catch(() => {});
                 }
               })
               .catch(() => {});

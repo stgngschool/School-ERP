@@ -32,8 +32,11 @@ export async function POST(request: Request) {
     }
 
     // Role eligibility validation
-    // An ADMIN user can switch to any role for testing/management view
-    // Other users can only switch if their profile exists for that role or original role equals the requested role
+    // An ADMIN user can switch to any role for testing/management view.
+    // ── A-06: When switching to PARENT, student access is strictly bound by
+    // server-side parentProfileId in /api/students. If an admin has no parentProfile,
+    // they receive [] (0 students) and never fuzzy-match other families' children.
+    // Other users can only switch if their profile exists for that role or original role equals the requested role.
     const isAdmin = user.role === "ADMIN";
     const canSwitch =
       isAdmin ||
@@ -46,11 +49,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "You are not authorized to switch to this role." }, { status: 403 });
     }
 
-    // Sign new JWT with updated active role
+    // Sign new JWT with updated active role and current tokenVersion
+    // ── A-02: tokenVersion must be included so the switched token is also
+    // revocable via the same mechanism as the original login token.
     const newToken = signToken({
       userId: user.id,
       username: user.username,
       role: role as Role,
+      tokenVersion: user.tokenVersion,
     });
 
     const response = NextResponse.json({
