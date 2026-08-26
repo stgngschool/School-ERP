@@ -925,7 +925,9 @@ export default function ParentDashboard() {
                       className="p-3 border border-slate-200/80 bg-slate-50/50 rounded-xl flex items-center justify-between text-xs font-semibold text-slate-700"
                     >
                       <div>
-                        <p className="font-bold text-slate-800">Receipt No: {rec.receiptNo}</p>
+                        <p className="font-bold text-slate-800">
+                          Receipt No: {rec.receiptNo} {rec.manualReceiptNo ? `(Book #: ${rec.manualReceiptNo})` : ""}
+                        </p>
                         <p className="text-[9px] text-slate-400 mt-0.5">Date: {rec.createdAt} | Method: {rec.method}</p>
                         <p className="text-[8px] text-indigo-600 font-bold max-w-xs truncate">{rec.details}</p>
                       </div>
@@ -1543,13 +1545,18 @@ export default function ParentDashboard() {
                     }`}>Phone: {schoolInfo.phone || "9452824318"} | Email: {schoolInfo.email || "stgng2005@gmail.com"}</p>
                   </div>
                 </div>
-                <div className="text-right space-y-1 shrink-0">
+                <div className="text-right space-y-0.5 shrink-0">
                   <span className="bg-slate-900 text-white font-black uppercase rounded-md tracking-wider text-[9px] px-2.5 py-1 block">
                     Official Fee Receipt
                   </span>
                   <p className="text-slate-500 font-bold text-[9px] mt-0.5">
                     Receipt No: <span className="font-black text-slate-900">{activeReceipt.receiptNo}</span>
                   </p>
+                  {activeReceipt.manualReceiptNo && (
+                    <p className="text-indigo-700 font-bold text-[9px] bg-indigo-50 border border-indigo-100/80 px-1.5 py-0.5 rounded">
+                      Book Rec No: <span className="font-black text-indigo-950">{activeReceipt.manualReceiptNo}</span>
+                    </p>
+                  )}
                   <p className="text-slate-400 font-bold text-[9px]">
                     Date: <span className="font-extrabold text-slate-800">{activeReceipt.createdAt}</span>
                   </p>
@@ -1578,6 +1585,7 @@ export default function ParentDashboard() {
                   <span className="text-slate-400 font-bold uppercase text-[8px] block">Payment Method & Reference:</span>
                   <p className="font-extrabold text-slate-800 uppercase leading-tight">
                     {activeReceipt.method} {activeReceipt.transactionRef ? `(${activeReceipt.transactionRef})` : "Counter"}
+                    {activeReceipt.manualReceiptNo ? ` | Book #: ${activeReceipt.manualReceiptNo}` : ""}
                   </p>
                 </div>
               </div>

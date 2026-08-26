@@ -680,6 +680,7 @@ export default function AdminDashboard() {
   const [transferMode, setTransferMode] = useState("NEFT");
   const [activeSiblingTabId, setActiveSiblingTabId] = useState("");
   const [fifoAmount, setFifoAmount] = useState("");
+  const [manualReceiptNo, setManualReceiptNo] = useState("");
 
   // Fee Config States (ported from Accountant)
   const [newHead, setNewHead] = useState("");
@@ -1415,6 +1416,7 @@ export default function AdminDashboard() {
       `Dear ${parentName},\n` +
       `Fee payment has been successfully recorded.\n\n` +
       `📄 *Receipt No:* ${rec.receiptNo}\n` +
+      (rec.manualReceiptNo ? `📖 *Book/Offline Rec No:* ${rec.manualReceiptNo}\n` : ``) +
       `👦 *Student / Family:* ${rec.studentName} (${rec.classSection})\n` +
       `💳 *Payment Method:* ${rec.method} Counter\n` +
       `📅 *Date:* ${rec.createdAt || new Date().toISOString().split("T")[0]}\n\n` +
@@ -1473,7 +1475,8 @@ export default function AdminDashboard() {
       }
 
       // Send null for studentId to trigger unified family checkout
-      const payRes = await recordItemizedPayment(null, items, payMethod, finalTransactionRef);
+      const cleanManualNo = manualReceiptNo && manualReceiptNo.trim() ? manualReceiptNo.trim() : undefined;
+      const payRes = await recordItemizedPayment(null, items, payMethod, finalTransactionRef, undefined, cleanManualNo);
       if (!payRes.success) {
         alert(payRes.error || "Payment failed. Please check backend logs or try again.");
         setIsSubmittingPayment(false);
@@ -1501,6 +1504,7 @@ export default function AdminDashboard() {
       const serverRec = payRes.receipt;
       const matchedReceipt = {
         receiptNo: serverRec.receiptNo,
+        manualReceiptNo: serverRec.manualReceiptNo || cleanManualNo || null,
         studentName: isSingleSibling ? student.name : `Family (Siblings: ${siblingStudents.map(s => s.name).join(", ")})`,
         classSection: isSingleSibling ? `${student.class}-${student.section}` : "Unified Family",
         admissionNo: isSingleSibling ? student.admissionNo : student.familyCode || "Multi",
@@ -1546,6 +1550,7 @@ export default function AdminDashboard() {
       setPayingState({});
       setAmountReceived("");
       setTransactionRef("");
+      setManualReceiptNo("");
       setSelectedStudentId("");
       setSearchQuery("");
       setShowReceiptModal(true);
@@ -3769,7 +3774,9 @@ export default function AdminDashboard() {
                               >
                                 <div>
                                   <p className="font-bold text-slate-800">{rec.studentName}</p>
-                                  <p className="text-[9px] text-slate-400 mt-0.5">Receipt: {rec.receiptNo} | {rec.createdAt}</p>
+                                  <p className="text-[9px] text-slate-400 mt-0.5">
+                                    Receipt: {rec.receiptNo} {rec.manualReceiptNo ? `(Book #: ${rec.manualReceiptNo})` : ""} | {rec.createdAt}
+                                  </p>
                                   <p className="text-[8px] text-indigo-600 font-bold max-w-sm truncate mt-0.5">{rec.details}</p>
                                 </div>
                                 <div className="text-right flex flex-col items-end gap-1 shrink-0">
@@ -4107,6 +4114,27 @@ export default function AdminDashboard() {
                               </div>
                             );
                           })()}
+
+                          {/* Optional Manual / Offline Book Receipt Number */}
+                          <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 space-y-1.5 animate-in slide-in-from-top-1 duration-150">
+                            <div className="flex items-center justify-between">
+                              <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                                <BookOpen className="h-3 w-3 text-indigo-600" />
+                                <span>Offline / Book Receipt No. (Optional)</span>
+                              </label>
+                              <span className="text-[8px] font-bold text-slate-400 bg-slate-200/60 px-1.5 py-0.5 rounded">Register</span>
+                            </div>
+                            <input
+                              type="text"
+                              placeholder="e.g. BK-204 / 4591 (physical register receipt #)"
+                              value={manualReceiptNo}
+                              onChange={(e) => setManualReceiptNo(e.target.value)}
+                              className="w-full text-xs font-semibold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-white focus:bg-white focus:border-indigo-600 focus:ring-1 focus:ring-indigo-100 placeholder:text-slate-400"
+                            />
+                            <p className="text-[8px] text-slate-400 font-medium leading-tight">
+                              If physical paper receipt was issued, record its number here for cross-reference. System online receipt will still be generated.
+                            </p>
+                          </div>
 
                           <button
                             type="submit"
@@ -8416,6 +8444,7 @@ export default function AdminDashboard() {
                       const matchesSearch =
                         !ledgerSearch.trim() ||
                         r.receiptNo?.toLowerCase().includes(ledgerSearch.toLowerCase()) ||
+                        r.manualReceiptNo?.toLowerCase().includes(ledgerSearch.toLowerCase()) ||
                         r.studentName?.toLowerCase().includes(ledgerSearch.toLowerCase()) ||
                         r.details?.toLowerCase().includes(ledgerSearch.toLowerCase());
                       const matchesDate = !ledgerDate || r.createdAt.startsWith(ledgerDate);
@@ -8536,6 +8565,7 @@ export default function AdminDashboard() {
                               const matchesSearch =
                                 !ledgerSearch.trim() ||
                                 r.receiptNo?.toLowerCase().includes(ledgerSearch.toLowerCase()) ||
+                                r.manualReceiptNo?.toLowerCase().includes(ledgerSearch.toLowerCase()) ||
                                 r.studentName?.toLowerCase().includes(ledgerSearch.toLowerCase()) ||
                                 r.details?.toLowerCase().includes(ledgerSearch.toLowerCase());
                               const matchesDate = !ledgerDate || r.createdAt.startsWith(ledgerDate);
@@ -8558,7 +8588,16 @@ export default function AdminDashboard() {
                               <>
                                 {visibleReceipts.map((rec) => (
                                   <tr key={rec.id} className="hover:bg-slate-50/40 transition-colors">
-                                    <td className="py-3.5 px-4 font-black text-indigo-755">{rec.receiptNo}</td>
+                                    <td className="py-3.5 px-4 font-black text-indigo-755">
+                                      <div className="space-y-0.5">
+                                        <span>{rec.receiptNo}</span>
+                                        {rec.manualReceiptNo && (
+                                          <span className="block text-[8px] font-extrabold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/70 w-fit">
+                                            📖 Book: {rec.manualReceiptNo}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </td>
                                     <td className="py-3.5 px-4">
                                       <p className="font-extrabold text-slate-900">{rec.studentName}</p>
                                       <p className="text-[9px] text-slate-400 font-bold uppercase">{rec.classSection}</p>
@@ -9866,13 +9905,18 @@ export default function AdminDashboard() {
                     }`}>Phone: {schoolInfo.phone || "9452824318"} | Email: {schoolInfo.email || "stgng2005@gmail.com"}</p>
                   </div>
                 </div>
-                <div className="text-right space-y-1 shrink-0">
+                <div className="text-right space-y-0.5 shrink-0">
                   <span className="bg-slate-900 text-white font-black uppercase rounded-md tracking-wider text-[9px] px-2.5 py-1 block">
                     Official Fee Receipt
                   </span>
                   <p className="text-slate-500 font-bold text-[9px] mt-0.5">
                     Receipt No: <span className="font-black text-slate-900">{activeReceipt.receiptNo}</span>
                   </p>
+                  {activeReceipt.manualReceiptNo && (
+                    <p className="text-indigo-700 font-bold text-[9px] bg-indigo-50 border border-indigo-100/80 px-1.5 py-0.5 rounded">
+                      Book Rec No: <span className="font-black text-indigo-950">{activeReceipt.manualReceiptNo}</span>
+                    </p>
+                  )}
                   <p className="text-slate-400 font-bold text-[9px]">
                     Date: <span className="font-extrabold text-slate-800">{activeReceipt.createdAt}</span>
                   </p>
@@ -9901,6 +9945,7 @@ export default function AdminDashboard() {
                   <span className="text-slate-400 font-bold uppercase text-[8px] block">Payment Method & Reference:</span>
                   <p className="font-extrabold text-slate-800 uppercase leading-tight">
                     {activeReceipt.method} {activeReceipt.transactionRef ? `(${activeReceipt.transactionRef})` : "Counter"}
+                    {activeReceipt.manualReceiptNo ? ` | Book #: ${activeReceipt.manualReceiptNo}` : ""}
                   </p>
                 </div>
               </div>

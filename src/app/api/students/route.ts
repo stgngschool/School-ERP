@@ -60,13 +60,13 @@ export async function GET(request: Request) {
     }
 
     const { searchParams } = new URL(request.url);
-    const { limit, offset } = boundPagination(searchParams, { defaultLimit: 500, maxLimit: 1000 });
+    const hasExplicitPagination = searchParams.has("limit") || searchParams.has("take") || searchParams.has("page") || searchParams.has("offset") || searchParams.has("skip");
+    const { limit, offset } = boundPagination(searchParams, { defaultLimit: 2500, maxLimit: 5000 });
 
     const dbStart = performance.now();
     const students = await db.student.findMany({
       where: whereClause,
-      take: limit,
-      skip: offset,
+      ...(hasExplicitPagination ? { take: limit, skip: offset } : {}),
       select: {
         id: true,
         name: true,

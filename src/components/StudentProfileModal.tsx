@@ -453,6 +453,10 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
                           <p className="font-semibold text-slate-700 mt-0.5">{data.aadhaar || "N/A"}</p>
                         </div>
                         <div>
+                          <p className="text-slate-400 font-bold">PEN No. (UDISE+)</p>
+                          <p className="font-semibold text-slate-700 mt-0.5">{data.boardRegNo || "N/A"}</p>
+                        </div>
+                        <div>
                           <p className="text-slate-400 font-bold">Category</p>
                           <p className="font-semibold text-slate-700 mt-0.5">{data.category || "General"}</p>
                         </div>
@@ -608,7 +612,7 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
                           )}
                         </div>
                         <div>
-                          <p className="text-slate-400 font-bold">Board Registration No.</p>
+                          <p className="text-slate-400 font-bold">PEN No. (UDISE+)</p>
                           <p className="font-semibold text-slate-700 mt-0.5">{data.boardRegNo || "N/A"}</p>
                         </div>
                       </div>
@@ -767,8 +771,13 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
                         data.receipts.map((rec: any) => (
                           <div key={rec.id} className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                             <div className="space-y-1">
-                              <div className="flex items-center space-x-2">
+                              <div className="flex items-center space-x-2 flex-wrap gap-y-1">
                                 <span className="font-bold text-slate-800 text-sm">{rec.receiptNumber}</span>
+                                {rec.manualReceiptNo && (
+                                  <span className="text-[10px] bg-amber-50 border border-amber-200 text-amber-800 font-extrabold px-2 py-0.5 rounded-full">
+                                    📖 Book: {rec.manualReceiptNo}
+                                  </span>
+                                )}
                                 <span className="text-[10px] bg-indigo-50 border border-indigo-100 text-indigo-600 font-bold px-2 py-0.5 rounded-full">
                                   {rec.paymentMethod}
                                 </span>

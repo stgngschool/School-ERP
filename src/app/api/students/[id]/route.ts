@@ -166,6 +166,7 @@ export async function GET(
           select: {
             id: true,
             receiptNumber: true,
+            manualReceiptNo: true,
             paymentMethod: true,
             transactionReference: true,
             amountPaid: true,
@@ -327,6 +328,7 @@ export async function GET(
       receipts: isFinancialStaffOrParent ? student.receipts.map((rec) => ({
         id: rec.id,
         receiptNumber: rec.receiptNumber,
+        manualReceiptNo: rec.manualReceiptNo || null,
         paymentMethod: rec.paymentMethod,
         transactionReference: rec.transactionReference || "",
         amountPaid: rec.amountPaid, // in Paisa

@@ -161,6 +161,7 @@ export interface MockReceipt {
   id: string;
   studentId: string;
   receiptNo: string;
+  manualReceiptNo?: string | null;
   amount: number;
   subtotal?: number;
   discount?: number;
@@ -366,7 +367,8 @@ interface AuthContextType {
     items: { ledgerEntryId: string; payAmount: number; discountAmount: number }[],
     paymentMethod: string,
     transactionRef?: string,
-    parentProfileId?: string
+    parentProfileId?: string,
+    manualReceiptNo?: string
   ) => Promise<{ success: boolean; receipt?: any; error?: string }>;
   addStudent: (
     studentData: {
@@ -1498,13 +1500,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     items: { ledgerEntryId: string; payAmount: number; discountAmount: number }[],
     paymentMethod: string,
     transactionRef?: string,
-    parentProfileId?: string
+    parentProfileId?: string,
+    manualReceiptNo?: string
   ): Promise<{ success: boolean; receipt?: any; error?: string }> => {
     try {
       const res = await fetch("/api/billing", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ studentId, parentProfileId, items, paymentMethod, transactionRef }),
+        body: JSON.stringify({ studentId, parentProfileId, items, paymentMethod, transactionRef, manualReceiptNo }),
       });
 
       const data = await res.json();

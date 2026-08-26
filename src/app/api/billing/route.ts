@@ -167,6 +167,7 @@ export async function GET(request: Request) {
         teacherConditions.push({
           OR: [
             { receiptNumber: { contains: searchParam, mode: "insensitive" } },
+            { manualReceiptNo: { contains: searchParam, mode: "insensitive" } },
             { transactionReference: { contains: searchParam, mode: "insensitive" } },
             { student: { name: { contains: searchParam, mode: "insensitive" } } },
             { student: { admissionNumber: { contains: searchParam, mode: "insensitive" } } },
@@ -254,6 +255,7 @@ export async function GET(request: Request) {
         parentConditions.push({
           OR: [
             { receiptNumber: { contains: searchParam, mode: "insensitive" } },
+            { manualReceiptNo: { contains: searchParam, mode: "insensitive" } },
             { transactionReference: { contains: searchParam, mode: "insensitive" } },
             { student: { name: { contains: searchParam, mode: "insensitive" } } },
             { student: { admissionNumber: { contains: searchParam, mode: "insensitive" } } },
@@ -279,6 +281,7 @@ export async function GET(request: Request) {
         adminConditions.push({
           OR: [
             { receiptNumber: { contains: searchParam, mode: "insensitive" } },
+            { manualReceiptNo: { contains: searchParam, mode: "insensitive" } },
             { transactionReference: { contains: searchParam, mode: "insensitive" } },
             { student: { name: { contains: searchParam, mode: "insensitive" } } },
             { student: { admissionNumber: { contains: searchParam, mode: "insensitive" } } },
@@ -332,6 +335,7 @@ export async function GET(request: Request) {
           id: true,
           studentId: true,
           receiptNumber: true,
+          manualReceiptNo: true,
           paymentMethod: true,
           transactionReference: true,
           amountPaid: true,
@@ -505,6 +509,7 @@ export async function GET(request: Request) {
         studentId: r.studentId || (studentIds.length === 1 ? (studentIds[0] as string) : null),
         studentIds,
         receiptNo: r.receiptNumber,
+        manualReceiptNo: r.manualReceiptNo || meta?.manualReceiptNo || null,
         amount: r.amountPaid,
         subtotal,
         discount,
@@ -656,7 +661,8 @@ export async function POST(request: Request) {
     clearServerBillingCache();
 
     const body = await request.json();
-    const { action, studentId, parentProfileId, items, paymentMethod, transactionRef, title, amount, headName } = body;
+    const { action, studentId, parentProfileId, items, paymentMethod, transactionRef, manualReceiptNo, title, amount, headName } = body;
+    const cleanManualReceiptNo = manualReceiptNo && typeof manualReceiptNo === "string" && manualReceiptNo.trim() ? manualReceiptNo.trim() : null;
 
     // Single student custom charge handler
     if (action === "ADD_CUSTOM_CHARGE") {
@@ -840,6 +846,7 @@ export async function POST(request: Request) {
             id: existingReceipt.id,
             studentId: existingReceipt.studentId,
             receiptNo: existingReceipt.receiptNumber,
+            manualReceiptNo: existingReceipt.manualReceiptNo || snapshot.manualReceiptNo || null,
             amount: existingReceipt.amountPaid,
             subtotal: snapshot.subtotal !== undefined ? snapshot.subtotal : existingReceipt.amountPaid,
             discount: snapshot.discount !== undefined ? snapshot.discount : 0,
@@ -1209,6 +1216,7 @@ export async function POST(request: Request) {
 
       const snapshot = {
         idempotencyKey: idempotencyKey || undefined,
+        manualReceiptNo: cleanManualReceiptNo || undefined,
         // ── B-03: subtotal = what was actually outstanding, not original charge amounts
         subtotal: totalOutstandingThisReceipt,
         discount: totalDiscountPaisa,
@@ -1235,6 +1243,7 @@ export async function POST(request: Request) {
           studentId: resolvedStudentId,
           parentProfileId: resolvedParentProfileId,
           receiptNumber: receiptNo,
+          manualReceiptNo: cleanManualReceiptNo,
           paymentMethod: paymentMethod as PaymentMethod,
           transactionReference: transactionRef || null,
           amountPaid: actualTotalPayPaisa,
@@ -1252,6 +1261,7 @@ export async function POST(request: Request) {
           entityId: receipt.id,
           newValues: JSON.stringify({
             receiptNumber: receiptNo,
+            manualReceiptNo: cleanManualReceiptNo,
             studentId: resolvedStudentId,
             amountPaid: actualTotalPayPaisa,
             paymentMethod,
@@ -1359,6 +1369,7 @@ export async function POST(request: Request) {
         id: result.id,
         studentId: result.studentId,
         receiptNo: result.receiptNumber,
+        manualReceiptNo: result.manualReceiptNo || cleanManualReceiptNo || null,
         amount: result.amountPaid,
         // RS-01: Include snapshot-derived fields so the immediate post-payment receipt
         // modal shows the same data as a historical reprint — no recomputation from

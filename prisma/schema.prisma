@@ -392,6 +392,7 @@ model Receipt {
   parentProfileId      String?
   parentProfile        ParentProfile? @relation(fields: [parentProfileId], references: [id], onDelete: SetNull)
   receiptNumber        String         @unique // REC-YYYY-XXXX
+  manualReceiptNo      String?        // Offline / Book Receipt Number (Physical paper register reference)
   paymentMethod        PaymentMethod
   transactionReference String?
   amountPaid           Int            // In Paisa
@@ -409,6 +410,7 @@ model Receipt {
   @@index([parentProfileId])
   @@index([createdAt])
   @@index([createdById])
+  @@index([manualReceiptNo])
 }
 
 // Atomic counter for receipt number generation.

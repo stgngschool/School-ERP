@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import * as XLSX from "xlsx";
 import { getAuthUser } from "@/lib/auth";
@@ -224,6 +224,7 @@ export async function GET(request: Request) {
       const receiptsRows = receipts.map((r: any, idx: number) => ({
         "S.No.": idx + 1,
         "Receipt No": r.receiptNumber,
+        "Book / Offline Receipt No": r.manualReceiptNo || "-",
         "Date": r.createdAt.toISOString().split("T")[0],
         "Amount Paid (Rs)": toRupees(r.amountPaid),
         "Payment Mode": r.paymentMethod,
