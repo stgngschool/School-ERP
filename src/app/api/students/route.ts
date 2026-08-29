@@ -46,18 +46,8 @@ export async function GET(request: Request) {
         return NextResponse.json([]);
       }
       whereClause = { parentProfileId: parentProfile.id };
-    } else if (authUser.role === "TEACHER") {
-      // ── U-05: Scope teacher student list to only their assigned classes.
-      // Without this a teacher could enumerate students from other classes.
-      const teacherProfile = await db.teacherProfile.findUnique({
-        where: { userId: authUser.userId },
-        include: { classes: { select: { id: true } } },
-      });
-      if (!teacherProfile || teacherProfile.classes.length === 0) {
-        return NextResponse.json([]);
-      }
-      whereClause = { classId: { in: teacherProfile.classes.map((c: { id: string }) => c.id) } };
     }
+    // Teachers, Admins, and Accountants have school-wide access to all students and classes for grading, attendance, and coursework.
 
     const { searchParams } = new URL(request.url);
     const hasExplicitPagination = searchParams.has("limit") || searchParams.has("take") || searchParams.has("page") || searchParams.has("offset") || searchParams.has("skip");

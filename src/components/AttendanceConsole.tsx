@@ -22,6 +22,7 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
     user,
     schoolInfo,
     students,
+    classes,
     attendances,
     leaveRequests,
     markBatchAttendance,
@@ -55,13 +56,38 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
     return `${s.class}-${s.section}`;
   };
 
-  // Get available classes from students list
+  const classOrderScore = (cls: string): number => {
+    const norm = cls.toLowerCase().replace(/^class\s*/i, "").trim();
+    if (norm.includes("nurs") || norm.includes("play")) return 1;
+    if (norm.includes("lkg") || norm.includes("lower")) return 2;
+    if (norm.includes("ukg") || norm.includes("upper") || norm.includes("kg")) return 3;
+    const num = parseInt(norm, 10);
+    if (!isNaN(num)) return 10 + num;
+    return 100;
+  };
+
+  // Get available classes from classes & students list with natural order
   const availableClasses = useMemo(() => {
-    if (!students || students.length === 0) return ["10-A", "9-A", "1-A"];
-    const classSet = new Set(students.map((s) => getStudentClassKey(s)));
-    const list = Array.from(classSet).sort();
-    return ["ALL", ...list];
-  }, [students]);
+    const classSet = new Set<string>();
+    if (classes && classes.length > 0) {
+      classes.forEach((c) => {
+        const key = c.section && c.section.trim() !== "" && !c.name.toLowerCase().includes(c.section.toLowerCase())
+          ? `${c.name}-${c.section}`
+          : c.name;
+        classSet.add(key);
+      });
+    }
+    if (students && students.length > 0) {
+      students.forEach((s) => classSet.add(getStudentClassKey(s)));
+    }
+    const sorted = Array.from(classSet).sort((a, b) => {
+      const scoreA = classOrderScore(a);
+      const scoreB = classOrderScore(b);
+      if (scoreA !== scoreB) return scoreA - scoreB;
+      return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+    });
+    return ["ALL", ...sorted];
+  }, [students, classes]);
 
   // Sync selected class when initialClass is resolved asynchronously or teacher profile loads
   useEffect(() => {

@@ -97,8 +97,27 @@ function getSubjectsForClass(className: string): string[] {
   return CLASS_SUBJECT_MAP.PRIMARY;
 }
 
+const classOrderScore = (cls: string): number => {
+  const norm = cls.toLowerCase().replace(/^class\s*/i, "").trim();
+  if (norm.includes("nurs") || norm.includes("play")) return 1;
+  if (norm.includes("lkg") || norm.includes("lower")) return 2;
+  if (norm.includes("ukg") || norm.includes("upper") || norm.includes("kg")) return 3;
+  const num = parseInt(norm, 10);
+  if (!isNaN(num)) return 10 + num;
+  return 100;
+};
+
+const sortClasses = (list: string[]) => {
+  return [...list].sort((a, b) => {
+    const scoreA = classOrderScore(a);
+    const scoreB = classOrderScore(b);
+    if (scoreA !== scoreB) return scoreA - scoreB;
+    return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+  });
+};
+
 export default function MarksFeedingConsole() {
-  const { user, students, schoolInfo, refreshStudents } = useAuth();
+  const { user, students, classes, schoolInfo, refreshStudents } = useAuth();
 
   // Helper to extract clean class key e.g. "1-A", "10-A"
   const getStudentClassKey = (s: any) => {
@@ -108,11 +127,22 @@ export default function MarksFeedingConsole() {
   };
 
   const availableClasses = useMemo(() => {
-    if (!students || students.length === 0) return [];
-    return Array.from(
-      new Set(students.map((s) => getStudentClassKey(s)))
-    ).sort();
-  }, [students]);
+    const classSet = new Set<string>();
+    if (classes && classes.length > 0) {
+      classes.forEach((c) => {
+        const key = c.section && c.section.trim() !== "" && !c.name.toLowerCase().includes(c.section.toLowerCase())
+          ? `${c.name}-${c.section}`
+          : c.name;
+        classSet.add(key);
+      });
+    }
+    if (students && students.length > 0) {
+      students.forEach((s) => {
+        classSet.add(getStudentClassKey(s));
+      });
+    }
+    return sortClasses(Array.from(classSet));
+  }, [students, classes]);
 
   const availableExams = useMemo(() => {
     return schoolInfo.exams && schoolInfo.exams.length > 0
