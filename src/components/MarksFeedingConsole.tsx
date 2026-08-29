@@ -130,6 +130,7 @@ export default function MarksFeedingConsole() {
     const classSet = new Set<string>();
     if (classes && classes.length > 0) {
       classes.forEach((c) => {
+        if (c.name.toLowerCase().startsWith("class_") || c.name.toLowerCase().startsWith("sec-")) return;
         const key = c.section && c.section.trim() !== "" && !c.name.toLowerCase().includes(c.section.toLowerCase())
           ? `${c.name}-${c.section}`
           : c.name;
@@ -138,7 +139,10 @@ export default function MarksFeedingConsole() {
     }
     if (students && students.length > 0) {
       students.forEach((s) => {
-        classSet.add(getStudentClassKey(s));
+        const key = getStudentClassKey(s);
+        if (!key.toLowerCase().startsWith("class_") && !key.toLowerCase().startsWith("sec-")) {
+          classSet.add(key);
+        }
       });
     }
     return sortClasses(Array.from(classSet));
