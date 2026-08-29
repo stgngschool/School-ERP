@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useDeferredValue } from "react";
 import { useAuth, AttendanceStatus, MockStudent } from "@/context/AuthContext";
 import {
   Search,
@@ -32,6 +32,7 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
   const [selectedClass, setSelectedClass] = useState<string>(initialClass || "10-A");
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [activeView, setActiveView] = useState<"ROSTER" | "MONTHLY">("ROSTER");
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
@@ -206,19 +207,21 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
     }
   };
 
-  // Filtered Students List
+  // Filtered Students List with Deferred Query for 60fps search
   const filteredStudents = useMemo(() => {
+    const q = deferredSearchQuery.trim().toLowerCase();
     return classStudents.filter((student) => {
       const matchesSearch =
-        student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        student.rollNo.toString().includes(searchQuery);
+        !q ||
+        student.name.toLowerCase().includes(q) ||
+        (student.rollNo && student.rollNo.toString().includes(q));
 
       const status = localAttendanceMap[student.id] || "PRESENT";
       const matchesStatus = statusFilter === "ALL" || status === statusFilter;
 
       return matchesSearch && matchesStatus;
     });
-  }, [classStudents, searchQuery, statusFilter, localAttendanceMap]);
+  }, [classStudents, deferredSearchQuery, statusFilter, localAttendanceMap]);
 
   // Live Counts
   const counts = useMemo(() => {
@@ -371,7 +374,7 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
                 <div
                   key={student.id}
                   onClick={() => toggleStudentStatus(student.id)}
-                  className={`px-3.5 py-3 sm:px-4 transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                  className={`px-3.5 py-3 sm:px-4 transition-all cursor-pointer flex items-center justify-between gap-3 cv-auto-row ${
                     isPresent
                       ? "bg-white hover:bg-emerald-50/40"
                       : "bg-rose-50/60 hover:bg-rose-50"

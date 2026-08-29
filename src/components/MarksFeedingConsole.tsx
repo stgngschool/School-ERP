@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useDeferredValue, useMemo, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import {
   Save,
@@ -23,9 +23,11 @@ import {
 export default function MarksFeedingConsole() {
   const { user, students, schoolInfo, refreshStudents } = useAuth();
 
-  const availableClasses = Array.from(
-    new Set(students.map((s) => `${s.class}-${s.section}`))
-  ).sort();
+  const availableClasses = useMemo(() => {
+    return Array.from(
+      new Set(students.map((s) => `${s.class}-${s.section}`))
+    ).sort();
+  }, [students]);
 
   const [selectedClass, setSelectedClass] = useState("");
   const [selectedExam, setSelectedExam] = useState("");
@@ -34,6 +36,7 @@ export default function MarksFeedingConsole() {
   const [isCustomSubjectMode, setIsCustomSubjectMode] = useState(false);
   const [maxMarks, setMaxMarks] = useState("100");
   const [studentSearch, setStudentSearch] = useState("");
+  const deferredStudentSearch = useDeferredValue(studentSearch);
 
   const [marksRoster, setMarksRoster] = useState<{
     [studentId: string]: {
@@ -181,15 +184,21 @@ export default function MarksFeedingConsole() {
     }
   };
 
-  const classStudents = students.filter(
-    (s) => `${s.class}-${s.section}` === selectedClass
-  );
+  const classStudents = useMemo(() => {
+    return students.filter(
+      (s) => `${s.class}-${s.section}` === selectedClass
+    );
+  }, [students, selectedClass]);
 
-  const filteredStudents = classStudents.filter((s) =>
-    s.name.toLowerCase().includes(studentSearch.toLowerCase()) ||
-    (s.rollNo && s.rollNo.toString().includes(studentSearch)) ||
-    (s.admissionNo && s.admissionNo.toLowerCase().includes(studentSearch.toLowerCase()))
-  );
+  const filteredStudents = useMemo(() => {
+    const q = deferredStudentSearch.trim().toLowerCase();
+    if (!q) return classStudents;
+    return classStudents.filter((s) =>
+      s.name.toLowerCase().includes(q) ||
+      (s.rollNo && s.rollNo.toString().includes(q)) ||
+      (s.admissionNo && s.admissionNo.toLowerCase().includes(q))
+    );
+  }, [classStudents, deferredStudentSearch]);
 
   const maxValNum = parseFloat(maxMarks) || 100;
   let enteredCount = 0;
@@ -721,7 +730,7 @@ export default function MarksFeedingConsole() {
                 const gradeInfo = getGradeBadge(totalObt, maxValNum);
 
                 return (
-                  <div key={student.id} className={`p-4 rounded-2xl border ${hasAnyInvalid ? "border-rose-300 bg-rose-50/50" : "border-slate-200/90 bg-white"} shadow-xs space-y-3 transition-all text-left`}>
+                  <div key={student.id} className={`p-4 rounded-2xl border ${hasAnyInvalid ? "border-rose-300 bg-rose-50/50" : "border-slate-200/90 bg-white"} shadow-xs space-y-3 transition-all text-left cv-auto-card`}>
                     {/* Student Info Header */}
                     <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                       <div className="flex items-center gap-3 min-w-0">
@@ -756,6 +765,7 @@ export default function MarksFeedingConsole() {
                             </label>
                             <input
                               type="number"
+                              inputMode="decimal"
                               step="0.5"
                               min="0"
                               max={comp.max}
@@ -797,7 +807,7 @@ export default function MarksFeedingConsole() {
                 const gradeInfo = getGradeBadge(scoreNum, max);
 
                 return (
-                  <div key={student.id} className={`p-4 rounded-2xl border ${!isValid && scoreStr !== "" ? "border-rose-300 bg-rose-50/50" : "border-slate-200/90 bg-white"} shadow-xs space-y-3 transition-all text-left`}>
+                  <div key={student.id} className={`p-4 rounded-2xl border ${!isValid && scoreStr !== "" ? "border-rose-300 bg-rose-50/50" : "border-slate-200/90 bg-white"} shadow-xs space-y-3 transition-all text-left cv-auto-card`}>
                     {/* Header */}
                     <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                       <div className="flex items-center gap-2.5 min-w-0">
@@ -819,6 +829,7 @@ export default function MarksFeedingConsole() {
                         <label className="text-[9px] font-bold text-slate-400 uppercase block mb-1">Marks Obtained</label>
                         <input
                           type="number"
+                          inputMode="decimal"
                           step="0.5"
                           min="0"
                           max={maxMarks}
@@ -922,7 +933,7 @@ export default function MarksFeedingConsole() {
                     const gradeInfo = getGradeBadge(totalObt, maxValNum);
 
                     return (
-                      <tr key={student.id} className={`hover:bg-slate-50/70 transition-colors ${hasAnyInvalid ? "bg-rose-50/30" : ""}`}>
+                      <tr key={student.id} className={`hover:bg-slate-50/70 transition-colors cv-auto-row ${hasAnyInvalid ? "bg-rose-50/30" : ""}`}>
                         <td className="py-3 px-3 text-center font-bold text-slate-400">
                           {student.rollNo || "--"}
                         </td>
@@ -940,6 +951,7 @@ export default function MarksFeedingConsole() {
                             <td key={cIdx} className="py-3 px-2 text-center">
                               <input
                                 type="number"
+                                inputMode="decimal"
                                 step="0.5"
                                 min="0"
                                 max={comp.max}
@@ -983,7 +995,7 @@ export default function MarksFeedingConsole() {
                     const gradeInfo = getGradeBadge(scoreNum, max);
 
                     return (
-                      <tr key={student.id} className={`hover:bg-slate-50/70 transition-colors ${!isValid && scoreStr !== "" ? "bg-rose-50/30" : ""}`}>
+                      <tr key={student.id} className={`hover:bg-slate-50/70 transition-colors cv-auto-row ${!isValid && scoreStr !== "" ? "bg-rose-50/30" : ""}`}>
                         <td className="py-3 px-3 text-center font-bold text-slate-400">
                           {student.rollNo || "--"}
                         </td>
@@ -996,6 +1008,7 @@ export default function MarksFeedingConsole() {
                         <td className="py-3 px-3 text-center">
                           <input
                             type="number"
+                            inputMode="decimal"
                             step="0.5"
                             min="0"
                             max={maxMarks}

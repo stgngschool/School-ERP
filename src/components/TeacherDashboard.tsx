@@ -68,8 +68,10 @@ export default function TeacherDashboard() {
 
   const [selectedClass, setSelectedClass] = useState("10-A");
   const [studentSearch, setStudentSearch] = useState("");
+  const deferredStudentSearch = React.useDeferredValue(studentSearch);
   const [feeStatusFilter, setFeeStatusFilter] = useState<"ALL" | "UNPAID" | "PAID">("UNPAID");
   const [feeSearch, setFeeSearch] = useState("");
+  const deferredFeeSearch = React.useDeferredValue(feeSearch);
 
   // Auto-set teacher's default class when user profile loads
   React.useEffect(() => {
@@ -98,14 +100,20 @@ export default function TeacherDashboard() {
   const [hwSuccess, setHwSuccess] = useState(false);
 
   // Filter students based on selected class
-  const classStudents = students.filter(
-    (s) => `${s.class}-${s.section}` === selectedClass
-  );
+  const classStudents = React.useMemo(() => {
+    return students.filter(
+      (s) => `${s.class}-${s.section}` === selectedClass
+    );
+  }, [students, selectedClass]);
 
   // Filter students based on search string
-  const filteredStudents = classStudents.filter((s) =>
-    s.name.toLowerCase().includes(studentSearch.toLowerCase())
-  );
+  const filteredStudents = React.useMemo(() => {
+    const q = deferredStudentSearch.trim().toLowerCase();
+    if (!q) return classStudents;
+    return classStudents.filter((s) =>
+      s.name.toLowerCase().includes(q)
+    );
+  }, [classStudents, deferredStudentSearch]);
 
   // Filter leaves that belong to class 10-A
   const pendingLeaves = leaveRequests.filter((l) => l.status === "PENDING");
@@ -407,7 +415,7 @@ export default function TeacherDashboard() {
                   ? !item.isDefaulter
                   : item.isDefaulter; // Default to UNPAID (defaulters only)
 
-              const query = feeSearch.toLowerCase().trim();
+              const query = deferredFeeSearch.toLowerCase().trim();
               const matchesSearch =
                 !query ||
                 item.student.name.toLowerCase().includes(query) ||
