@@ -245,6 +245,14 @@ export default function AdminDashboard() {
     attendanceLoaded,
   } = useAuth();
 
+  const cleanFeeHeads = React.useMemo(() => {
+    return feeHeads.filter(
+      (h) =>
+        !h.name.toLowerCase().startsWith("tuition_") &&
+        !h.name.toLowerCase().startsWith("fee_")
+    );
+  }, [feeHeads]);
+
   // ── AD-09: validTabs moved to module-level VALID_ADMIN_TABS (see above component def)
   React.useEffect(() => {
     if (!VALID_ADMIN_TABS.includes(activeTab as any)) {
@@ -938,7 +946,7 @@ export default function AdminDashboard() {
     const struct = feeStructures.find(fs => fs.name === templateName && fs.className === newStructClass);
     const inputs: Record<string, string> = {};
     
-    feeHeads.forEach(head => {
+    cleanFeeHeads.forEach(head => {
       inputs[head.name] = "";
     });
 
@@ -950,7 +958,7 @@ export default function AdminDashboard() {
     }
     
     setClassFeeInputs(inputs);
-  }, [newStructClass, feeStructures, feeHeads]);
+  }, [newStructClass, feeStructures, cleanFeeHeads]);
 
   React.useEffect(() => {
     if (classes && classes.length > 0 && !stdClass) {
@@ -967,7 +975,7 @@ export default function AdminDashboard() {
     inputs["All"] = {};
     freqs["All"] = "monthly";
     const generalStruct = feeStructures.find(fs => fs.className === "All");
-    feeHeads.forEach((head) => {
+    cleanFeeHeads.forEach((head) => {
       inputs["All"][head.name] = "";
     });
     if (generalStruct) {
@@ -989,7 +997,7 @@ export default function AdminDashboard() {
         (fs) => fs.className === cls.name || fs.name === templateName
       );
 
-      feeHeads.forEach((head) => {
+      cleanFeeHeads.forEach((head) => {
         inputs[cls.id][head.name] = "";
       });
 
@@ -1005,7 +1013,7 @@ export default function AdminDashboard() {
 
     setGridInputs(inputs);
     setGridFrequencies(freqs);
-  }, [classes, feeHeads, feeStructures]);
+  }, [classes, cleanFeeHeads, feeStructures]);
 
   // Extract unique families from students list to display in Sibling Link selector
   const parentFamilies = React.useMemo(() => {
@@ -4490,7 +4498,7 @@ export default function AdminDashboard() {
                         className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
                       >
                         <option value="ALL">ALL Fee Types (Full Session Dues)</option>
-                        {feeHeads.map((h: any) => (
+                        {cleanFeeHeads.map((h: any) => (
                           <option key={h.name} value={h.name}>
                             {h.name} ({h.frequency === "monthly" ? "Monthly" : h.frequency === "one_time" ? "One-Time" : h.frequency === "annual" ? "Annual" : "Exam"})
                           </option>
@@ -4501,7 +4509,7 @@ export default function AdminDashboard() {
 
                   {/* Row 2: Dynamic Context Parameter & Action Button */}
                   {(() => {
-                    const selectedHeadObj = feeHeads.find((h: any) => h.name === ledgerGenFeeHead);
+                    const selectedHeadObj = cleanFeeHeads.find((h: any) => h.name === ledgerGenFeeHead);
                     const headFreq = ledgerGenFeeHead === "ALL" ? "monthly" : selectedHeadObj?.frequency || "monthly";
                     const isMonthlyOrAll = headFreq === "monthly" || ledgerGenFeeHead === "ALL";
 
@@ -4621,7 +4629,7 @@ export default function AdminDashboard() {
                     )}
                   </div>
 
-                  {feeHeads.length === 0 ? (
+                  {cleanFeeHeads.length === 0 ? (
                     <div className="border-2 border-dashed border-indigo-200 rounded-xl py-10 text-center">
                       <div className="text-3xl mb-2">&#128073;</div>
                       <p className="text-xs font-bold text-slate-500">Please create Fee Types in the right-hand panel first</p>
@@ -4633,7 +4641,7 @@ export default function AdminDashboard() {
                         <thead>
                           <tr className="bg-slate-50 border-b border-slate-200/80">
                             <th className="py-3 px-4 text-[9px] font-black uppercase text-slate-400 tracking-wider">Class &amp; Section</th>
-                            {feeHeads.map((head) => {
+                            {cleanFeeHeads.map((head) => {
                               const freqColor: Record<string,string> = {
                                 monthly: "text-blue-600 bg-blue-50 border-blue-200",
                                 annual: "text-amber-600 bg-amber-50 border-amber-200",
@@ -4669,7 +4677,7 @@ export default function AdminDashboard() {
                               </div>
                               <div className="text-[9px] text-indigo-600 font-bold mt-1 leading-tight">Applied to all classes unless overridden below</div>
                             </td>
-                            {feeHeads.map((head) => (
+                            {cleanFeeHeads.map((head) => (
                               <td key={head.name} className="py-2 px-4">
                                 <div className="flex items-center gap-1">
                                   <span className="text-[9px] text-slate-400 font-bold">Rs.</span>
@@ -4704,7 +4712,7 @@ export default function AdminDashboard() {
                           {/* Dynamic Class Rows */}
                           {classes.length > 0 ? (
                             classes.map((cls) => {
-                              const annualTotal = feeHeads.reduce((sum, head) => {
+                              const annualTotal = cleanFeeHeads.reduce((sum, head) => {
                                 const amt = parseFloat(gridInputs[cls.id]?.[head.name] || "0") || 0;
                                 if (head.frequency === "monthly") return sum + amt * 12;
                                 if (head.frequency === "annual") return sum + amt;
@@ -4722,7 +4730,7 @@ export default function AdminDashboard() {
                                       </div>
                                     )}
                                   </td>
-                                  {feeHeads.map((head) => (
+                                  {cleanFeeHeads.map((head) => (
                                     <td key={head.name} className="py-2.5 px-4">
                                       <div className="flex items-center gap-1">
                                         <span className="text-[9px] text-slate-400 font-bold">Rs.</span>
@@ -4757,7 +4765,7 @@ export default function AdminDashboard() {
                             })
                           ) : (
                             <tr>
-                              <td colSpan={2 + feeHeads.length} className="text-center py-8 text-slate-400 italic text-xs">
+                              <td colSpan={2 + cleanFeeHeads.length} className="text-center py-8 text-slate-400 italic text-xs">
                                 Please create classes in Right Panel &rarr; Card 1 first.
                               </td>
                             </tr>
@@ -4768,7 +4776,7 @@ export default function AdminDashboard() {
                   )}
 
                   {/* Auto-billing calendar preview */}
-                  {feeHeads.some(h => h.frequency === "monthly") && (
+                  {cleanFeeHeads.some(h => h.frequency === "monthly") && (
                     <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-3">
                       <p className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-2">Auto-Generated Monthly Bills (April &rarr; March)</p>
                       <div className="flex flex-wrap gap-1.5">
@@ -4919,11 +4927,11 @@ export default function AdminDashboard() {
                       </button>
                     </form>
 
-                    {feeHeads.length > 0 && (
+                    {cleanFeeHeads.length > 0 && (
                       <div className="space-y-1.5 pt-3 border-t border-slate-200/80">
-                        <p className="text-[9px] font-black uppercase text-slate-400">Configured Fee Types ({feeHeads.length})</p>
+                        <p className="text-[9px] font-black uppercase text-slate-400">Configured Fee Types ({cleanFeeHeads.length})</p>
                         <div className="space-y-1 max-h-[170px] overflow-y-auto pr-1">
-                          {feeHeads.map((head, index) => {
+                          {cleanFeeHeads.map((head, index) => {
                             const freqMeta: Record<string,{label:string; color:string}> = {
                               monthly:  { label: "Monthly \u2014 12\u00d7/yr",  color: "bg-blue-50 border-blue-200 text-blue-700" },
                               annual:   { label: "Annual \u2014 1\u00d7/yr",    color: "bg-amber-50 border-amber-200 text-amber-700" },
