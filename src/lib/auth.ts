@@ -67,6 +67,13 @@ export async function getAuthUser(request?: Request): Promise<TokenPayload | nul
       if (authHeader && authHeader.startsWith("Bearer ")) {
         token = authHeader.substring(7);
       }
+      if (!token) {
+        const cookieHeader = request.headers.get("cookie");
+        if (cookieHeader) {
+          const match = cookieHeader.match(/(?:^|;\s*)auth_token=([^;]+)/);
+          if (match) token = decodeURIComponent(match[1]);
+        }
+      }
     }
 
     if (!token) {
@@ -97,9 +104,9 @@ export async function getAuthUser(request?: Request): Promise<TokenPayload | nul
     if (dbUser.status === "BLOCKED") return null;
 
     // Reject tokens whose version is older than the current DB version.
-    // A missing tokenVersion in the payload (pre-fix tokens) is treated as 0
-    // and will always fail this check (DB starts at 1) — forcing re-login.
-    if ((decoded.tokenVersion ?? 0) !== dbUser.tokenVersion) return null;
+    if (dbUser.tokenVersion && (decoded.tokenVersion ?? 0) < dbUser.tokenVersion) {
+      return null;
+    }
 
     return decoded;
   } catch (err: any) {

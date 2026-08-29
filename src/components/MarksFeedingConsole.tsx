@@ -149,7 +149,11 @@ export default function MarksFeedingConsole() {
       try {
         const res = await fetch(
           `/api/marks/roster?class=${encodeURIComponent(rawClass)}&section=${encodeURIComponent(section)}&exam=${encodeURIComponent(selectedExam)}&subject=${encodeURIComponent(subjectToUse)}`,
-          { signal: abortControllerRef.current.signal }
+          { 
+            credentials: "include",
+            cache: "no-store",
+            signal: abortControllerRef.current.signal 
+          }
         );
         if (res.ok) {
           marksRecord = await res.json();
@@ -442,6 +446,7 @@ export default function MarksFeedingConsole() {
     try {
       const res = await fetch("/api/marks/bulk", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           examName: selectedExam,

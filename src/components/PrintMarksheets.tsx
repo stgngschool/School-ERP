@@ -68,7 +68,10 @@ export default function PrintMarksheets() {
     const cName = selectedClass.substring(0, lastDashIdx);
     const cSec = selectedClass.substring(lastDashIdx + 1);
     setLoadingMarks(true);
-    fetch(`/api/marks/class?class=${encodeURIComponent(cName)}&section=${encodeURIComponent(cSec)}`)
+    fetch(`/api/marks/class?class=${encodeURIComponent(cName)}&section=${encodeURIComponent(cSec)}`, {
+      credentials: "include",
+      cache: "no-store",
+    })
       .then(res => res.json())
       .then(data => {
         setClassMarks(Array.isArray(data) ? data : []);
@@ -86,6 +89,7 @@ export default function PrintMarksheets() {
       setClaiming(true);
       const res = await fetch(`/api/students/claim-marksheet`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ studentId: student.id, isMarksheetClaimed: !student.isMarksheetClaimed })
       });

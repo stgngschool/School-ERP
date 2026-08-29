@@ -53,6 +53,7 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
     try {
       const res = await fetch("/api/billing", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "ADD_CUSTOM_CHARGE",
@@ -68,7 +69,10 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
         throw new Error(errJson.error || "Failed to add custom charge.");
       }
 
-      const refreshRes = await fetch(`/api/students/${studentId}`);
+      const refreshRes = await fetch(`/api/students/${studentId}`, {
+        credentials: "include",
+        cache: "no-store",
+      });
       if (refreshRes.ok) {
         const refreshedData = await refreshRes.json();
         setData(refreshedData);
@@ -112,6 +116,7 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
 
       const res = await fetch("/api/students/upload-photo", {
         method: "POST",
+        credentials: "include",
         body: formData,
       });
 
@@ -140,6 +145,7 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
     try {
       const res = await fetch(`/api/students/${studentId}/marks`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           subject: newSubject,
@@ -198,7 +204,10 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`/api/students/${studentId}`);
+        const res = await fetch(`/api/students/${studentId}`, {
+          credentials: "include",
+          cache: "no-store",
+        });
         if (!res.ok) {
           throw new Error("Failed to load student profile");
         }

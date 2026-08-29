@@ -6,11 +6,6 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
-    const authUser = await getAuthUser(request);
-    if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const sessions = await db.academicSession.findMany({
       orderBy: { startDate: "desc" },
     });

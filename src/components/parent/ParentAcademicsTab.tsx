@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState, useEffect } from "react";
 import { BookOpen, Award, CheckCircle, Clock, Calendar as CalendarIcon, FileText } from "lucide-react";
@@ -26,7 +26,10 @@ export default function ParentAcademicsTab({ child, homeworks, schoolInfo }: Par
   useEffect(() => {
     if (!child?.id) return;
     setLoadingMarks(true);
-    fetch(`/api/students/${child.id}/marks`)
+    fetch(`/api/students/${child.id}/marks`, {
+      credentials: "include",
+      cache: "no-store",
+    })
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
         setChildMarks(Array.isArray(data) ? data : []);
