@@ -676,3 +676,32 @@ button:active {
     page-break-inside: avoid !important;
   }
 }
+
+/* ─────────────────────────────────────────
+   LOW-END DEVICE & GPU OPTIMIZATIONS (PHASE 2)
+   ───────────────────────────────────────── */
+.cv-auto-row {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 44px;
+}
+
+.cv-auto-card {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 160px;
+}
+
+.contain-paint {
+  contain: layout style paint;
+}
+
+.hardware-accelerated {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+.modal-backdrop-optimized {
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  contain: strict;
+  transform: translateZ(0);
+}
