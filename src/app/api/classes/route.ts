@@ -16,7 +16,7 @@ export async function GET(request: Request) {
     });
     return NextResponse.json(classes, {
       headers: {
-        "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
+        "Cache-Control": "private, no-cache, no-store, must-revalidate",
       },
     });
   } catch (error) {

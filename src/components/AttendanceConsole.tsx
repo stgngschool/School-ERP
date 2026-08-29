@@ -72,9 +72,9 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
     if (classes && classes.length > 0) {
       classes.forEach((c) => {
         if (c.name.toLowerCase().startsWith("class_") || c.name.toLowerCase().startsWith("sec-")) return;
-        const key = c.section && c.section.trim() !== "" && !c.name.toLowerCase().includes(c.section.toLowerCase())
-          ? `${c.name}-${c.section}`
-          : c.name;
+        const section = (c.section || "A").trim().toUpperCase();
+        if (section !== "A") return; // School only has Section A
+        const key = `${c.name}-A`;
         classSet.add(key);
       });
     }
@@ -82,7 +82,11 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
       students.forEach((s) => {
         const key = getStudentClassKey(s);
         if (!key.toLowerCase().startsWith("class_") && !key.toLowerCase().startsWith("sec-")) {
-          classSet.add(key);
+          const parts = key.split("-");
+          const section = (parts[1] || s.section || "A").trim().toUpperCase();
+          if (section === "A") {
+            classSet.add(`${parts[0]}-A`);
+          }
         }
       });
     }
