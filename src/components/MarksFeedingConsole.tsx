@@ -23,9 +23,17 @@ import {
 export default function MarksFeedingConsole() {
   const { user, students, schoolInfo, refreshStudents } = useAuth();
 
+  // Helper to extract clean class key e.g. "1-A", "10-A"
+  const getStudentClassKey = (s: any) => {
+    if (!s.section || s.section.trim() === "") return s.class;
+    if (s.class.toLowerCase().includes(s.section.toLowerCase())) return s.class;
+    return `${s.class}-${s.section}`;
+  };
+
   const availableClasses = useMemo(() => {
+    if (!students || students.length === 0) return [];
     return Array.from(
-      new Set(students.map((s) => `${s.class}-${s.section}`))
+      new Set(students.map((s) => getStudentClassKey(s)))
     ).sort();
   }, [students]);
 
@@ -64,6 +72,27 @@ export default function MarksFeedingConsole() {
   const isSplitExam = examConfig.isSplit;
   const splitComponents = examConfig.components || [];
 
+  // Active roster students for selected class (Defined BEFORE loadRoster)
+  const classStudents = useMemo(() => {
+    if (!selectedClass) return [];
+    return students.filter(
+      (s) =>
+        getStudentClassKey(s) === selectedClass ||
+        `${s.class}-${s.section}` === selectedClass ||
+        s.class === selectedClass
+    );
+  }, [students, selectedClass]);
+
+  const filteredStudents = useMemo(() => {
+    const q = deferredStudentSearch.trim().toLowerCase();
+    if (!q) return classStudents;
+    return classStudents.filter((s) =>
+      s.name.toLowerCase().includes(q) ||
+      (s.rollNo && s.rollNo.toString().includes(q)) ||
+      (s.admissionNo && s.admissionNo.toLowerCase().includes(q))
+    );
+  }, [classStudents, deferredStudentSearch]);
+
   useEffect(() => {
     if (!selectedClass) {
       if (user?.teacherProfile?.classes && user.teacherProfile.classes.length > 0) {
@@ -100,30 +129,47 @@ export default function MarksFeedingConsole() {
   }, [selectedClass, selectedExam, selectedSubject, customSubject, isCustomSubjectMode]);
 
   const loadRoster = async () => {
-    if (!selectedClass || !selectedExam || !selectedSubject) return;
+    if (!selectedClass || !selectedExam) return;
 
     const subjectToUse = isCustomSubjectMode && customSubject.trim() ? customSubject.trim() : selectedSubject;
-
-    if (!selectedClass || !selectedExam || !subjectToUse) return;
+    if (!subjectToUse) return;
 
     setLoadingRoster(true);
+    setErrorMsg("");
+
     try {
-      const [className, section] = selectedClass.split("-");
-            if (abortControllerRef.current) abortControllerRef.current.abort();
+      const parts = selectedClass.split("-");
+      const rawClass = parts[0].replace(/^class\s*/i, "").trim();
+      const section = (parts[1] || "").trim();
+
+      if (abortControllerRef.current) abortControllerRef.current.abort();
       abortControllerRef.current = new AbortController();
-      const res = await fetch(`/api/marks/roster?class=${encodeURIComponent(className)}&section=${encodeURIComponent(section)}&exam=${encodeURIComponent(selectedExam)}&subject=${encodeURIComponent(subjectToUse)}`, { signal: abortControllerRef.current.signal });
-      if (!res.ok) {
-        const text = await res.text();
-        try { const json = JSON.parse(text); throw new Error(json.error || "Failed"); }
-        catch { throw new Error(`HTTP Error: ${res.status}`); }
+
+      let marksRecord: Record<string, any> = {};
+      try {
+        const res = await fetch(
+          `/api/marks/roster?class=${encodeURIComponent(rawClass)}&section=${encodeURIComponent(section)}&exam=${encodeURIComponent(selectedExam)}&subject=${encodeURIComponent(subjectToUse)}`,
+          { signal: abortControllerRef.current.signal }
+        );
+        if (res.ok) {
+          marksRecord = await res.json();
+        }
+      } catch (fetchErr: any) {
+        if (fetchErr.name !== "AbortError") {
+          console.warn("Could not fetch remote marks roster, initializing local roster:", fetchErr);
+        }
       }
-      const marksRecord = await res.json();
 
       const newRoster: any = {};
       let foundAny = false;
-      let loadedMaxMarks = "100";
+      let loadedMaxMarks = maxMarks || "100";
 
-      classStudents.forEach((student) => {
+      // Match students either from classStudents or local students filter
+      const studentsToUse = classStudents.length > 0
+        ? classStudents
+        : students.filter((s) => getStudentClassKey(s) === selectedClass || s.class === selectedClass);
+
+      studentsToUse.forEach((student) => {
         const existingMark = marksRecord[student.id];
 
         if (existingMark) {
@@ -161,7 +207,9 @@ export default function MarksFeedingConsole() {
             breakdown: initialBreakdown,
           };
           foundAny = true;
-          loadedMaxMarks = existingMark.maxMarks?.toString() || "100";
+          if (existingMark.maxMarks) {
+            loadedMaxMarks = existingMark.maxMarks.toString();
+          }
         } else {
           newRoster[student.id] = {
             marksObtained: "",
@@ -178,27 +226,18 @@ export default function MarksFeedingConsole() {
       }
       setIsRosterLoaded(true);
     } catch (err) {
-      console.error(err);
+      console.error("loadRoster error:", err);
+      // Even on unexpected error, load the roster from classStudents so UI is always accessible
+      const fallbackRoster: any = {};
+      classStudents.forEach((student) => {
+        fallbackRoster[student.id] = { marksObtained: "", remarks: "", breakdown: {} };
+      });
+      setMarksRoster(fallbackRoster);
+      setIsRosterLoaded(true);
     } finally {
       setLoadingRoster(false);
     }
   };
-
-  const classStudents = useMemo(() => {
-    return students.filter(
-      (s) => `${s.class}-${s.section}` === selectedClass
-    );
-  }, [students, selectedClass]);
-
-  const filteredStudents = useMemo(() => {
-    const q = deferredStudentSearch.trim().toLowerCase();
-    if (!q) return classStudents;
-    return classStudents.filter((s) =>
-      s.name.toLowerCase().includes(q) ||
-      (s.rollNo && s.rollNo.toString().includes(q)) ||
-      (s.admissionNo && s.admissionNo.toLowerCase().includes(q))
-    );
-  }, [classStudents, deferredStudentSearch]);
 
   const maxValNum = parseFloat(maxMarks) || 100;
   let enteredCount = 0;

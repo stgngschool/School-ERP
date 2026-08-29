@@ -17,22 +17,35 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const className = searchParams.get("class");
-    const section = searchParams.get("section");
+    const section = searchParams.get("section") || "";
     const examName = searchParams.get("exam");
     const subject = searchParams.get("subject");
     const sessionId = searchParams.get("sessionId");
 
-    if (!className || !section || !examName || !subject) {
+    if (!className || !examName || !subject) {
       return NextResponse.json({ error: "Missing required parameters" }, { status: 400 });
     }
 
+    const cleanClassName = className.replace(/^class\s*/i, "").trim();
+
+    const classOrConditions: any[] = [
+      { name: cleanClassName },
+      { name: `Class ${cleanClassName}` },
+      { name: className },
+    ];
+
+    if (section) {
+      classOrConditions.forEach((cond) => {
+        cond.section = section;
+      });
+    }
+
     const whereClause: any = {
-      examName,
-      subject,
+      examName: { equals: examName, mode: "insensitive" },
+      subject: { equals: subject, mode: "insensitive" },
       student: {
         class: {
-          name: className,
-          section: section,
+          OR: classOrConditions,
         }
       }
     };
@@ -51,6 +64,7 @@ export async function GET(request: Request) {
         notebook: true,
         subjectEnrichment: true,
         practical: true,
+        breakdown: true,
       }
     });
 
