@@ -51,6 +51,52 @@ const DEFAULT_EXAM_CONFIG: Record<string, { isSplit: boolean; maxMarks: number; 
   }
 };
 
+const CLASS_SUBJECT_MAP = {
+  KG: ["ENGLISH", "HINDI", "MATHEMATICS", "DRAWING"],
+  PRIMARY: [
+    "ENGLISH",
+    "HINDI",
+    "MATHEMATICS",
+    "SCIENCE/EVS",
+    "COMPUTER",
+    "DRAWING",
+    "G.K",
+    "SANSKRIT",
+  ],
+  MIDDLE: [
+    "ENGLISH",
+    "HINDI",
+    "MATHEMATICS",
+    "SCIENCE/EVS",
+    "COMPUTER",
+    "DRAWING",
+    "G.K.",
+    "SOCIAL SCIENCE",
+    "SANSKRIT",
+  ],
+};
+
+function getSubjectsForClass(className: string): string[] {
+  if (!className) return CLASS_SUBJECT_MAP.PRIMARY;
+  const raw = className.toLowerCase().replace(/^class\s*/i, "").split("-")[0].trim();
+  
+  if (["nursery", "lkg", "ukg", "kg", "pre-kg", "playgroup", "nurs", "prep"].some((k) => raw.includes(k))) {
+    return CLASS_SUBJECT_MAP.KG;
+  }
+  
+  const classNum = parseInt(raw, 10);
+  if (!isNaN(classNum)) {
+    if (classNum >= 1 && classNum <= 5) {
+      return CLASS_SUBJECT_MAP.PRIMARY;
+    }
+    if (classNum >= 6) {
+      return CLASS_SUBJECT_MAP.MIDDLE;
+    }
+  }
+  
+  return CLASS_SUBJECT_MAP.PRIMARY;
+}
+
 export default function MarksFeedingConsole() {
   const { user, students, schoolInfo, refreshStudents } = useAuth();
 
@@ -76,11 +122,22 @@ export default function MarksFeedingConsole() {
 
   const [selectedClass, setSelectedClass] = useState("");
   const [selectedExam, setSelectedExam] = useState(availableExams[0] || "Unit-1");
-  const [selectedSubject, setSelectedSubject] = useState("Mathematics");
-  const [customSubject, setCustomSubject] = useState("");
-  const [isCustomSubjectMode, setIsCustomSubjectMode] = useState(false);
+
+  // Dynamic Subjects filtered by selected class curriculum
+  const availableSubjects = useMemo(() => {
+    return getSubjectsForClass(selectedClass);
+  }, [selectedClass]);
+
+  const [selectedSubject, setSelectedSubject] = useState(availableSubjects[0] || "ENGLISH");
   const [studentSearch, setStudentSearch] = useState("");
   const deferredStudentSearch = useDeferredValue(studentSearch);
+
+  // Keep selected subject synchronized with current class subject list
+  useEffect(() => {
+    if (availableSubjects.length > 0 && !availableSubjects.includes(selectedSubject)) {
+      setSelectedSubject(availableSubjects[0]);
+    }
+  }, [availableSubjects, selectedSubject]);
 
   // Derive active exam configuration from Admin settings or canonical school defaults
   const activeExamKey = selectedExam || availableExams[0] || "Unit-1";
@@ -157,12 +214,12 @@ export default function MarksFeedingConsole() {
     setIsEditMode(false);
     setErrorMsg("");
     setSuccessMsg("");
-  }, [selectedClass, selectedExam, selectedSubject, customSubject, isCustomSubjectMode]);
+  }, [selectedClass, selectedExam, selectedSubject]);
 
   const loadRoster = async () => {
     if (!selectedClass || !selectedExam) return;
 
-    const subjectToUse = isCustomSubjectMode && customSubject.trim() ? customSubject.trim() : selectedSubject;
+    const subjectToUse = selectedSubject;
     if (!subjectToUse) return;
 
     setLoadingRoster(true);
@@ -359,14 +416,7 @@ export default function MarksFeedingConsole() {
   };
 
   const handleSubjectChange = (val: string) => {
-    if (val === "CUSTOM") {
-      setIsCustomSubjectMode(true);
-      setSelectedSubject("CUSTOM");
-    } else {
-      setIsCustomSubjectMode(false);
-      setSelectedSubject(val);
-      setCustomSubject("");
-    }
+    setSelectedSubject(val);
   };
 
   const max = parseFloat(maxMarks) || 0;
@@ -403,7 +453,7 @@ export default function MarksFeedingConsole() {
       return;
     }
 
-    const subjectToUse = isCustomSubjectMode ? customSubject : selectedSubject;
+    const subjectToUse = selectedSubject;
     if (!subjectToUse) {
       setErrorMsg("Please specify a subject.");
       return;
@@ -575,38 +625,17 @@ export default function MarksFeedingConsole() {
             <label className="text-[8.5px] sm:text-[9px] font-black uppercase text-slate-400 block mb-1 tracking-wider">
               Subject Name
             </label>
-            {!isCustomSubjectMode ? (
-              <select
-                value={selectedSubject}
-                onChange={(e) => handleSubjectChange(e.target.value)}
-                className="w-full text-[10.5px] sm:text-[11px] font-extrabold py-2 px-2.5 sm:py-2.5 sm:px-3 border border-slate-200/60 rounded-xl sm:rounded-2xl outline-none bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300 focus:bg-white focus:border-indigo-600 text-slate-700 transition-all cursor-pointer shadow-2xs"
-              >
-                <option value="Mathematics">Mathematics</option>
-                <option value="Science">Science</option>
-                <option value="English">English</option>
-                <option value="Social Studies">Social Studies</option>
-                <option value="Hindi">Hindi</option>
-                <option value="CUSTOM">Custom...</option>
-              </select>
-            ) : (
-              <div className="flex gap-1.5 flex-col sm:flex-row">
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Art"
-                  value={customSubject}
-                  onChange={(e) => setCustomSubject(e.target.value)}
-                  className="w-full text-xs sm:text-sm font-bold py-2 px-2.5 sm:py-2.5 sm:px-3 border border-slate-200 rounded-xl outline-none bg-white focus:border-indigo-600 text-slate-700"
-                />
-                <button
-                  type="button"
-                  onClick={() => setIsCustomSubjectMode(false)}
-                  className="px-2.5 py-1 sm:py-0 bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 rounded-xl text-[10px] sm:text-xs font-bold shrink-0"
-                >
-                  Cancel
-                </button>
-              </div>
-            )}
+            <select
+              value={selectedSubject}
+              onChange={(e) => handleSubjectChange(e.target.value)}
+              className="w-full text-[10.5px] sm:text-[11px] font-extrabold py-2 px-2.5 sm:py-2.5 sm:px-3 border border-slate-200/60 rounded-xl sm:rounded-2xl outline-none bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300 focus:bg-white focus:border-indigo-600 text-slate-700 transition-all cursor-pointer shadow-2xs"
+            >
+              {availableSubjects.map((sub) => (
+                <option key={sub} value={sub}>
+                  {sub}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
