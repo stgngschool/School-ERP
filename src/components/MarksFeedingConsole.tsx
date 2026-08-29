@@ -20,6 +20,37 @@ import {
   Loader2
 } from "lucide-react";
 
+const DEFAULT_EXAM_CONFIG: Record<string, { isSplit: boolean; maxMarks: number; components?: { name: string; max: number }[] }> = {
+  "Unit-1": {
+    isSplit: true,
+    maxMarks: 20,
+    components: [
+      { name: "Note Book", max: 5 },
+      { name: "Sub. Enrich.", max: 5 },
+      { name: "Pr. Act.", max: 10 }
+    ]
+  },
+  "Unit-2": {
+    isSplit: true,
+    maxMarks: 20,
+    components: [
+      { name: "Note Book", max: 5 },
+      { name: "Sub. Enrich.", max: 5 },
+      { name: "Pr. Act.", max: 10 }
+    ]
+  },
+  "Half Yearly": {
+    isSplit: false,
+    maxMarks: 80,
+    components: []
+  },
+  "Annual": {
+    isSplit: false,
+    maxMarks: 80,
+    components: []
+  }
+};
+
 export default function MarksFeedingConsole() {
   const { user, students, schoolInfo, refreshStudents } = useAuth();
 
@@ -37,14 +68,31 @@ export default function MarksFeedingConsole() {
     ).sort();
   }, [students]);
 
+  const availableExams = useMemo(() => {
+    return schoolInfo.exams && schoolInfo.exams.length > 0
+      ? schoolInfo.exams
+      : ["Unit-1", "Half Yearly", "Unit-2", "Annual"];
+  }, [schoolInfo.exams]);
+
   const [selectedClass, setSelectedClass] = useState("");
-  const [selectedExam, setSelectedExam] = useState("");
+  const [selectedExam, setSelectedExam] = useState(availableExams[0] || "Unit-1");
   const [selectedSubject, setSelectedSubject] = useState("Mathematics");
   const [customSubject, setCustomSubject] = useState("");
   const [isCustomSubjectMode, setIsCustomSubjectMode] = useState(false);
-  const [maxMarks, setMaxMarks] = useState("100");
   const [studentSearch, setStudentSearch] = useState("");
   const deferredStudentSearch = useDeferredValue(studentSearch);
+
+  // Derive active exam configuration from Admin settings or canonical school defaults
+  const activeExamKey = selectedExam || availableExams[0] || "Unit-1";
+  const examConfig = (schoolInfo.examConfig && schoolInfo.examConfig[activeExamKey]) || DEFAULT_EXAM_CONFIG[activeExamKey] || {
+    isSplit: false,
+    maxMarks: 80,
+    components: []
+  };
+
+  const isSplitExam = examConfig.isSplit;
+  const splitComponents = examConfig.components || [];
+  const maxMarks = (examConfig.maxMarks ?? (isSplitExam ? 20 : 80)).toString();
 
   const [marksRoster, setMarksRoster] = useState<{
     [studentId: string]: {
@@ -58,19 +106,6 @@ export default function MarksFeedingConsole() {
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [isEditMode, setIsEditMode] = useState(false);
-
-  const availableExams = schoolInfo.exams && schoolInfo.exams.length > 0
-    ? schoolInfo.exams
-    : ["Unit-1", "Half Yearly", "Unit-2", "Annual"];
-
-  const examConfig = schoolInfo.examConfig?.[selectedExam] || {
-    isSplit: false,
-    maxMarks: 100,
-    components: []
-  };
-
-  const isSplitExam = examConfig.isSplit;
-  const splitComponents = examConfig.components || [];
 
   // Active roster students for selected class (Defined BEFORE loadRoster)
   const classStudents = useMemo(() => {
@@ -110,14 +145,7 @@ export default function MarksFeedingConsole() {
     if (availableExams.length > 0 && !selectedExam) {
       setSelectedExam(availableExams[0]);
     }
-  }, [user, availableClasses, availableExams]);
-
-  useEffect(() => {
-    if (selectedExam) {
-      const defaultMax = examConfig.maxMarks?.toString() || "100";
-      setMaxMarks(defaultMax);
-    }
-  }, [selectedExam, schoolInfo.examConfig]);
+  }, [user, availableClasses, availableExams, selectedClass, selectedExam]);
 
   const [isRosterLoaded, setIsRosterLoaded] = useState(false);
   const [loadingRoster, setLoadingRoster] = useState(false);
@@ -126,6 +154,9 @@ export default function MarksFeedingConsole() {
   useEffect(() => {
     setIsRosterLoaded(false);
     setMarksRoster({});
+    setIsEditMode(false);
+    setErrorMsg("");
+    setSuccessMsg("");
   }, [selectedClass, selectedExam, selectedSubject, customSubject, isCustomSubjectMode]);
 
   const loadRoster = async () => {
@@ -166,7 +197,6 @@ export default function MarksFeedingConsole() {
 
       const newRoster: any = {};
       let foundAny = false;
-      let loadedMaxMarks = maxMarks || "100";
 
       // Match students either from classStudents or local students filter
       const studentsToUse = classStudents.length > 0
@@ -211,9 +241,6 @@ export default function MarksFeedingConsole() {
             breakdown: initialBreakdown,
           };
           foundAny = true;
-          if (existingMark.maxMarks) {
-            loadedMaxMarks = existingMark.maxMarks.toString();
-          }
         } else {
           newRoster[student.id] = {
             marksObtained: "",
@@ -225,9 +252,6 @@ export default function MarksFeedingConsole() {
 
       setMarksRoster(newRoster);
       setIsEditMode(foundAny);
-      if (foundAny) {
-        setMaxMarks(loadedMaxMarks);
-      }
       setIsRosterLoaded(true);
     } catch (err) {
       console.error("loadRoster error:", err);
@@ -586,18 +610,20 @@ export default function MarksFeedingConsole() {
           </div>
 
           <div>
-            <label className="text-[8.5px] sm:text-[9px] font-black uppercase text-slate-400 block mb-1 tracking-wider">
-              Max Marks
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[8.5px] sm:text-[9px] font-black uppercase text-slate-400 block tracking-wider">
+                Max Marks
+              </label>
+              <span className="text-[7.5px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100/60 px-1 py-0.5 rounded leading-none">
+                Admin Set
+              </span>
+            </div>
             <input
-              type="number"
-              min="1"
-              required
-              inputMode="decimal"
-              disabled={isEditMode || isSplitExam}
+              type="text"
+              readOnly
+              disabled
               value={maxMarks}
-              onChange={(e) => setMaxMarks(e.target.value)}
-              className="w-full text-[10.5px] sm:text-[11px] font-extrabold py-2 px-2.5 sm:py-2.5 sm:px-3 border border-slate-200/60 rounded-xl sm:rounded-2xl outline-none bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300 focus:bg-white focus:border-indigo-600 text-slate-700 disabled:opacity-60 disabled:cursor-not-allowed shadow-2xs transition-all"
+              className="w-full text-[10.5px] sm:text-[11px] font-black py-2 px-2.5 sm:py-2.5 sm:px-3 border border-slate-200/60 rounded-xl sm:rounded-2xl outline-none bg-slate-100/80 text-slate-600 opacity-90 cursor-not-allowed shadow-2xs transition-all select-none"
             />
           </div>
         </div>

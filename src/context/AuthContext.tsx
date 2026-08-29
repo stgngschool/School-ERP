@@ -531,8 +531,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       lateFeeGraceDays: 10,
       lateFeeAmount: 50,
       lateFeeType: "FLAT",
-      exams: [],
-      examConfig: {},
+      exams: ["Unit-1", "Half Yearly", "Unit-2", "Annual"],
+      examConfig: {
+        "Unit-1": {
+          isSplit: true,
+          maxMarks: 20,
+          components: [
+            { name: "Note Book", max: 5 },
+            { name: "Sub. Enrich.", max: 5 },
+            { name: "Pr. Act.", max: 10 }
+          ]
+        },
+        "Unit-2": {
+          isSplit: true,
+          maxMarks: 20,
+          components: [
+            { name: "Note Book", max: 5 },
+            { name: "Sub. Enrich.", max: 5 },
+            { name: "Pr. Act.", max: 10 }
+          ]
+        },
+        "Half Yearly": {
+          isSplit: false,
+          maxMarks: 80
+        },
+        "Annual": {
+          isSplit: false,
+          maxMarks: 80
+        }
+      },
     })
   );
   const [students, setStudents] = useState<MockStudent[]>(() =>
