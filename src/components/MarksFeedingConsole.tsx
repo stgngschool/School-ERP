@@ -1,20 +1,24 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useDeferredValue, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useRef, useDeferredValue, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
+import {
+  getCleanClassKey,
+  matchStudentToClass,
+  normalizeDisplayClassName,
+  sortClasses,
+  normalizeClassName,
+  normalizeSectionName
+} from "@/lib/classUtils";
 import {
   Save,
   AlertCircle,
   CheckCircle,
   Search,
-  Printer,
-  FileText,
   Award,
   TrendingUp,
   Users,
-  Sparkles,
   CheckCircle2,
-  Eye,
   Layers,
   BookOpen,
   Loader2
@@ -97,55 +101,23 @@ function getSubjectsForClass(className: string): string[] {
   return CLASS_SUBJECT_MAP.PRIMARY;
 }
 
-const classOrderScore = (cls: string): number => {
-  const norm = cls.toLowerCase().replace(/^class\s*/i, "").trim();
-  if (norm.includes("nurs") || norm.includes("play")) return 1;
-  if (norm.includes("lkg") || norm.includes("lower")) return 2;
-  if (norm.includes("ukg") || norm.includes("upper") || norm.includes("kg")) return 3;
-  const num = parseInt(norm, 10);
-  if (!isNaN(num)) return 10 + num;
-  return 100;
-};
-
-const sortClasses = (list: string[]) => {
-  return [...list].sort((a, b) => {
-    const scoreA = classOrderScore(a);
-    const scoreB = classOrderScore(b);
-    if (scoreA !== scoreB) return scoreA - scoreB;
-    return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
-  });
-};
-
 export default function MarksFeedingConsole() {
   const { user, students, classes, schoolInfo, refreshStudents } = useAuth();
-
-  // Helper to extract clean class key e.g. "1-A", "10-A"
-  const getStudentClassKey = (s: any) => {
-    if (!s.section || s.section.trim() === "") return s.class;
-    if (s.class.toLowerCase().includes(s.section.toLowerCase())) return s.class;
-    return `${s.class}-${s.section}`;
-  };
 
   const availableClasses = useMemo(() => {
     const classSet = new Set<string>();
     if (classes && classes.length > 0) {
       classes.forEach((c) => {
         if (c.name.toLowerCase().startsWith("class_") || c.name.toLowerCase().startsWith("sec-")) return;
-        const section = (c.section || "A").trim().toUpperCase();
-        if (section !== "A") return; // School only has Section A
-        const key = `${c.name}-A`;
-        classSet.add(key);
+        const key = getCleanClassKey(c.name, c.section);
+        if (key) classSet.add(key);
       });
     }
     if (students && students.length > 0) {
       students.forEach((s) => {
-        const key = getStudentClassKey(s);
-        if (!key.toLowerCase().startsWith("class_") && !key.toLowerCase().startsWith("sec-")) {
-          const parts = key.split("-");
-          const section = (parts[1] || s.section || "A").trim().toUpperCase();
-          if (section === "A") {
-            classSet.add(`${parts[0]}-A`);
-          }
+        const key = getCleanClassKey(s.class, s.section);
+        if (key && !key.toLowerCase().startsWith("class_") && !key.toLowerCase().startsWith("sec-")) {
+          classSet.add(key);
         }
       });
     }
@@ -205,12 +177,7 @@ export default function MarksFeedingConsole() {
   // Active roster students for selected class (Defined BEFORE loadRoster)
   const classStudents = useMemo(() => {
     if (!selectedClass) return [];
-    return students.filter(
-      (s) =>
-        getStudentClassKey(s) === selectedClass ||
-        `${s.class}-${s.section}` === selectedClass ||
-        s.class === selectedClass
-    );
+    return students.filter((s) => matchStudentToClass(s, selectedClass));
   }, [students, selectedClass]);
 
   const filteredStudents = useMemo(() => {
@@ -227,7 +194,7 @@ export default function MarksFeedingConsole() {
     if (!selectedClass) {
       if (user?.teacherProfile?.classes && user.teacherProfile.classes.length > 0) {
         const tClass = user.teacherProfile.classes[0];
-        const targetStr = `${tClass.name}-${tClass.section}`;
+        const targetStr = getCleanClassKey(tClass.name, tClass.section);
         if (availableClasses.includes(targetStr)) {
           setSelectedClass(targetStr);
           return;
@@ -264,9 +231,8 @@ export default function MarksFeedingConsole() {
     setErrorMsg("");
 
     try {
-      const parts = selectedClass.split("-");
-      const rawClass = parts[0].replace(/^class\s*/i, "").trim();
-      const section = (parts[1] || "").trim();
+      const rawClass = normalizeClassName(selectedClass);
+      const section = normalizeSectionName(undefined, selectedClass);
 
       if (abortControllerRef.current) abortControllerRef.current.abort();
       abortControllerRef.current = new AbortController();
@@ -296,7 +262,7 @@ export default function MarksFeedingConsole() {
       // Match students either from classStudents or local students filter
       const studentsToUse = classStudents.length > 0
         ? classStudents
-        : students.filter((s) => getStudentClassKey(s) === selectedClass || s.class === selectedClass);
+        : students.filter((s) => matchStudentToClass(s, selectedClass));
 
       studentsToUse.forEach((student) => {
         const existingMark = marksRecord[student.id];
@@ -514,17 +480,23 @@ export default function MarksFeedingConsole() {
         if (!dataEntry) return null;
 
         if (isSplitExam) {
-          const keys = Object.keys(dataEntry.breakdown);
-
-
+          let hasAny = false;
           const breakdownJson: { [key: string]: number } = {};
           let total = 0;
           splitComponents.forEach((comp: any) => {
             const vStr = dataEntry.breakdown[comp.name] || "";
-            const v = vStr !== "" ? parseFloat(vStr) : 0;
-            breakdownJson[comp.name] = v;
-            total += v;
+            if (vStr !== "") {
+              hasAny = true;
+              const v = parseFloat(vStr);
+              const numVal = isNaN(v) ? 0 : v;
+              breakdownJson[comp.name] = numVal;
+              total += numVal;
+            } else {
+              breakdownJson[comp.name] = 0;
+            }
           });
+
+          if (!hasAny) return null;
 
           return {
             studentId: s.id,
@@ -636,7 +608,7 @@ export default function MarksFeedingConsole() {
             >
               {availableClasses.map((cls) => (
                 <option key={cls} value={cls}>
-                  Class {cls}
+                  {normalizeDisplayClassName(cls)}
                 </option>
               ))}
             </select>
@@ -742,7 +714,7 @@ export default function MarksFeedingConsole() {
             </div>
 
             <div className="bg-white border border-slate-200/60 p-4 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.015)] flex items-center gap-3">
-              <div className="h-10 w-10 bg-amber-50 border border-amber-100/50 rounded-2xl flex items-center justify-center text-amber-655 shrink-0">
+              <div className="h-10 w-10 bg-amber-50 border border-amber-100/50 rounded-2xl flex items-center justify-center text-amber-600 shrink-0">
                 <Award className="h-5 w-5" />
               </div>
               <div>
@@ -754,7 +726,7 @@ export default function MarksFeedingConsole() {
             </div>
 
             <div className="bg-white border border-slate-200/60 p-4 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.015)] flex items-center gap-3">
-              <div className="h-10 w-10 bg-teal-50 border border-teal-100/50 rounded-2xl flex items-center justify-center text-teal-655 shrink-0">
+              <div className="h-10 w-10 bg-teal-50 border border-teal-100/50 rounded-2xl flex items-center justify-center text-teal-600 shrink-0">
                 <CheckCircle2 className="h-5 w-5" />
               </div>
               <div>
@@ -792,7 +764,7 @@ export default function MarksFeedingConsole() {
             placeholder="Search student name or roll..."
             value={studentSearch}
             onChange={(e) => setStudentSearch(e.target.value)}
-            className="w-full sm:w-64 text-xs font-extrabold py-2.5 pl-10 pr-4 border border-slate-200/60 rounded-2xl outline-none bg-slate-50/50 hover:bg-slate-50 hover:border-slate-350 focus:bg-white focus:border-indigo-600 transition-all shadow-2xs text-slate-800 placeholder-slate-400"
+            className="w-full sm:w-64 text-xs font-extrabold py-2.5 pl-10 pr-4 border border-slate-200/60 rounded-2xl outline-none bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300 focus:bg-white focus:border-indigo-600 transition-all shadow-2xs text-slate-800 placeholder-slate-400"
           />
         </div>
       </div>

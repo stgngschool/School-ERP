@@ -39,6 +39,14 @@ const StudentProfileModal = dynamic(() => import("@/components/StudentProfileMod
 
 import ModernDatePicker from "@/components/ModernDatePicker";
 import {
+  getCleanClassKey,
+  matchStudentToClass,
+  normalizeDisplayClassName,
+  sortClasses,
+  normalizeClassName,
+  normalizeSectionName
+} from "@/lib/classUtils";
+import {
   generateFeeReminderWhatsAppUrl,
   isDueUpToCurrentMonth,
   getCurrentMonthName,
@@ -2087,8 +2095,8 @@ export default function AdminDashboard() {
         (s.parentPhone && s.parentPhone.toLowerCase().includes(q)) ||
         (s.aadhaar && s.aadhaar.includes(q));
 
-      const matchesClass = !dirClassFilter || s.class === dirClassFilter;
-      const matchesSection = !dirSectionFilter || s.section === dirSectionFilter;
+      const matchesClass = !dirClassFilter || normalizeClassName(s.class).toLowerCase() === normalizeClassName(dirClassFilter).toLowerCase();
+      const matchesSection = !dirSectionFilter || normalizeSectionName(s.section, s.class).toLowerCase() === normalizeSectionName(dirSectionFilter).toLowerCase();
       const matchesFamily = !dirFamilyFilter || (s.familyCode && s.familyCode.toLowerCase().trim() === dirFamilyFilter.toLowerCase().trim());
       const matchesStatus = dirStatusFilter === "ALL" || (s.status || "ACTIVE") === dirStatusFilter;
 
@@ -2115,8 +2123,19 @@ export default function AdminDashboard() {
     });
   }, [students, debouncedDirSearch, dirClassFilter, dirSectionFilter, dirFamilyFilter, dirStatusFilter, dirRteFilter, dirCategoryFilter, dirDuesFilter, unpaidStudentIdsSet]);
 
-  const classOptions = React.useMemo(() => Array.from(new Set(classes.map((c: any) => c.name))).sort(), [classes]);
-  const sectionOptions = React.useMemo(() => Array.from(new Set(classes.map((c: any) => c.section))).sort(), [classes]);
+  const classOptions = React.useMemo(() => {
+    const classSet = new Set<string>();
+    classes.forEach((c: any) => {
+      const norm = normalizeClassName(c.name);
+      if (norm) classSet.add(norm);
+    });
+    students.forEach((s: any) => {
+      const norm = normalizeClassName(s.class);
+      if (norm) classSet.add(norm);
+    });
+    return sortClasses(Array.from(classSet));
+  }, [classes, students]);
+  const sectionOptions = React.useMemo(() => Array.from(new Set([...classes.map((c: any) => c.section), ...students.map((s: any) => s.section)])).filter(Boolean).sort(), [classes, students]);
   const familyOptions = React.useMemo(() => Array.from(new Set(students.map((s: any) => s.familyCode).filter(Boolean))).sort(), [students]);
   const activeFilterCount = [dirClassFilter, dirSectionFilter, dirFamilyFilter, dirStatusFilter !== "ALL" ? "1" : "", dirRteFilter !== "ALL" ? "1" : "", dirCategoryFilter !== "ALL" ? "1" : "", dirDuesFilter !== "ALL" ? "1" : ""].filter(Boolean).length;
 
@@ -7403,8 +7422,15 @@ export default function AdminDashboard() {
                     className="text-xs font-bold py-1.5 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 cursor-pointer w-full sm:w-[180px]"
                   >
                     <option value="">-- Choose Class --</option>
-                    {classes.map((cls: any) => (
-                      <option key={cls.id} value={cls.name}>{cls.name}-{cls.section}</option>
+                    {sortClasses(
+                      Array.from(
+                        new Set([
+                          ...classes.map((cls: any) => getCleanClassKey(cls.name, cls.section)),
+                          ...students.map((std: any) => getCleanClassKey(std.class, std.section)),
+                        ])
+                      ).filter(Boolean)
+                    ).map((clsKey: string) => (
+                      <option key={clsKey} value={clsKey}>{normalizeDisplayClassName(clsKey)}</option>
                     ))}
                   </select>
                 </div>
@@ -7416,11 +7442,11 @@ export default function AdminDashboard() {
                         type="checkbox"
                         id="select-all-idcards"
                         checked={
-                          students.filter(s => s.class === idClassFilter).length > 0 &&
-                          students.filter(s => s.class === idClassFilter).every(s => selectedIdCardStudentIds.includes(s.id))
+                          students.filter(s => matchStudentToClass(s, idClassFilter)).length > 0 &&
+                          students.filter(s => matchStudentToClass(s, idClassFilter)).every(s => selectedIdCardStudentIds.includes(s.id))
                         }
                         onChange={(e) => {
-                          const classStds = students.filter(s => s.class === idClassFilter);
+                          const classStds = students.filter(s => matchStudentToClass(s, idClassFilter));
                           if (e.target.checked) {
                             setSelectedIdCardStudentIds(classStds.map(s => s.id));
                           } else {
@@ -7432,7 +7458,7 @@ export default function AdminDashboard() {
                       <label htmlFor="select-all-idcards" className="cursor-pointer">Select All Class</label>
                     </div>
                     <span className="text-[10px] font-black uppercase bg-indigo-50 text-indigo-700 border border-indigo-100 px-2.5 py-1 rounded-full">
-                      {students.filter(s => s.class === idClassFilter).length} Students
+                      {students.filter(s => matchStudentToClass(s, idClassFilter)).length} Students
                     </span>
                   </div>
                 )}
@@ -7447,7 +7473,7 @@ export default function AdminDashboard() {
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   {students
-                    .filter((s) => s.class === idClassFilter)
+                    .filter((s) => matchStudentToClass(s, idClassFilter))
                     .map((std) => (
                       <div
                         key={std.id}
@@ -8919,19 +8945,18 @@ export default function AdminDashboard() {
                       className="w-full text-xs font-bold py-2.5 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50/50 focus:bg-white focus:border-indigo-600 transition-all text-slate-700 shadow-2xs cursor-pointer"
                     >
                       <option value="All">All Classes (Outstanding)</option>
-                      {Array.from(
-                        new Set([
-                          ...classes.map((c) => `${c.name}-${c.section}`),
-                          ...students.map((s) => `${s.class}-${s.section}`),
-                        ])
-                      )
-                        .filter(Boolean)
-                        .sort()
-                        .map((cls) => (
-                          <option key={cls} value={cls}>
-                            Class {cls}
-                          </option>
-                        ))}
+                      {sortClasses(
+                        Array.from(
+                          new Set([
+                            ...classes.map((c) => getCleanClassKey(c.name, c.section)),
+                            ...students.map((s) => getCleanClassKey(s.class, s.section)),
+                          ])
+                        ).filter(Boolean)
+                      ).map((cls) => (
+                        <option key={cls} value={cls}>
+                          {normalizeDisplayClassName(cls)}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>
@@ -9165,8 +9190,7 @@ export default function AdminDashboard() {
                   }
 
                   // E. Class Filter
-                  const sClassVal = `${s.class}-${s.section}`;
-                  const matchesClass = defaulterClass === "All" || sClassVal === defaulterClass;
+                  const matchesClass = defaulterClass === "All" || matchStudentToClass(s, defaulterClass);
                   if (!matchesClass) return false;
 
                   return true;

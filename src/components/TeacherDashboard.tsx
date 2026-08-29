@@ -30,6 +30,12 @@ import AttendanceConsole from "@/components/AttendanceConsole";
 import NoticeBoardView from "@/components/NoticeBoardView";
 import ModernDatePicker from "@/components/ModernDatePicker";
 import {
+  getCleanClassKey,
+  matchStudentToClass,
+  normalizeDisplayClassName,
+  sortClasses
+} from "@/lib/classUtils";
+import {
   generateFeeReminderWhatsAppUrl,
   isDueUpToCurrentMonth,
   getCurrentMonthName,
@@ -77,20 +83,37 @@ export default function TeacherDashboard() {
   React.useEffect(() => {
     if (user?.teacherProfile?.classes && user.teacherProfile.classes.length > 0) {
       const tClass = user.teacherProfile.classes[0];
-      setSelectedClass(`${tClass.name}-${tClass.section}`);
+      setSelectedClass(getCleanClassKey(tClass.name, tClass.section));
     }
   }, [user]);
 
+  // Available classes computed and sorted cleanly
+  const availableClasses = React.useMemo(() => {
+    const classSet = new Set<string>();
+    if (user?.teacherProfile?.classes && user.teacherProfile.classes.length > 0) {
+      user.teacherProfile.classes.forEach((c) => {
+        const key = getCleanClassKey(c.name, c.section);
+        if (key) classSet.add(key);
+      });
+    }
+    if (students.length > 0) {
+      students.forEach((s) => {
+        const key = getCleanClassKey(s.class, s.section);
+        if (key) classSet.add(key);
+      });
+    }
+    return sortClasses(Array.from(classSet));
+  }, [students, user]);
+
   // Auto-select first available class if current class has no students
   React.useEffect(() => {
-    if (students.length > 0) {
-      const availableClasses = Array.from(new Set(students.map((s) => `${s.class}-${s.section}`)));
-      const hasCurrent = students.some((s) => `${s.class}-${s.section}` === selectedClass);
-      if (!hasCurrent && availableClasses.length > 0 && !user?.teacherProfile?.classes?.length) {
+    if (availableClasses.length > 0) {
+      const hasCurrent = students.some((s) => matchStudentToClass(s, selectedClass));
+      if (!hasCurrent && !user?.teacherProfile?.classes?.length) {
         setSelectedClass(availableClasses[0]);
       }
     }
-  }, [students, selectedClass, user]);
+  }, [students, availableClasses, selectedClass, user]);
 
   // Homework Form State
   const [hwSubject, setHwSubject] = useState("Mathematics");
@@ -101,9 +124,7 @@ export default function TeacherDashboard() {
 
   // Filter students based on selected class
   const classStudents = React.useMemo(() => {
-    return students.filter(
-      (s) => `${s.class}-${s.section}` === selectedClass
-    );
+    return students.filter((s) => matchStudentToClass(s, selectedClass));
   }, [students, selectedClass]);
 
   // Filter students based on search string
@@ -381,9 +402,7 @@ export default function TeacherDashboard() {
 
           {/* TAB: Class Fee Status & Dues */}
           {currentTab === "defaulters" && (() => {
-            const classStudentsList = students.filter(
-              (s) => `${s.class}-${s.section}` === selectedClass
-            );
+            const classStudentsList = students.filter((s) => matchStudentToClass(s, selectedClass));
 
             const currentMonthName = getCurrentMonthName();
 
@@ -438,7 +457,7 @@ export default function TeacherDashboard() {
                       Pending Dues (Up to {currentMonthName})
                     </h2>
                     <p className="text-[11px] text-slate-400 font-semibold mt-0.5">
-                      Class {selectedClass} • Only students with unpaid fee dues up to {currentMonthName} are listed below.
+                      {normalizeDisplayClassName(selectedClass)} • Only students with unpaid fee dues up to {currentMonthName} are listed below.
                     </p>
                   </div>
 
@@ -449,9 +468,9 @@ export default function TeacherDashboard() {
                       onChange={(e) => setSelectedClass(e.target.value)}
                       className="text-[11px] font-extrabold py-2 px-3 border border-slate-200/60 rounded-2xl outline-none bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300 focus:bg-white focus:border-indigo-600 text-slate-700 transition-all cursor-pointer shadow-2xs"
                     >
-                      {Array.from(new Set(students.map((s) => `${s.class}-${s.section}`))).map((cs) => (
+                      {availableClasses.map((cs) => (
                         <option key={cs} value={cs}>
-                          Class {cs}
+                          {normalizeDisplayClassName(cs)}
                         </option>
                       ))}
                     </select>

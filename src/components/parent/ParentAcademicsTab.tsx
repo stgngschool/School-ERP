@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { BookOpen, Award, CheckCircle, Clock, Calendar as CalendarIcon, FileText } from "lucide-react";
 import { MockStudent, MockHomework, MockSchoolInfo } from "@/context/AuthContext";
+import { matchStudentToClass } from "@/lib/classUtils";
 
 interface ParentAcademicsTabProps {
   child: MockStudent | undefined;
@@ -43,21 +44,12 @@ export default function ParentAcademicsTab({ child, homeworks, schoolInfo }: Par
   }, [child?.id]);
 
   // Filter homework matching child's class and section
-  const childHomework = child ? homeworks.filter((h) => {
-    const childClassNorm = (child.class || "").toLowerCase().replace(/^class\s*/i, "").replace(/\s+/g, "");
-    const childSecNorm = (child.section || "").toLowerCase().trim();
-
-    const rawHwCS = (h.classSection || "").toLowerCase().trim();
-    if (!rawHwCS) return false;
-
-    const parts = rawHwCS.split("-").map((p: string) => p.replace(/^class\s*/i, "").trim());
-    const hwClass = parts[0];
-    const hwSec = parts[1] || "";
-
-    if (hwClass !== childClassNorm) return false;
-    if (!hwSec || hwSec === "all") return true;
-    return hwSec === childSecNorm;
-  }) : [];
+  const childHomework = child
+    ? homeworks.filter((h) => {
+        if (!h.classSection) return false;
+        return matchStudentToClass(child, h.classSection);
+      })
+    : [];
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in text-left pb-12 font-sans">

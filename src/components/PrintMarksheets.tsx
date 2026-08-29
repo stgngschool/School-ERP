@@ -1,7 +1,15 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
+import {
+  getCleanClassKey,
+  matchStudentToClass,
+  normalizeDisplayClassName,
+  sortClasses,
+  normalizeClassName,
+  normalizeSectionName
+} from "@/lib/classUtils";
 import {
   Printer,
   Layers,
@@ -14,9 +22,16 @@ import {
 export default function PrintMarksheets() {
   const { students, schoolInfo, refreshStudents } = useAuth();
 
-  const availableClasses = Array.from(
-    new Set(students.map((s) => `${s.class}-${s.section}`))
-  ).sort();
+  const availableClasses = useMemo(() => {
+    const classSet = new Set<string>();
+    if (students && students.length > 0) {
+      students.forEach((s) => {
+        const key = getCleanClassKey(s.class, s.section);
+        if (key) classSet.add(key);
+      });
+    }
+    return sortClasses(Array.from(classSet));
+  }, [students]);
 
   const availableExams = schoolInfo.exams && schoolInfo.exams.length > 0
     ? schoolInfo.exams
@@ -38,9 +53,10 @@ export default function PrintMarksheets() {
     }
   }, [availableClasses, selectedClass]);
 
-  const classStudents = students.filter(
-    (s) => `${s.class}-${s.section}` === selectedClass
-  );
+  const classStudents = useMemo(() => {
+    if (!selectedClass) return [];
+    return students.filter((s) => matchStudentToClass(s, selectedClass));
+  }, [students, selectedClass]);
 
   const filteredStudents = classStudents.filter(s => 
     s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -64,9 +80,8 @@ export default function PrintMarksheets() {
 
   const loadClassData = () => {
     if (!selectedClass) return;
-    const lastDashIdx = selectedClass.lastIndexOf("-");
-    const cName = selectedClass.substring(0, lastDashIdx);
-    const cSec = selectedClass.substring(lastDashIdx + 1);
+    const cName = normalizeClassName(selectedClass);
+    const cSec = normalizeSectionName(undefined, selectedClass);
     setLoadingMarks(true);
     fetch(`/api/marks/class?class=${encodeURIComponent(cName)}&section=${encodeURIComponent(cSec)}`, {
       credentials: "include",
@@ -146,7 +161,7 @@ export default function PrintMarksheets() {
               className="w-full text-xs font-bold py-2.5 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 text-slate-700 shadow-2xs"
             >
               {availableClasses.map((cls) => (
-                <option key={cls} value={cls}>Class {cls}</option>
+                <option key={cls} value={cls}>{normalizeDisplayClassName(cls)}</option>
               ))}
             </select>
           </div>
@@ -254,7 +269,7 @@ export default function PrintMarksheets() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-sm font-black text-slate-800">Distribution Log</h3>
-              <p className="text-[10px] font-bold text-slate-400">Class {selectedClass}</p>
+              <p className="text-[10px] font-bold text-slate-400">{normalizeDisplayClassName(selectedClass)}</p>
             </div>
             <div className="bg-slate-100 px-3 py-1.5 rounded-lg text-xs font-black text-slate-700">
               {classStudents.filter(s => s.isMarksheetClaimed).length} / {classStudents.length} Claimed
@@ -573,7 +588,7 @@ function SingleMarksheetCard({
               </div>
               <div className="pl-3">
                 <span className="text-[8.5px] font-bold text-slate-500 uppercase tracking-wider block">Roll No & Class</span>
-                <span className="font-black text-slate-950 text-xs">ROLL NO: {student.rollNo || "N/A"} | CLASS {student.class}-{student.section}</span>
+                <span className="font-black text-slate-950 text-xs">ROLL NO: {student.rollNo || "N/A"} | {normalizeDisplayClassName(getCleanClassKey(student.class, student.section)).toUpperCase()}</span>
               </div>
             </div>
             <div className="grid grid-cols-2 divide-x-2 divide-slate-900 p-2">

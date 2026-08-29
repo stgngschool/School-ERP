@@ -10,6 +10,12 @@ import { formatP } from "@/lib/currency";
 import { generateFeeReminderWhatsAppUrl, isDueUpToCurrentMonth } from "@/lib/whatsapp";
 import { exportMasterFeeRegisterXLS, exportSingleStudentStatementXLS, exportFeeRegisterCSV } from "@/lib/exportFeeXLS";
 import { MockStudent, MockDueItem, MockReceipt, MockSchoolInfo } from "@/context/AuthContext";
+import {
+  getCleanClassKey,
+  matchStudentToClass,
+  normalizeDisplayClassName,
+  sortClasses
+} from "@/lib/classUtils";
 
 interface DefaultersReportTabProps {
   students: MockStudent[];
@@ -146,8 +152,7 @@ export default function DefaultersReportTab({
         }
       }
 
-      const sClassVal = `${s.class}-${s.section}`;
-      const matchesClass = defaulterClass === "All" || sClassVal === defaulterClass;
+      const matchesClass = defaulterClass === "All" || matchStudentToClass(s, defaulterClass);
       if (!matchesClass) return false;
 
       return true;
@@ -164,6 +169,23 @@ export default function DefaultersReportTab({
     deferredSearch,
     defaulterClass,
   ]);
+
+  const availableDefaulterClasses = useMemo(() => {
+    const classSet = new Set<string>();
+    if (classes && classes.length > 0) {
+      classes.forEach((c) => {
+        const key = getCleanClassKey(c.name, c.section);
+        if (key) classSet.add(key);
+      });
+    }
+    if (students && students.length > 0) {
+      students.forEach((s) => {
+        const key = getCleanClassKey(s.class, s.section);
+        if (key) classSet.add(key);
+      });
+    }
+    return sortClasses(Array.from(classSet));
+  }, [classes, students]);
 
   const sortedDefaulters = useMemo(() => {
     const list = [...filteredDefaulters];
@@ -586,19 +608,11 @@ export default function DefaultersReportTab({
               className="w-full text-xs font-bold py-2.5 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50/50 focus:bg-white focus:border-indigo-600 transition-all text-slate-700 shadow-2xs cursor-pointer"
             >
               <option value="All">All Classes (Outstanding)</option>
-              {Array.from(
-                new Set([
-                  ...classes.map((c) => `${c.name}-${c.section}`),
-                  ...students.map((s) => `${s.class}-${s.section}`),
-                ])
-              )
-                .filter(Boolean)
-                .sort()
-                .map((cls) => (
-                  <option key={cls} value={cls}>
-                    Class {cls}
-                  </option>
-                ))}
+              {availableDefaulterClasses.map((cls) => (
+                <option key={cls} value={cls}>
+                  {normalizeDisplayClassName(cls)}
+                </option>
+              ))}
             </select>
           </div>
         </div>

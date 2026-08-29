@@ -3,6 +3,12 @@
 import React, { useState, useEffect, useMemo, useDeferredValue } from "react";
 import { useAuth, AttendanceStatus, MockStudent } from "@/context/AuthContext";
 import {
+  getCleanClassKey,
+  matchStudentToClass,
+  normalizeDisplayClassName,
+  sortClasses
+} from "@/lib/classUtils";
+import {
   Search,
   Save,
   Printer,
@@ -49,53 +55,25 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [saveSuccessMessage, setSaveSuccessMessage] = useState<string>("");
 
-  // Helper to format student class key cleanly
-  const getStudentClassKey = (s: MockStudent) => {
-    if (!s.section || s.section.trim() === "") return s.class;
-    if (s.class.toLowerCase().includes(s.section.toLowerCase())) return s.class;
-    return `${s.class}-${s.section}`;
-  };
-
-  const classOrderScore = (cls: string): number => {
-    const norm = cls.toLowerCase().replace(/^class\s*/i, "").trim();
-    if (norm.includes("nurs") || norm.includes("play")) return 1;
-    if (norm.includes("lkg") || norm.includes("lower")) return 2;
-    if (norm.includes("ukg") || norm.includes("upper") || norm.includes("kg")) return 3;
-    const num = parseInt(norm, 10);
-    if (!isNaN(num)) return 10 + num;
-    return 100;
-  };
-
   // Get available classes from classes & students list with natural order
   const availableClasses = useMemo(() => {
     const classSet = new Set<string>();
     if (classes && classes.length > 0) {
       classes.forEach((c) => {
         if (c.name.toLowerCase().startsWith("class_") || c.name.toLowerCase().startsWith("sec-")) return;
-        const section = (c.section || "A").trim().toUpperCase();
-        if (section !== "A") return; // School only has Section A
-        const key = `${c.name}-A`;
-        classSet.add(key);
+        const key = getCleanClassKey(c.name, c.section);
+        if (key) classSet.add(key);
       });
     }
     if (students && students.length > 0) {
       students.forEach((s) => {
-        const key = getStudentClassKey(s);
-        if (!key.toLowerCase().startsWith("class_") && !key.toLowerCase().startsWith("sec-")) {
-          const parts = key.split("-");
-          const section = (parts[1] || s.section || "A").trim().toUpperCase();
-          if (section === "A") {
-            classSet.add(`${parts[0]}-A`);
-          }
+        const key = getCleanClassKey(s.class, s.section);
+        if (key && !key.toLowerCase().startsWith("class_") && !key.toLowerCase().startsWith("sec-")) {
+          classSet.add(key);
         }
       });
     }
-    const sorted = Array.from(classSet).sort((a, b) => {
-      const scoreA = classOrderScore(a);
-      const scoreB = classOrderScore(b);
-      if (scoreA !== scoreB) return scoreA - scoreB;
-      return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
-    });
+    const sorted = sortClasses(Array.from(classSet));
     return ["ALL", ...sorted];
   }, [students, classes]);
 
@@ -105,8 +83,7 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
       setSelectedClass(initialClass);
     } else if (user?.role === "TEACHER" && user.teacherProfile?.classes && user.teacherProfile.classes.length > 0) {
       const cls = user.teacherProfile.classes[0];
-      const classKey = cls.section && !cls.name.toLowerCase().includes(cls.section.toLowerCase()) 
-        ? `${cls.name}-${cls.section}` : cls.name;
+      const classKey = getCleanClassKey(cls.name, cls.section);
       setSelectedClass(classKey);
     }
   }, [initialClass, user]);
@@ -122,9 +99,7 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
   const classStudents = useMemo(() => {
     if (!students) return [];
     if (selectedClass === "ALL") return students;
-    return students.filter(
-      (s) => getStudentClassKey(s) === selectedClass || s.class === selectedClass
-    );
+    return students.filter((s) => matchStudentToClass(s, selectedClass));
   }, [students, selectedClass]);
 
   // Attendance state map for current date & class: { [studentId]: AttendanceStatus }
@@ -306,7 +281,7 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
               >
                 {availableClasses.map((cls) => (
                   <option key={cls} value={cls}>
-                    {cls === "ALL" ? "All Classes" : `Class ${cls}`}
+                    {cls === "ALL" ? "All Classes" : normalizeDisplayClassName(cls)}
                   </option>
                 ))}
               </select>

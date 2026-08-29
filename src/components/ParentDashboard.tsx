@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState } from "react";
 import { formatP } from "@/lib/currency";
@@ -17,6 +17,7 @@ import ParentFinanceTab from "@/components/parent/ParentFinanceTab";
 import ParentAttendanceTab from "@/components/parent/ParentAttendanceTab";
 import ParentAcademicsTab from "@/components/parent/ParentAcademicsTab";
 import ParentLeaveTab from "@/components/parent/ParentLeaveTab";
+import { matchStudentToClass, normalizeDisplayClassName, getCleanClassKey } from "@/lib/classUtils";
 
 export default function ParentDashboard() {
   const {
@@ -75,18 +76,12 @@ export default function ParentDashboard() {
   const totalDays = childAttendances.length;
   const attendanceRate = totalDays > 0 ? Math.round(((presentDays + leaveDays + lateDays) / totalDays) * 100) : 100;
 
-  const childHomework = child ? homeworks.filter((h) => {
-    const childClassNorm = (child.class || "").toLowerCase().replace(/^class\s*/i, "").replace(/\s+/g, "");
-    const childSecNorm = (child.section || "").toLowerCase().trim();
-    const rawHwCS = (h.classSection || "").toLowerCase().trim();
-    if (!rawHwCS) return false;
-    const parts = rawHwCS.split("-").map((p: string) => p.replace(/^class\s*/i, "").trim());
-    const hwClass = parts[0];
-    const hwSec = parts[1] || "";
-    if (hwClass !== childClassNorm) return false;
-    if (!hwSec || hwSec === "all") return true;
-    return hwSec === childSecNorm;
-  }) : [];
+  const childHomework = child
+    ? homeworks.filter((h) => {
+        if (!h.classSection) return false;
+        return matchStudentToClass(child, h.classSection);
+      })
+    : [];
 
   return (
     <div className="space-y-4 sm:space-y-6 font-sans">
