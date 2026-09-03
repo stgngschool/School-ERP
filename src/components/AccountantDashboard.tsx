@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
@@ -136,6 +136,7 @@ export default function AccountantDashboard() {
   // Top KPI Metrics
   const myReceipts = receipts.filter(
     (r) =>
+      r.createdById === user?.id ||
       r.collectedBy === user?.name ||
       r.collectedBy === user?.email ||
       r.collectedBy === "Accountant"

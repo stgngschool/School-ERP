@@ -6,11 +6,13 @@ import { generateYearlyCharges, getAcademicYear } from "@/lib/generateYearlyChar
 import { getNextFamilyCode, getNextAdmissionNumber, getNextRollNumber, findMatchingParentProfile } from "@/lib/family";
 import { getAuthUser } from "@/lib/auth";
 import { boundPagination, getSafeErrorMessage } from "@/lib/validation";
+import { BoundedCache } from "@/lib/cache/BoundedCache";
 
 export const dynamic = "force-dynamic";
 
-const serverStudentsCache = new Map<string, { data: any; timestamp: number }>();
-const CACHE_TTL_MS = 25000; // 25 seconds
+// ── C-02 fix: Bounded LRU cache (max 30 entries, 25s TTL) replaces the
+// unbounded Map that could grow indefinitely, risking OOM.
+const serverStudentsCache = new BoundedCache(30, 25000);
 
 function clearServerStudentsCache() {
   serverStudentsCache.clear();
@@ -27,9 +29,9 @@ export async function GET(request: Request) {
     }
 
     const cacheKey = `${authUser.role}_${authUser.userId}`;
-    const cached = serverStudentsCache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-      return NextResponse.json(cached.data, {
+    const cachedData = serverStudentsCache.get(cacheKey);
+    if (cachedData) {
+      return NextResponse.json(cachedData, {
         headers: {
           "Cache-Control": "private, max-age=15, stale-while-revalidate=30",
           "X-Server-Cache": "HIT",
@@ -122,10 +124,7 @@ export async function GET(request: Request) {
       } : null,
     }));
 
-    serverStudentsCache.set(cacheKey, {
-      data: formatted,
-      timestamp: Date.now(),
-    });
+    serverStudentsCache.set(cacheKey, formatted);
 
     return NextResponse.json(formatted, {
       headers: {

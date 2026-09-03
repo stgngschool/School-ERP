@@ -8,10 +8,12 @@ import { getNextReceiptNumber } from "@/lib/family";
 import { getAcademicYear } from "@/lib/generateYearlyCharges";
 import { numberToIndianWords } from "@/lib/currency";
 import { validatePaisaAmount, getSafeErrorMessage } from "@/lib/validation";
+import { BoundedCache } from "@/lib/cache/BoundedCache";
 
-// Server-side in-memory cache for ultra-fast response times & zero Supabase overload
-const serverBillingCache = new Map<string, { data: any; timestamp: number }>();
-const CACHE_TTL_MS = 20000; // 20s TTL
+// ── C-02 fix: Bounded LRU cache (max 50 entries, 20s TTL) replaces the
+// unbounded Map that could grow indefinitely with varied query parameters,
+// risking an Out-of-Memory server crash via trivial DoS.
+const serverBillingCache = new BoundedCache(50, 20000);
 
 function clearServerBillingCache() {
   serverBillingCache.clear();
@@ -72,11 +74,11 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
     }
 
-    // ── RS-02 / RS-03: Include full request URL in cache key so filtered/search queries don't collide
+    // ── C-02 fix: BoundedCache.get() returns data directly (undefined if expired/missing)
     const cacheKey = `${authUser.role}_${authUser.userId}_${request.url}`;
-    const cached = serverBillingCache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-      return NextResponse.json(cached.data, {
+    const cachedData = serverBillingCache.get(cacheKey);
+    if (cachedData) {
+      return NextResponse.json(cachedData, {
         headers: {
           "Cache-Control": "private, max-age=10, stale-while-revalidate=20",
           "X-Server-Cache": "HIT",
@@ -629,10 +631,7 @@ export async function GET(request: Request) {
       },
     };
 
-    serverBillingCache.set(cacheKey, {
-      data: result,
-      timestamp: Date.now(),
-    });
+    serverBillingCache.set(cacheKey, result);
 
     return NextResponse.json(result, {
       headers: {

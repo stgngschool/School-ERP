@@ -46,11 +46,18 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
 
   const handleAddCustomCharge = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!chargeTitle || !chargeAmount || parseFloat(chargeAmount) <= 0) return;
+    // ── C-04 fix: Explicitly check for NaN — parseFloat("abc") returns NaN,
+    // and NaN <= 0 evaluates to false in JavaScript, bypassing the guard.
+    const parsedAmount = Number(chargeAmount);
+    if (!chargeTitle || !chargeAmount || isNaN(parsedAmount) || parsedAmount <= 0) return;
 
     setChargeError(null);
     setAddingCharge(true);
     try {
+      const amountInPaisa = toPaisa(parsedAmount);
+      // Double-check: toPaisa should produce a valid positive integer
+      if (!Number.isFinite(amountInPaisa) || amountInPaisa <= 0) return;
+
       const res = await fetch("/api/billing", {
         method: "POST",
         credentials: "include",
@@ -59,7 +66,7 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
           action: "ADD_CUSTOM_CHARGE",
           studentId,
           title: chargeTitle,
-          amount: toPaisa(parseFloat(chargeAmount)),
+          amount: amountInPaisa,
           headName: chargeHeadName,
         }),
       });

@@ -166,7 +166,13 @@ export default function FeeCollectTab({
     const concession = concessionByIdMap.get(student.concessionId);
     if (!concession || concession.percentage <= 0) return 0;
 
-    const feeHeadMatches = due.name.toLowerCase().includes(concession.feeHeadName.toLowerCase());
+    // ── C-08 fix: Prevent substring .includes() from matching 'Late Tuition Fine' when concession is for 'Tuition Fee'
+    const dueNameClean = (due.name || "").trim().toLowerCase();
+    const concHeadClean = (concession.feeHeadName || "").trim().toLowerCase();
+    const isExact = dueNameClean === concHeadClean;
+    const isPrefixed = dueNameClean.startsWith(`${concHeadClean} -`) || dueNameClean.startsWith(`${concHeadClean} (`);
+    const isMonthlyFee = concHeadClean.includes("tuition") && dueNameClean.includes("tuition") && !dueNameClean.includes("fine") && !dueNameClean.includes("late");
+    const feeHeadMatches = isExact || isPrefixed || isMonthlyFee;
     if (!feeHeadMatches) return 0;
 
     const baseChargeAmount = due.originalAmount || due.amount;

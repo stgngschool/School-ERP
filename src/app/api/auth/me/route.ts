@@ -52,6 +52,7 @@ export async function GET() {
         name: true,
         phone: true,
         status: true,
+        tokenVersion: true,
         parentProfile: { select: { id: true, familyCode: true } },
         teacherProfile: {
           select: {
@@ -73,6 +74,13 @@ export async function GET() {
       const duration = (performance.now() - startTime).toFixed(2);
       console.warn(`[DIAGNOSTIC][API][END] GET /api/auth/me [${reqId}] | status: 401 | duration: ${duration}ms | authenticated: false | reason: User not found in DB`);
       return noStoreJson({ authenticated: false }, { status: 401 });
+    }
+
+    // ── C-06 fix: Verify tokenVersion matches DB (catches password reset / logout revocation)
+    if (user.tokenVersion && (decoded.tokenVersion ?? 0) < user.tokenVersion) {
+      const duration = (performance.now() - startTime).toFixed(2);
+      console.warn(`[DIAGNOSTIC][API][END] GET /api/auth/me [${reqId}] | status: 401 | duration: ${duration}ms | authenticated: false | reason: Token revoked`);
+      return noStoreJson({ authenticated: false, error: "Session expired or revoked. Please login again." }, { status: 401 });
     }
 
     if (user.status === "BLOCKED") {

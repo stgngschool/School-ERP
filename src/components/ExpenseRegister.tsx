@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { PlusCircle, Receipt, Trash2, Calendar } from "lucide-react";
-import { formatP } from "@/lib/currency";
+import { formatP, toPaisa } from "@/lib/currency";
 
 export type Expense = {
   id: string;
@@ -26,24 +26,30 @@ export default function ExpenseRegister({ expenses, setExpenses }: ExpenseRegist
   const handleAddExpense = (e: React.FormEvent) => {
     e.preventDefault();
     if (!amount || !description) return;
-    
+
+    // ── C-03 fix: Validate for NaN before creating financial entry
+    const rupeeValue = parseFloat(amount);
+    if (isNaN(rupeeValue) || rupeeValue <= 0) return;
+
     const newExpense: Expense = {
       id: Math.random().toString(36).substr(2, 9),
       date: new Date().toISOString().slice(0, 10),
       category,
       description,
-      // store internally as paisa/cents for consistency with formatP
-      amount: parseFloat(amount) * 100, 
+      // ── C-03 fix: Use toPaisa() which does Math.round(rupees * 100) internally
+      // Prevents IEEE 754 floating-point errors (e.g. 19.99 * 100 = 1998.999...)
+      amount: toPaisa(rupeeValue),
       addedBy: "Accountant"
     };
 
-    setExpenses([newExpense, ...expenses]);
+    // ── H-07 fix: Use functional updater to prevent race condition on rapid submissions
+    setExpenses((prev) => [newExpense, ...prev]);
     setAmount("");
     setDescription("");
   };
 
   const handleDelete = (id: string) => {
-    setExpenses(expenses.filter(e => e.id !== id));
+    setExpenses((prev) => prev.filter(e => e.id !== id));
   };
 
   return (

@@ -148,10 +148,15 @@ export default function ParentFinanceTab({
     }
   };
 
-  const upiId = schoolInfo?.upiId || "school@upi";
+  const hasValidUpi = Boolean(schoolInfo?.upiId && schoolInfo.upiId.trim() !== "" && schoolInfo.upiId !== "school@upi");
+  const upiId = hasValidUpi ? schoolInfo!.upiId!.trim() : "";
   const upiAmountRupees = (paymentSubtotal / 100).toFixed(2);
-  const upiString = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(schoolInfo?.name || "School")}&am=${upiAmountRupees}&cu=INR&tn=${encodeURIComponent(`Fee payment for ${child?.name || "Student"}`)}`;
-  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(upiString)}`;
+  const upiString = hasValidUpi
+    ? `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(schoolInfo?.name || "School")}&am=${upiAmountRupees}&cu=INR&tn=${encodeURIComponent(`Fee payment for ${child?.name || "Student"}`)}`
+    : "";
+  const qrCodeUrl = hasValidUpi
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(upiString)}`
+    : "";
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in text-left pb-12 font-sans">
@@ -330,39 +335,50 @@ export default function ParentFinanceTab({
               </p>
             </div>
 
-            {/* UPI QR Code */}
-            <div className="flex flex-col items-center justify-center p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
-              <img
-                src={qrCodeUrl}
-                alt="UPI QR Code"
-                className="w-40 h-40 rounded-xl bg-white p-2 border border-slate-200 shadow-2xs"
-              />
-              <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">
-                Scan with any UPI App (GPay, PhonePe, Paytm)
-              </span>
-            </div>
+            {/* UPI QR Code or Warning */}
+            {hasValidUpi ? (
+              <div className="flex flex-col items-center justify-center p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+                <img
+                  src={qrCodeUrl}
+                  alt="UPI QR Code"
+                  className="w-40 h-40 rounded-xl bg-white p-2 border border-slate-200 shadow-2xs"
+                />
+                <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">
+                  Scan with any UPI App (GPay, PhonePe, Paytm)
+                </span>
+              </div>
+            ) : (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-center space-y-1">
+                <p className="text-xs font-bold text-amber-800">Online UPI Payment Not Active</p>
+                <p className="text-[10px] text-amber-700 font-medium">
+                  The school has not linked their official UPI VPA yet. Please submit your fee payment directly at the school accounts counter.
+                </p>
+              </div>
+            )}
 
             {/* Simulated Checkout Button */}
             <form onSubmit={handleSimulatePayment} className="space-y-3">
-              <div className="flex items-center gap-2">
-                <select
-                  value={payMethod}
-                  onChange={(e) => setPayMethod(e.target.value)}
-                  className="w-full text-xs font-bold py-2.5 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                >
-                  <option value="UPI">UPI / QR Code</option>
-                  <option value="CARD">Debit / Credit Card</option>
-                  <option value="NET_BANKING">Net Banking</option>
-                </select>
-              </div>
+              {hasValidUpi && (
+                <div className="flex items-center gap-2">
+                  <select
+                    value={payMethod}
+                    onChange={(e) => setPayMethod(e.target.value)}
+                    className="w-full text-xs font-bold py-2.5 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
+                  >
+                    <option value="UPI">UPI / QR Code</option>
+                    <option value="CARD">Debit / Credit Card</option>
+                    <option value="NET_BANKING">Net Banking</option>
+                  </select>
+                </div>
+              )}
 
               <button
                 type="submit"
-                disabled={payLoading}
-                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer shadow-md shadow-emerald-600/10 flex items-center justify-center gap-2"
+                disabled={payLoading || !hasValidUpi}
+                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-md shadow-emerald-600/10 flex items-center justify-center gap-2"
               >
                 {payLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-                {payLoading ? "Processing Payment..." : `Confirm Payment (${formatP(paymentSubtotal)})`}
+                {payLoading ? "Processing Payment..." : hasValidUpi ? `Confirm Payment (${formatP(paymentSubtotal)})` : "Payment Unavailable"}
               </button>
             </form>
           </div>
