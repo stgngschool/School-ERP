@@ -90,7 +90,7 @@ export default function HeroSection({ onOpenEnquiry }: HeroSectionProps) {
                   <Bus className="w-4 h-4" />
                 </div>
                 <h4 className="text-xs font-black text-slate-900">सुरक्षित वैन सेवा</h4>
-                <p className="text-[10px] text-slate-500 font-medium mt-0.5">सलारपुर, रसूलगढ़, सारनाथ</p>
+                <p className="text-[10px] text-slate-500 font-medium mt-0.5">सलारपुर, रसूलगढ़, दीनापुर</p>
               </div>
 
               <div className="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs">
@@ -124,7 +124,7 @@ export default function HeroSection({ onOpenEnquiry }: HeroSectionProps) {
 
             {/* Helper Route Notice */}
             <p className="text-[11px] text-slate-500 font-bold pt-1">
-              📍 सलारपुर, रसूलगढ़, सारनाथ एवं आशापुर मार्ग पर वैन सुविधा उपलब्ध • सत्र 2026-27 प्रवेश प्रारंभ
+              📍 सलारपुर, रसूलगढ़, दीनापुर, रघुनाथपुर एवं खालिसपुर मार्ग पर वैन सुविधा उपलब्ध • सत्र 2026-27 प्रवेश प्रारंभ
             </p>
           </div>
 
@@ -201,7 +201,7 @@ export default function HeroSection({ onOpenEnquiry }: HeroSectionProps) {
           <div className="p-3.5 sm:p-4 rounded-2xl bg-white border border-slate-200 shadow-xs">
             <div className="text-xl sm:text-2xl md:text-3xl font-black text-slate-900">500+</div>
             <div className="text-[11px] sm:text-xs font-extrabold text-slate-800 mt-0.5">संतुष्ट स्थानीय परिवार</div>
-            <p className="text-[9px] sm:text-[10px] text-slate-500 mt-0.5">सलारपुर, रसूलगढ़ व सारनाथ</p>
+            <p className="text-[9px] sm:text-[10px] text-slate-500 mt-0.5">सलारपुर, रसूलगढ़ व आसपास</p>
           </div>
         </div>
       </div>
