@@ -266,7 +266,7 @@ export default function Navbar({
             : "bg-white border-b border-slate-200/80 py-2.5 sm:py-3"
         }`}
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4">
           {/* 1. Left: School Brand & Crest */}
           <Link
             href="/"
@@ -276,22 +276,23 @@ export default function Navbar({
                 onTabSelect("HOME");
               }
             }}
-            className="flex items-center gap-3 group shrink-0"
+            className="flex items-center gap-2.5 sm:gap-3 group shrink-0 min-w-0"
           >
             <img
               src="/logo.png"
               alt="St. GNG School Logo"
-              className="h-10 sm:h-12 md:h-14 w-auto object-contain transition-transform duration-300 group-hover:scale-105 shrink-0"
+              className="h-9 sm:h-12 md:h-14 w-auto object-contain transition-transform duration-300 group-hover:scale-105 shrink-0"
               onError={(e) => {
                 (e.target as HTMLElement).style.display = "none";
               }}
             />
-            <div className="flex flex-col justify-center">
-              <span className="text-base sm:text-lg lg:text-xl font-black text-slate-900 tracking-tight leading-tight">
+            <div className="flex flex-col justify-center min-w-0">
+              <span className="text-sm sm:text-lg lg:text-xl font-black text-slate-900 tracking-tight leading-tight truncate">
                 St. G.N.G. School
               </span>
-              <p className="text-[10px] sm:text-[11px] font-bold text-slate-500 tracking-normal mt-0.5">
-                Salarpur, Varanasi • Estd. 2005 (Nursery to 8th)
+              <p className="text-[9px] sm:text-[11px] font-bold text-slate-500 tracking-normal mt-0.5 truncate">
+                <span className="sm:hidden">Salarpur, Varanasi</span>
+                <span className="hidden sm:inline">Salarpur, Varanasi • Estd. 2005 (Nursery to 8th)</span>
               </p>
             </div>
           </Link>
@@ -343,8 +344,8 @@ export default function Navbar({
             </div>
           </div>
 
-          {/* 3. Right: Action CTAs & Navigation Controls (Never clipped) */}
-          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+          {/* 3. Right: Action CTAs & Navigation Controls (Never clipped, comfortable breathing margin) */}
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0 pr-1 sm:pr-0">
             <button
               onClick={handleEnquiryClick}
               className="hidden md:flex px-3.5 py-2 rounded-xl text-xs font-extrabold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 shadow-xs transition-all cursor-pointer whitespace-nowrap items-center gap-1.5"
@@ -356,7 +357,7 @@ export default function Navbar({
             {/* Always-visible Portal Login Button */}
             <Link
               href={mounted && user && activeRole ? "/?view=erp" : "/login"}
-              className="px-3.5 sm:px-4 py-2 rounded-xl text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/20 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+              className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap mr-0.5 sm:mr-0"
             >
               <LogIn className="w-3.5 h-3.5" />
               <span>{mounted && user && activeRole ? "ERP Dashboard" : "Portal Login"}</span>
@@ -366,9 +367,9 @@ export default function Navbar({
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               aria-label="Toggle navigation"
-              className="xl:hidden p-2 rounded-xl text-slate-700 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer flex items-center justify-center shrink-0"
+              className="xl:hidden p-1.5 sm:p-2 rounded-xl text-slate-700 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer flex items-center justify-center shrink-0"
             >
-              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              {mobileMenuOpen ? <X className="w-4 h-4 sm:w-5 sm:h-5" /> : <Menu className="w-4 h-4 sm:w-5 sm:h-5" />}
             </button>
           </div>
         </div>

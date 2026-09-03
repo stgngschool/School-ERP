@@ -67,29 +67,31 @@ export default function HeroSection({ onOpenEnquiry }: HeroSectionProps) {
               </div>
             </div>
 
-            {/* ─── MOBILE-FIRST HERO PHOTO (Visible on Mobile/Tablet, hidden on Desktop) ─── */}
-            <div className="lg:hidden relative rounded-2xl overflow-hidden border-2 border-white shadow-md bg-slate-900 my-3">
-              <img
-                src={getOptimizedImageUrl(heroImage, 800)}
-                alt="St. G.N.G. School Building Salarpur Varanasi"
-                className="w-full h-52 sm:h-64 object-cover object-top"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = "/images/st_gng_school_building.jpg";
-                }}
-              />
-              {/* Top Pill on Mobile Image */}
-              <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none">
-                <span className="px-2.5 py-0.5 rounded-lg bg-slate-950/80 backdrop-blur-md text-amber-300 text-[9px] font-black uppercase tracking-wider border border-white/20">
-                  🏛️ Estd. 2005
-                </span>
-                <span className="px-2.5 py-0.5 rounded-lg bg-emerald-700/90 backdrop-blur-md text-white text-[9px] font-black uppercase tracking-wider border border-emerald-400/30">
-                  Govt. Recognized
-                </span>
-              </div>
-              {/* Bottom Gradient Label */}
-              <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-slate-950/95 via-slate-950/60 to-transparent p-3 pt-6 text-white text-left">
-                <p className="text-xs font-black text-amber-300">St. G.N.G. School Campus</p>
-                <p className="text-[10px] text-slate-200">सलारपुर, रसूलगढ़ (वाराणसी) • नर्सरी से 8वीं</p>
+            {/* ─── MOBILE-FIRST HERO PHOTO (Full 4-story building visible without clipping) ─── */}
+            <div className="lg:hidden relative rounded-2xl overflow-hidden border-2 border-white shadow-md bg-slate-950 my-3">
+              <div className="relative aspect-[4/3.9] w-full">
+                <img
+                  src={getOptimizedImageUrl(heroImage, 800)}
+                  alt="St. G.N.G. School Building Salarpur Varanasi"
+                  className="w-full h-full object-cover object-center"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = "/images/st_gng_school_building.jpg";
+                  }}
+                />
+                {/* Top Pill on Mobile Image */}
+                <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none">
+                  <span className="px-2.5 py-0.5 rounded-lg bg-slate-950/80 backdrop-blur-md text-amber-300 text-[9px] font-black uppercase tracking-wider border border-white/20">
+                    🏛️ Estd. 2005
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-lg bg-emerald-700/90 backdrop-blur-md text-white text-[9px] font-black uppercase tracking-wider border border-emerald-400/30">
+                    Govt. Recognized
+                  </span>
+                </div>
+                {/* Bottom Gradient Label */}
+                <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-slate-950/95 via-slate-950/60 to-transparent p-3 pt-6 text-white text-left">
+                  <p className="text-xs font-black text-amber-300">St. G.N.G. School Campus</p>
+                  <p className="text-[10px] text-slate-200">सलारपुर, रसूलगढ़ (वाराणसी) • नर्सरी से 8वीं</p>
+                </div>
               </div>
             </div>
 

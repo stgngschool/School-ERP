@@ -179,10 +179,10 @@ body {
 }
 
 /* ─────────────────────────────────────────
-   MOBILE BODY PADDING FOR BOTTOM NAV
+   MOBILE BODY PADDING FOR BOTTOM NAV (Only on pages with bottom nav)
 ───────────────────────────────────────── */
 @media (max-width: 767px) {
-  body {
+  body:has(.mobile-bottom-nav) {
     padding-bottom: calc(var(--bottom-nav-height) + var(--safe-bottom));
   }
 }
