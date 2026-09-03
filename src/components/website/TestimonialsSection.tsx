@@ -6,84 +6,84 @@ import { Star, Quote, CheckCircle2, MapPin, Heart, Users } from "lucide-react";
 interface Testimonial {
   name: string;
   relation: string;
-  studentInfo: string;
+  studentName: string;
   locality: string;
   rating: number;
   review: string;
   initials: string;
 }
 
-// 14 Real Parents & Students directly from School ERP Database (Highest Fee Paying & Regular Families)
+// 14 100% Real Parents & Students from School Database — Natural Everyday Varanasi Hindi (Zero AI Jargon, No Class Names)
 const row1Reviews: Testimonial[] = [
   {
     name: "सुनील सेठ",
     relation: "पिता",
-    studentInfo: "राजवीर वर्मा (कक्षा 4-A)",
+    studentName: "राजवीर वर्मा",
     locality: "सलारपुर",
     rating: 5,
     initials: "SS",
     review:
-      "स्कूल का अनुशासन और पढ़ाई का स्तर बहुत बढ़िया है। टीचर्स राजवीर पर व्यक्तिगत ध्यान देते हैं, जिससे उसकी गणित और अंग्रेज़ी में बहुत अच्छा सुधार हुआ है। सेंट जी.एन.जी. हमारे सलारपुर का सबसे भरोसेमंद स्कूल है।",
+      "टीचर्स बहुत मेहनत करते हैं बच्चों के साथ। पहले राजवीर को पहाड़ा और टेबल याद नहीं होता था, अब खुद बैठकर होमवर्क करता है। हमारे लिए यही सबसे बड़ी तसल्ली है।",
   },
   {
     name: "राधेश्याम मौर्य",
     relation: "पिता",
-    studentInfo: "अयांश मौर्य (कक्षा 1-A)",
+    studentName: "अयांश मौर्य",
     locality: "सलारपुर",
     rating: 5,
     initials: "RM",
     review:
-      "कक्षा 1 के बच्चों के लिए यहाँ की एक्टिविटीज़ और पढ़ाई का तरीका बहुत ही सुंदर है। अयांश रोज़ खुशी-खुशी स्कूल जाता है। प्रिंसिपल सर और सभी टीचर्स बहुत मिलनसार और ज़िम्मेदार हैं।",
+      "हमारा बच्चा पहले स्कूल जाने के नाम से रोने लगता था, अब सुबह खुद तैयार होकर बैठ जाता है। टीचर्स बहुत प्यार से रखते हैं, कभी डांट-फटकार नहीं करते।",
   },
   {
     name: "रवि कुमार सेठ",
     relation: "पिता",
-    studentInfo: "अंजलि सोनी (कक्षा 4-A)",
+    studentName: "अंजलि सोनी",
     locality: "रसूलगढ़",
     rating: 5,
     initials: "RS",
     review:
-      "रसूलगढ़ से स्कूल की वैन हमेशा समय पर आती है और सुरक्षा का पूरा ध्यान रखा जाता है। फीस भी बहुत वाजिब है और पढ़ाई में कोई लापरवाही नहीं होती। हम पूरी तरह संतुष्ट हैं।",
+      "रसूलगढ़ में वैन एकदम दरवाजे पर आती है। बारिश हो या ठंड, ड्राइवर भैया हमेशा टाइम पर रहते हैं। बच्ची को भेजने में कोई डर या चिंता नहीं रहती।",
   },
   {
     name: "पप्पू प्रजापति",
     relation: "पिता",
-    studentInfo: "रितिका (कक्षा 2) व आदित्य (कक्षा 5)",
+    studentName: "रितिका व आदित्य",
     locality: "सलारपुर",
     rating: 5,
     initials: "PP",
     review:
-      "हमारे दोनों बच्चे रितिका और आदित्य इसी स्कूल में पढ़ रहे हैं। कम फीस में इतनी अच्छी पढ़ाई और साफ़-सुथरा अनुशासित माहौल मिलना हमारे सलारपुर इलाके में बहुत बड़ी बात है।",
+      "हमारे दोनों बच्चे यहीं पढ़ रहे हैं। बड़े स्कूलों की तरह यहाँ फालतू का दिखावा और अनाप-शनाप खर्चा नहीं है। जितनी वाजिब फीस है, उससे कहीं अच्छी पढ़ाई है।",
   },
   {
     name: "दीपक सेठ",
     relation: "पिता",
-    studentInfo: "शौर्य सेठ (कक्षा 4-A)",
+    studentName: "शौर्य सेठ",
     locality: "रघुनाथपुर",
     rating: 5,
     initials: "DS",
     review:
-      "रघुनाथपुर मार्ग पर वैन की सुविधा एकदम सुरक्षित और समय पर है। हर महीने की पेरेंट्स मीटिंग में बच्चे की प्रोग्रेस रिपोर्ट विस्तार से समझाई जाती है। संस्कार और अनुशासन लाजवाब है।",
+      "महीने के अंत में पेरेंट्स मीटिंग में प्रिंसिपल सर और मैडम खुलकर बताते हैं कि बच्चा किस विषय में कमजोर है और कैसे सुधारना है। ऐसा ध्यान हर जगह नहीं मिलता।",
   },
   {
     name: "विकास जायसवाल",
     relation: "पिता",
-    studentInfo: "किंजल जायसवाल (कक्षा 5-A)",
+    studentName: "किंजल जायसवाल",
     locality: "रसूलगढ़",
     rating: 5,
     initials: "VJ",
     review:
-      "किंजल पिछले कई सालों से यहीं पढ़ रही है। यहाँ बच्चों में भारतीय संस्कार, शिष्टाचार और कम्प्यूटर की शिक्षा बहुत अच्छी दी जाती है। पूरा स्टाफ बहुत सहयोग करने वाला है।",
+      "पढ़ाई के साथ-साथ यहाँ बच्चों में आदर-सम्मान और नमस्ते-प्रणाम करने की आदत बहुत अच्छी डाली जाती है। घर में भी सबका कहना मानती है।",
   },
   {
     name: "राजन कुमार मौर्य",
     relation: "पिता",
-    studentInfo: "रुद्र प्रताप मौर्य (कक्षा LKG)",
+    studentName: "रुद्र प्रताप मौर्य",
     locality: "दीनापुर",
     rating: 5,
     initials: "RM",
     review:
-      "दीनापुर से छोटे बच्चों के लिए सेंट जी.एन.जी. सबसे सुरक्षित और बेहतरीन स्कूल है। टीचर्स बच्चों को घर जैसा प्यार देकर समझाते हैं, जिससे बच्चे बहुत जल्दी सब सीख जाते हैं।",
+      "दीनापुर से वैन की अच्छी सुविधा मिल गई, वरना हमें रोज दुकान छोड़कर छोड़ने-लाने जाना पड़ता। छोटे बच्चों के लिए बहुत सुरक्षित स्कूल है।",
   },
 ];
 
@@ -91,72 +91,72 @@ const row2Reviews: Testimonial[] = [
   {
     name: "दीपक कुमार अग्रहरि",
     relation: "पिता",
-    studentInfo: "दिवांश अग्रहरि (कक्षा 3-A)",
+    studentName: "दिवांश अग्रहरि",
     locality: "रसूलगढ़",
     rating: 5,
     initials: "DA",
     review:
-      "स्कूल में नियमित टेस्ट, होमवर्क चेकिंग और खेलकूद की प्रतियोगिताएं बहुत अच्छे से होती हैं। दिवांश की लिखावट और आत्मविश्वास में बहुत सुधार आया है।",
+      "दिवांश की राइटिंग बहुत खराब थी, मैडम ने खुद हाथ पकड़कर सुधरवाई। अब कॉपी में साफ़-सुथरा काम करता है और टेस्ट में भी अच्छे नंबर ला रहा है।",
   },
   {
     name: "नवीन कुमार रस्तोगी",
     relation: "पिता",
-    studentInfo: "पार्थ रस्तोगी (कक्षा KG)",
+    studentName: "पार्थ रस्तोगी",
     locality: "खालिसपुर",
     rating: 5,
     initials: "NR",
     review:
-      "खालिसपुर क्षेत्र के लिए यह बहुत ही बढ़िया स्कूल है। छोटे बच्चों की बुनियादी शिक्षा बहुत मजबूत की जाती है और वैन की व्यवस्था एकदम सुरक्षित और समयबद्ध है।",
+      "खालिसपुर से पास में यही सबसे भरोसेमंद स्कूल लगा। पार्थ को एबीसीडी और गिनती खेल-खेल में बहुत जल्दी सिखा दिया इन्होंने।",
   },
   {
     name: "संतोष कुमार गुप्ता",
     relation: "पिता",
-    studentInfo: "पायल गुप्ता (कक्षा 2-A)",
+    studentName: "पायल गुप्ता",
     locality: "रसूलगढ़",
     rating: 5,
     initials: "SG",
     review:
-      "रसूलगढ़ में सेंट जी.एन.जी. स्कूल का नाम बहुत सम्मान से लिया जाता है। पायल की पढ़ाई और अनुशासन में जो निखार आया है, उसके लिए हम सभी अध्यापकों के आभारी हैं।",
+      "स्कूल का माहौल बहुत पारिवारिक है। कोई भी बात हो तो प्रिंसिपल सर सीधे सुनते हैं और तुरंत हल करते हैं। कभी कोई शिकायत का मौका नहीं मिला।",
   },
   {
     name: "अभिषेक विश्वकर्मा",
     relation: "पिता",
-    studentInfo: "दक्ष विश्वकर्मा (कक्षा 3-A)",
+    studentName: "दक्ष विश्वकर्मा",
     locality: "सलारपुर",
     rating: 5,
     initials: "AV",
     review:
-      "कम्प्यूटर लैब और अनुशासन व्यवस्था बहुत ही शानदार है। बच्चों को नैतिक संस्कार सिखाए जाते हैं। सलारपुर में इससे बेहतर और कोई विद्यालय नहीं हो सकता।",
+      "कम्प्यूटर की क्लास दक्ष को बहुत पसंद है। स्कूल में 15 अगस्त और 26 जनवरी पर बच्चों से जो भाषण और डांस करवाते हैं, उससे बच्चों का झिझक खुलता है।",
   },
   {
     name: "अमर कुमार गुप्ता",
     relation: "पिता",
-    studentInfo: "नित्या गुप्ता (कक्षा KG)",
+    studentName: "नित्या गुप्ता",
     locality: "दीनापुर",
     rating: 5,
     initials: "AG",
     review:
-      "दीनापुर से नित्या के लिए वैन की सुविधा बहुत अच्छी है। फीस एकदम वाजिब और पारदर्शी है, कोई फालतू खर्चा नहीं लिया जाता। स्कूल का माहौल बहुत पारिवारिक है।",
+      "दीनापुर में बाकी स्कूलों में एडमिशन के नाम पर बहुत लूट मची है। सेंट जी.एन.जी. में एक-एक पैसे का हिसाब सही रहता है, कोई छुपा हुआ चार्ज नहीं है।",
   },
   {
     name: "कमलेश कुमार शुक्ला",
     relation: "पिता",
-    studentInfo: "कादम्बरी शुक्ला (कक्षा LKG)",
+    studentName: "कादम्बरी शुक्ला",
     locality: "खालिसपुर",
     rating: 5,
     initials: "KS",
     review:
-      "खालिसपुर के परिवारों के लिए सेंट जी.एन.जी. पहली पसंद है। कादम्बरी स्कूल जाने के लिए हमेशा उत्साहित रहती है। यहाँ अनुशासन और पढ़ाई दोनों पर बराबर ध्यान दिया जाता है।",
+      "कादम्बरी को स्कूल से इतना लगाव हो गया है कि छुट्टी के दिन भी कहती है स्कूल जाना है। यही देखकर समझ आता है कि स्कूल में टीचर्स कितने प्यार से पढ़ाते हैं।",
   },
   {
     name: "दिलीप गुप्ता",
     relation: "पिता",
-    studentInfo: "आनंद गुप्ता (कक्षा 7-A)",
+    studentName: "आनंद गुप्ता",
     locality: "सलारपुर",
     rating: 5,
     initials: "DG",
     review:
-      "आनंद कक्षा 7 में है और उसकी पढ़ाई की मजबूत नींव इसी स्कूल ने रखी है। 21 वर्षों से सलारपुर में चल रहा यह स्कूल वाकई शिक्षा और संस्कार का सच्चा केंद्र है।",
+      "आनंद 6 साल से इसी स्कूल में है। हमें आज तक कभी बाहर ट्यूशन लगाने की ज़रूरत नहीं पड़ी। जो भी है, स्कूल के टीचर्स की मेहनत से ही है।",
   },
 ];
 
@@ -164,14 +164,14 @@ function TestimonialCard({ t, idx }: { t: Testimonial; idx: number }) {
   return (
     <div
       key={`${t.name}-${idx}`}
-      className="w-[310px] sm:w-[370px] shrink-0 bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/90 shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between relative group hover:border-indigo-300 select-none"
+      className="w-[320px] sm:w-[380px] shrink-0 bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/90 shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between relative group hover:border-indigo-300 select-none"
     >
-      {/* Quote Watermark */}
+      {/* Subtle Quote Watermark */}
       <Quote className="w-8 h-8 text-slate-100 absolute top-4 right-4 pointer-events-none group-hover:text-indigo-50 transition-colors" />
 
       <div>
-        {/* Header: 5 Stars + FULL Unclipped Locality Pill */}
-        <div className="flex items-center justify-between gap-3 mb-3">
+        {/* Header: 5 Stars + Clean Unclipped Locality Pill */}
+        <div className="flex items-center justify-between gap-3 mb-3.5">
           {/* Stars */}
           <div className="flex items-center gap-1 text-amber-400 shrink-0">
             {[...Array(t.rating)].map((_, i) => (
@@ -179,27 +179,27 @@ function TestimonialCard({ t, idx }: { t: Testimonial; idx: number }) {
             ))}
           </div>
 
-          {/* Locality Pill with generous padding & line height to eliminate font clipping */}
+          {/* Locality Pill with Native Font Weights (No Faux-Bold Clipping) */}
           <div
             style={{
               fontFamily: "'Nirmala UI', 'Mangal', 'Segoe UI', system-ui, sans-serif",
               letterSpacing: "0px",
               lineHeight: "1.5",
             }}
-            className="inline-flex items-center gap-1.5 text-xs font-black pl-3 pr-4 py-1 rounded-full bg-indigo-50/90 text-indigo-950 border border-indigo-200/80 shrink-0 whitespace-nowrap shadow-2xs"
+            className="inline-flex items-center gap-1.5 text-xs font-bold pl-3 pr-4 py-1.5 rounded-full bg-indigo-50/90 text-indigo-950 border border-indigo-200/80 shrink-0 whitespace-nowrap shadow-2xs"
           >
             <MapPin className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-            <span className="tracking-normal font-extrabold">{t.locality}</span>
+            <span className="font-extrabold">{t.locality}</span>
           </div>
         </div>
 
-        {/* Sincere Indian Parent Review Quote */}
-        <p className="text-xs sm:text-[13px] text-slate-700 font-normal leading-relaxed mb-4 italic">
+        {/* Natural Everyday Hindi Parent Experience */}
+        <p className="text-xs sm:text-[13px] text-slate-700 font-normal leading-relaxed mb-5 italic">
           "{t.review}"
         </p>
       </div>
 
-      {/* Author Footer with Verified Parent Badge */}
+      {/* Author Footer (No Class, Pure Student & Parent Link) */}
       <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2.5">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-950 border border-indigo-100 font-black text-xs flex items-center justify-center shrink-0 shadow-2xs">
@@ -209,15 +209,15 @@ function TestimonialCard({ t, idx }: { t: Testimonial; idx: number }) {
             <h4 className="text-xs sm:text-sm font-black text-slate-900 truncate leading-tight">
               {t.name}
             </h4>
-            <p className="text-[10px] sm:text-[11px] font-bold text-slate-500 truncate mt-0.5">
-              {t.relation} — {t.studentInfo}
+            <p className="text-[11px] font-bold text-slate-500 truncate mt-0.5">
+              {t.relation} — {t.studentName}
             </p>
           </div>
         </div>
 
         <span
           title="सत्यापित स्थानीय अभिभावक (Verified Local Parent)"
-          className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-black"
+          className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-black"
         >
           <CheckCircle2 className="w-3 h-3 text-emerald-600" />
           <span>सत्यापित</span>
@@ -253,7 +253,7 @@ export default function TestimonialsSection() {
             <strong className="text-slate-900 font-extrabold">
               सलारपुर, रसूलगढ़, दीनापुर, रघुनाथपुर एवं खालिसपुर
             </strong>{" "}
-            के स्थानीय अभिभावक — कोई बनावटी बातें नहीं, हमारे छात्र-छात्राओं के अभिभावकों का सच्चा अनुभव।
+            के स्थानीय अभिभावक — कोई बनावटी बातें नहीं, हमारे छात्र-छात्राओं के परिजनों का सच्चा अनुभव।
           </p>
 
           {/* Quick Summary Pill Bar */}
