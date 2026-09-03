@@ -13,6 +13,7 @@ import GallerySection from "./GallerySection";
 import ContactSection from "./ContactSection";
 import PrincipalMessage from "./PrincipalMessage";
 import ParentQuickDesk from "./ParentQuickDesk";
+import TestimonialsSection from "./TestimonialsSection";
 import Footer from "./Footer";
 import AdmissionModal from "./AdmissionModal";
 import PageHeader from "./PageHeader";
@@ -443,6 +444,9 @@ export default function SchoolWebsite({
                 </div>
               </div>
             </section>
+
+            {/* Real Varanasi / Salarpur Parent Testimonials */}
+            <TestimonialsSection />
 
             {/* YouTube Featured Teaser in Gallery */}
             <section className="py-14 bg-white border-b border-slate-200/80">
