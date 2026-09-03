@@ -204,10 +204,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Name, username, email, password, and role are required." }, { status: 400 });
     }
 
-    // Check if username/email already exists
+    const cleanName = name.trim();
+    const cleanUsername = username.trim().toLowerCase();
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPassword = password.trim();
+    const cleanPhone = phone ? phone.trim() : null;
+    const cleanEmployeeId = employeeId ? employeeId.trim() : undefined;
+
+    // Check if username/email already exists (case-insensitive)
     const existing = await db.user.findFirst({
       where: {
-        OR: [{ username }, { email }]
+        OR: [
+          { username: { equals: cleanUsername, mode: "insensitive" } },
+          { email: { equals: cleanEmail, mode: "insensitive" } }
+        ]
       }
     });
     if (existing) {
@@ -215,27 +225,27 @@ export async function POST(request: Request) {
     }
 
     // ── U-03: Validate uniqueness of custom employeeId if provided
-    if (employeeId) {
+    if (cleanEmployeeId) {
       const [existingTch, existingAcc] = await Promise.all([
-        db.teacherProfile.findUnique({ where: { employeeId } }),
-        db.accountantProfile.findUnique({ where: { employeeId } }),
+        db.teacherProfile.findUnique({ where: { employeeId: cleanEmployeeId } }),
+        db.accountantProfile.findUnique({ where: { employeeId: cleanEmployeeId } }),
       ]);
       if (existingTch || existingAcc) {
-        return NextResponse.json({ error: `Employee ID "${employeeId}" is already in use.` }, { status: 400 });
+        return NextResponse.json({ error: `Employee ID "${cleanEmployeeId}" is already in use.` }, { status: 400 });
       }
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(cleanPassword, 10);
 
     const newUser = await db.$transaction(async (tx) => {
       const u = await tx.user.create({
         data: {
-          name,
-          username,
-          email,
+          name: cleanName,
+          username: cleanUsername,
+          email: cleanEmail,
           passwordHash,
           role,
-          phone
+          phone: cleanPhone
         }
       });
 

@@ -68,7 +68,7 @@ const getNavItems = (activeRole: string): NavItem[] => {
     case "TEACHER":
       return [
         { category: "Daily Academics", name: "Mark Attendance", shortName: "Attendance", icon: UserCheck, tab: "attendance" },
-        { category: "Daily Academics", name: "Marks & Exam Roster", shortName: "Marks", icon: GraduationCap, tab: "marks" },
+        { category: "Daily Academics", name: "Class Marks Entry", shortName: "Marks", icon: GraduationCap, tab: "marks" },
         { category: "Daily Academics", name: "Upload Homework", shortName: "Homework", icon: BookOpen, tab: "homework" },
         { category: "Daily Academics", name: "Fee Status & Dues", shortName: "Fee Dues", icon: AlertTriangle, tab: "defaulters" },
         { category: "Daily Academics", name: "Leave Requests", shortName: "Leaves", icon: FileText, tab: "leaves" },
@@ -86,7 +86,7 @@ const getNavItems = (activeRole: string): NavItem[] => {
         { category: "Overview", name: "Admin Dashboard", shortName: "Dashboard", icon: LayoutDashboard, tab: "dashboard" },
         { category: "Student & Academics", name: "Student Management", shortName: "Students", icon: Users, tab: "students" },
         { category: "Student & Academics", name: "Attendance Console", shortName: "Attendance", icon: UserCheck, tab: "attendance" },
-        { category: "Student & Academics", name: "Marks & Exam Roster", shortName: "Marks", icon: GraduationCap, tab: "marks" },
+        { category: "Student & Academics", name: "Class Marks Entry", shortName: "Marks", icon: GraduationCap, tab: "marks" },
         { category: "Student & Academics", name: "Print Marksheets", shortName: "Marksheets", icon: Printer, tab: "print_marksheets", desktopOnly: true },
         { category: "Student & Academics", name: "ID Cards & Photos", shortName: "ID Cards", icon: UserCheck, tab: "idcards", desktopOnly: true },
         { category: "Finance & Fees", name: "Fee Collection", shortName: "Collect", icon: CreditCard, tab: "collect" },
@@ -136,7 +136,7 @@ const getMegaMenuData = (activeRole: string): MegaMenuCategory[] => {
             { name: "New Admission", tab: "students", mode: "single" },
             { name: "Bulk Import (CSV)", tab: "students", mode: "bulk" },
             { name: "Attendance Console", tab: "attendance" },
-            { name: "Marks & Exam Roster", tab: "marks" },
+            { name: "Class Marks Entry", tab: "marks" },
             { name: "Print Marksheets", tab: "print_marksheets" },
             { name: "ID Cards & Photos", tab: "idcards" },
           ]

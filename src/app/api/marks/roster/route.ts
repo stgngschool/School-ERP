@@ -40,6 +40,12 @@ export async function GET(request: Request) {
       });
     }
 
+    let targetSessionId: string | null = sessionId;
+    if (!targetSessionId) {
+      const currentSession = await db.academicSession.findFirst({ where: { isCurrent: true } });
+      targetSessionId = currentSession ? currentSession.id : null;
+    }
+
     const whereClause: any = {
       examName: { equals: examName, mode: "insensitive" },
       subject: { equals: subject, mode: "insensitive" },
@@ -49,8 +55,8 @@ export async function GET(request: Request) {
         }
       }
     };
-    if (sessionId) {
-      whereClause.sessionId = sessionId;
+    if (targetSessionId) {
+      whereClause.sessionId = targetSessionId;
     }
 
     const marks = await db.mark.findMany({

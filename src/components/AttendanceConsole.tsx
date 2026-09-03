@@ -304,7 +304,7 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
                   activeView === "ROSTER" ? "bg-white text-slate-900 shadow-2xs font-black" : "text-slate-500"
                 }`}
               >
-                Roster
+                Daily List
               </button>
               <button
                 onClick={() => setActiveView("MONTHLY")}
@@ -355,7 +355,7 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
             disabled={isSaving}
             className="hidden sm:inline-flex bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer shadow-xs disabled:opacity-50"
           >
-            {isSaving ? "Saving..." : "Save Roster"}
+            {isSaving ? "Saving..." : "Save Attendance"}
           </button>
         </div>
       </div>
@@ -571,7 +571,7 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
             className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-slate-950 font-black h-11 px-5 rounded-xl text-xs transition-all shrink-0 shadow-md cursor-pointer"
           >
             <Save className="h-4 w-4" />
-            <span>{isSaving ? "Saving..." : "Save Roster"}</span>
+            <span>{isSaving ? "Saving..." : "Save Attendance"}</span>
           </button>
         </div>
       </div>

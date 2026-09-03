@@ -473,15 +473,18 @@ function SingleMarksheetCard({
     const subMarks = sMarks.filter((m) => m.subject.toUpperCase() === subName.toUpperCase());
     const t1Match = subMarks.find((m) => {
       const e = m.examName.toLowerCase();
-      return e.includes("half") || e.includes("term 1") || e.includes("term-1") || e.includes("unit 1") || e.includes("unit-1");
+      return e.includes("half") || e.includes("term 1") || e.includes("term-1");
+    }) || subMarks.find((m) => {
+      const e = m.examName.toLowerCase();
+      return e.includes("unit 1") || e.includes("unit-1");
     });
     let prAct1 = 0, noteBook1 = 0, subEnri1 = 0, halfYearly1 = 0, obt1 = 0;
     if (t1Match) {
       const b1 = t1Match.breakdown || {};
-      prAct1 = b1["Practical / Activity"] !== undefined ? parseFloat(b1["Practical / Activity"]) : (t1Match.practical ?? 0);
-      noteBook1 = b1["Notebook"] !== undefined ? parseFloat(b1["Notebook"]) : (t1Match.notebook ?? 0);
-      subEnri1 = b1["Subject Enrichment"] !== undefined ? parseFloat(b1["Subject Enrichment"]) : (t1Match.subjectEnrichment ?? 0);
-      halfYearly1 = b1["Written Exam"] !== undefined ? parseFloat(b1["Written Exam"]) : (t1Match.writtenExam ?? Math.max(0, t1Match.marksObtained - prAct1 - noteBook1 - subEnri1));
+      prAct1 = Number(b1["Practical / Activity"] ?? b1["Pr. Act."] ?? b1["Practical"] ?? t1Match.practical ?? 0);
+      noteBook1 = Number(b1["Notebook"] ?? b1["Note Book"] ?? t1Match.notebook ?? 0);
+      subEnri1 = Number(b1["Subject Enrichment"] ?? b1["Sub. Enrich."] ?? t1Match.subjectEnrichment ?? 0);
+      halfYearly1 = Number(b1["Written Exam"] ?? b1["Written"] ?? (t1Match.writtenExam ?? Math.max(0, t1Match.marksObtained - prAct1 - noteBook1 - subEnri1)));
       obt1 = prAct1 + noteBook1 + subEnri1 + halfYearly1;
     } else if (subMarks.length > 0) {
        // fallback if they just entered some exam
@@ -492,24 +495,25 @@ function SingleMarksheetCard({
 
     const t2Match = subMarks.find((m) => {
       const e = m.examName.toLowerCase();
-      return e.includes("annual") || e.includes("yearly") || e.includes("term 2") || e.includes("term-2") || e.includes("final");
+      if (e.includes("half")) return false; // Never match Half Yearly as Term 2
+      return e.includes("annual") || e.includes("final") || e.includes("term 2") || e.includes("term-2") || e.includes("yearly");
+    }) || subMarks.find((m) => {
+      const e = m.examName.toLowerCase();
+      return e.includes("unit 2") || e.includes("unit-2");
     });
     let prAct2 = 0, noteBook2 = 0, subEnri2 = 0, yearly2 = 0, obt2 = 0;
     if (t2Match) {
       const b2 = t2Match.breakdown || {};
-      prAct2 = b2["Practical / Activity"] !== undefined ? parseFloat(b2["Practical / Activity"]) : (t2Match.practical ?? 0);
-      noteBook2 = b2["Notebook"] !== undefined ? parseFloat(b2["Notebook"]) : (t2Match.notebook ?? 0);
-      subEnri2 = b2["Subject Enrichment"] !== undefined ? parseFloat(b2["Subject Enrichment"]) : (t2Match.subjectEnrichment ?? 0);
-      yearly2 = b2["Written Exam"] !== undefined ? parseFloat(b2["Written Exam"]) : (t2Match.writtenExam ?? Math.max(0, t2Match.marksObtained - prAct2 - noteBook2 - subEnri2));
+      prAct2 = Number(b2["Practical / Activity"] ?? b2["Pr. Act."] ?? b2["Practical"] ?? t2Match.practical ?? 0);
+      noteBook2 = Number(b2["Notebook"] ?? b2["Note Book"] ?? t2Match.notebook ?? 0);
+      subEnri2 = Number(b2["Subject Enrichment"] ?? b2["Sub. Enrich."] ?? t2Match.subjectEnrichment ?? 0);
+      yearly2 = Number(b2["Written Exam"] ?? b2["Written"] ?? (t2Match.writtenExam ?? Math.max(0, t2Match.marksObtained - prAct2 - noteBook2 - subEnri2)));
       obt2 = prAct2 + noteBook2 + subEnri2 + yearly2;
-    } else if (subMarks.length > 1) {
+    } else if (subMarks.length > 1 && subMarks[1] !== t1Match) {
        // fallback to second exam if t2 not found
        const m = subMarks[1];
        obt2 = m.marksObtained;
        yearly2 = m.marksObtained;
-    } else if (subMarks.length === 1 && !t1Match) {
-       // if only one exam was found and it didn't match t1, put it in t2? 
-       // Or just leave it in t1 as we did above.
     }
 
     // Calculate dynamic max marks based on active terms (100 per conducted term or recorded maxMarks)

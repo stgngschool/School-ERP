@@ -115,9 +115,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, count: upserts.length });
   } catch (error: any) {
     console.error("Bulk save student marks error:", error);
-    const safeMsg = error?.message && error.message.includes("Invalid marks")
+    const isValidationError = error?.message && error.message.includes("Invalid marks");
+    const safeMsg = isValidationError
       ? error.message
-      : "Failed to save student marks.";
-    return NextResponse.json({ error: safeMsg }, { status: 500 });
+      : "Failed to save student marks. Please try again.";
+    return NextResponse.json({ error: safeMsg }, { status: isValidationError ? 400 : 500 });
   }
 }

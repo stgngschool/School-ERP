@@ -20,7 +20,6 @@ import {
   MessageSquare,
   AlertTriangle,
   CheckCircle2,
-  DollarSign,
   ChevronRight,
   GraduationCap,
 } from "lucide-react";
@@ -227,7 +226,7 @@ export default function TeacherDashboard() {
       ) : currentTab === "marks" ? (
         <MarksFeedingConsole />
       ) : currentTab === "attendance" ? (
-        <AttendanceConsole initialClass={selectedClass} hideClassSelector={true} />
+        <AttendanceConsole initialClass={selectedClass} hideClassSelector={false} />
       ) : (
         <div className="bg-white border-y sm:border border-slate-200 sm:rounded-2xl shadow-sm overflow-hidden">
 
@@ -422,7 +421,6 @@ export default function TeacherDashboard() {
 
             // Defaulters only list (unpaid dues up to current month)
             const defaultersOnly = studentFeeStats.filter((item) => item.isDefaulter);
-            const totalClassDues = defaultersOnly.reduce((sum, item) => sum + item.totalDue, 0);
             const defaultersCount = defaultersOnly.length;
             const clearedCount = studentFeeStats.length - defaultersCount;
 
@@ -478,17 +476,7 @@ export default function TeacherDashboard() {
                 </div>
 
                 {/* Summary KPI Cards (Compact & Responsive) */}
-                <div className="grid grid-cols-3 gap-2 sm:gap-4">
-                  <div className="bg-white border border-slate-200/60 p-3 sm:p-5 rounded-2xl sm:rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.015)] flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                    <div>
-                      <span className="text-[8px] sm:text-[9px] font-black uppercase text-slate-400 tracking-wider block">Total Due</span>
-                      <h4 className="text-sm sm:text-xl font-black text-rose-600 tracking-tight mt-0.5 sm:mt-1">{formatP(totalClassDues)}</h4>
-                    </div>
-                    <div className="hidden sm:flex p-3 bg-rose-50 border border-rose-100/50 text-rose-600 rounded-2xl shadow-2xs">
-                      <DollarSign className="h-5 w-5" />
-                    </div>
-                  </div>
-
+                <div className="grid grid-cols-2 gap-3 sm:gap-4">
                   <div className="bg-white border border-slate-200/60 p-3 sm:p-5 rounded-2xl sm:rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.015)] flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                     <div>
                       <span className="text-[8px] sm:text-[9px] font-black uppercase text-slate-400 tracking-wider block">Defaulters</span>
@@ -596,7 +584,15 @@ export default function TeacherDashboard() {
                               {std.name.charAt(0).toUpperCase()}
                             </div>
                             <div>
-                              <h4 className="font-black text-slate-900 text-sm leading-tight">{std.name}</h4>
+                              <h4
+                                onClick={() => {
+                                  setSelectedProfileStudentId(std.id);
+                                  setShowProfileModal(true);
+                                }}
+                                className="font-black text-slate-900 text-sm leading-tight cursor-pointer hover:text-indigo-600 transition-colors"
+                              >
+                                {std.name}
+                              </h4>
                               <p className="text-[10px] text-slate-400 font-bold mt-0.5">
                                 {std.rollNo ? `Roll: ${std.rollNo} • ` : ""}ADM: {std.admissionNo || "N/A"}
                               </p>
@@ -606,7 +602,7 @@ export default function TeacherDashboard() {
                           {item.isDefaulter ? (
                             <div className="text-right">
                               <span className="px-2.5 py-1 rounded-xl bg-rose-50 text-rose-700 border border-rose-100 font-black text-xs block">
-                                {formatP(item.totalDue)}
+                                Fee Pending
                               </span>
                               <span className="text-[9px] text-rose-500 font-bold mt-0.5 block">
                                 {item.unpaidDues.length} bill{item.unpaidDues.length > 1 ? "s" : ""} due
@@ -699,7 +695,6 @@ export default function TeacherDashboard() {
                           <th className="py-3.5 px-5">Student & Details</th>
                           <th className="py-3.5 px-5">Father / Parent</th>
                           <th className="py-3.5 px-5 text-center">Fee Status (Up to {currentMonthName})</th>
-                          <th className="py-3.5 px-5 text-right">Outstanding Due</th>
                           <th className="py-3.5 px-5 text-right">Follow-Up Action</th>
                         </tr>
                       </thead>
@@ -738,7 +733,15 @@ export default function TeacherDashboard() {
                                     {std.name.charAt(0).toUpperCase()}
                                   </div>
                                   <div>
-                                    <p className="font-black text-slate-900">{std.name}</p>
+                                    <p
+                                      onClick={() => {
+                                        setSelectedProfileStudentId(std.id);
+                                        setShowProfileModal(true);
+                                      }}
+                                      className="font-black text-slate-900 cursor-pointer hover:text-indigo-600 transition-colors"
+                                    >
+                                      {std.name}
+                                    </p>
                                     <p className="text-[10px] text-slate-400 font-bold">
                                       {std.rollNo ? `Roll: ${std.rollNo} • ` : ""}ADM: {std.admissionNo || "N/A"}
                                     </p>
@@ -773,15 +776,6 @@ export default function TeacherDashboard() {
                                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                                     All Clear
                                   </span>
-                                )}
-                              </td>
-
-                              {/* Due Amount */}
-                              <td className="py-4 px-5 text-right font-black">
-                                {item.isDefaulter ? (
-                                  <span className="text-rose-600 text-sm font-black">{formatP(item.totalDue)}</span>
-                                ) : (
-                                  <span className="text-emerald-600 text-xs font-black">₹0</span>
                                 )}
                               </td>
 
@@ -822,7 +816,7 @@ export default function TeacherDashboard() {
 
                         {filteredFeeList.length === 0 && (
                           <tr>
-                            <td colSpan={5} className="py-12 text-center text-xs text-slate-400 font-semibold italic">
+                            <td colSpan={4} className="py-12 text-center text-xs text-slate-400 font-semibold italic">
                               No students found matching current filters.
                             </td>
                           </tr>
@@ -835,6 +829,17 @@ export default function TeacherDashboard() {
             );
           })()}
         </div>
+      )}
+
+      {showProfileModal && selectedProfileStudentId && (
+        <StudentProfileModal
+          studentId={selectedProfileStudentId}
+          isOpen={showProfileModal}
+          onClose={() => {
+            setShowProfileModal(false);
+            setSelectedProfileStudentId("");
+          }}
+        />
       )}
     </div>
   );
