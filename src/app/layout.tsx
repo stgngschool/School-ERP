@@ -19,14 +19,14 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "St. GNG School - Finance OS",
-  description: "Unified Finance OS & Academic Portal for Admins, Teachers, Accountants, and Parents",
+  title: "St. G.N.G. School — Salarpur, Varanasi",
+  description: "Official Portal & Academic Website of St. G.N.G. School, Salarpur, Rasulgarh, Varanasi (Estd. 2005)",
   manifest: "/manifest.json",
-  applicationName: "St. GNG School",
+  applicationName: "St. G.N.G. School",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "GNG School",
+    title: "St. G.N.G. School",
     startupImage: "/logo.png",
   },
   formatDetection: {
@@ -38,12 +38,13 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
+      { url: "/icon.png", sizes: "32x32", type: "image/png" },
       { url: "/logo.png", sizes: "192x192", type: "image/png" },
       { url: "/logo.png", sizes: "512x512", type: "image/png" },
     ],
-    shortcut: "/logo.png",
+    shortcut: "/icon.png",
     apple: [
-      { url: "/logo.png", sizes: "180x180", type: "image/png" },
+      { url: "/apple-icon.png", sizes: "180x180", type: "image/png" },
     ],
   },
 };
