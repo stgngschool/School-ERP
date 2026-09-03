@@ -14,9 +14,9 @@ if (!connectionString) {
 // We use a safe connection pool per instance to prevent exhausting Supavisor session limit while supporting concurrent dashboard requests.
 const poolConfig = {
   connectionString,
-  max: 3, // Conservative connection limit per serverless instance prevents exhausting Supavisor limits
-  idleTimeoutMillis: 10000,
-  connectionTimeoutMillis: 5000,
+  max: 20, // Accommodates peak concurrent load: 11 teachers + accountants + admin operations during exam periods
+  idleTimeoutMillis: 20000, // Closes idle connections after 20s to conserve DB resources
+  connectionTimeoutMillis: 8000, // Safe wait threshold for sudden bursts before timing out
 };
 
 // Re-use global singleton across both development and warm production serverless invocations
