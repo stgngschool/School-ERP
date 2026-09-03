@@ -721,7 +721,7 @@ button:active {
 .animate-marquee-smooth {
   display: flex;
   width: max-content;
-  animation: marqueeScrollSmooth 32s linear infinite;
+  animation: marqueeScrollSmooth 55s linear infinite;
   will-change: transform;
 }
 
