@@ -14,7 +14,7 @@ interface Testimonial {
 }
 
 // 14 Real Parents & Students directly from School ERP Database (Highest Fee Paying & Regular Families)
-const parentReviews: Testimonial[] = [
+const row1Reviews: Testimonial[] = [
   {
     name: "सुनील सेठ",
     relation: "पिता",
@@ -85,6 +85,9 @@ const parentReviews: Testimonial[] = [
     review:
       "दीनापुर से छोटे बच्चों के लिए सेंट जी.एन.जी. सबसे सुरक्षित और बेहतरीन स्कूल है। टीचर्स बच्चों को घर जैसा प्यार देकर समझाते हैं, जिससे बच्चे बहुत जल्दी सब सीख जाते हैं।",
   },
+];
+
+const row2Reviews: Testimonial[] = [
   {
     name: "दीपक कुमार अग्रहरि",
     relation: "पिता",
@@ -157,9 +160,76 @@ const parentReviews: Testimonial[] = [
   },
 ];
 
+function TestimonialCard({ t, idx }: { t: Testimonial; idx: number }) {
+  return (
+    <div
+      key={`${t.name}-${idx}`}
+      className="w-[310px] sm:w-[370px] shrink-0 bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/90 shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between relative group hover:border-indigo-300 select-none"
+    >
+      {/* Quote Watermark */}
+      <Quote className="w-8 h-8 text-slate-100 absolute top-4 right-4 pointer-events-none group-hover:text-indigo-50 transition-colors" />
+
+      <div>
+        {/* Header: 5 Stars + FULL Unclipped Locality Pill */}
+        <div className="flex items-center justify-between gap-3 mb-3">
+          {/* Stars */}
+          <div className="flex items-center gap-1 text-amber-400 shrink-0">
+            {[...Array(t.rating)].map((_, i) => (
+              <Star key={i} className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+            ))}
+          </div>
+
+          {/* Locality Pill with generous padding & line height to eliminate font clipping */}
+          <div
+            style={{
+              fontFamily: "'Nirmala UI', 'Mangal', 'Segoe UI', system-ui, sans-serif",
+              letterSpacing: "0px",
+              lineHeight: "1.5",
+            }}
+            className="inline-flex items-center gap-1.5 text-xs font-black pl-3 pr-4 py-1 rounded-full bg-indigo-50/90 text-indigo-950 border border-indigo-200/80 shrink-0 whitespace-nowrap shadow-2xs"
+          >
+            <MapPin className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+            <span className="tracking-normal font-extrabold">{t.locality}</span>
+          </div>
+        </div>
+
+        {/* Sincere Indian Parent Review Quote */}
+        <p className="text-xs sm:text-[13px] text-slate-700 font-normal leading-relaxed mb-4 italic">
+          "{t.review}"
+        </p>
+      </div>
+
+      {/* Author Footer with Verified Parent Badge */}
+      <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2.5">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-950 border border-indigo-100 font-black text-xs flex items-center justify-center shrink-0 shadow-2xs">
+            {t.initials}
+          </div>
+          <div className="min-w-0">
+            <h4 className="text-xs sm:text-sm font-black text-slate-900 truncate leading-tight">
+              {t.name}
+            </h4>
+            <p className="text-[10px] sm:text-[11px] font-bold text-slate-500 truncate mt-0.5">
+              {t.relation} — {t.studentInfo}
+            </p>
+          </div>
+        </div>
+
+        <span
+          title="सत्यापित स्थानीय अभिभावक (Verified Local Parent)"
+          className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-black"
+        >
+          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+          <span>सत्यापित</span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default function TestimonialsSection() {
-  // Seamless loop without duplicate key issues
-  const marqueeList = [...parentReviews, ...parentReviews];
+  const loopRow1 = [...row1Reviews, ...row1Reviews];
+  const loopRow2 = [...row2Reviews, ...row2Reviews];
 
   return (
     <section className="py-16 sm:py-20 bg-slate-50 border-b border-slate-200/90 relative overflow-hidden">
@@ -173,7 +243,7 @@ export default function TestimonialsSection() {
 
           <h2 className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight leading-tight">
             सलारपुर, रसूलगढ़ व आसपास के 500+ परिवारों का{" "}
-            <span className="text-indigo-950 underline decoration-amber-400 decoration-4 underline-offset-4">
+            <span className="text-[#0f285a] underline decoration-amber-400 decoration-4 underline-offset-4">
               अटूट भरोसा
             </span>
           </h2>
@@ -215,78 +285,25 @@ export default function TestimonialsSection() {
         </div>
       </div>
 
-      {/* ─── Infinite Smooth Flowing Moving Testimonials Showcase ─── */}
-      <div className="relative w-full overflow-hidden py-3">
+      {/* ─── Dual-Track Opposite Flowing Moving Testimonials Showcase ─── */}
+      <div className="relative w-full overflow-hidden space-y-4 sm:space-y-5">
         {/* Left Edge Gradient Fade Mask */}
         <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-8 sm:w-28 bg-gradient-to-r from-slate-50 via-slate-50/70 to-transparent z-20" />
 
         {/* Right Edge Gradient Fade Mask */}
         <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 sm:w-28 bg-gradient-to-l from-slate-50 via-slate-50/70 to-transparent z-20" />
 
-        {/* Infinite Moving Marquee Track */}
-        <div className="animate-marquee-smooth flex items-stretch gap-5 sm:gap-6 px-4">
-          {marqueeList.map((t, idx) => (
-            <div
-              key={`${t.name}-${idx}`}
-              className="w-[330px] sm:w-[390px] shrink-0 bg-white rounded-3xl p-6 sm:p-7 border border-slate-200 shadow-xs hover:shadow-md transition-all duration-300 flex flex-col justify-between relative group hover:border-indigo-300 select-none"
-            >
-              {/* Quote Watermark Icon */}
-              <Quote className="w-10 h-10 text-slate-100 absolute top-5 right-5 pointer-events-none group-hover:text-indigo-50 transition-colors" />
+        {/* Track 1: Right to Left Glide */}
+        <div className="animate-marquee-smooth flex items-stretch gap-4 sm:gap-5 px-2">
+          {loopRow1.map((t, idx) => (
+            <TestimonialCard key={`track1-${t.name}-${idx}`} t={t} idx={idx} />
+          ))}
+        </div>
 
-              <div>
-                {/* Header: 5 Stars + FULL Unclipped Locality Badge */}
-                <div className="flex items-center justify-between gap-3 mb-4">
-                  {/* Stars */}
-                  <div className="flex items-center gap-1 text-amber-400 shrink-0">
-                    {[...Array(t.rating)].map((_, i) => (
-                      <Star key={i} className="w-4 h-4 fill-amber-400 text-amber-400" />
-                    ))}
-                  </div>
-
-                  {/* Locality Pill — Zero clipping with dedicated font rendering & extra padding */}
-                  <div
-                    style={{
-                      fontFamily: "'Nirmala UI', 'Mangal', 'Segoe UI', system-ui, sans-serif",
-                    }}
-                    className="inline-flex items-center gap-1.5 text-xs font-black px-3.5 py-1 rounded-full bg-indigo-50/90 text-indigo-950 border border-indigo-200/80 shrink-0 whitespace-nowrap shadow-2xs"
-                  >
-                    <MapPin className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-                    <span className="tracking-wide">{t.locality}</span>
-                  </div>
-                </div>
-
-                {/* Sincere Indian Parent Review Quote */}
-                <p className="text-xs sm:text-[13px] text-slate-700 font-normal leading-relaxed mb-6 italic">
-                  "{t.review}"
-                </p>
-              </div>
-
-              {/* Author Footer with Verified Parent Badge */}
-              <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-950 border border-indigo-100 font-black text-xs flex items-center justify-center shrink-0 shadow-2xs">
-                    {t.initials}
-                  </div>
-                  <div className="min-w-0">
-                    <h4 className="text-xs sm:text-sm font-black text-slate-900 truncate leading-tight">
-                      {t.name}
-                    </h4>
-                    <p className="text-[11px] font-bold text-slate-500 truncate mt-0.5">
-                      {t.relation} — {t.studentInfo} •{" "}
-                      <span className="text-indigo-900 font-black">{t.locality}</span>
-                    </p>
-                  </div>
-                </div>
-
-                <span
-                  title="सत्यापित स्थानीय अभिभावक (Verified Local Parent)"
-                  className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-black"
-                >
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span>सत्यापित</span>
-                </span>
-              </div>
-            </div>
+        {/* Track 2: Left to Right Glide (Opposite Direction) */}
+        <div className="animate-marquee-reverse flex items-stretch gap-4 sm:gap-5 px-2">
+          {loopRow2.map((t, idx) => (
+            <TestimonialCard key={`track2-${t.name}-${idx}`} t={t} idx={idx} />
           ))}
         </div>
       </div>

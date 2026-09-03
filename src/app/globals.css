@@ -707,7 +707,8 @@ button:active {
 }
 
 /* ─────────────────────────────────────────
-   SMOOTH INFINITE MARQUEE (MOVING TESTIMONIALS)
+/* ─────────────────────────────────────────
+   SMOOTH INFINITE MARQUEE (DUAL-TRACK MOVING TESTIMONIALS)
 ───────────────────────────────────────── */
 @keyframes marqueeScrollSmooth {
   0% {
@@ -718,14 +719,32 @@ button:active {
   }
 }
 
+@keyframes marqueeScrollReverse {
+  0% {
+    transform: translate3d(-50%, 0, 0);
+  }
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
 .animate-marquee-smooth {
   display: flex;
   width: max-content;
-  animation: marqueeScrollSmooth 55s linear infinite;
+  animation: marqueeScrollSmooth 48s linear infinite;
   will-change: transform;
 }
 
-.animate-marquee-smooth:hover {
+.animate-marquee-reverse {
+  display: flex;
+  width: max-content;
+  animation: marqueeScrollReverse 52s linear infinite;
+  will-change: transform;
+}
+
+.animate-marquee-smooth:hover,
+.animate-marquee-reverse:hover {
   animation-play-state: paused;
 }
+
 
