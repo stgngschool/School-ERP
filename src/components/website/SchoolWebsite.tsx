@@ -17,6 +17,7 @@ import TestimonialsSection from "./TestimonialsSection";
 import Footer from "./Footer";
 import AdmissionModal from "./AdmissionModal";
 import PageHeader from "./PageHeader";
+import PublicResultSection from "./PublicResultSection";
 import {
   Bell,
   BookOpen,
@@ -56,6 +57,7 @@ export type ActiveTabKey =
   | "HOME"
   | "ABOUT"
   | "ACADEMICS"
+  | "RESULTS"
   | "NOTICES"
   | "FACILITIES"
   | "ADMISSIONS"
@@ -75,6 +77,7 @@ export default function SchoolWebsite({
     "HOME",
     "ABOUT",
     "ACADEMICS",
+    "RESULTS",
     "NOTICES",
     "FACILITIES",
     "ADMISSIONS",
@@ -149,32 +152,7 @@ export default function SchoolWebsite({
   ];
 
   // Dynamic Live Notices from ERP Database
-  const [liveNotices, setLiveNotices] = useState<any[]>([
-    {
-      id: "fallback-1",
-      category: "ADMISSION",
-      title: "Admissions Open for Session 2026-2027 (Nursery to Class 8th)",
-      createdAt: "Aug 2026",
-      content: "Limited seats available per section. Collect form from office or submit online enquiry.",
-      isUrgent: true,
-    },
-    {
-      id: "fallback-2",
-      category: "EXAM",
-      title: "Half-Yearly Examination Datesheet & Syllabus Notification",
-      createdAt: "Aug 2026",
-      content: "Syllabus posted on the Parent Portal. Please ensure project notebooks are complete.",
-      isUrgent: true,
-    },
-    {
-      id: "fallback-3",
-      category: "FEE",
-      title: "Monthly Fee Dues Clearance Reminder (Counter & Online Portal)",
-      createdAt: "Aug 2026",
-      content: "Clear pending tuition fees at school counter or check dues on the Parent ERP Portal.",
-      isUrgent: false,
-    },
-  ]);
+  const [liveNotices, setLiveNotices] = useState<any[]>([]);
 
   useEffect(() => {
     async function loadLatestNotices() {
@@ -182,12 +160,40 @@ export default function SchoolWebsite({
         const res = await fetch("/api/notice?public=true&limit=3", { cache: "no-store" });
         if (res.ok) {
           const data = await res.json();
-          if (Array.isArray(data) && data.length > 0) {
+          if (Array.isArray(data)) {
             setLiveNotices(data);
           }
         }
       } catch (e) {
-        console.warn("Using offline notice fallback");
+        console.warn("Notice fetch failed:", e);
+        if (typeof navigator !== "undefined" && !navigator.onLine) {
+          setLiveNotices([
+            {
+              id: "fallback-1",
+              category: "ADMISSION",
+              title: "Admissions Open for Session 2026-2027 (Nursery to Class 8th)",
+              createdAt: "Aug 2026",
+              content: "Limited seats available per section. Collect form from office or submit online enquiry.",
+              isUrgent: true,
+            },
+            {
+              id: "fallback-2",
+              category: "EXAM",
+              title: "Half-Yearly Examination Datesheet & Syllabus Notification",
+              createdAt: "Aug 2026",
+              content: "Syllabus posted on the Parent Portal. Please ensure project notebooks are complete.",
+              isUrgent: true,
+            },
+            {
+              id: "fallback-3",
+              category: "FEE",
+              title: "Monthly Fee Dues Clearance Reminder (Counter & Online Portal)",
+              createdAt: "Aug 2026",
+              content: "Clear pending tuition fees at school counter or check dues on the Parent ERP Portal.",
+              isUrgent: false,
+            },
+          ]);
+        }
       }
     }
     loadLatestNotices();
@@ -329,63 +335,70 @@ export default function SchoolWebsite({
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {liveNotices.map((n, i) => {
-                    const cat = (n.category || "GENERAL").toUpperCase();
-                    const badgeClass =
-                      cat === "EXAM"
-                        ? "bg-rose-100 text-rose-800"
-                        : cat === "ADMISSION"
-                        ? "bg-amber-100 text-amber-800"
-                        : cat === "FEE"
-                        ? "bg-emerald-100 text-emerald-800"
-                        : cat === "HOLIDAY"
-                        ? "bg-purple-100 text-purple-800"
-                        : "bg-indigo-100 text-indigo-800";
+                {liveNotices.length === 0 ? (
+                  <div className="p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-400">
+                    <p className="text-sm font-bold text-slate-600">No active circulars published yet</p>
+                    <p className="text-xs text-slate-400 mt-1">Official bulletins and circulars will appear here once announced by school administration.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {liveNotices.map((n, i) => {
+                      const cat = (n.category || "GENERAL").toUpperCase();
+                      const badgeClass =
+                        cat === "EXAM"
+                          ? "bg-rose-100 text-rose-800"
+                          : cat === "ADMISSION"
+                          ? "bg-amber-100 text-amber-800"
+                          : cat === "FEE"
+                          ? "bg-emerald-100 text-emerald-800"
+                          : cat === "HOLIDAY"
+                          ? "bg-purple-100 text-purple-800"
+                          : "bg-indigo-100 text-indigo-800";
 
-                    return (
-                      <div
-                        key={n.id || i}
-                        onClick={() => handleTabSwitch("NOTICES")}
-                        className={`p-5 rounded-2xl bg-slate-50 border ${
-                          n.isUrgent ? "border-rose-300 ring-2 ring-rose-100/80 bg-white" : "border-slate-200/80 hover:bg-white"
-                        } hover:shadow-md transition-all flex flex-col justify-between cursor-pointer group`}
-                      >
-                        <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-1.5">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${badgeClass}`}>
-                                {n.category || "General"}
-                              </span>
-                              {n.isUrgent && (
-                                <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-rose-500 text-white animate-pulse">
-                                  Urgent
-                                </span>
-                              )}
-                            </div>
-                            <span className="text-[11px] font-bold text-slate-400">{n.createdAt}</span>
-                          </div>
-                          <h3 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors leading-snug mb-1 line-clamp-2">
-                            {n.title}
-                          </h3>
-                          <p className="text-xs text-slate-600 font-normal leading-relaxed line-clamp-3">
-                            {n.content || n.desc}
-                          </p>
-                        </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleTabSwitch("NOTICES");
-                          }}
-                          className="mt-4 pt-3 border-t border-slate-200/60 text-xs font-bold text-indigo-600 flex items-center gap-1 hover:underline text-left cursor-pointer"
+                      return (
+                        <div
+                          key={n.id || i}
+                          onClick={() => handleTabSwitch("NOTICES")}
+                          className={`p-5 rounded-2xl bg-slate-50 border ${
+                            n.isUrgent ? "border-rose-300 ring-2 ring-rose-100/80 bg-white" : "border-slate-200/80 hover:bg-white"
+                          } hover:shadow-md transition-all flex flex-col justify-between cursor-pointer group`}
                         >
-                          <span>Read Full Circular</span>
-                          <ChevronRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-1.5">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${badgeClass}`}>
+                                  {n.category || "General"}
+                                </span>
+                                {n.isUrgent && (
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-rose-500 text-white animate-pulse">
+                                    Urgent
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[11px] font-bold text-slate-400">{n.createdAt}</span>
+                            </div>
+                            <h3 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors leading-snug mb-1 line-clamp-2">
+                              {n.title}
+                            </h3>
+                            <p className="text-xs text-slate-600 font-normal leading-relaxed line-clamp-3">
+                              {n.content || n.desc}
+                            </p>
+                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleTabSwitch("NOTICES");
+                            }}
+                            className="mt-4 pt-3 border-t border-slate-200/60 text-xs font-bold text-indigo-600 flex items-center gap-1 hover:underline text-left cursor-pointer"
+                          >
+                            <span>Read Full Circular</span>
+                            <ChevronRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </section>
 
@@ -575,7 +588,21 @@ export default function SchoolWebsite({
           </div>
         )}
 
-        {/* 4. NOTICES TAB VIEW */}
+        {/* 4. RESULTS / EVALUATION TAB VIEW */}
+        {activeTab === "RESULTS" && (
+          <div>
+            <PageHeader
+              breadcrumb="Examination Results"
+              badge="Academic Session 2026-2027"
+              title="Student Examination Results Portal"
+              description="Official institutional portal for parents to securely verify academic performance, unit evaluation marks, and printable progress cards."
+              badgeIcon={<FileSpreadsheet className="w-3.5 h-3.5 text-indigo-600" />}
+            />
+            <PublicResultSection />
+          </div>
+        )}
+
+        {/* 5. NOTICES TAB VIEW */}
         {activeTab === "NOTICES" && (
           <div>
             <PageHeader

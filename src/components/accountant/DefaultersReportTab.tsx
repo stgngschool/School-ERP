@@ -7,6 +7,7 @@ import {
   Printer, Send, CreditCard, Phone, UserCheck, Users, FileText, Home
 } from "lucide-react";
 import { formatP } from "@/lib/currency";
+import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
 import { generateFeeReminderWhatsAppUrl, isDueUpToCurrentMonth } from "@/lib/whatsapp";
 import { exportMasterFeeRegisterXLS, exportSingleStudentStatementXLS, exportFeeRegisterCSV } from "@/lib/exportFeeXLS";
 import { MockStudent, MockDueItem, MockReceipt, MockSchoolInfo } from "@/context/AuthContext";
@@ -459,7 +460,7 @@ export default function DefaultersReportTab({
                 }
                 className="flex items-center gap-1.5 py-2 px-4 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold transition-all cursor-pointer shadow-sm"
               >
-                <Send className="h-4 w-4 text-emerald-600" /> WhatsApp
+                <WhatsAppIcon className="h-4 w-4 text-emerald-600 shrink-0" /> WhatsApp
               </button>
               <button
                 onClick={() => onSelectStudentForPayment(std.id)}
@@ -980,7 +981,7 @@ export default function DefaultersReportTab({
                             className="p-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg transition-all cursor-pointer"
                             title="Send WhatsApp Reminder"
                           >
-                            <Send className="h-3 w-3" />
+                            <WhatsAppIcon className="h-3.5 w-3.5 text-emerald-600" />
                           </button>
                         </div>
                       </td>
@@ -1129,7 +1130,7 @@ export default function DefaultersReportTab({
                         title="Send WhatsApp Reminder"
                         className="flex items-center gap-1 py-1 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black transition-all shadow-2xs"
                       >
-                        <Send className="h-3 w-3" /> WhatsApp
+                        <WhatsAppIcon className="w-3.5 h-3.5 text-white shrink-0" /> WhatsApp
                       </a>
                     )}
                   </div>

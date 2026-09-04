@@ -32,6 +32,7 @@ import {
   Tag,
   Eye,
 } from "lucide-react";
+import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
 
 interface EnquiryItem {
   id: string;
@@ -603,7 +604,7 @@ export default function AdmissionLeadsDesk() {
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold transition-colors"
                           >
-                            <MessageSquare className="w-3 h-3 text-emerald-600" />
+                            <WhatsAppIcon className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                             <span>WhatsApp</span>
                           </a>
                         </div>
@@ -815,7 +816,7 @@ export default function AdmissionLeadsDesk() {
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold transition-colors"
                         >
-                          <MessageSquare className="w-3 h-3 text-emerald-600" />
+                          <WhatsAppIcon className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                           <span>WhatsApp</span>
                         </a>
                       </div>

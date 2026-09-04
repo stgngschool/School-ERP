@@ -51,8 +51,12 @@ export async function GET(request: Request) {
     }));
 
     const response = NextResponse.json(formatted);
-    // Cache for 30s with stale-while-revalidate for fast public performance
-    response.headers.set("Cache-Control", "public, s-maxage=30, stale-while-revalidate=120");
+    // Authenticated dashboard queries should never be cached; public visitors can short-cache
+    if (authUser) {
+      response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    } else {
+      response.headers.set("Cache-Control", "public, s-maxage=5, stale-while-revalidate=10");
+    }
     return response;
   } catch (error) {
     console.error("Fetch notices error:", error);

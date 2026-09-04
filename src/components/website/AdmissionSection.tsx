@@ -26,6 +26,7 @@ import {
   Building2,
   Copy,
 } from "lucide-react";
+import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
 
 interface AdmissionSectionProps {
   onSuccessEnquiry?: (formData: any) => void;
@@ -302,7 +303,7 @@ export default function AdmissionSection({ onSuccessEnquiry }: AdmissionSectionP
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >
-              <Phone className="w-3.5 h-3.5" />
+              <WhatsAppIcon className="w-3.5 h-3.5 text-emerald-600" />
               <span>Quick WhatsApp Query</span>
             </button>
           </div>
@@ -1135,8 +1136,9 @@ export default function AdmissionSection({ onSuccessEnquiry }: AdmissionSectionP
         {activeTab === "ENQUIRY" && (
           <div className="max-w-2xl mx-auto bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-xl space-y-6">
             <div className="text-center">
-              <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-black uppercase tracking-wider">
-                Direct WhatsApp Helpline
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-black uppercase tracking-wider">
+                <WhatsAppIcon className="w-3.5 h-3.5 text-emerald-700" />
+                <span>Direct WhatsApp Helpline</span>
               </span>
               <h3 className="text-xl sm:text-2xl font-black text-slate-900 mt-2">Quick Admission Enquiry</h3>
               <p className="text-xs text-slate-500 font-medium mt-1">
@@ -1239,9 +1241,9 @@ export default function AdmissionSection({ onSuccessEnquiry }: AdmissionSectionP
 
                 <button
                   type="submit"
-                  className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                  className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md active:scale-95"
                 >
-                  <Send className="w-4 h-4" />
+                  <WhatsAppIcon className="w-4 h-4 text-white shrink-0" />
                   <span>Send WhatsApp Message</span>
                 </button>
               </form>

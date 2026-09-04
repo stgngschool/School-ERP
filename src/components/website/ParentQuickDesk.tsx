@@ -14,6 +14,7 @@ import {
   Building2,
   Receipt,
 } from "lucide-react";
+import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
 
 export default function ParentQuickDesk() {
   return (
@@ -85,28 +86,45 @@ export default function ParentQuickDesk() {
               </p>
 
               <div className="space-y-2 text-xs font-medium text-slate-700">
+                <Link
+                  href="/?tab=results"
+                  className="p-3 rounded-2xl bg-indigo-50/80 border border-indigo-200 flex items-center justify-between hover:bg-indigo-100/70 transition group"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="font-bold text-indigo-950">Unit Test 1 Results (Live Portal)</span>
+                  </div>
+                  <span className="text-[10px] font-black px-2 py-0.5 rounded bg-indigo-600 text-white flex items-center gap-1 group-hover:scale-105 transition">
+                    Check Now <ArrowRight className="w-2.5 h-2.5" />
+                  </span>
+                </Link>
                 <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/70 flex items-center justify-between">
-                  <span>Unit Test 1 & 2 Results</span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-100 text-indigo-700">Online</span>
+                  <span>Unit Test 2 Results</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600">Upcoming</span>
                 </div>
                 <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/70 flex items-center justify-between">
                   <span>Half Yearly & Annual Progress Card</span>
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800">Download</span>
                 </div>
-                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/70 flex items-center justify-between">
-                  <span>Daily Attendance & Leaves</span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">Live</span>
-                </div>
               </div>
             </div>
 
-            <Link
-              href="/login"
-              className="mt-6 w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold text-center transition-all flex items-center justify-center gap-1.5 shadow-sm"
-            >
-              <LogIn className="w-3.5 h-3.5" />
-              <span>Parent Portal Sign In</span>
-            </Link>
+            <div className="mt-6 space-y-2">
+              <Link
+                href="/?tab=results"
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white text-xs font-bold text-center transition-all flex items-center justify-center gap-1.5 shadow-md shadow-indigo-600/20"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span>Check Student Results Online</span>
+              </Link>
+              <Link
+                href="/login"
+                className="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold text-center transition-all flex items-center justify-center gap-1.5"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Parent Portal Full Login</span>
+              </Link>
+            </div>
           </div>
 
           {/* Card 3: School Helpdesk & Timings */}
@@ -143,8 +161,9 @@ export default function ParentQuickDesk() {
               href="https://wa.me/919452824318?text=Hello%20St.%20GNG%20School%20Office,%20I%20have%20an%20inquiry"
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-6 w-full py-3 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold text-center transition-all flex items-center justify-center gap-1.5 shadow-sm"
+              className="mt-6 w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold text-center transition-all flex items-center justify-center gap-2 shadow-sm"
             >
+              <WhatsAppIcon className="w-4 h-4 text-white shrink-0" />
               <span>WhatsApp Office Helpdesk</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </a>

@@ -12,8 +12,11 @@ import {
   ExternalLink,
   Navigation,
 } from "lucide-react";
+import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
+import { useAuth } from "@/context/AuthContext";
 
 export default function ContactSection() {
+  const { schoolInfo } = useAuth();
   const [schoolData, setSchoolData] = useState<any>({
     name: "St. G.N.G. School",
     address: "Salarpur, Rasulgarh, Varanasi - 221007, Uttar Pradesh, India",
@@ -25,6 +28,27 @@ export default function ContactSection() {
     googleMapsUrl: "https://maps.google.com/?q=St+GNG+School+Salarpur+Rasulgarh+Varanasi",
   });
 
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    fetch("/api/school", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) setSchoolData(data);
+      })
+      .catch(() => {});
+  }, []);
+
+  const liveName = (mounted && schoolInfo?.name) || schoolData.name || "St. G.N.G. School";
+  const liveAddress = (mounted && schoolInfo?.address) || schoolData.address || "Salarpur, Rasulgarh, Varanasi - 221007, Uttar Pradesh, India";
+  const livePhone = (mounted && schoolInfo?.phone) || schoolData.phone || "9452824318";
+  const liveAltPhone = (mounted && schoolInfo?.alternatePhone) || schoolData.alternatePhone || "9415812975";
+  const liveWhatsapp = (mounted && schoolInfo?.whatsappNumber) || schoolData.whatsappNumber || livePhone;
+  const liveEmail = (mounted && schoolInfo?.email) || schoolData.email || "stgng2005@gmail.com";
+  const liveTimings = (mounted && schoolInfo?.schoolTimings) || schoolData.schoolTimings || "8:00 AM - 1:30 PM (Monday to Saturday)";
+  const liveMapsUrl = (mounted && schoolInfo?.googleMapsUrl) || schoolData.googleMapsUrl || "https://maps.google.com/?q=St+GNG+School+Salarpur+Rasulgarh+Varanasi";
+
   const [formData, setFormData] = useState({
     name: "",
     phone: "",
@@ -34,14 +58,6 @@ export default function ContactSection() {
   const [sent, setSent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    fetch("/api/school")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data) setSchoolData(data);
-      })
-      .catch(() => {});
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -108,13 +124,13 @@ export default function ContactSection() {
                     School Campus Address
                   </h3>
                   <p className="text-sm font-black text-slate-900 mt-1">
-                    {schoolData.name || "St. G.N.G. School"}
+                    {liveName}
                   </p>
                   <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
-                    {schoolData.address || "Salarpur, Rasulgarh, Varanasi - 221007, Uttar Pradesh, India"}
+                    {liveAddress}
                   </p>
                   <a
-                    href={schoolData.googleMapsUrl || "https://maps.google.com/?q=St+GNG+School+Salarpur+Rasulgarh+Varanasi"}
+                    href={liveMapsUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 hover:underline mt-2"
@@ -135,12 +151,12 @@ export default function ContactSection() {
                     Official Helplines
                   </h3>
                   <p className="text-sm font-black text-slate-900 mt-1">
-                    <a href={`tel:${schoolData.phone || "9452824318"}`} className="hover:text-emerald-600 transition-colors">
-                      +91 {schoolData.phone || "9452824318"}
+                    <a href={`tel:${livePhone}`} className="hover:text-emerald-600 transition-colors">
+                      +91 {livePhone}
                     </a>
-                    {schoolData.alternatePhone && (
+                    {liveAltPhone && (
                       <span className="text-slate-500 font-bold ml-2">
-                        / +91 {schoolData.alternatePhone}
+                        / +91 {liveAltPhone}
                       </span>
                     )}
                   </p>
@@ -160,8 +176,8 @@ export default function ContactSection() {
                     Official Email
                   </h3>
                   <p className="text-sm font-black text-slate-900 mt-1">
-                    <a href={`mailto:${schoolData.email || "stgng2005@gmail.com"}`} className="hover:text-amber-600 transition-colors">
-                      {schoolData.email || "stgng2005@gmail.com"}
+                    <a href={`mailto:${liveEmail}`} className="hover:text-amber-600 transition-colors">
+                      {liveEmail}
                     </a>
                   </p>
                   <p className="text-xs text-slate-500 mt-0.5">
@@ -180,7 +196,7 @@ export default function ContactSection() {
                     School & Office Hours
                   </h3>
                   <p className="text-xs font-black text-slate-900 mt-1">
-                    {schoolData.schoolTimings || "8:00 AM - 1:30 PM (Monday to Saturday)"}
+                    {liveTimings}
                   </p>
                   <p className="text-[11px] text-rose-600 font-bold mt-1">
                     Sundays & Gazetted Holidays Closed
@@ -279,9 +295,9 @@ export default function ContactSection() {
 
                     <button
                       type="submit"
-                      className="w-full py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs sm:text-sm shadow-md active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer"
+                      className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs sm:text-sm shadow-md active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer"
                     >
-                      <Send className="w-4 h-4" />
+                      <WhatsAppIcon className="w-4 h-4 text-white shrink-0" />
                       <span>Send Message (WhatsApp Office Desk)</span>
                     </button>
                   </form>

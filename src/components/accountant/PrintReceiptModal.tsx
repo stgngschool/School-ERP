@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { Printer, Send, X } from "lucide-react";
+import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
 import { formatP, numberToIndianWords } from "@/lib/currency";
 import { getGroupedReceiptItems } from "@/lib/receipts";
 
@@ -404,7 +405,7 @@ export default function PrintReceiptModal({
             onClick={() => onSendWhatsApp(activeReceipt)}
             className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-md shadow-emerald-600/15"
           >
-            <Send className="h-4 w-4" /> WhatsApp Receipt
+            <WhatsAppIcon className="w-4 h-4 text-white shrink-0" /> WhatsApp Receipt
           </button>
           <button
             type="button"

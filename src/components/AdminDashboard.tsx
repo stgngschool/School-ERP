@@ -38,6 +38,7 @@ const StudentProfileModal = dynamic(() => import("@/components/StudentProfileMod
 });
 
 import ModernDatePicker from "@/components/ModernDatePicker";
+import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
 import {
   getCleanClassKey,
   matchStudentToClass,
@@ -96,6 +97,7 @@ import {
   FileSpreadsheet,
   MessageSquare,
   Phone,
+  Mail,
   Hash,
   Home,
   Send,
@@ -121,6 +123,7 @@ import {
   GraduationCap,
   Globe,
   QrCode,
+  Lock,
 } from "lucide-react";
 
 import { getGroupedReceiptItems } from "@/lib/receipts";
@@ -779,7 +782,7 @@ export default function AdminDashboard() {
   const [schoolAdmissionSession, setSchoolAdmissionSession] = useState(schoolInfo.admissionSession || "2026-2027");
   const [schoolAdmissionStatus, setSchoolAdmissionStatus] = useState(schoolInfo.admissionStatus || "OPEN");
   const [schoolAdmissionClasses, setSchoolAdmissionClasses] = useState(schoolInfo.admissionClasses || "Nursery to 8th");
-  const [schoolMarqueeText, setSchoolMarqueeText] = useState(schoolInfo.marqueeText || "");
+  const [schoolMarqueeText, setSchoolMarqueeText] = useState(schoolInfo.marqueeText || "Admissions Open for Session 2026-2027 (Nursery to Class 8th) • U.P. Govt. Recognized • UDISE: 09670707502");
   const [schoolGoogleMapsUrl, setSchoolGoogleMapsUrl] = useState(schoolInfo.googleMapsUrl || "");
   const [schoolYoutubeUrl, setSchoolYoutubeUrl] = useState(schoolInfo.youtubeUrl || "");
   const [schoolEmail, setSchoolEmail] = useState(schoolInfo.email);
@@ -794,6 +797,8 @@ export default function AdminDashboard() {
   const [selectedConfigExam, setSelectedConfigExam] = useState<string>("");
   const [newCompName, setNewCompName] = useState("");
   const [newCompMax, setNewCompMax] = useState("");
+  const [schoolEnablePublicResults, setSchoolEnablePublicResults] = useState(true);
+  const [schoolAllowedPublicExams, setSchoolAllowedPublicExams] = useState<string[]>(["Unit-1"]);
 
   // Sync settings form states when schoolInfo loads
   React.useEffect(() => {
@@ -807,7 +812,7 @@ export default function AdminDashboard() {
       setSchoolAdmissionSession(schoolInfo.admissionSession || "2026-2027");
       setSchoolAdmissionStatus(schoolInfo.admissionStatus || "OPEN");
       setSchoolAdmissionClasses(schoolInfo.admissionClasses || "Nursery to 8th");
-      setSchoolMarqueeText(schoolInfo.marqueeText || "");
+      setSchoolMarqueeText(schoolInfo.marqueeText || "Admissions Open for Session 2026-2027 (Nursery to Class 8th) • U.P. Govt. Recognized • UDISE: 09670707502");
       setSchoolGoogleMapsUrl(schoolInfo.googleMapsUrl || "");
       setSchoolYoutubeUrl(schoolInfo.youtubeUrl || "");
       setSchoolEmail(schoolInfo.email);
@@ -842,11 +847,17 @@ export default function AdminDashboard() {
           "isSplit": false,
           "maxMarks": 80
         },
-        "Annual": {
-          "isSplit": false,
+        "Annual": { 
+          "isSplit": false, 
           "maxMarks": 80
         }
       });
+      setSchoolEnablePublicResults(schoolInfo.enablePublicResults ?? true);
+      setSchoolAllowedPublicExams(
+        Array.isArray(schoolInfo.allowedPublicExams) && schoolInfo.allowedPublicExams.length > 0
+          ? schoolInfo.allowedPublicExams
+          : ["Unit-1"]
+      );
     }
   }, [schoolInfo]);
 
@@ -3116,7 +3127,7 @@ export default function AdminDashboard() {
                                     title="Send WhatsApp Reminder"
                                     className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black transition-all shadow-xs flex items-center gap-1 active:scale-95"
                                   >
-                                    <MessageSquare className="w-3 h-3" />
+                                    <WhatsAppIcon className="w-3.5 h-3.5 text-white shrink-0" />
                                     <span>WhatsApp</span>
                                   </a>
                                 )}
@@ -7597,127 +7608,270 @@ export default function AdminDashboard() {
                       </div>
                     )}
 
-                    <form onSubmit={handleUpdateSchool} className="space-y-4">
-                      {/* Top Marquee Announcement */}
-                      <div>
-                        <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                          Top Marquee Announcement Ticker
-                        </label>
-                        <textarea
-                          rows={2}
-                          value={schoolMarqueeText}
-                          onChange={(e) => setSchoolMarqueeText(e.target.value)}
-                          placeholder="e.g. Admissions Open for Session 2026-2027 (Nursery to Class 8th) • Call: 9452824318"
-                          className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 resize-none shadow-2xs"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div>
-                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                            Admission Session
+                    <form onSubmit={handleUpdateSchool} className="space-y-5">
+                      {/* 1. Dedicated Box for Top Announcement / Notice */}
+                      <div className="p-4 sm:p-5 bg-gradient-to-br from-amber-500/5 via-slate-50 to-indigo-500/5 border-2 border-amber-300/70 rounded-2xl space-y-3.5 shadow-xs">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <label className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                            <span className="p-1.5 rounded-lg bg-amber-500 text-white shadow-xs">
+                              <Megaphone className="w-3.5 h-3.5" />
+                            </span>
+                            <span>Website Top Bar Notice / Urgent Announcement (अलग बॉक्स)</span>
                           </label>
-                          <input
-                            type="text"
-                            value={schoolAdmissionSession}
-                            onChange={(e) => setSchoolAdmissionSession(e.target.value)}
-                            placeholder="2026-2027"
-                            className="w-full text-xs font-bold py-2.5 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 shadow-2xs"
-                          />
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black tracking-wide border border-emerald-300">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            Live on Header
+                          </span>
+                        </div>
+
+                        <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
+                          Yeh notice website ke sabse upar black strip (<strong>● NOTICE</strong>) mein scroll/display hota hai. Aap yahan se apna custom urgent alert ya admission notice change kar sakte hain.
+                        </p>
+
+                        {/* Exact Website Top Bar Live Preview */}
+                        <div className="space-y-1">
+                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">
+                            Website Top Bar Live Preview:
+                          </span>
+                          <div className="bg-slate-950 text-slate-200 text-xs py-2 px-3.5 rounded-xl border border-slate-800 flex items-center gap-2.5 overflow-hidden shadow-inner">
+                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-black uppercase tracking-wider shrink-0 border border-amber-500/30">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                              <span>Notice</span>
+                            </span>
+                            <span className="text-xs font-medium text-slate-200 truncate">
+                              {schoolMarqueeText.trim() || (
+                                <span className="text-slate-500 italic">Notice message khali hai... yahan type karein</span>
+                              )}
+                            </span>
+                          </div>
                         </div>
 
                         <div>
-                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                            Admission Status
+                          <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                            Notice Text Content
                           </label>
-                          <select
-                            value={schoolAdmissionStatus}
-                            onChange={(e) => setSchoolAdmissionStatus(e.target.value)}
-                            className="w-full text-xs font-bold py-2.5 px-2.5 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 cursor-pointer shadow-2xs"
-                          >
-                            <option value="OPEN">Admissions Open</option>
-                            <option value="CLOSING_SOON">Closing Soon</option>
-                            <option value="CLOSED">Admissions Closed</option>
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                            Classes Offered
-                          </label>
-                          <input
-                            type="text"
-                            value={schoolAdmissionClasses}
-                            onChange={(e) => setSchoolAdmissionClasses(e.target.value)}
-                            placeholder="Nursery to 8th"
-                            className="w-full text-xs font-bold py-2.5 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 shadow-2xs"
+                          <textarea
+                            rows={3}
+                            value={schoolMarqueeText}
+                            onChange={(e) => setSchoolMarqueeText(e.target.value)}
+                            placeholder="e.g. Admissions Open for Session 2026-2027 (Nursery to Class 8th) • U.P. Govt. Recognized • UDISE: 09670707502"
+                            className="w-full text-xs font-bold py-2.5 px-3 border border-slate-300 rounded-xl outline-none bg-white focus:border-indigo-600 resize-none shadow-2xs leading-relaxed"
                           />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                            WhatsApp Helpline Number
-                          </label>
-                          <input
-                            type="text"
-                            value={schoolWhatsapp}
-                            onChange={(e) => setSchoolWhatsapp(e.target.value)}
-                            placeholder="9452824318"
-                            className="w-full text-xs font-bold py-2.5 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 shadow-2xs"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                            School & Office Timings
-                          </label>
-                          <input
-                            type="text"
-                            value={schoolTimings}
-                            onChange={(e) => setSchoolTimings(e.target.value)}
-                            placeholder="8:00 AM - 1:30 PM (Mon - Sat)"
-                            className="w-full text-xs font-bold py-2.5 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 shadow-2xs"
-                          />
+                          <div className="flex items-center justify-between pt-1">
+                            <span className="text-[10px] text-slate-400 font-semibold">
+                              {schoolMarqueeText.length} characters
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setSchoolMarqueeText(
+                                  "Admissions Open for Session 2026-2027 (Nursery to Class 8th) • U.P. Govt. Recognized • UDISE: 09670707502"
+                                )
+                              }
+                              className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 hover:underline cursor-pointer"
+                            >
+                              <RotateCcw className="w-3 h-3" />
+                              <span>Reset to Default Notice</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {/* 2. Dedicated Boxes for Number, Email, and Timings */}
+                      <div className="p-4 sm:p-5 bg-slate-50 border border-slate-200 rounded-2xl space-y-4">
                         <div>
-                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                            Google Maps URL
-                          </label>
-                          <input
-                            type="url"
-                            value={schoolGoogleMapsUrl}
-                            onChange={(e) => setSchoolGoogleMapsUrl(e.target.value)}
-                            placeholder="https://maps.google.com/..."
-                            className="w-full text-xs font-semibold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 shadow-2xs"
-                          />
+                          <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                            <span className="p-1.5 rounded-lg bg-indigo-600 text-white shadow-xs">
+                              <Phone className="w-3.5 h-3.5" />
+                            </span>
+                            <span>Website Header & Top Bar Contact Details (नंबर, ईमेल और समय)</span>
+                          </h4>
+                          <p className="text-[10px] text-slate-500 font-medium mt-1">
+                            Website ke top strip aur header par dikhne wale official phone number, email aur school timings ke alag-alag boxes:
+                          </p>
                         </div>
 
-                        <div>
-                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                            YouTube Channel URL
-                          </label>
-                          <input
-                            type="url"
-                            value={schoolYoutubeUrl}
-                            onChange={(e) => setSchoolYoutubeUrl(e.target.value)}
-                            placeholder="https://www.youtube.com/@stgngschool"
-                            className="w-full text-xs font-semibold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 shadow-2xs"
-                          />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                          {/* Official Calling Number */}
+                          <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-2xs space-y-1.5">
+                            <label className="text-[10px] font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                              <Phone className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>Official Calling Number</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={schoolPhone}
+                              onChange={(e) => setSchoolPhone(e.target.value)}
+                              placeholder="9452824318"
+                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
+                            />
+                            <span className="text-[9px] text-slate-400 font-semibold block">
+                              Website top bar call link (+91)
+                            </span>
+                          </div>
+
+                          {/* Official Email */}
+                          <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-2xs space-y-1.5">
+                            <label className="text-[10px] font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                              <Mail className="w-3.5 h-3.5 text-indigo-600" />
+                              <span>Official School Email</span>
+                            </label>
+                            <input
+                              type="email"
+                              value={schoolEmail}
+                              onChange={(e) => setSchoolEmail(e.target.value)}
+                              placeholder="stgng2005@gmail.com"
+                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
+                            />
+                            <span className="text-[9px] text-slate-400 font-semibold block">
+                              Website top bar email link
+                            </span>
+                          </div>
+
+                          {/* School & Office Timings */}
+                          <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-2xs space-y-1.5">
+                            <label className="text-[10px] font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                              <Clock className="w-3.5 h-3.5 text-amber-500" />
+                              <span>School & Office Timings</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={schoolTimings}
+                              onChange={(e) => setSchoolTimings(e.target.value)}
+                              placeholder="8:00 AM - 1:30 PM"
+                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
+                            />
+                            <span className="text-[9px] text-slate-400 font-semibold block">
+                              Website top bar aur footer timings
+                            </span>
+                          </div>
+
+                          {/* WhatsApp Helpline */}
+                          <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-2xs space-y-1.5">
+                            <label className="text-[10px] font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                              <WhatsAppIcon className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>WhatsApp Helpline Number</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={schoolWhatsapp}
+                              onChange={(e) => setSchoolWhatsapp(e.target.value)}
+                              placeholder="9452824318"
+                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
+                            />
+                            <span className="text-[9px] text-slate-400 font-semibold block">
+                              WhatsApp floating button aur direct chat
+                            </span>
+                          </div>
                         </div>
                       </div>
 
-                      <div className="pt-2">
+                      {/* 3. Admissions Desk Details */}
+                      <div className="p-4 sm:p-5 bg-slate-50 border border-slate-200 rounded-2xl space-y-3.5">
+                        <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                          <span className="p-1.5 rounded-lg bg-purple-600 text-white shadow-xs">
+                            <GraduationCap className="w-3.5 h-3.5" />
+                          </span>
+                          <span>Admissions Desk Configuration</span>
+                        </h4>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div>
+                            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                              Admission Session
+                            </label>
+                            <input
+                              type="text"
+                              value={schoolAdmissionSession}
+                              onChange={(e) => setSchoolAdmissionSession(e.target.value)}
+                              placeholder="2026-2027"
+                              className="w-full text-xs font-bold py-2.5 px-3 border border-slate-200 rounded-xl outline-none bg-white focus:border-indigo-600 shadow-2xs"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                              Admission Status
+                            </label>
+                            <select
+                              value={schoolAdmissionStatus}
+                              onChange={(e) => setSchoolAdmissionStatus(e.target.value)}
+                              className="w-full text-xs font-bold py-2.5 px-2.5 border border-slate-200 rounded-xl outline-none bg-white focus:border-indigo-600 cursor-pointer shadow-2xs"
+                            >
+                              <option value="OPEN">Admissions Open</option>
+                              <option value="CLOSING_SOON">Closing Soon</option>
+                              <option value="CLOSED">Admissions Closed</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                              Classes Offered
+                            </label>
+                            <input
+                              type="text"
+                              value={schoolAdmissionClasses}
+                              onChange={(e) => setSchoolAdmissionClasses(e.target.value)}
+                              placeholder="Nursery to 8th"
+                              className="w-full text-xs font-bold py-2.5 px-3 border border-slate-200 rounded-xl outline-none bg-white focus:border-indigo-600 shadow-2xs"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 4. Social Media & Maps */}
+                      <div className="p-4 sm:p-5 bg-slate-50 border border-slate-200 rounded-2xl space-y-3.5">
+                        <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                          <span className="p-1.5 rounded-lg bg-sky-600 text-white shadow-xs">
+                            <Globe className="w-3.5 h-3.5" />
+                          </span>
+                          <span>Google Maps & Social Media Links</span>
+                        </h4>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                              Google Maps Location URL
+                            </label>
+                            <input
+                              type="url"
+                              value={schoolGoogleMapsUrl}
+                              onChange={(e) => setSchoolGoogleMapsUrl(e.target.value)}
+                              placeholder="https://maps.google.com/..."
+                              className="w-full text-xs font-semibold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-white focus:border-indigo-600 shadow-2xs"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                              YouTube Channel URL
+                            </label>
+                            <input
+                              type="url"
+                              value={schoolYoutubeUrl}
+                              onChange={(e) => setSchoolYoutubeUrl(e.target.value)}
+                              placeholder="https://www.youtube.com/@stgngschool"
+                              className="w-full text-xs font-semibold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-white focus:border-indigo-600 shadow-2xs"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Submit Button */}
+                      <div className="pt-2 flex items-center justify-between gap-3">
                         <button
                           type="submit"
-                          className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl transition-all cursor-pointer shadow-sm"
+                          className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] text-white text-xs font-black rounded-xl transition-all cursor-pointer shadow-md flex items-center gap-2"
                         >
-                          Save Website Settings
+                          <CheckCircle className="w-4 h-4" />
+                          <span>Save Website & Top Bar Settings</span>
                         </button>
+                        {schoolSuccess && (
+                          <span className="text-xs font-bold text-emerald-600 flex items-center gap-1.5 animate-fade-in">
+                            <CheckCircle className="w-4 h-4 text-emerald-600" />
+                            Saved successfully!
+                          </span>
+                        )}
                       </div>
                     </form>
                   </div>
@@ -8284,8 +8438,117 @@ export default function AdminDashboard() {
                         );
                       })()}
 
+                      {/* Online Examination Results Portal Controls & Publishing Lock */}
+                      <div className="border-t border-slate-200/80 pt-5 mt-5 space-y-4">
+                        <div className="flex items-start justify-between gap-4 p-4 rounded-2xl bg-gradient-to-r from-emerald-50/70 to-teal-50/70 border border-emerald-250/60">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-black uppercase text-emerald-800 tracking-wider flex items-center gap-1.5">
+                                <Globe className="h-3.5 w-3.5 text-emerald-600" />
+                                Online Results Portal (वेबसाइट परिणाम पोर्टल)
+                              </span>
+                              <span
+                                className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                                  schoolEnablePublicResults
+                                    ? "bg-emerald-150 text-emerald-800 border-emerald-300"
+                                    : "bg-slate-200 text-slate-700 border-slate-300"
+                                }`}
+                              >
+                                {schoolEnablePublicResults ? "LIVE / सक्रिय" : "OFFLINE / बंद"}
+                              </span>
+                            </div>
+                            <p className="text-[10.5px] text-emerald-950/80 leading-relaxed font-medium">
+                              अगर यह चालू (ON) है, तो अभिभावक स्कूल वेबसाइट से बिना लॉगिन किए सीधे रोल/एडमिशन नंबर व जन्मतिथि डालकर रिजल्ट देख व मार्कशीट डाउनलोड कर सकेंगे।
+                            </p>
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
+                            <input
+                              type="checkbox"
+                              checked={schoolEnablePublicResults}
+                              onChange={(e) => setSchoolEnablePublicResults(e.target.checked)}
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                          </label>
+                        </div>
+
+                        {/* Exam Locking / Publishing Selection */}
+                        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <label className="text-xs font-black uppercase text-slate-800 tracking-wide flex items-center gap-1.5">
+                                <Lock className="h-3.5 w-3.5 text-rose-500" />
+                                Published Exams (कौन-सा रिजल्ट पब्लिक में दिखे)
+                              </label>
+                              <p className="text-[10px] text-slate-500 font-semibold mt-0.5">
+                                जिन परीक्षाओं पर टिक (✓) रहेगा केवल उन्हीं का रिजल्ट अभिभावक वेबसाइट पर देख सकेंगे। बाकी सभी पर 🔒 लॉक रहेगा।
+                              </p>
+                            </div>
+                            <span className="text-[10px] font-bold text-slate-500 bg-white px-2.5 py-1 rounded-lg border border-slate-200">
+                              {schoolAllowedPublicExams.length} Published
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                            {schoolExams.map((exam) => {
+                              const isPublished = schoolAllowedPublicExams.includes(exam);
+                              return (
+                                <button
+                                  key={exam}
+                                  type="button"
+                                  onClick={() => {
+                                    if (isPublished) {
+                                      // Must keep at least one if preferred, or allow unchecking
+                                      setSchoolAllowedPublicExams((prev) => prev.filter((e) => e !== exam));
+                                    } else {
+                                      setSchoolAllowedPublicExams((prev) => [...prev, exam]);
+                                    }
+                                  }}
+                                  className={`flex items-center justify-between p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                                    isPublished
+                                      ? "bg-emerald-50/80 border-emerald-300 text-emerald-950 shadow-2xs font-bold"
+                                      : "bg-white border-slate-200/80 text-slate-600 hover:border-slate-300"
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <div
+                                      className={`w-4 h-4 rounded flex items-center justify-center text-[10px] font-black shrink-0 ${
+                                        isPublished
+                                          ? "bg-emerald-600 text-white"
+                                          : "border border-slate-300 text-transparent"
+                                      }`}
+                                    >
+                                      ✓
+                                    </div>
+                                    <span className="text-xs font-black uppercase tracking-tight truncate">
+                                      {exam}
+                                    </span>
+                                  </div>
+                                  <span
+                                    className={`text-[9.5px] font-black uppercase px-2 py-0.5 rounded-md ${
+                                      isPublished
+                                        ? "bg-emerald-200/70 text-emerald-900"
+                                        : "bg-slate-150 text-slate-500"
+                                    }`}
+                                  >
+                                    {isPublished ? "Published ✓" : "Locked 🔒"}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+
                       {/* Save button */}
-                      <div className="border-t border-slate-100 pt-4 flex justify-end">
+                      <div className="border-t border-slate-100 pt-4 flex items-center justify-between">
+                        {schoolSuccess ? (
+                          <span className="text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl">
+                            ✓ Exam and Result Portal settings saved successfully!
+                          </span>
+                        ) : (
+                          <span />
+                        )}
                         <button
                           type="button"
                           onClick={async () => {
@@ -8295,6 +8558,8 @@ export default function AdminDashboard() {
                                 ...schoolInfo,
                                 exams: schoolExams,
                                 examConfig: schoolExamConfig,
+                                enablePublicResults: schoolEnablePublicResults,
+                                allowedPublicExams: schoolAllowedPublicExams,
                               });
                               setSchoolSuccess(true);
                               setTimeout(() => setSchoolSuccess(false), 3000);
@@ -8305,9 +8570,9 @@ export default function AdminDashboard() {
                             }
                           }}
                           disabled={savingExams}
-                          className="px-4 py-2.5 bg-rose-600 hover:bg-rose-750 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-rose-500/20 cursor-pointer disabled:opacity-55 active:scale-95"
+                          className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-rose-500/20 cursor-pointer disabled:opacity-55 active:scale-95"
                         >
-                          {savingExams ? "Saving..." : "Save Exam Configuration"}
+                          {savingExams ? "Saving Settings..." : "Save Exam & Portal Settings"}
                         </button>
                       </div>
                     </div>
@@ -9398,7 +9663,7 @@ export default function AdminDashboard() {
                               onClick={() => handleSendWhatsApp(std.name, std.parentName, overdueTillNow > 0 ? overdueTillNow : fullYearRemainingDue, std.fatherMobile || std.parentPhone)}
                               className="flex items-center gap-1.5 py-2 px-4 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold transition-all cursor-pointer shadow-sm"
                             >
-                              <Send className="h-4 w-4 text-emerald-600" /> WhatsApp
+                              <WhatsAppIcon className="h-4 w-4 text-emerald-600 shrink-0" /> WhatsApp
                             </button>
                             <button
                               onClick={() =>
@@ -9631,7 +9896,7 @@ export default function AdminDashboard() {
                                           className="p-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg transition-all cursor-pointer"
                                           title="Send WhatsApp Reminder"
                                         >
-                                          <Send className="h-3 w-3" />
+                                          <WhatsAppIcon className="h-3.5 w-3.5 text-emerald-600" />
                                         </button>
                                       </div>
                                     </td>
@@ -9782,7 +10047,7 @@ export default function AdminDashboard() {
                                       title="Send WhatsApp Reminder"
                                       className="flex items-center gap-1 py-1 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black transition-all shadow-2xs"
                                     >
-                                      <Send className="h-3 w-3" /> WhatsApp
+                                      <WhatsAppIcon className="w-3.5 h-3.5 text-white shrink-0" /> WhatsApp
                                     </a>
                                   )}
                                 </div>
@@ -10139,7 +10404,7 @@ export default function AdminDashboard() {
                 onClick={() => handleSendReceiptWhatsApp(activeReceipt)}
                 className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-md shadow-emerald-600/15"
               >
-                <Send className="h-4 w-4" /> WhatsApp Receipt
+                <WhatsAppIcon className="w-4 h-4 text-white shrink-0" /> WhatsApp Receipt
               </button>
               <button
                 type="button"

@@ -15,8 +15,8 @@ import {
   MapPin,
   Laptop,
   PhoneCall,
-  MessageCircle,
 } from "lucide-react";
+import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
 
 interface HeroSectionProps {
   onOpenEnquiry: () => void;
@@ -149,7 +149,7 @@ export default function HeroSection({ onOpenEnquiry }: HeroSectionProps) {
                   rel="noopener noreferrer"
                   className="px-4 py-2.5 sm:py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[11px] sm:text-xs shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
                 >
-                  <MessageCircle className="w-3.5 h-3.5 fill-white text-emerald-600" />
+                  <WhatsAppIcon className="w-4 h-4 text-white shrink-0" />
                   <span>WhatsApp चैट</span>
                 </a>
 

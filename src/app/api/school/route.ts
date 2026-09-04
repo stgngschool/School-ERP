@@ -80,11 +80,13 @@ export async function GET(request: Request) {
       instagramUrl: configData.instagramUrl || "",
       email: configData.email || "",
       enableTransport: configData.enableTransport ?? false,
+      enablePublicResults: configData.enablePublicResults ?? (process.env.NEXT_PUBLIC_ENABLE_PUBLIC_RESULTS === "true" || process.env.NEXT_PUBLIC_ENABLE_PUBLIC_UNIT1_RESULT === "true"),
+      allowedPublicExams: Array.isArray(configData.allowedPublicExams) ? configData.allowedPublicExams : (process.env.NEXT_PUBLIC_ALLOWED_PUBLIC_EXAMS || "Unit-1").split(",").map((e: string) => e.trim()).filter(Boolean),
     };
 
     return NextResponse.json(publicData, {
       headers: {
-        "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
+        "Cache-Control": "public, s-maxage=5, stale-while-revalidate=10, must-revalidate",
       },
     });
   } catch (error) {

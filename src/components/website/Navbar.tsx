@@ -19,7 +19,9 @@ import {
   Bell,
   Clock,
   BookOpen,
+  FileSpreadsheet,
 } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 import { ActiveTabKey } from "./SchoolWebsite";
 
 interface NavbarProps {
@@ -162,21 +164,36 @@ export default function Navbar({
     }
   };
 
+  const { schoolInfo } = useAuth();
+
+  const DEFAULT_MARQUEE =
+    "Admissions Open for Session 2026-2027 (Nursery to Class 8th) • U.P. Govt. Recognized • UDISE: 09670707502";
+
   const [schoolData, setSchoolData] = useState<any>({
     phone: "9452824318",
     email: "stgng2005@gmail.com",
     schoolTimings: "8:00 AM - 1:30 PM",
-    marqueeText: "Admissions Open 2026-27 (Nursery to 8th) • U.P. Govt. Recognized • UDISE: 09670707502",
+    marqueeText: DEFAULT_MARQUEE,
   });
 
   useEffect(() => {
-    fetch("/api/school")
+    fetch("/api/school", { cache: "no-store" })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data) setSchoolData(data);
       })
       .catch(() => {});
   }, []);
+
+  // Hydration-safe: use server-safe fallback until client mounts
+  const liveMarquee =
+    mounted && schoolInfo?.marqueeText !== undefined && schoolInfo?.marqueeText !== ""
+      ? schoolInfo.marqueeText
+      : schoolData.marqueeText || DEFAULT_MARQUEE;
+
+  const livePhone = (mounted && schoolInfo?.phone) || schoolData.phone || "9452824318";
+  const liveEmail = (mounted && schoolInfo?.email) || schoolData.email || "stgng2005@gmail.com";
+  const liveTimings = (mounted && schoolInfo?.schoolTimings) || schoolData.schoolTimings || "8:00 AM - 1:30 PM";
 
   return (
     <header className="sticky top-0 z-50 w-full transition-all duration-300 font-sans shadow-xs">
@@ -191,6 +208,7 @@ export default function Navbar({
             </span>
             <Link
               href="/notices"
+              suppressHydrationWarning
               onClick={(e) => {
                 if (onTabSelect) {
                   e.preventDefault();
@@ -199,29 +217,31 @@ export default function Navbar({
               }}
               className="text-xs font-medium text-slate-300 truncate hover:text-white transition-colors"
             >
-              {schoolData.marqueeText || "Admissions Open 2026-27 (Nursery to 8th) • U.P. Govt. Recognized • UDISE: 09670707502"}
+              {liveMarquee}
             </Link>
           </div>
 
           {/* Right: Quick Contact & Timings (Desktop) */}
-          <div className="hidden md:flex items-center gap-6 text-[11px] font-semibold text-slate-400 shrink-0">
+          <div suppressHydrationWarning className="hidden md:flex items-center gap-6 text-[11px] font-semibold text-slate-400 shrink-0">
             <a
-              href={`tel:${schoolData.phone || "9452824318"}`}
+              href={`tel:${livePhone}`}
+              suppressHydrationWarning
               className="flex items-center gap-1.5 hover:text-white transition-colors"
             >
               <Phone className="w-3.5 h-3.5 text-emerald-400" />
-              <span>+91 {schoolData.phone || "9452824318"}</span>
+              <span suppressHydrationWarning>+91 {livePhone}</span>
             </a>
             <a
-              href={`mailto:${schoolData.email || "stgng2005@gmail.com"}`}
+              href={`mailto:${liveEmail}`}
+              suppressHydrationWarning
               className="flex items-center gap-1.5 hover:text-white transition-colors"
             >
               <Mail className="w-3.5 h-3.5 text-indigo-400" />
-              <span>{schoolData.email || "stgng2005@gmail.com"}</span>
+              <span suppressHydrationWarning>{liveEmail}</span>
             </a>
-            <div className="flex items-center gap-1.5 text-slate-400">
+            <div suppressHydrationWarning className="flex items-center gap-1.5 text-slate-400">
               <Clock className="w-3.5 h-3.5 text-amber-400" />
-              <span>{schoolData.schoolTimings || "8:00 AM - 1:30 PM"}</span>
+              <span suppressHydrationWarning>{liveTimings}</span>
             </div>
           </div>
         </div>
@@ -354,13 +374,29 @@ export default function Navbar({
               <span>Enquiry</span>
             </button>
 
+            {/* Examination Result Desk Direct CTA - Compact on Mobile, Full on Tablet/Desktop */}
+            <button
+              onClick={(e) => {
+                if (onTabSelect) {
+                  e.preventDefault();
+                  onTabSelect("RESULTS");
+                } else {
+                  window.location.href = "/?tab=results";
+                }
+              }}
+              className="px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-black text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 shadow-xs transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap active:scale-95"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-indigo-600" />
+              <span className="hidden xs:inline sm:inline">Results</span>
+            </button>
+
             {/* Always-visible Portal Login Button */}
             <Link
               href={mounted && user && activeRole ? "/?view=erp" : "/login"}
-              className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap mr-0.5 sm:mr-0"
+              className="px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
             >
               <LogIn className="w-3.5 h-3.5" />
-              <span>{mounted && user && activeRole ? "ERP Dashboard" : "Portal Login"}</span>
+              <span>Login</span>
             </Link>
 
             {/* Menu Hamburger Toggle (Visible on all screens < 1280px) */}
@@ -427,7 +463,7 @@ export default function Navbar({
               </p>
               <p className="flex items-center gap-1.5">
                 <Phone className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                <span>Helpline: +91 9452824318</span>
+                <span>Helpline: +91 {livePhone}</span>
               </p>
             </div>
           </div>

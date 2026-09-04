@@ -216,6 +216,8 @@ export interface MockSchoolInfo {
   lateFeeType?: string;
   exams?: string[];
   examConfig?: any;
+  enablePublicResults?: boolean;
+  allowedPublicExams?: string[];
 }
 
 export interface MockAuditLog {
@@ -506,7 +508,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const setLocalCache = (key: string, data: any) => {
-    if (typeof window === "undefined" || !data) return;
+    if (typeof window === "undefined" || data === undefined || data === null) return;
     try {
       localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }));
     } catch {
@@ -805,8 +807,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setLocalCache("gng_cached_feeStructures", feeData.feeStructures || []);
         }
       });
-      const noticesLoad = apiFetch("/api/notice", {}, 10000, true).then((data) => {
-        if (data) {
+      const noticesLoad = apiFetch("/api/notice", {}, 10000, false).then((data) => {
+        if (Array.isArray(data)) {
           setNotices(data);
           setLocalCache("gng_cached_notices", data);
         }
@@ -962,8 +964,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const refreshNotices = async () => {
-    const data = await apiFetch("/api/notice");
-    if (data) setNotices(data);
+    clearApiCache("/api/notice");
+    const data = await apiFetch("/api/notice", {}, 10000, false);
+    if (Array.isArray(data)) {
+      setNotices(data);
+      setLocalCache("gng_cached_notices", data);
+    }
   };
 
   const refreshAdmissionApplications = async () => {
@@ -972,8 +978,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const refreshSchool = async () => {
-    const data = await apiFetch("/api/school");
-    if (data) setSchoolInfo(data);
+    clearApiCache("/api/school");
+    const data = await apiFetch("/api/school", { cache: "no-store" }, 10000, false);
+    if (data) {
+      setSchoolInfo(data);
+      setLocalCache("gng_cached_schoolInfo", data);
+    }
   };
 
   const refreshUsers = async () => {
@@ -1189,6 +1199,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // The backend upserts the merged payload in a single transaction.
       const mergedConfig = { ...schoolInfo, ...info };
 
+      // Optimistic update for 0ms instantaneous UI feedback across all website components
+      setSchoolInfo(mergedConfig);
+      setLocalCache("gng_cached_schoolInfo", mergedConfig);
+      clearApiCache("/api/school");
+
       const res = await fetch("/api/school", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1367,6 +1382,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     fileUrl?: string
   ) => {
     try {
+      clearApiCache("/api/notice");
       const res = await fetch("/api/notice", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1394,6 +1410,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   ): Promise<boolean> => {
     try {
+      clearApiCache("/api/notice");
       const res = await fetch("/api/notice", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -1413,6 +1430,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const deleteNotice = async (id: string): Promise<boolean> => {
     try {
+      // Optimistically remove from state & localStorage immediately
+      setNotices((prev) => {
+        const next = prev.filter((n) => n.id !== id);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("gng_cached_notices", JSON.stringify({ data: next, timestamp: Date.now() }));
+        }
+        return next;
+      });
+      clearApiCache("/api/notice");
+
       const res = await fetch("/api/notice", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
@@ -1423,9 +1450,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await refreshNotices();
         return true;
       }
+      await refreshNotices();
       return false;
     } catch (err) {
       console.error("Delete notice failed:", err);
+      await refreshNotices();
       return false;
     }
   };

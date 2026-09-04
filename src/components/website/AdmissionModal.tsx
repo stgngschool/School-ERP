@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { X, GraduationCap, CheckCircle2, Send, Phone, Clock } from "lucide-react";
+import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
 
 interface AdmissionModalProps {
   onClose: () => void;
@@ -188,9 +189,9 @@ export default function AdmissionModal({ onClose }: AdmissionModalProps) {
 
             <button
               type="submit"
-              className="w-full py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer mt-4"
+              className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer mt-4 active:scale-95"
             >
-              <Send className="w-4 h-4" />
+              <WhatsAppIcon className="w-4 h-4 text-white shrink-0" />
               <span>Connect on WhatsApp</span>
             </button>
           </form>

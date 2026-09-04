@@ -14,8 +14,11 @@ import {
   ChevronRight,
   ArrowUp,
 } from "lucide-react";
+import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
+import { useAuth } from "@/context/AuthContext";
 
 export default function Footer() {
+  const { schoolInfo } = useAuth();
   const [schoolData, setSchoolData] = React.useState<any>({
     name: "St. G.N.G. School",
     address: "Salarpur, Rasulgarh, Varanasi - 221007, Uttar Pradesh",
@@ -26,14 +29,25 @@ export default function Footer() {
     udiseCode: "09670707502",
   });
 
+  const [mounted, setMounted] = React.useState(false);
+
   React.useEffect(() => {
-    fetch("/api/school")
+    setMounted(true);
+    fetch("/api/school", { cache: "no-store" })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data) setSchoolData(data);
       })
       .catch(() => {});
   }, []);
+
+  const liveName = (mounted && schoolInfo?.name) || schoolData.name || "St. G.N.G. School";
+  const liveAddress = (mounted && schoolInfo?.address) || schoolData.address || "Salarpur, Rasulgarh, Varanasi - 221007, Uttar Pradesh";
+  const livePhone = (mounted && schoolInfo?.phone) || schoolData.phone || "9452824318";
+  const liveAltPhone = (mounted && schoolInfo?.alternatePhone) || schoolData.alternatePhone || "9415812975";
+  const liveWhatsapp = (mounted && schoolInfo?.whatsappNumber) || schoolData.whatsappNumber || livePhone;
+  const liveEmail = (mounted && schoolInfo?.email) || schoolData.email || "stgng2005@gmail.com";
+  const liveTimings = (mounted && schoolInfo?.schoolTimings) || schoolData.schoolTimings || "8:00 AM - 1:30 PM (Mon - Sat)";
 
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -184,37 +198,50 @@ export default function Footer() {
               School Campus Office
             </h4>
 
-            <div className="space-y-2.5 text-xs text-slate-700 font-medium">
+            <div suppressHydrationWarning className="space-y-2.5 text-xs text-slate-700 font-medium">
               <div className="flex items-start gap-2">
                 <MapPin className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
-                <span>{schoolData.address || "Salarpur, Rasulgarh, Varanasi - 221007, Uttar Pradesh"}</span>
+                <span>{liveAddress}</span>
               </div>
 
               <div className="flex items-center gap-2">
                 <Phone className="w-4 h-4 text-emerald-600 shrink-0" />
-                <a href={`tel:${schoolData.phone || "9452824318"}`} className="hover:text-indigo-600 font-bold text-slate-900">
-                  +91 {schoolData.phone || "9452824318"}
+                <a href={`tel:${livePhone}`} className="hover:text-indigo-600 font-bold text-slate-900">
+                  +91 {livePhone}
                 </a>
-                {schoolData.alternatePhone && (
+                {liveAltPhone && (
                   <>
                     <span className="text-slate-400">/</span>
-                    <a href={`tel:${schoolData.alternatePhone}`} className="hover:text-indigo-600 font-bold text-slate-900">
-                      {schoolData.alternatePhone}
+                    <a href={`tel:${liveAltPhone}`} className="hover:text-indigo-600 font-bold text-slate-900">
+                      {liveAltPhone}
                     </a>
                   </>
                 )}
               </div>
 
               <div className="flex items-center gap-2">
+                <WhatsAppIcon className="w-4 h-4 text-emerald-600 shrink-0" />
+                <a
+                  href={`https://wa.me/91${liveWhatsapp}?text=${encodeURIComponent("Namaste St. GNG School, I have an inquiry.")}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-emerald-700 font-bold text-slate-900 flex items-center gap-1.5"
+                >
+                  <span>+91 {liveWhatsapp}</span>
+                  <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">WhatsApp</span>
+                </a>
+              </div>
+
+              <div className="flex items-center gap-2">
                 <Mail className="w-4 h-4 text-indigo-600 shrink-0" />
-                <a href={`mailto:${schoolData.email || "stgng2005@gmail.com"}`} className="hover:text-indigo-600">
-                  {schoolData.email || "stgng2005@gmail.com"}
+                <a href={`mailto:${liveEmail}`} className="hover:text-indigo-600">
+                  {liveEmail}
                 </a>
               </div>
 
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-amber-600 shrink-0" />
-                <span>Office: {schoolData.schoolTimings || "8:00 AM - 1:30 PM (Mon - Sat)"}</span>
+                <span>Office: {liveTimings}</span>
               </div>
             </div>
           </div>
@@ -222,7 +249,7 @@ export default function Footer() {
 
         {/* Bottom Bar: Copyright & Recognition */}
         <div className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500 font-medium">
-          <p>© {new Date().getFullYear()} {schoolData.name || "St. G.N.G. School"}. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} {liveName}. All rights reserved.</p>
           <div className="flex items-center gap-4">
             <span className="text-emerald-700 font-bold">● Govt. Approved Institution</span>
             <button

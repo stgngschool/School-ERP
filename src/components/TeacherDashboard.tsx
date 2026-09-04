@@ -23,6 +23,7 @@ import {
   ChevronRight,
   GraduationCap,
 } from "lucide-react";
+import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
 import StudentProfileModal from "@/components/StudentProfileModal";
 import MarksFeedingConsole from "@/components/MarksFeedingConsole";
 import AttendanceConsole from "@/components/AttendanceConsole";
@@ -662,7 +663,7 @@ export default function TeacherDashboard() {
                               rel="noopener noreferrer"
                               className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition-all shadow-xs active:scale-95 cursor-pointer"
                             >
-                              <MessageSquare className="w-3.5 h-3.5" />
+                              <WhatsAppIcon className="w-3.5 h-3.5 text-white shrink-0" />
                               <span>WhatsApp</span>
                             </a>
                           ) : (
@@ -800,7 +801,7 @@ export default function TeacherDashboard() {
                                           title="Send Auto-Formatted WhatsApp Fee Reminder"
                                           className="flex items-center gap-1.5 py-2 px-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition-all cursor-pointer active:scale-95 shadow-xs"
                                         >
-                                          <MessageSquare className="w-3.5 h-3.5" />
+                                          <WhatsAppIcon className="w-3.5 h-3.5 text-white shrink-0" />
                                           <span>WhatsApp</span>
                                         </a>
                                       )}

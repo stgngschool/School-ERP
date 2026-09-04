@@ -92,8 +92,8 @@ const FALLBACK_NOTICES: NoticeItem[] = [
 ];
 
 export default function NoticeBoardSection() {
-  const [notices, setNotices] = useState<NoticeItem[]>(FALLBACK_NOTICES);
-  const [loading, setLoading] = useState(false);
+  const [notices, setNotices] = useState<NoticeItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedNotice, setSelectedNotice] = useState<NoticeItem | null>(null);
@@ -105,12 +105,15 @@ export default function NoticeBoardSection() {
       const res = await fetch("/api/notice?public=true", { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           setNotices(data);
         }
       }
     } catch (err) {
-      console.warn("Using offline notice board data");
+      console.warn("Notice board fetch failed:", err);
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        setNotices(FALLBACK_NOTICES);
+      }
     } finally {
       setLoading(false);
     }
