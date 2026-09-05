@@ -77,7 +77,9 @@ const getNavItems = (activeRole: string): NavItem[] => {
     case "ACCOUNTANT":
       return [
         { category: "Fee Transactions", name: "Fee Collection", shortName: "Collect", icon: CreditCard, tab: "collect" },
+        { category: "Academic Marks", name: "Class Marks Entry", shortName: "Marks", icon: GraduationCap, tab: "marks" },
         { category: "Fee Transactions", name: "Fee Defaulters & Dues", shortName: "Dues", icon: AlertTriangle, tab: "defaulters" },
+        { category: "Academic Marks", name: "Print Marksheets", shortName: "Marksheets", icon: Printer, tab: "print_marksheets", desktopOnly: true },
         { category: "Fee Transactions", name: "Receipts & Ledger Logs", shortName: "Ledger", icon: ArrowRightLeft, tab: "ledger", desktopOnly: true },
         { category: "Communication", name: "Notices & Circulars", shortName: "Notices", icon: Bell, tab: "notices" },
       ];
@@ -183,10 +185,21 @@ const getMegaMenuData = (activeRole: string): MegaMenuCategory[] => {
           ]
         },
         {
-          title: "Announcements",
+          title: "Academics & Examination",
           textColor: "text-indigo-600",
           bgColor: "bg-indigo-50",
           borderColor: "border-indigo-100",
+          icon: GraduationCap,
+          items: [
+            { name: "Class Marks Entry", tab: "marks" },
+            { name: "Print Marksheets", tab: "print_marksheets" },
+          ]
+        },
+        {
+          title: "Announcements",
+          textColor: "text-amber-600",
+          bgColor: "bg-amber-50",
+          borderColor: "border-amber-100",
           icon: Bell,
           items: [
             { name: "Notices & Circulars", tab: "notices" },

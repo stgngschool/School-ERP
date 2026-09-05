@@ -7,6 +7,7 @@ import { getNextFamilyCode, getNextAdmissionNumber, getNextRollNumber, findMatch
 import { getAuthUser } from "@/lib/auth";
 import { boundPagination, getSafeErrorMessage } from "@/lib/validation";
 import { BoundedCache } from "@/lib/cache/BoundedCache";
+import { validateCsrfOrigin } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
@@ -141,6 +142,11 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    // ── H-11: Validate CSRF Origin on state-mutating requests
+    if (!validateCsrfOrigin(request)) {
+      return NextResponse.json({ error: "Invalid request origin (CSRF verification failed)." }, { status: 403 });
+    }
+
     const authUser = await getAuthUser(request);
     if (!authUser || (authUser.role !== "ADMIN" && authUser.role !== "ACCOUNTANT")) {
       return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
@@ -456,6 +462,11 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
+    // ── H-11: Validate CSRF Origin on state-mutating requests
+    if (!validateCsrfOrigin(request)) {
+      return NextResponse.json({ error: "Invalid request origin (CSRF verification failed)." }, { status: 403 });
+    }
+
     const authUser = await getAuthUser(request);
     if (!authUser || (authUser.role !== "ADMIN" && authUser.role !== "ACCOUNTANT")) {
       return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
@@ -471,6 +482,16 @@ export async function PATCH(request: Request) {
     const studentIds = Array.isArray(studentId) ? studentId : [studentId];
 
     if (action === "updateStatus") {
+      // ── C-07 / L-04: Strict validation of student lifecycle status
+      const allowedStatuses = ["ACTIVE", "LEFT", "ALUMNI", "SUSPENDED"];
+      if (!data?.status || typeof data.status !== "string" || !allowedStatuses.includes(data.status)) {
+        return NextResponse.json(
+          { error: `Invalid status. Allowed values: ${allowedStatuses.join(", ")}` },
+          { status: 400 }
+        );
+      }
+
+      clearServerStudentsCache();
       const updated = await db.student.updateMany({
         where: { id: { in: studentIds } },
         data: { status: data.status },

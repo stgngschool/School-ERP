@@ -218,6 +218,10 @@ export interface MockSchoolInfo {
   examConfig?: any;
   enablePublicResults?: boolean;
   allowedPublicExams?: string[];
+  adminNotes?: string[];
+  googleSpreadsheetId?: string;
+  googleFolderId?: string;
+  [key: string]: any;
 }
 
 export interface MockAuditLog {

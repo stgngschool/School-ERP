@@ -529,11 +529,15 @@ function SingleMarksheetCard({
     grandMaxTotal += maxM;
     grandObtTotal += totalTermObt;
 
+    const isAbsent1 = (t1Match?.remarks || "").toUpperCase().includes("ABSENT") || (subMarks[0]?.remarks || "").toUpperCase().includes("ABSENT");
+    const isAbsent2 = (t2Match?.remarks || "").toUpperCase().includes("ABSENT") || (subMarks[1]?.remarks || "").toUpperCase().includes("ABSENT");
+
     return {
       subName,
       prAct1, noteBook1, subEnri1, halfYearly1, obt1,
       prAct2, noteBook2, subEnri2, yearly2, obt2,
       maxM, totalTermObt,
+      isAbsent1, isAbsent2,
     };
   });
 
@@ -649,18 +653,20 @@ function SingleMarksheetCard({
                 {subjectRows.map((row, idx) => (
                   <tr key={idx} className={`border-b border-slate-900 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/80"}`}>
                     <td className="py-1.5 px-2 border-r-2 border-slate-900 text-left font-black uppercase text-slate-950">{row.subName}</td>
-                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-bold text-slate-700">{row.prAct1}</td>
-                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-bold text-slate-700">{row.noteBook1}</td>
-                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-bold text-slate-700">{row.subEnri1}</td>
-                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-black text-slate-900">{row.halfYearly1}</td>
-                    <td className="py-1.5 px-0.5 border-r-2 border-slate-900 font-black bg-indigo-50/60 text-indigo-950">{row.obt1}</td>
-                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-bold text-slate-700">{row.prAct2}</td>
-                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-bold text-slate-700">{row.noteBook2}</td>
-                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-bold text-slate-700">{row.subEnri2}</td>
-                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-black text-slate-900">{row.yearly2}</td>
-                    <td className="py-1.5 px-0.5 border-r-2 border-slate-900 font-black bg-emerald-50/60 text-emerald-950">{row.obt2}</td>
+                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-bold text-slate-700">{row.isAbsent1 ? "AB" : row.prAct1}</td>
+                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-bold text-slate-700">{row.isAbsent1 ? "AB" : row.noteBook1}</td>
+                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-bold text-slate-700">{row.isAbsent1 ? "AB" : row.subEnri1}</td>
+                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-black text-slate-900">{row.isAbsent1 ? <span className="text-rose-700 font-black">AB</span> : row.halfYearly1}</td>
+                    <td className="py-1.5 px-0.5 border-r-2 border-slate-900 font-black bg-indigo-50/60 text-indigo-950">{row.isAbsent1 ? <span className="text-rose-700 font-black">AB</span> : row.obt1}</td>
+                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-bold text-slate-700">{row.isAbsent2 ? "AB" : row.prAct2}</td>
+                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-bold text-slate-700">{row.isAbsent2 ? "AB" : row.noteBook2}</td>
+                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-bold text-slate-700">{row.isAbsent2 ? "AB" : row.subEnri2}</td>
+                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-black text-slate-900">{row.isAbsent2 ? <span className="text-rose-700 font-black">AB</span> : row.yearly2}</td>
+                    <td className="py-1.5 px-0.5 border-r-2 border-slate-900 font-black bg-emerald-50/60 text-emerald-950">{row.isAbsent2 ? <span className="text-rose-700 font-black">AB</span> : row.obt2}</td>
                     <td className="py-1.5 px-0.5 border-r border-slate-300 font-extrabold text-slate-700">{row.maxM}</td>
-                    <td className="py-1.5 px-0.5 font-black text-indigo-950 text-xs bg-amber-50">{row.totalTermObt}</td>
+                    <td className="py-1.5 px-0.5 font-black text-indigo-950 text-xs bg-amber-50">
+                      {row.isAbsent1 && row.isAbsent2 ? <span className="text-rose-700 font-black">AB</span> : row.totalTermObt}
+                    </td>
                   </tr>
                 ))}
                 <tr className="border-t-2 border-slate-900 font-black bg-slate-900 text-white">

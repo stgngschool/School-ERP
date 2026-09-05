@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { PlusCircle, Receipt, Trash2, Calendar } from "lucide-react";
 import { formatP, toPaisa } from "@/lib/currency";
+import { getTodayIST } from "@/lib/dateUtils";
 
 export type Expense = {
   id: string;
@@ -33,7 +34,7 @@ export default function ExpenseRegister({ expenses, setExpenses }: ExpenseRegist
 
     const newExpense: Expense = {
       id: Math.random().toString(36).substr(2, 9),
-      date: new Date().toISOString().slice(0, 10),
+      date: getTodayIST(),
       category,
       description,
       // ── C-03 fix: Use toPaisa() which does Math.round(rupees * 100) internally

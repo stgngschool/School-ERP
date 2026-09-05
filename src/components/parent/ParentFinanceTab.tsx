@@ -2,6 +2,7 @@
 
 import React, { useState, useRef } from "react";
 import { formatP } from "@/lib/currency";
+import { getISTDateString, getTodayIST } from "@/lib/dateUtils";
 import {
   CreditCard,
   CheckCircle,
@@ -131,7 +132,7 @@ export default function ParentFinanceTab({
           transactionRef: serverRec.transactionRef || "",
           details: serverRec.details || unpaidItems.map((i) => `${i.name} (${formatP(i.amount)})`).join(" + "),
           items: serverRec.items || unpaidItems.map((i) => ({ name: i.name, amount: i.amount, originalAmount: i.amount, discount: 0, balance: 0 })),
-          createdAt: serverRec.createdAt ? new Date(serverRec.createdAt).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
+          createdAt: serverRec.createdAt ? getISTDateString(serverRec.createdAt) : getTodayIST(),
         };
 
         setSelectedDueIds([]);

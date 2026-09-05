@@ -61,8 +61,8 @@ export async function POST(
   const authUser = await getAuthUser(request);
   if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  if (authUser.role !== "ADMIN" && authUser.role !== "TEACHER") {
-    return NextResponse.json({ error: "Unauthorized. Only administrators and teachers can record marks." }, { status: 403 });
+  if (authUser.role !== "ADMIN" && authUser.role !== "TEACHER" && authUser.role !== "ACCOUNTANT") {
+    return NextResponse.json({ error: "Unauthorized. Only administrators, accountants, and teachers can record marks." }, { status: 403 });
   }
 
   try {

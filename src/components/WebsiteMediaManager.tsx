@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { uploadToCloudinary, getOptimizedImageUrl } from "@/lib/cloudinary";
+import { getTodayIST } from "@/lib/dateUtils";
 
 interface MediaItem {
   id: string;
@@ -177,7 +178,7 @@ export default function WebsiteMediaManager({ onClose }: { onClose?: () => void 
         category: newGalleryCategory,
         imageUrl: uploadRes.url,
         description: newGalleryDesc.trim(),
-        date: new Date().toISOString().split("T")[0],
+        date: getTodayIST(),
       };
 
       const updated: WebsiteMediaConfig = {

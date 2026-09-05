@@ -116,7 +116,7 @@ export default function BottomSheet({ isOpen, onClose, title, children }: Bottom
         onTouchEnd={handleTouchEnd}
       >
         {/* Visual Grab Handle for Swiping */}
-        <div className="bottom-sheet-handle cursor-grab active:cursor-grabbing" />
+        <div className="bottom-sheet-handle cursor-grab active:cursor-grabbing" style={{ touchAction: "none" }} />
         
         {/* Header */}
         <div className="flex items-center justify-between mb-4 select-none">

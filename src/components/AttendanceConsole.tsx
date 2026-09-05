@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import StudentProfileModal from "@/components/StudentProfileModal";
 import ModernDatePicker from "@/components/ModernDatePicker";
+import { getTodayIST } from "@/lib/dateUtils";
 
 interface AttendanceConsoleProps {
   initialClass?: string;
@@ -35,17 +36,14 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
   } = useAuth();
 
   // Selected Class & Date
-  const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
+  const todayStr = useMemo(() => getTodayIST(), []);
   const [selectedClass, setSelectedClass] = useState<string>(initialClass || "10-A");
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [activeView, setActiveView] = useState<"ROSTER" | "MONTHLY">("ROSTER");
-  const [selectedMonth, setSelectedMonth] = useState<string>(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-  });
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => getTodayIST().slice(0, 7));
 
   // Profile modal state
   const [showProfileModal, setShowProfileModal] = useState<boolean>(false);

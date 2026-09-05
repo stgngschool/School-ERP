@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useAuth, AttendanceStatus } from "@/context/AuthContext";
 import {
   UserCheck,
@@ -23,10 +23,14 @@ import {
   ChevronRight,
   GraduationCap,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
-import StudentProfileModal from "@/components/StudentProfileModal";
-import MarksFeedingConsole from "@/components/MarksFeedingConsole";
-import AttendanceConsole from "@/components/AttendanceConsole";
+
+// ── M-02 fix: Lazy-load heavy components with next/dynamic to optimize teacher portal initial load
+const StudentProfileModal = dynamic(() => import("@/components/StudentProfileModal"), { ssr: false });
+const MarksFeedingConsole = dynamic(() => import("@/components/MarksFeedingConsole"), { ssr: false });
+const AttendanceConsole = dynamic(() => import("@/components/AttendanceConsole"), { ssr: false });
+
 import NoticeBoardView from "@/components/NoticeBoardView";
 import ModernDatePicker from "@/components/ModernDatePicker";
 import {
@@ -41,6 +45,10 @@ import {
   getCurrentMonthName,
 } from "@/lib/whatsapp";
 import { formatP } from "@/lib/currency";
+import { getTodayIST } from "@/lib/dateUtils";
+
+// ── H-10 / L-09: Stable module-level tabs array
+const VALID_TEACHER_TABS = ["attendance", "homework", "leaves", "marks", "notices", "defaulters"] as const;
 
 export default function TeacherDashboard() {
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -63,14 +71,13 @@ export default function TeacherDashboard() {
     studentsLoaded,
   } = useAuth();
 
-  const validTabs = ["attendance", "homework", "leaves", "marks", "notices", "defaulters"];
-  const currentTab = validTabs.includes(activeTab) ? activeTab : "attendance";
+  const currentTab = VALID_TEACHER_TABS.includes(activeTab as any) ? activeTab : "attendance";
 
   React.useEffect(() => {
-    if (!validTabs.includes(activeTab)) {
+    if (!VALID_TEACHER_TABS.includes(activeTab as any)) {
       setActiveTab("attendance");
     }
-  }, [activeTab]);
+  }, [activeTab, setActiveTab]);
 
   const [selectedClass, setSelectedClass] = useState("10-A");
   const [studentSearch, setStudentSearch] = useState("");
@@ -87,7 +94,8 @@ export default function TeacherDashboard() {
     }
   }, [user]);
 
-  // Available classes computed and sorted cleanly
+  // ── M-05 fix: Available classes computed for this teacher specifically.
+  // Teachers only see their assigned classes; fallback to all classes only if unassigned.
   const availableClasses = React.useMemo(() => {
     const classSet = new Set<string>();
     if (user?.teacherProfile?.classes && user.teacherProfile.classes.length > 0) {
@@ -95,8 +103,7 @@ export default function TeacherDashboard() {
         const key = getCleanClassKey(c.name, c.section);
         if (key) classSet.add(key);
       });
-    }
-    if (students.length > 0) {
+    } else if (students.length > 0) {
       students.forEach((s) => {
         const key = getCleanClassKey(s.class, s.section);
         if (key) classSet.add(key);
@@ -122,6 +129,12 @@ export default function TeacherDashboard() {
   const [hwDueDate, setHwDueDate] = useState("");
   const [hwSuccess, setHwSuccess] = useState(false);
 
+  // ── M-13: Homework history pagination limit
+  const [homeworkLimit, setHomeworkLimit] = useState(15);
+  useEffect(() => {
+    setHomeworkLimit(15);
+  }, [selectedClass]);
+
   // Filter students based on selected class
   const classStudents = React.useMemo(() => {
     return students.filter((s) => matchStudentToClass(s, selectedClass));
@@ -140,7 +153,7 @@ export default function TeacherDashboard() {
   const pendingLeaves = leaveRequests.filter((l) => l.status === "PENDING");
 
   // Helper to check today's attendance status
-  const todayDateStr = new Date().toISOString().split("T")[0];
+  const todayDateStr = getTodayIST();
 
   const todaysAttendanceMap = React.useMemo(() => {
     const map: Record<string, AttendanceStatus> = {};
@@ -300,23 +313,42 @@ export default function TeacherDashboard() {
                 <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">
                   Assignment Log — {selectedClass}
                 </h3>
-                {classHomeworkHistory.length > 0 ? classHomeworkHistory.map((hw) => (
-                  <div key={hw.id} className="p-3 sm:p-3.5 border border-slate-200 bg-slate-50 rounded-lg sm:rounded-xl flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[9px] font-black uppercase px-1.5 py-0.5 bg-indigo-100 text-indigo-800 rounded">
-                          {hw.subject}
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-bold">Due: {hw.dueDate}</span>
+                {classHomeworkHistory.length > 0 ? (
+                  <>
+                    {classHomeworkHistory.slice(0, homeworkLimit).map((hw) => (
+                      <div key={hw.id} className="p-3 sm:p-3.5 border border-slate-200 bg-slate-50 rounded-lg sm:rounded-xl flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[9px] font-black uppercase px-1.5 py-0.5 bg-indigo-100 text-indigo-800 rounded">
+                              {hw.subject}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-bold">Due: {hw.dueDate}</span>
+                          </div>
+                          <h4 className="font-bold text-slate-800 mt-1 text-sm truncate">{hw.title}</h4>
+                        </div>
+                        <button onClick={() => deleteHomework(hw.id)}
+                          className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors shrink-0 press-scale cursor-pointer">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                       </div>
-                      <h4 className="font-bold text-slate-800 mt-1 text-sm truncate">{hw.title}</h4>
-                    </div>
-                    <button onClick={() => deleteHomework(hw.id)}
-                      className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors shrink-0 press-scale">
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                )) : (
+                    ))}
+
+                    {classHomeworkHistory.length > homeworkLimit && (
+                      <div className="pt-2 flex items-center justify-between">
+                        <span className="text-[11px] text-slate-400 font-semibold">
+                          Showing {Math.min(homeworkLimit, classHomeworkHistory.length)} of {classHomeworkHistory.length} assignments
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setHomeworkLimit((prev) => prev + 15)}
+                          className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-lg border border-indigo-200 transition-colors cursor-pointer"
+                        >
+                          Load More
+                        </button>
+                      </div>
+                    )}
+                  </>
+                ) : (
                   <div className="text-center py-10">
                     <BookOpen className="h-10 w-10 text-slate-200 mx-auto mb-2" />
                     <p className="text-sm text-slate-400 font-semibold">No assignments yet for {selectedClass}</p>

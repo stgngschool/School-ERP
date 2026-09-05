@@ -194,6 +194,7 @@ model Student {
   @@index([parentProfileId])
   @@index([classId])
   @@index([name])
+  @@index([status])
 }
 
 model Attendance {

@@ -127,12 +127,10 @@ import {
 } from "lucide-react";
 
 import { getGroupedReceiptItems } from "@/lib/receipts";
+import { getISTDateString, getTodayIST } from "@/lib/dateUtils";
+import { cleanPhoneNumber } from "@/lib/whatsapp";
 
-const getLocalDateString = () => {
-  const d = new Date();
-  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-  return d.toISOString().split("T")[0];
-};
+const getLocalDateString = (date?: Date | string | number) => getISTDateString(date);
 
 // ── AD-09: validTabs is a static list — defined at module level so it is stable
 // across renders and the useEffect dependency array never captures a stale closure.
@@ -164,41 +162,6 @@ export default function AdminDashboard() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Redesigned Dashboard State
-  const [hoveredMonth, setHoveredMonth] = useState<string | null>(null);
-  const [notes, setNotes] = useState<string[]>([]);
-  const [newNoteText, setNewNoteText] = useState("");
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("admin_dashboard_notes");
-      if (saved) {
-        try {
-          setNotes(JSON.parse(saved));
-        } catch (e) {
-          console.error("Error loading notes", e);
-        }
-      }
-    }
-  }, []);
-
-  const addNote = () => {
-    if (!newNoteText.trim()) return;
-    const updated = [...notes, newNoteText.trim()];
-    setNotes(updated);
-    setNewNoteText("");
-    if (typeof window !== "undefined") {
-      localStorage.setItem("admin_dashboard_notes", JSON.stringify(updated));
-    }
-  };
-
-  const deleteNote = (index: number) => {
-    const updated = notes.filter((_, i) => i !== index);
-    setNotes(updated);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("admin_dashboard_notes", JSON.stringify(updated));
-    }
-  };
   const {
     user,
     usersList,
@@ -255,6 +218,48 @@ export default function AdminDashboard() {
     billingLoaded,
     attendanceLoaded,
   } = useAuth();
+
+  // Redesigned Dashboard State
+  const [hoveredMonth, setHoveredMonth] = useState<string | null>(null);
+  const [notes, setNotes] = useState<string[]>([]);
+  const [newNoteText, setNewNoteText] = useState("");
+
+  // ── M-03: Hydrate notes from DB schoolInfo (PostgreSQL) with localStorage cache fallback
+  useEffect(() => {
+    const dbNotes = (schoolInfo as any)?.adminNotes;
+    if (Array.isArray(dbNotes)) {
+      setNotes(dbNotes);
+    } else if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("admin_dashboard_notes");
+      if (saved) {
+        try {
+          setNotes(JSON.parse(saved));
+        } catch (e) {
+          console.error("Error loading notes", e);
+        }
+      }
+    }
+  }, [(schoolInfo as any)?.adminNotes]);
+
+  const addNote = () => {
+    if (!newNoteText.trim()) return;
+    const updated = [...notes, newNoteText.trim()];
+    setNotes(updated);
+    setNewNoteText("");
+    if (typeof window !== "undefined") {
+      localStorage.setItem("admin_dashboard_notes", JSON.stringify(updated));
+    }
+    updateSchoolInfo({ adminNotes: updated });
+  };
+
+  const deleteNote = (index: number) => {
+    const updated = notes.filter((_, i) => i !== index);
+    setNotes(updated);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("admin_dashboard_notes", JSON.stringify(updated));
+    }
+    updateSchoolInfo({ adminNotes: updated });
+  };
 
   const cleanFeeHeads = React.useMemo(() => {
     return feeHeads.filter(
@@ -465,8 +470,10 @@ export default function AdminDashboard() {
   const [assignClassSuccess, setAssignClassSuccess] = useState("");
 
   // itemsPerPage is now state
-  
   const [receiptPageSize, setReceiptPageSize] = useState<"A4" | "A5">("A5");
+
+  // ── M-12: Pagination limit for System Security Audit Logs
+  const [auditLogLimit, setAuditLogLimit] = useState(50);
 
   // Google Cloud Integration states
   const [googleSpreadsheetId, setGoogleSpreadsheetId] = useState("");
@@ -480,14 +487,25 @@ export default function AdminDashboard() {
   const [showJsonBox, setShowJsonBox] = useState(false);
   const [googleStatus, setGoogleStatus] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
-  // Load Google integration state only when the School settings tab is opened.
+  // ── M-04: Load Google integration state from PostgreSQL schoolInfo with localStorage fallback
   useEffect(() => {
     if (activeTab !== "school") return;
 
-    if (typeof window !== "undefined") {
+    const dbSheetId = (schoolInfo as any)?.googleSpreadsheetId;
+    const dbFolderId = (schoolInfo as any)?.googleFolderId;
+
+    if (dbSheetId) {
+      setGoogleSpreadsheetId(dbSheetId);
+    } else if (typeof window !== "undefined") {
       setGoogleSpreadsheetId(localStorage.getItem("g_sheet_id") || "");
+    }
+
+    if (dbFolderId) {
+      setGoogleFolderId(dbFolderId);
+    } else if (typeof window !== "undefined") {
       setGoogleFolderId(localStorage.getItem("g_drive_folder_id") || "");
     }
+
     fetch("/api/google")
       .then((res) => res.json())
       .then((data) => {
@@ -496,7 +514,7 @@ export default function AdminDashboard() {
         }
       })
       .catch(() => {});
-  }, [activeTab]);
+  }, [activeTab, schoolInfo]);
 
   const handleSaveGoogleCredentials = async () => {
     if (!serviceJsonInput.trim()) {
@@ -526,12 +544,18 @@ export default function AdminDashboard() {
 
   const handleSpreadsheetIdChange = (val: string) => {
     setGoogleSpreadsheetId(val);
-    localStorage.setItem("g_sheet_id", val);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("g_sheet_id", val);
+    }
+    updateSchoolInfo({ googleSpreadsheetId: val });
   };
 
   const handleFolderIdChange = (val: string) => {
     setGoogleFolderId(val);
-    localStorage.setItem("g_drive_folder_id", val);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("g_drive_folder_id", val);
+    }
+    updateSchoolInfo({ googleFolderId: val });
   };
 
   const triggerSyncStudents = async () => {
@@ -1446,7 +1470,7 @@ export default function AdminDashboard() {
       (rec.manualReceiptNo ? `📖 *Book/Offline Rec No:* ${rec.manualReceiptNo}\n` : ``) +
       `👦 *Student / Family:* ${rec.studentName} (${rec.classSection})\n` +
       `💳 *Payment Method:* ${rec.method} Counter\n` +
-      `📅 *Date:* ${rec.createdAt || new Date().toISOString().split("T")[0]}\n\n` +
+      `📅 *Date:* ${rec.createdAt || getTodayIST()}\n\n` +
       `*Fee Breakdown:*\n${itemsText}\n\n` +
       `💰 *Total Paid:* ${formatP(rec.amount)}\n` +
       (rec.discount > 0 ? `🏷️ *Total Discount:* ${formatP(rec.discount)}\n` : ``) +
@@ -1454,8 +1478,7 @@ export default function AdminDashboard() {
       `\nThank you!\n*St. GNG School Finance Office*`;
 
     const encoded = encodeURIComponent(message);
-    const numericPhone = phone.replace(/\D/g, "");
-    const finalPhone = numericPhone.length === 10 ? `91${numericPhone}` : numericPhone;
+    const finalPhone = cleanPhoneNumber(phone);
 
     if (finalPhone) {
       window.open(`https://wa.me/${finalPhone}?text=${encoded}`, "_blank");
@@ -2005,9 +2028,7 @@ export default function AdminDashboard() {
     const encodedMessage = encodeURIComponent(message);
     
     if (phone && phone.trim() !== "") {
-      const numericPhone = phone.replace(/\D/g, "");
-      // if it's 10 digits in India, prepend 91. If it starts with 91 or +91 it's fine.
-      const finalPhone = numericPhone.length === 10 ? `91${numericPhone}` : numericPhone;
+      const finalPhone = cleanPhoneNumber(phone);
       window.open(`https://wa.me/${finalPhone}?text=${encodedMessage}`, '_blank');
     } else {
       window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
@@ -8594,8 +8615,8 @@ export default function AdminDashboard() {
                 </p>
               </div>
 
-              <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1">
-                {auditLogs.map((log) => (
+              <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
+                {auditLogs.slice(0, auditLogLimit).map((log) => (
                   <div
                     key={log.id}
                     className="p-3 border border-slate-200/80 rounded-xl flex items-center justify-between text-xs font-semibold"
@@ -8612,6 +8633,21 @@ export default function AdminDashboard() {
                     <span className="text-[9px] font-bold text-slate-400 shrink-0">{log.createdAt}</span>
                   </div>
                 ))}
+
+                {auditLogs.length > auditLogLimit && (
+                  <div className="pt-2 flex items-center justify-between">
+                    <span className="text-[11px] text-slate-400 font-semibold">
+                      Showing {Math.min(auditLogLimit, auditLogs.length)} of {auditLogs.length} audit logs
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setAuditLogLimit((prev) => Math.min(prev + 50, auditLogs.length))}
+                      className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-lg border border-indigo-200 transition-colors cursor-pointer"
+                    >
+                      Load 50 More
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}

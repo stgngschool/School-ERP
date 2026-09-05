@@ -3,7 +3,9 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { formatP } from "@/lib/currency";
-import { Sparkles, TrendingUp, FileText, Coins } from "lucide-react";
+import { getTodayIST } from "@/lib/dateUtils";
+import { cleanPhoneNumber } from "@/lib/whatsapp";
+import { Sparkles, TrendingUp, FileText, Coins, CreditCard, GraduationCap, Printer, AlertTriangle } from "lucide-react";
 import StudentProfileModal from "@/components/StudentProfileModal";
 import AttendanceConsole from "@/components/AttendanceConsole";
 import MarksFeedingConsole from "@/components/MarksFeedingConsole";
@@ -16,6 +18,20 @@ import FeeStructuresTab from "@/components/accountant/FeeStructuresTab";
 import LedgerReceiptsTab from "@/components/accountant/LedgerReceiptsTab";
 import DefaultersReportTab from "@/components/accountant/DefaultersReportTab";
 import FeeCollectTab from "@/components/accountant/FeeCollectTab";
+
+// ── H-10 / L-09 / L-02: Stable module-level valid tabs list.
+// Excludes unrendered tabs ('students', 'idcards', 'audit') to prevent blank screens for accountants.
+const VALID_ACCOUNTANT_TABS = [
+  "dashboard",
+  "collect",
+  "attendance",
+  "defaulters",
+  "ledger",
+  "structures",
+  "print_marksheets",
+  "marks",
+  "notices",
+] as const;
 
 export default function AccountantDashboard() {
   const {
@@ -40,24 +56,10 @@ export default function AccountantDashboard() {
     refreshBilling,
   } = useAuth();
 
-  const validTabs = [
-    "dashboard",
-    "collect",
-    "attendance",
-    "defaulters",
-    "ledger",
-    "structures",
-    "students",
-    "idcards",
-    "audit",
-    "print_marksheets",
-    "marks",
-    "notices",
-  ];
-  const currentTab = validTabs.includes(activeTab) ? activeTab : "collect";
+  const currentTab = VALID_ACCOUNTANT_TABS.includes(activeTab as any) ? activeTab : "collect";
 
   useEffect(() => {
-    if (!validTabs.includes(activeTab)) {
+    if (!VALID_ACCOUNTANT_TABS.includes(activeTab as any)) {
       setActiveTab("collect");
     }
   }, [activeTab, setActiveTab]);
@@ -115,7 +117,7 @@ export default function AccountantDashboard() {
       (rec.manualReceiptNo ? `📖 *Book/Offline Rec No:* ${rec.manualReceiptNo}\n` : ``) +
       `👦 *Student / Family:* ${rec.studentName} (${rec.classSection})\n` +
       `💳 *Payment Method:* ${rec.method} Counter\n` +
-      `📅 *Date:* ${rec.createdAt || new Date().toISOString().split("T")[0]}\n\n` +
+      `📅 *Date:* ${rec.createdAt || getTodayIST()}\n\n` +
       `*Fee Breakdown:*\n${itemsText}\n\n` +
       `💰 *Total Paid:* ${formatP(rec.amount)}\n` +
       (rec.discount > 0 ? `🏷️ *Total Discount:* ${formatP(rec.discount)}\n` : ``) +
@@ -123,8 +125,7 @@ export default function AccountantDashboard() {
       `\nThank you!\n*St. GNG School Finance Office*`;
 
     const encoded = encodeURIComponent(message);
-    const numericPhone = phone.replace(/\D/g, "");
-    const finalPhone = numericPhone.length === 10 ? `91${numericPhone}` : numericPhone;
+    const finalPhone = cleanPhoneNumber(phone);
 
     if (finalPhone) {
       window.open(`https://wa.me/${finalPhone}?text=${encoded}`, "_blank");
@@ -141,7 +142,7 @@ export default function AccountantDashboard() {
       r.collectedBy === user?.email ||
       r.collectedBy === "Accountant"
   );
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = getTodayIST();
   const myTodayReceipts = myReceipts.filter(
     (r) => r.createdAt && r.createdAt.startsWith(todayStr)
   );
@@ -275,6 +276,65 @@ export default function AccountantDashboard() {
           </div>
         </>
       )}
+
+      {/* Quick Action Navigation Strip for Accountant */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar pt-1">
+        <button
+          onClick={() => setActiveTab("collect")}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            currentTab === "collect"
+              ? "bg-slate-900 text-white shadow-sm"
+              : "bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50 hover:text-slate-900"
+          }`}
+        >
+          <CreditCard className="w-3.5 h-3.5 text-emerald-500" />
+          Fee Collection
+        </button>
+        <button
+          onClick={() => setActiveTab("marks")}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            currentTab === "marks"
+              ? "bg-indigo-600 text-white shadow-sm shadow-indigo-100"
+              : "bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50 hover:text-indigo-600"
+          }`}
+        >
+          <GraduationCap className={`w-3.5 h-3.5 ${currentTab === "marks" ? "text-white" : "text-indigo-600"}`} />
+          Class Marks Entry
+        </button>
+        <button
+          onClick={() => setActiveTab("print_marksheets")}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            currentTab === "print_marksheets"
+              ? "bg-emerald-600 text-white shadow-sm shadow-emerald-100"
+              : "bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50 hover:text-emerald-600"
+          }`}
+        >
+          <Printer className={`w-3.5 h-3.5 ${currentTab === "print_marksheets" ? "text-white" : "text-emerald-600"}`} />
+          Print Marksheets
+        </button>
+        <button
+          onClick={() => setActiveTab("defaulters")}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            currentTab === "defaulters"
+              ? "bg-amber-600 text-white shadow-sm shadow-amber-100"
+              : "bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50 hover:text-amber-600"
+          }`}
+        >
+          <AlertTriangle className={`w-3.5 h-3.5 ${currentTab === "defaulters" ? "text-white" : "text-amber-600"}`} />
+          Fee Defaulters
+        </button>
+        <button
+          onClick={() => setActiveTab("ledger")}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            currentTab === "ledger"
+              ? "bg-slate-900 text-white shadow-sm"
+              : "bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50 hover:text-slate-900"
+          }`}
+        >
+          <FileText className="w-3.5 h-3.5 text-slate-500" />
+          Receipts Ledger
+        </button>
+      </div>
 
       {/* 2. Main Tab Body */}
       {currentTab === "marks" ? (

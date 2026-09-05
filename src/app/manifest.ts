@@ -50,6 +50,12 @@ export default function manifest(): MetadataRoute.Manifest {
         src: '/logo.png',
         sizes: '192x192',
         type: 'image/png',
+        purpose: 'any',
+      },
+      {
+        src: '/logo.png',
+        sizes: '192x192',
+        type: 'image/png',
         purpose: 'maskable',
       },
       {
@@ -57,6 +63,12 @@ export default function manifest(): MetadataRoute.Manifest {
         sizes: '384x384',
         type: 'image/png',
         purpose: 'maskable',
+      },
+      {
+        src: '/logo.png',
+        sizes: '512x512',
+        type: 'image/png',
+        purpose: 'any',
       },
       {
         src: '/logo.png',

@@ -36,6 +36,7 @@ export const config = {
      * - api routes other than auth (or protect them separately if needed)
      * - _next/static, _next/image, favicon.ico, public assets
      */
-    "/((?!api|_next/static|_next/image|favicon.ico|.*\\.).*)",
+    // ── M-10 fix: Explicitly match static asset extensions instead of any dot in URL
+    "/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|woff|woff2|ttf|eot)).*)",
   ],
 };

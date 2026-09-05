@@ -19,6 +19,9 @@ import ParentAcademicsTab from "@/components/parent/ParentAcademicsTab";
 import ParentLeaveTab from "@/components/parent/ParentLeaveTab";
 import { matchStudentToClass, normalizeDisplayClassName, getCleanClassKey } from "@/lib/classUtils";
 
+// ── H-10 / L-09: Define valid tabs at module level so reference is stable
+const VALID_PARENT_TABS = ["dashboard", "reportcard", "fees", "homework", "attendance", "leave", "notices"] as const;
+
 export default function ParentDashboard() {
   const {
     user,
@@ -56,12 +59,11 @@ export default function ParentDashboard() {
 
   const child = parentStudents.find((s) => s.id === selectedChildId) || parentStudents[0];
 
-  const validTabs = ["dashboard", "reportcard", "fees", "homework", "attendance", "leave", "notices"];
   React.useEffect(() => {
-    if (!validTabs.includes(activeTab)) {
+    if (!VALID_PARENT_TABS.includes(activeTab as any)) {
       setActiveTab("dashboard");
     }
-  }, [activeTab]);
+  }, [activeTab, setActiveTab]);
 
   // Overall Child Calculations for Overview Cards
   const childDues = child
@@ -71,10 +73,11 @@ export default function ParentDashboard() {
 
   const childAttendances = child ? attendances.filter((a) => a.studentId === child.id) : [];
   const presentDays = childAttendances.filter((a) => a.status === "PRESENT").length;
-  const leaveDays = childAttendances.filter((a) => a.status === "LEAVE").length;
   const lateDays = childAttendances.filter((a) => a.status === "LATE").length;
+  const leaveDays = childAttendances.filter((a) => a.status === "LEAVE").length;
   const totalDays = childAttendances.length;
-  const attendanceRate = totalDays > 0 ? Math.round(((presentDays + leaveDays + lateDays) / totalDays) * 100) : 100;
+  // ── M-01 fix: Accurate attendance rate based only on attended days (present + late). Excludes leave days.
+  const attendanceRate = totalDays > 0 ? Math.round(((presentDays + lateDays) / totalDays) * 100) : null;
 
   const childHomework = child
     ? homeworks.filter((h) => {
@@ -173,8 +176,12 @@ export default function ParentDashboard() {
             <div className="space-y-2">
               <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Attendance Rate</span>
               <div>
-                <h3 className="text-2xl font-black text-slate-900 tracking-tight">{attendanceRate}%</h3>
-                <p className="text-[10px] text-slate-400 font-semibold mt-1">Current Academic Session</p>
+                <h3 className="text-2xl font-black text-slate-900 tracking-tight">
+                  {attendanceRate !== null ? `${attendanceRate}%` : "No Records"}
+                </h3>
+                <p className="text-[10px] text-slate-400 font-semibold mt-1">
+                  {totalDays > 0 ? `${presentDays + lateDays} of ${totalDays} days attended` : "Current Academic Session"}
+                </p>
               </div>
             </div>
             <div className="h-10 w-10 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 border border-indigo-100/50 shrink-0 group-hover:scale-105 transition-transform">
@@ -208,7 +215,13 @@ export default function ParentDashboard() {
               <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Outstanding Dues</span>
               <div>
                 <h3 className="text-2xl font-black text-rose-600 tracking-tight">{formatP(childBalance)}</h3>
-                <p className="text-[10px] text-slate-400 font-semibold mt-1">Tap to pay online</p>
+                <p className="text-[10px] text-slate-400 font-semibold mt-1">
+                  {childBalance <= 0
+                    ? "All dues cleared ✅"
+                    : schoolInfo?.upiId
+                      ? "Tap to pay online via UPI"
+                      : "Tap to view dues breakdown"}
+                </p>
               </div>
             </div>
             <div className="h-10 w-10 bg-rose-50 rounded-2xl flex items-center justify-center text-rose-600 border border-rose-100/50 shrink-0 group-hover:scale-105 transition-transform">

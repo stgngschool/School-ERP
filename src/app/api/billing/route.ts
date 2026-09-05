@@ -9,6 +9,8 @@ import { getAcademicYear } from "@/lib/generateYearlyCharges";
 import { numberToIndianWords } from "@/lib/currency";
 import { validatePaisaAmount, getSafeErrorMessage } from "@/lib/validation";
 import { BoundedCache } from "@/lib/cache/BoundedCache";
+import { getISTDateString } from "@/lib/dateUtils";
+import { validateCsrfOrigin } from "@/lib/security";
 
 // ── C-02 fix: Bounded LRU cache (max 50 entries, 20s TTL) replaces the
 // unbounded Map that could grow indefinitely with varied query parameters,
@@ -63,7 +65,7 @@ function getChargeDueDate(chargeName: string, fallbackTime: number): string {
     return `${sy}-04-10`;
   }
 
-  return new Date(fallbackTime).toISOString().split("T")[0];
+  return getISTDateString(fallbackTime);
 }
 
 
@@ -650,6 +652,11 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    // ── H-11: Validate CSRF Origin on state-mutating requests
+    if (!validateCsrfOrigin(request)) {
+      return NextResponse.json({ error: "Invalid request origin (CSRF verification failed)." }, { status: 403 });
+    }
+
     const authUser = await getAuthUser(request);
     if (!authUser) {
       return NextResponse.json({ error: "Unauthorized. Please log in." }, { status: 401 });
@@ -764,7 +771,15 @@ export async function POST(request: Request) {
 
       const reversedReceipt = await db.$transaction(async (tx) => {
         // 1. Mark receipt as REVERSED
-        const remarksObj = targetReceipt.remarks ? JSON.parse(targetReceipt.remarks) : {};
+        // ── M-11 fix: Gracefully handle legacy non-JSON plain text remarks
+        let remarksObj: Record<string, any> = {};
+        if (targetReceipt.remarks) {
+          try {
+            remarksObj = JSON.parse(targetReceipt.remarks);
+          } catch {
+            remarksObj = { originalRemarks: targetReceipt.remarks };
+          }
+        }
         remarksObj.reversedAt = new Date().toISOString();
         remarksObj.reversedBy = authUser.userId;
         remarksObj.reversalReason = reason || "Administrative Reversal";
@@ -879,6 +894,15 @@ export async function POST(request: Request) {
       } catch (err: any) {
         return NextResponse.json({ error: err.message }, { status: 400 });
       }
+    }
+
+    // ── M-07 fix: Server-side validation of PaymentMethod enum to prevent unhandled DB error
+    const VALID_PAYMENT_METHODS = ["CASH", "UPI", "BANK_TRANSFER", "CHEQUE", "ONLINE"];
+    if (!paymentMethod || typeof paymentMethod !== "string" || !VALID_PAYMENT_METHODS.includes(paymentMethod)) {
+      return NextResponse.json(
+        { error: `Invalid payment method '${paymentMethod}'. Allowed: ${VALID_PAYMENT_METHODS.join(", ")}` },
+        { status: 400 }
+      );
     }
 
     // ── B-05: Enforce role-based checkout restrictions

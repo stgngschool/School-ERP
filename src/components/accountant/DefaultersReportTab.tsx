@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { formatP } from "@/lib/currency";
 import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
-import { generateFeeReminderWhatsAppUrl, isDueUpToCurrentMonth } from "@/lib/whatsapp";
+import { generateFeeReminderWhatsAppUrl, isDueUpToCurrentMonth, cleanPhoneNumber } from "@/lib/whatsapp";
 import { exportMasterFeeRegisterXLS, exportSingleStudentStatementXLS, exportFeeRegisterCSV } from "@/lib/exportFeeXLS";
 import { MockStudent, MockDueItem, MockReceipt, MockSchoolInfo } from "@/context/AuthContext";
 import {
@@ -68,8 +68,7 @@ export default function DefaultersReportTab({
     const encodedMessage = encodeURIComponent(message);
 
     if (phone && phone.trim() !== "") {
-      const numericPhone = phone.replace(/\D/g, "");
-      const finalPhone = numericPhone.length === 10 ? `91${numericPhone}` : numericPhone;
+      const finalPhone = cleanPhoneNumber(phone);
       window.open(`https://wa.me/${finalPhone}?text=${encodedMessage}`, "_blank");
     } else {
       window.open(`https://wa.me/?text=${encodedMessage}`, "_blank");

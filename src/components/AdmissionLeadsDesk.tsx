@@ -33,6 +33,7 @@ import {
   Eye,
 } from "lucide-react";
 import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
+import { getTodayIST } from "@/lib/dateUtils";
 
 interface EnquiryItem {
   id: string;
@@ -199,7 +200,7 @@ export default function AdmissionLeadsDesk() {
       concessionId: selectedConcessionId || undefined,
       transportStopId: selectedTransportStopId || undefined,
       startingFeeMonth: startingMonth,
-      admissionDate: new Date().toISOString().split("T")[0],
+      admissionDate: getTodayIST(),
     });
 
     setApprovingLoading(false);

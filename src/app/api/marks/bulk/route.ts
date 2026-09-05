@@ -14,14 +14,21 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { examName, subject, maxMarks, marksList } = body;
+    const { examName, subject, maxMarks, marksList, deletedStudentIds } = body;
 
-    if (!examName || !subject || maxMarks === undefined || !Array.isArray(marksList)) {
-      return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
+    if (!examName || !subject) {
+      return NextResponse.json({ error: "Missing examName or subject." }, { status: 400 });
     }
 
-    const max = parseFloat(maxMarks);
-    if (isNaN(max) || max <= 0) {
+    const hasMarksList = Array.isArray(marksList) && marksList.length > 0;
+    const hasDeletions = Array.isArray(deletedStudentIds) && deletedStudentIds.length > 0;
+
+    if (!hasMarksList && !hasDeletions) {
+      return NextResponse.json({ error: "No marks or deletions provided." }, { status: 400 });
+    }
+
+    const max = maxMarks !== undefined ? parseFloat(maxMarks) : 100;
+    if (hasMarksList && (isNaN(max) || max <= 0)) {
       return NextResponse.json({ error: "Max marks must be a positive number." }, { status: 400 });
     }
 
@@ -35,19 +42,56 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Active academic session not found." }, { status: 400 });
     }
 
-    const upserts = marksList.map((m: any) => {
+    const isAbsentString = (val: any) => {
+      if (typeof val === "string") {
+        const clean = val.trim().toUpperCase();
+        return clean === "AB" || clean === "A" || clean === "ABSENT";
+      }
+      return false;
+    };
+
+    const validEntries: any[] = [];
+    const validationErrors: string[] = [];
+
+    for (const m of marksList) {
+      if (!m.studentId) continue;
+
       const breakdown = m.breakdown || null;
-      let obtained = parseFloat(m.marksObtained);
+      let isAbsent = m.isAbsent === true || isAbsentString(m.marksObtained);
+      let obtained = 0;
+      let remarks = m.remarks || "";
 
       if (breakdown && typeof breakdown === "object") {
-        obtained = Object.values(breakdown).reduce((sum: number, val: any) => {
-          const num = parseFloat(val);
-          return sum + (isNaN(num) ? 0 : num);
-        }, 0);
+        let hasAnyNumber = false;
+        let sum = 0;
+        Object.values(breakdown).forEach((val: any) => {
+          if (isAbsentString(val)) {
+            isAbsent = true;
+          } else {
+            const num = parseFloat(val);
+            if (!isNaN(num)) {
+              hasAnyNumber = true;
+              sum += num;
+            }
+          }
+        });
+        obtained = sum;
+      } else {
+        if (!isAbsent) {
+          obtained = parseFloat(m.marksObtained);
+        }
+      }
+
+      if (isAbsent) {
+        obtained = 0;
+        if (!remarks.toUpperCase().includes("ABSENT")) {
+          remarks = remarks ? `${remarks} (ABSENT)` : "ABSENT";
+        }
       }
 
       if (isNaN(obtained) || obtained < 0 || obtained > max) {
-        throw new Error(`Invalid marks: must be between 0 and ${max}`);
+        validationErrors.push(`Student ${m.studentId}: Marks must be between 0 and ${max}`);
+        continue;
       }
 
       // Map dynamic breakdown keys to static columns where possible for compatibility
@@ -74,45 +118,111 @@ export async function POST(request: Request) {
         });
       }
 
+      validEntries.push({
+        studentId: m.studentId,
+        obtained,
+        max,
+        writtenExam,
+        notebook,
+        subjectEnrichment,
+        practical,
+        breakdown,
+        remarks: remarks || null,
+      });
+    }
+
+    if (validEntries.length === 0 && validationErrors.length > 0) {
+      return NextResponse.json({ error: validationErrors[0] }, { status: 400 });
+    }
+
+    const cleanSubject = subject.trim();
+    const cleanExamName = examName.trim();
+
+    // If any students need to be deleted (cleared marks)
+    let deletedCount = 0;
+    if (hasDeletions) {
+      const delRes = await db.mark.deleteMany({
+        where: {
+          studentId: { in: deletedStudentIds },
+          sessionId: targetSessionId,
+          subject: cleanSubject,
+          examName: cleanExamName,
+        },
+      });
+      deletedCount = delRes.count;
+    }
+
+    // Generate individual upsert operations
+    const upsertOps = validEntries.map((entry) => {
       return db.mark.upsert({
         where: {
           studentId_sessionId_subject_examName: {
-            studentId: m.studentId,
+            studentId: entry.studentId,
             sessionId: targetSessionId,
-            subject,
-            examName,
+            subject: cleanSubject,
+            examName: cleanExamName,
           },
         },
         update: {
-          marksObtained: obtained,
-          maxMarks: max,
-          writtenExam,
-          notebook,
-          subjectEnrichment,
-          practical,
-          breakdown: breakdown || undefined,
-          remarks: m.remarks || null,
+          marksObtained: entry.obtained,
+          maxMarks: entry.max,
+          writtenExam: entry.writtenExam,
+          notebook: entry.notebook,
+          subjectEnrichment: entry.subjectEnrichment,
+          practical: entry.practical,
+          breakdown: entry.breakdown || undefined,
+          remarks: entry.remarks,
         },
         create: {
-          studentId: m.studentId,
+          studentId: entry.studentId,
           sessionId: targetSessionId,
-          subject,
-          examName,
-          marksObtained: obtained,
-          maxMarks: max,
-          writtenExam,
-          notebook,
-          subjectEnrichment,
-          practical,
-          breakdown: breakdown || undefined,
-          remarks: m.remarks || null,
+          subject: cleanSubject,
+          examName: cleanExamName,
+          marksObtained: entry.obtained,
+          maxMarks: entry.max,
+          writtenExam: entry.writtenExam,
+          notebook: entry.notebook,
+          subjectEnrichment: entry.subjectEnrichment,
+          practical: entry.practical,
+          breakdown: entry.breakdown || undefined,
+          remarks: entry.remarks,
         },
       });
     });
 
-    await db.$transaction(upserts);
+    // ── Safe Chunked Execution (eliminates Prisma 5s transaction timeout and full-batch aborts)
+    const CHUNK_SIZE = 15;
+    let savedCount = 0;
+    const failedStudentIds: string[] = [];
 
-    return NextResponse.json({ success: true, count: upserts.length });
+    for (let i = 0; i < upsertOps.length; i += CHUNK_SIZE) {
+      const chunk = upsertOps.slice(i, i + CHUNK_SIZE);
+      try {
+        await db.$transaction(chunk);
+        savedCount += chunk.length;
+      } catch (chunkErr: any) {
+        console.warn(`[API /api/marks/bulk] Chunk batch ${Math.floor(i / CHUNK_SIZE) + 1} transaction failed, retrying row-by-row:`, chunkErr.message);
+        // Fallback: save row-by-row so no valid student data in this chunk is discarded
+        for (let j = 0; j < chunk.length; j++) {
+          try {
+            await chunk[j];
+            savedCount++;
+          } catch (singleErr: any) {
+            console.error(`[API /api/marks/bulk] Failed to save student ${validEntries[i + j]?.studentId}:`, singleErr.message);
+            failedStudentIds.push(validEntries[i + j]?.studentId);
+          }
+        }
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      count: savedCount,
+      deletedCount,
+      totalSubmitted: (marksList?.length || 0) + (deletedStudentIds?.length || 0),
+      failedStudentIds,
+      warnings: validationErrors,
+    });
   } catch (error: any) {
     console.error("Bulk save student marks error:", error);
     const isValidationError = error?.message && error.message.includes("Invalid marks");
@@ -120,5 +230,53 @@ export async function POST(request: Request) {
       ? error.message
       : "Failed to save student marks. Please try again.";
     return NextResponse.json({ error: safeMsg }, { status: isValidationError ? 400 : 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  const authUser = await getAuthUser(request);
+  if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  if (authUser.role !== "ADMIN" && authUser.role !== "TEACHER" && authUser.role !== "ACCOUNTANT") {
+    return NextResponse.json({ error: "Forbidden. Admin, Accountant, or Teacher access required." }, { status: 403 });
+  }
+
+  try {
+    const body = await request.json();
+    const { examName, subject, studentId, studentIds } = body;
+
+    if (!examName || !subject || (!studentId && (!Array.isArray(studentIds) || studentIds.length === 0))) {
+      return NextResponse.json({ error: "Missing required fields for deletion (examName, subject, studentId/studentIds)." }, { status: 400 });
+    }
+
+    let targetSessionId = body.sessionId;
+    if (!targetSessionId) {
+      const currentSession = await db.academicSession.findFirst({ where: { isCurrent: true } });
+      targetSessionId = currentSession?.id;
+    }
+    if (!targetSessionId) {
+      return NextResponse.json({ error: "Active academic session not found." }, { status: 400 });
+    }
+
+    const idsToDelete: string[] = studentId ? [studentId] : studentIds;
+    const cleanSubject = subject.trim();
+    const cleanExamName = examName.trim();
+
+    const delResult = await db.mark.deleteMany({
+      where: {
+        studentId: { in: idsToDelete },
+        sessionId: targetSessionId,
+        subject: cleanSubject,
+        examName: cleanExamName,
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      deletedCount: delResult.count,
+    });
+  } catch (error: any) {
+    console.error("Delete mark error:", error);
+    return NextResponse.json({ error: "Failed to delete student marks." }, { status: 500 });
   }
 }

@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { Calendar, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { getTodayIST } from "@/lib/dateUtils";
 
 interface ModernDatePickerProps {
   value: string; // "YYYY-MM-DD" or ""
@@ -122,7 +123,7 @@ export default function ModernDatePicker({
     days.push({ dateStr, dayNum: d, isCurrentMonth: false });
   }
 
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = getTodayIST();
 
   const handleSelectDay = (dateStr: string) => {
     onChange(dateStr);

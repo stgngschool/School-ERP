@@ -501,9 +501,15 @@ export default function PublicResultSection() {
                                 </td>
                               )}
                               <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                                <span className="inline-flex items-center justify-center font-black text-indigo-800 bg-indigo-50 px-2.5 py-0.5 rounded-md border border-indigo-200 whitespace-nowrap text-xs min-w-[64px]">
-                                  {s.marksObtained} / {s.maxMarks}
-                                </span>
+                                {s.remarks?.toUpperCase().includes("ABSENT") ? (
+                                  <span className="inline-flex items-center justify-center font-black text-rose-700 bg-rose-50 px-2.5 py-0.5 rounded-md border border-rose-200 whitespace-nowrap text-xs min-w-[64px]">
+                                    AB (Absent)
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center justify-center font-black text-indigo-800 bg-indigo-50 px-2.5 py-0.5 rounded-md border border-indigo-200 whitespace-nowrap text-xs min-w-[64px]">
+                                    {s.marksObtained} / {s.maxMarks}
+                                  </span>
+                                )}
                               </td>
                               <td className="py-2.5 px-3 text-right text-[11px] text-slate-600 font-normal">
                                 {s.remarks || "Good"}

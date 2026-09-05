@@ -57,6 +57,17 @@ h1, h2, h3, h4, h5, h6, .font-bold, .font-extrabold, .font-black {
   backface-visibility: hidden;
 }
 
+/* Virtual rendering optimization for long lists on low-spec mobile devices */
+.cv-auto-card {
+  content-visibility: auto;
+  contain-intrinsic-size: 140px;
+}
+
+.cv-auto-row {
+  content-visibility: auto;
+  contain-intrinsic-size: 48px;
+}
+
 body {
   background: var(--background);
   color: #0f172a;
@@ -306,6 +317,8 @@ body {
   z-index: 61;
   max-height: 85vh;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   animation: slide-up 0.3s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
@@ -315,6 +328,7 @@ body {
   background: #e2e8f0;
   border-radius: 99px;
   margin: 0 auto 16px;
+  touch-action: none;
 }
 
 
@@ -327,12 +341,14 @@ body {
   border-radius: 16px;
   padding: 14px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.04);
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
 }
 
+/* ── M-08 fix: Avoid transform: scale() which causes jitter/layout shift in mobile grids */
 .mobile-card:active {
-  transform: scale(0.985);
   background: #f8fafc;
+  border-color: #cbd5e1;
+  opacity: 0.96;
 }
 
 /* ─────────────────────────────────────────

@@ -14,6 +14,7 @@ import {
   BookOpen,
 } from "lucide-react";
 import { formatP, toRupees, toPaisa, numberToIndianWords } from "@/lib/currency";
+import { getISTDateString, getTodayIST } from "@/lib/dateUtils";
 import { isDueUpToCurrentMonth } from "@/lib/whatsapp";
 import { MockStudent, MockDueItem, MockReceipt, MockSchoolInfo } from "@/context/AuthContext";
 
@@ -249,40 +250,65 @@ export default function FeeCollectTab({
     setDiscountsState(newDiscountsState);
   };
 
+  // ── H-06 fix: Resilient quarter due matcher checking full names, 3-letter abbreviations, and dueDate
+  const matchesQuarterDue = (d: { name: string; dueDate?: string }, quarter: "Q1" | "Q2" | "Q3" | "Q4"): boolean => {
+    const name = (d.name || "").toLowerCase();
+    let dueMonth: number | null = null;
+    if (d.dueDate) {
+      const parts = d.dueDate.split("-");
+      if (parts.length >= 2) {
+        const m = parseInt(parts[1], 10);
+        if (!isNaN(m) && m >= 1 && m <= 12) {
+          dueMonth = m;
+        }
+      }
+    }
+
+    if (quarter === "Q1") {
+      return (
+        name.includes("april") || name.includes("apr") ||
+        name.includes("may") ||
+        name.includes("june") || name.includes("jun") ||
+        name.includes("previous") || name.includes("past") ||
+        name.includes("annual") || name.includes("m/s") || name.includes("admission") ||
+        dueMonth === 4 || dueMonth === 5 || dueMonth === 6
+      );
+    }
+    if (quarter === "Q2") {
+      return (
+        name.includes("july") || name.includes("jul") ||
+        name.includes("august") || name.includes("aug") ||
+        name.includes("september") || name.includes("sep") ||
+        dueMonth === 7 || dueMonth === 8 || dueMonth === 9
+      );
+    }
+    if (quarter === "Q3") {
+      return (
+        name.includes("october") || name.includes("oct") ||
+        name.includes("november") || name.includes("nov") ||
+        name.includes("december") || name.includes("dec") ||
+        dueMonth === 10 || dueMonth === 11 || dueMonth === 12
+      );
+    }
+    if (quarter === "Q4") {
+      return (
+        name.includes("january") || name.includes("jan") ||
+        name.includes("february") || name.includes("feb") ||
+        name.includes("march") || name.includes("mar") ||
+        dueMonth === 1 || dueMonth === 2 || dueMonth === 3
+      );
+    }
+    return false;
+  };
+
   const handleSelectQuickFilter = (type: "Q1" | "Q2" | "Q3" | "Q4" | "TUITION" | "FULL_YEAR") => {
     const activeChildId = activeSiblingTabId || selectedStudentId;
     const childDues = selectedStudentDues.filter((d) => d.studentId === activeChildId);
     if (childDues.length === 0) return;
 
     let targetDues: typeof childDues = [];
-    if (type === "Q1") {
-      targetDues = childDues.filter((d) => {
-        const name = d.name.toLowerCase();
-        return (
-          name.includes("april") ||
-          name.includes("may") ||
-          name.includes("june") ||
-          name.includes("previous") ||
-          name.includes("past") ||
-          name.includes("annual") ||
-          name.includes("m/s")
-        );
-      });
-    } else if (type === "Q2") {
-      targetDues = childDues.filter((d) => {
-        const name = d.name.toLowerCase();
-        return name.includes("july") || name.includes("august") || name.includes("september");
-      });
-    } else if (type === "Q3") {
-      targetDues = childDues.filter((d) => {
-        const name = d.name.toLowerCase();
-        return name.includes("october") || name.includes("november") || name.includes("december");
-      });
-    } else if (type === "Q4") {
-      targetDues = childDues.filter((d) => {
-        const name = d.name.toLowerCase();
-        return name.includes("january") || name.includes("february") || name.includes("march");
-      });
+    if (type === "Q1" || type === "Q2" || type === "Q3" || type === "Q4") {
+      targetDues = childDues.filter((d) => matchesQuarterDue(d, type));
     } else if (type === "TUITION") {
       targetDues = childDues.filter((d) => d.name.toLowerCase().includes("tuition"));
     } else if (type === "FULL_YEAR") {
@@ -432,8 +458,8 @@ export default function FeeCollectTab({
           };
         }),
         createdAt: serverRec.createdAt
-          ? new Date(serverRec.createdAt).toISOString().split("T")[0]
-          : new Date().toISOString().split("T")[0],
+          ? getISTDateString(serverRec.createdAt)
+          : getTodayIST(),
       };
 
       onOpenReceipt(matchedReceipt);

@@ -92,8 +92,19 @@ export function cleanPhoneNumber(rawPhone?: string): string {
   if (!rawPhone) return "";
   const digits = rawPhone.replace(/\D/g, "");
   if (!digits) return "";
+  // Exactly 10 digits: add country code 91
   if (digits.length === 10) return `91${digits}`;
+  // 11 digits starting with 0 (e.g. 09876543210): strip leading 0 and add 91
   if (digits.length === 11 && digits.startsWith("0")) return `91${digits.slice(1)}`;
+  // 12 digits starting with 91 (e.g. 919876543210): already properly formatted
+  if (digits.length === 12 && digits.startsWith("91")) return digits;
+  // Extra leading zeros or international prefix with 10-digit Indian number
+  if (digits.length > 10) {
+    const last10 = digits.slice(-10);
+    if (/^[6-9]\d{9}$/.test(last10)) {
+      return `91${last10}`;
+    }
+  }
   return digits;
 }
 
