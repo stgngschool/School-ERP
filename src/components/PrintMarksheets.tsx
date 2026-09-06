@@ -58,11 +58,29 @@ export default function PrintMarksheets() {
     return students.filter((s) => matchStudentToClass(s, selectedClass));
   }, [students, selectedClass]);
 
-  const filteredStudents = classStudents.filter(s => 
-    s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    (s.rollNo && s.rollNo.includes(searchQuery)) ||
-    (s.admissionNo && s.admissionNo.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  const filteredStudents = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    let list = classStudents;
+    if (q) {
+      list = classStudents.filter(s => 
+        s.name.toLowerCase().includes(q) || 
+        (s.rollNo && s.rollNo.toString().includes(q)) ||
+        (s.admissionNo && s.admissionNo.toLowerCase().includes(q))
+      );
+    }
+    return [...list].sort((a, b) => {
+      const rawA = a.rollNo !== undefined && a.rollNo !== null ? a.rollNo.toString().trim() : "";
+      const rawB = b.rollNo !== undefined && b.rollNo !== null ? b.rollNo.toString().trim() : "";
+      const numA = parseInt(rawA.replace(/\D/g, ""), 10);
+      const numB = parseInt(rawB.replace(/\D/g, ""), 10);
+      const hasA = !isNaN(numA);
+      const hasB = !isNaN(numB);
+      if (hasA && hasB) return numA - numB;
+      if (hasA) return -1;
+      if (hasB) return 1;
+      return (a.name || "").localeCompare(b.name || "", undefined, { numeric: true, sensitivity: "base" });
+    });
+  }, [classStudents, searchQuery]);
 
   useEffect(() => {
     if (filteredStudents.length > 0 && !selectedReportCardStudentId) {
@@ -451,18 +469,66 @@ function SingleMarksheetCard({
   classMarks: any[];
 }) {
   const sMarks: any[] = classMarks.filter(m => m.studentId === student.id);
-  const defaultSubjects = [
-    "MATHEMATICS",
-    "SCIENCE",
+  
+  const classKey = student.class || "";
+  const normClass = classKey.toUpperCase().trim();
+  let defaultSubjects = [
     "ENGLISH",
     "HINDI",
-    "SOCIAL STUDIES",
-    "COMPUTER SCIENCE",
-    "GENERAL KNOWLEDGE",
-    "SANSKRIT / MORAL SCI",
+    "MATHEMATICS",
+    "SCIENCE/EVS",
+    "COMPUTER",
+    "DRAWING",
+    "G.K.",
+    "SOCIAL SCIENCE",
+    "SANSKRIT",
   ];
+
+  if (
+    normClass.includes("NURSERY") ||
+    normClass.includes("LKG") ||
+    normClass.includes("UKG") ||
+    normClass.includes("PRE-KG") ||
+    normClass.includes("PLAY") ||
+    normClass.startsWith("KG") ||
+    normClass.includes(" KG") ||
+    normClass.includes("-KG")
+  ) {
+    defaultSubjects = ["ENGLISH", "HINDI", "MATHEMATICS", "DRAWING"];
+  } else {
+    const match = normClass.match(/\d+/);
+    let classNum = match ? parseInt(match[0], 10) : NaN;
+    if (isNaN(classNum)) {
+      const romanMap: Record<string, number> = { i: 1, ii: 2, iii: 3, iv: 4, v: 5, vi: 6, vii: 7, viii: 8, ix: 9, x: 10, xi: 11, xii: 12 };
+      const cleaned = normClass.replace(/CLASS/g, "").replace(/SEC(TION)?/g, "").replace(/-[A-Z]$/g, "").trim().toLowerCase();
+      if (romanMap[cleaned]) classNum = romanMap[cleaned];
+    }
+    if (!isNaN(classNum) && classNum >= 1 && classNum <= 5) {
+      defaultSubjects = ["ENGLISH", "HINDI", "MATHEMATICS", "SCIENCE/EVS", "COMPUTER", "DRAWING", "G.K.", "SANSKRIT"];
+    }
+  }
+
   const recordedSubjects = Array.from(new Set(sMarks.map((m) => m.subject.toUpperCase())));
-  const displaySubjects = recordedSubjects.length > 0 ? recordedSubjects : defaultSubjects;
+  let displaySubjects: string[] = [];
+  if (recordedSubjects.length > 0) {
+    const matchedCurriculum = defaultSubjects.filter((dSub) =>
+      recordedSubjects.some((rSub) => {
+        if (rSub === dSub) return true;
+        if ((rSub === "SCIENCE/EVS" || rSub === "SCIENCE" || rSub === "EVS") && (dSub === "SCIENCE/EVS" || dSub === "SCIENCE" || dSub === "EVS")) return true;
+        if ((rSub === "G.K." || rSub === "GK" || rSub === "GENERAL KNOWLEDGE") && (dSub === "G.K." || dSub === "GK" || dSub === "GENERAL KNOWLEDGE")) return true;
+        if ((rSub === "DRAWING" || rSub === "ART") && (dSub === "DRAWING" || dSub === "ART")) return true;
+        if ((rSub === "SOCIAL SCIENCE" || rSub === "SOCIAL STUDIES" || rSub === "SST") && (dSub === "SOCIAL SCIENCE" || dSub === "SOCIAL STUDIES" || dSub === "SST")) return true;
+        if ((rSub === "COMPUTER" || rSub === "COMPUTER SCIENCE") && (dSub === "COMPUTER" || dSub === "COMPUTER SCIENCE")) return true;
+        return false;
+      })
+    );
+    const extraSubjects = recordedSubjects.filter(
+      (rSub) => !matchedCurriculum.some((mSub) => mSub === rSub)
+    );
+    displaySubjects = matchedCurriculum.length > 0 ? [...matchedCurriculum, ...extraSubjects] : recordedSubjects;
+  } else {
+    displaySubjects = defaultSubjects;
+  }
 
   let term1TotalObtained = 0;
   let term2TotalObtained = 0;
@@ -470,7 +536,17 @@ function SingleMarksheetCard({
   let grandObtTotal = 0;
 
   const subjectRows = displaySubjects.map((subName, idx) => {
-    const subMarks = sMarks.filter((m) => m.subject.toUpperCase() === subName.toUpperCase());
+    const subMarks = sMarks.filter((m) => {
+      const ms = (m.subject || "").toUpperCase().trim();
+      const sn = subName.toUpperCase().trim();
+      if (ms === sn) return true;
+      if ((ms === "SCIENCE/EVS" || ms === "SCIENCE" || ms === "EVS") && (sn === "SCIENCE/EVS" || sn === "SCIENCE" || sn === "EVS")) return true;
+      if ((ms === "G.K." || ms === "GK" || ms === "GENERAL KNOWLEDGE") && (sn === "G.K." || sn === "GK" || sn === "GENERAL KNOWLEDGE")) return true;
+      if ((ms === "DRAWING" || ms === "ART") && (sn === "DRAWING" || sn === "ART")) return true;
+      if ((ms === "SOCIAL SCIENCE" || ms === "SOCIAL STUDIES" || ms === "SST") && (sn === "SOCIAL SCIENCE" || sn === "SOCIAL STUDIES" || sn === "SST")) return true;
+      if ((ms === "COMPUTER" || ms === "COMPUTER SCIENCE") && (sn === "COMPUTER" || sn === "COMPUTER SCIENCE")) return true;
+      return false;
+    });
     const t1Match = subMarks.find((m) => {
       const e = m.examName.toLowerCase();
       return e.includes("half") || e.includes("term 1") || e.includes("term-1");

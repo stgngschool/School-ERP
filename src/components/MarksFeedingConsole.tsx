@@ -25,7 +25,8 @@ import {
   Sparkles,
   X,
   Info,
-  Trash2
+  Trash2,
+  ArrowUpDown
 } from "lucide-react";
 
 const DEFAULT_EXAM_CONFIG: Record<string, { isSplit: boolean; maxMarks: number; components?: { name: string; max: number }[] }> = {
@@ -65,19 +66,39 @@ const DEFAULT_EXAM_CONFIG: Record<string, { isSplit: boolean; maxMarks: number; 
 };
 
 const CLASS_SUBJECT_MAP: Record<string, string[]> = {
-  PRE_PRIMARY: ["HINDI", "ENGLISH", "MATHEMATICS", "DRAWING", "RHYMES"],
-  PRIMARY: ["HINDI", "ENGLISH", "MATHEMATICS", "SCIENCE", "EVS", "DRAWING"],
-  MIDDLE: ["HINDI", "ENGLISH", "MATHEMATICS", "SCIENCE", "SOCIAL SCIENCE", "SANSKRIT", "COMPUTER"],
+  PRE_PRIMARY: ["ENGLISH", "HINDI", "MATHEMATICS", "DRAWING"],
+  PRIMARY: ["ENGLISH", "HINDI", "MATHEMATICS", "SCIENCE/EVS", "COMPUTER", "DRAWING", "G.K.", "SANSKRIT"],
+  MIDDLE: ["ENGLISH", "HINDI", "MATHEMATICS", "SCIENCE/EVS", "COMPUTER", "DRAWING", "G.K.", "SOCIAL SCIENCE", "SANSKRIT"],
+  SECONDARY: ["ENGLISH", "HINDI", "MATHEMATICS", "SCIENCE/EVS", "COMPUTER", "DRAWING", "G.K.", "SOCIAL SCIENCE", "SANSKRIT"],
 };
 
 function getSubjectsForClass(className: string): string[] {
-  const norm = className.toUpperCase();
-  if (norm.includes("NURSERY") || norm.includes("LKG") || norm.includes("UKG")) {
+  const norm = className.toUpperCase().trim();
+  if (
+    norm.includes("NURSERY") ||
+    norm.includes("LKG") ||
+    norm.includes("UKG") ||
+    norm.includes("PRE-KG") ||
+    norm.includes("PLAY") ||
+    norm.startsWith("KG") ||
+    norm.includes(" KG") ||
+    norm.includes("-KG") ||
+    norm.includes("PRE_PRIMARY") ||
+    norm.includes("PRE-PRIMARY")
+  ) {
     return CLASS_SUBJECT_MAP.PRE_PRIMARY;
   }
   
   const match = norm.match(/\d+/);
-  const classNum = match ? parseInt(match[0], 10) : NaN;
+  let classNum = match ? parseInt(match[0], 10) : NaN;
+  if (isNaN(classNum)) {
+    const romanMap: Record<string, number> = { i: 1, ii: 2, iii: 3, iv: 4, v: 5, vi: 6, vii: 7, viii: 8, ix: 9, x: 10, xi: 11, xii: 12 };
+    const cleaned = norm.replace(/CLASS/g, "").replace(/SEC(TION)?/g, "").replace(/-[A-Z]$/g, "").trim().toLowerCase();
+    if (romanMap[cleaned]) {
+      classNum = romanMap[cleaned];
+    }
+  }
+
   if (!isNaN(classNum)) {
     if (classNum >= 1 && classNum <= 5) {
       return CLASS_SUBJECT_MAP.PRIMARY;
@@ -87,7 +108,7 @@ function getSubjectsForClass(className: string): string[] {
     }
   }
   
-  return CLASS_SUBJECT_MAP.PRIMARY;
+  return CLASS_SUBJECT_MAP.MIDDLE;
 }
 
 const getGradeBadge = (obtained: number, maxVal: number, isAbsent?: boolean) => {
@@ -936,9 +957,10 @@ export default function MarksFeedingConsole() {
     return getSubjectsForClass(selectedClass);
   }, [selectedClass]);
 
-  const [selectedSubject, setSelectedSubject] = useState(availableSubjects[0] || "HINDI");
+  const [selectedSubject, setSelectedSubject] = useState(availableSubjects[0] || "ENGLISH");
   const [studentSearch, setStudentSearch] = useState("");
   const deferredStudentSearch = useDeferredValue(studentSearch);
+  const [sortBy, setSortBy] = useState<"roll" | "name_asc" | "name_desc" | "status">("roll");
 
   // Synchronize subject when class changes
   useEffect(() => {
@@ -1023,13 +1045,62 @@ export default function MarksFeedingConsole() {
 
   const filteredStudents = useMemo(() => {
     const q = deferredStudentSearch.trim().toLowerCase();
-    if (!q) return classStudents;
-    return classStudents.filter((s) =>
-      s.name.toLowerCase().includes(q) ||
-      (s.rollNo && s.rollNo.toString().includes(q)) ||
-      (s.admissionNo && s.admissionNo.toLowerCase().includes(q))
-    );
-  }, [classStudents, deferredStudentSearch]);
+    let list = classStudents;
+    if (q) {
+      list = classStudents.filter((s) =>
+        s.name.toLowerCase().includes(q) ||
+        (s.rollNo && s.rollNo.toString().includes(q)) ||
+        (s.admissionNo && s.admissionNo.toLowerCase().includes(q))
+      );
+    }
+
+    return [...list].sort((a, b) => {
+      if (sortBy === "roll") {
+        // Natural numeric sort for roll numbers (1, 2, 3... 10, 11)
+        const rawA = a.rollNo !== undefined && a.rollNo !== null ? a.rollNo.toString().trim() : "";
+        const rawB = b.rollNo !== undefined && b.rollNo !== null ? b.rollNo.toString().trim() : "";
+        const numA = parseInt(rawA.replace(/\D/g, ""), 10);
+        const numB = parseInt(rawB.replace(/\D/g, ""), 10);
+        const hasA = !isNaN(numA);
+        const hasB = !isNaN(numB);
+
+        if (hasA && hasB) {
+          if (numA !== numB) return numA - numB;
+        } else if (hasA) {
+          return -1; // Students with roll numbers come first
+        } else if (hasB) {
+          return 1;
+        }
+
+        // Fallback to alphabetical order
+        return (a.name || "").localeCompare(b.name || "", undefined, { numeric: true, sensitivity: "base" });
+      }
+
+      if (sortBy === "name_asc") {
+        return (a.name || "").localeCompare(b.name || "", undefined, { numeric: true, sensitivity: "base" });
+      }
+
+      if (sortBy === "name_desc") {
+        return (b.name || "").localeCompare(a.name || "", undefined, { numeric: true, sensitivity: "base" });
+      }
+
+      if (sortBy === "status") {
+        const hasMarkA = !!(marksRoster[a.id]?.marksObtained || marksRoster[a.id]?.isAbsent);
+        const hasMarkB = !!(marksRoster[b.id]?.marksObtained || marksRoster[b.id]?.isAbsent);
+        if (hasMarkA === hasMarkB) {
+          const rawA = a.rollNo !== undefined && a.rollNo !== null ? a.rollNo.toString().trim() : "";
+          const rawB = b.rollNo !== undefined && b.rollNo !== null ? b.rollNo.toString().trim() : "";
+          const numA = parseInt(rawA.replace(/\D/g, ""), 10);
+          const numB = parseInt(rawB.replace(/\D/g, ""), 10);
+          if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+          return (a.name || "").localeCompare(b.name || "");
+        }
+        return hasMarkA ? 1 : -1;
+      }
+
+      return 0;
+    });
+  }, [classStudents, deferredStudentSearch, sortBy, marksRoster]);
 
   const defaultClassInitializedRef = useRef(false);
 
@@ -2065,7 +2136,7 @@ export default function MarksFeedingConsole() {
           <div>
             <p className="text-[9.5px] font-bold uppercase text-slate-400 tracking-wider">Pass % (≥33%)</p>
             <h4 className="text-sm font-black text-slate-800 mt-0.5">
-              {passPercentage}% <span className="text-[10px] text-emerald-600 font-bold">(${passCount} Pass)</span>
+              {passPercentage}% <span className="text-[10px] text-emerald-600 font-bold">({passCount} Pass)</span>
             </h4>
           </div>
         </div>
@@ -2095,15 +2166,33 @@ export default function MarksFeedingConsole() {
           )}
         </div>
 
-        <div className="relative flex-1 sm:flex-none">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400/80" />
-          <input
-            type="text"
-            placeholder="Search student name or roll..."
-            value={studentSearch}
-            onChange={(e) => setStudentSearch(e.target.value)}
-            className="w-full sm:w-64 text-xs font-extrabold py-2.5 pl-10 pr-4 border border-slate-200/60 rounded-2xl outline-none bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300 focus:bg-white focus:border-indigo-600 transition-all shadow-2xs text-slate-800 placeholder-slate-400"
-          />
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+          {/* SORT / FILTER SELECTOR (Defaults to Roll No as requested) */}
+          <div className="flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100/90 border border-slate-200/80 rounded-2xl px-3 py-2 transition-all shadow-2xs">
+            <ArrowUpDown className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+            <span className="text-[9.5px] font-black uppercase tracking-wider text-slate-400 shrink-0">Order:</span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              className="text-xs font-black text-slate-800 bg-transparent outline-none cursor-pointer pr-1"
+            >
+              <option value="roll">Roll No (1 - 99)</option>
+              <option value="name_asc">Name (A - Z)</option>
+              <option value="name_desc">Name (Z - A)</option>
+              <option value="status">Pending First</option>
+            </select>
+          </div>
+
+          <div className="relative flex-1 sm:flex-none">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400/80" />
+            <input
+              type="text"
+              placeholder="Search student name or roll..."
+              value={studentSearch}
+              onChange={(e) => setStudentSearch(e.target.value)}
+              className="w-full sm:w-60 text-xs font-extrabold py-2.5 pl-10 pr-4 border border-slate-200/60 rounded-2xl outline-none bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300 focus:bg-white focus:border-indigo-600 transition-all shadow-2xs text-slate-800 placeholder-slate-400"
+            />
+          </div>
         </div>
       </div>
 
@@ -2189,9 +2278,33 @@ export default function MarksFeedingConsole() {
             <table className="w-full text-left border-collapse">
               <thead>
                 {isSplitExam ? (
-                  <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-black uppercase text-slate-400 tracking-wider">
-                    <th className="py-3 px-3 w-16 text-center">Roll</th>
-                    <th className="py-3 px-3">Student Name</th>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-black uppercase text-slate-400 tracking-wider select-none">
+                    <th
+                      onClick={() => setSortBy("roll")}
+                      className={`py-3 px-3 w-16 text-center cursor-pointer transition-colors ${
+                        sortBy === "roll" ? "bg-indigo-50/90 text-indigo-900 font-black" : "hover:bg-slate-100"
+                      }`}
+                      title="Click to sort by Roll Number"
+                    >
+                      <span className="inline-flex items-center justify-center gap-0.5">
+                        Roll {sortBy === "roll" && <span className="text-indigo-600 font-black text-[9px]">▲</span>}
+                      </span>
+                    </th>
+                    <th
+                      onClick={() => setSortBy(sortBy === "name_asc" ? "name_desc" : "name_asc")}
+                      className={`py-3 px-3 cursor-pointer transition-colors ${
+                        sortBy === "name_asc" || sortBy === "name_desc"
+                          ? "bg-indigo-50/90 text-indigo-900 font-black"
+                          : "hover:bg-slate-100"
+                      }`}
+                      title="Click to sort by Name"
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        Student Name
+                        {sortBy === "name_asc" && <span className="text-indigo-600 font-black text-[9px]">▲ A-Z</span>}
+                        {sortBy === "name_desc" && <span className="text-indigo-600 font-black text-[9px]">▼ Z-A</span>}
+                      </span>
+                    </th>
                     {splitComponents.map((comp: any, idx: number) => (
                       <th key={idx} className="py-3 px-2 text-center w-28">
                         {comp.name} ({comp.max})
@@ -2202,9 +2315,33 @@ export default function MarksFeedingConsole() {
                     <th className="py-3 px-2 text-center w-24">Save</th>
                   </tr>
                 ) : (
-                  <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-black uppercase text-slate-400 tracking-wider">
-                    <th className="py-3 px-3 w-16 text-center">Roll</th>
-                    <th className="py-3 px-3">Student Name</th>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-black uppercase text-slate-400 tracking-wider select-none">
+                    <th
+                      onClick={() => setSortBy("roll")}
+                      className={`py-3 px-3 w-16 text-center cursor-pointer transition-colors ${
+                        sortBy === "roll" ? "bg-indigo-50/90 text-indigo-900 font-black" : "hover:bg-slate-100"
+                      }`}
+                      title="Click to sort by Roll Number"
+                    >
+                      <span className="inline-flex items-center justify-center gap-0.5">
+                        Roll {sortBy === "roll" && <span className="text-indigo-600 font-black text-[9px]">▲</span>}
+                      </span>
+                    </th>
+                    <th
+                      onClick={() => setSortBy(sortBy === "name_asc" ? "name_desc" : "name_asc")}
+                      className={`py-3 px-3 cursor-pointer transition-colors ${
+                        sortBy === "name_asc" || sortBy === "name_desc"
+                          ? "bg-indigo-50/90 text-indigo-900 font-black"
+                          : "hover:bg-slate-100"
+                      }`}
+                      title="Click to sort by Name"
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        Student Name
+                        {sortBy === "name_asc" && <span className="text-indigo-600 font-black text-[9px]">▲ A-Z</span>}
+                        {sortBy === "name_desc" && <span className="text-indigo-600 font-black text-[9px]">▼ Z-A</span>}
+                      </span>
+                    </th>
                     <th className="py-3 px-3 text-center w-36">Marks Obtained</th>
                     <th className="py-3 px-3 text-center w-24">Max Marks</th>
                     <th className="py-3 px-3 text-center w-24">Percentage</th>

@@ -12,6 +12,8 @@ import {
   CheckCircle,
   Loader2,
   BookOpen,
+  FileText,
+  ArrowRight,
 } from "lucide-react";
 import { formatP, toRupees, toPaisa, numberToIndianWords } from "@/lib/currency";
 import { getISTDateString, getTodayIST } from "@/lib/dateUtils";
@@ -108,6 +110,39 @@ export default function FeeCollectTab({
       })
       .slice(0, 10);
   }, [deferredSearchQuery, students]);
+
+  // Quick browse states for the initial screen when search input is empty
+  const [browseClass, setBrowseClass] = useState("ALL");
+  const [quickBrowseMode, setQuickBrowseMode] = useState<"dues" | "recent">("dues");
+
+  const availableClasses = useMemo(() => {
+    const set = new Set<string>();
+    students.forEach((s) => {
+      if (s.class) set.add(s.class);
+    });
+    return Array.from(set).sort((a, b) => {
+      const numA = parseInt(a.replace(/\D/g, ""), 10);
+      const numB = parseInt(b.replace(/\D/g, ""), 10);
+      if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+      return a.localeCompare(b);
+    });
+  }, [students]);
+
+  // Fast selection of students with pending dues or by class
+  const browseStudents = useMemo(() => {
+    return students
+      .filter((s) => {
+        if (browseClass !== "ALL" && s.class !== browseClass) return false;
+        return true;
+      })
+      .map((s) => {
+        const studentDues = dueItems.filter((d) => d.studentId === s.id && d.status === "UNPAID");
+        const totalDue = studentDues.reduce((sum, d) => sum + d.amount, 0);
+        return { student: s, duesCount: studentDues.length, totalDue };
+      })
+      .sort((a, b) => b.totalDue - a.totalDue)
+      .slice(0, 12);
+  }, [students, dueItems, browseClass]);
 
   const handleStudentSelect = (studentId: string) => {
     setSelectedStudentId(studentId);
@@ -624,28 +659,220 @@ export default function FeeCollectTab({
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg mx-auto pt-4 text-left">
-              <div className="p-4 bg-slate-50 border border-slate-200/60 rounded-2xl flex gap-3">
-                <div className="p-2 bg-indigo-50 rounded-xl text-indigo-600 h-fit border border-indigo-100/50">
-                  <Users className="h-4 w-4" />
+            <div className="space-y-4 max-w-4xl mx-auto pt-2 text-left">
+              {/* Quick View Mode Switcher */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl w-fit">
+                  <button
+                    type="button"
+                    onClick={() => setQuickBrowseMode("dues")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      quickBrowseMode === "dues"
+                        ? "bg-white text-slate-900 shadow-sm font-extrabold"
+                        : "text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    <Users className="w-3.5 h-3.5 text-indigo-600" />
+                    Quick Student Select ({students.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setQuickBrowseMode("recent")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      quickBrowseMode === "recent"
+                        ? "bg-white text-slate-900 shadow-sm font-extrabold"
+                        : "text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    <FileText className="w-3.5 h-3.5 text-emerald-600" />
+                    Recent Counter Receipts ({receipts.length})
+                  </button>
                 </div>
-                <div>
-                  <h4 className="text-[10px] font-black text-slate-700 uppercase tracking-wider">Family Accounts</h4>
-                  <p className="text-[9px] text-slate-400 font-semibold mt-0.5">
-                    Selecting a student automatically bundles sibling dues. Issue a single combined receipt for parents.
-                  </p>
-                </div>
+
+                {quickBrowseMode === "dues" && availableClasses.length > 0 && (
+                  <div className="flex items-center gap-1 overflow-x-auto pb-1 max-w-md no-scrollbar">
+                    <button
+                      type="button"
+                      onClick={() => setBrowseClass("ALL")}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold whitespace-nowrap cursor-pointer transition-colors ${
+                        browseClass === "ALL"
+                          ? "bg-indigo-600 text-white shadow-2xs"
+                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      }`}
+                    >
+                      All
+                    </button>
+                    {availableClasses.map((cls) => (
+                      <button
+                        key={cls}
+                        type="button"
+                        onClick={() => setBrowseClass(cls)}
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-bold whitespace-nowrap cursor-pointer transition-colors ${
+                          browseClass === cls
+                            ? "bg-indigo-600 text-white shadow-2xs"
+                            : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                        }`}
+                      >
+                        Class {cls}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div className="p-4 bg-slate-50 border border-slate-200/60 rounded-2xl flex gap-3">
-                <div className="p-2 bg-emerald-50 rounded-xl text-emerald-600 h-fit border border-emerald-100/50">
-                  <Printer className="h-4 w-4" />
+
+              {/* View 1: Quick Student Select */}
+              {quickBrowseMode === "dues" && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-slate-400 px-1">
+                    <span>Showing {browseStudents.length} Students {browseClass !== "ALL" ? `in Class ${browseClass}` : "(Highest Dues First)"}</span>
+                    <span>Click a student to load ledger</span>
+                  </div>
+
+                  {browseStudents.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 max-h-[380px] overflow-y-auto pr-1">
+                      {browseStudents.map(({ student: s, duesCount, totalDue }) => (
+                        <div
+                          key={s.id}
+                          onClick={() => {
+                            handleStudentSelect(s.id);
+                            setSearchQuery(`${s.name} (${s.class}-${s.section})`);
+                          }}
+                          className="p-3 bg-white border border-slate-200/80 hover:border-indigo-400 hover:shadow-sm rounded-2xl flex items-center justify-between gap-3 cursor-pointer transition-all group"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-700 font-black text-xs flex items-center justify-center shrink-0 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                              {s.name.substring(0, 2).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <h4 className="text-xs font-black text-slate-800 truncate group-hover:text-indigo-600 transition-colors">
+                                {s.name}
+                              </h4>
+                              <p className="text-[10px] text-slate-400 font-semibold truncate">
+                                Class {s.class}-{s.section} {s.rollNo ? `• Roll ${s.rollNo}` : ""} {s.fatherName ? `• S/O ${s.fatherName}` : ""}
+                              </p>
+                              <p className="text-[9px] text-slate-400 font-mono">
+                                Adm: {s.admissionNo} {s.fatherMobile ? `• 📞 ${s.fatherMobile}` : ""}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="text-right shrink-0">
+                            {s.isRte ? (
+                              <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                                RTE Quota
+                              </span>
+                            ) : totalDue > 0 ? (
+                              <div className="space-y-0.5">
+                                <span className="text-[10px] font-black text-rose-600 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full block">
+                                  Due: {formatP(totalDue)}
+                                </span>
+                                <span className="text-[9px] font-bold text-slate-400 block">
+                                  {duesCount} invoice(s)
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                                No Dues
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center text-xs font-semibold text-slate-400 bg-slate-50 border border-slate-200/60 rounded-2xl">
+                      No students found in this category.
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <h4 className="text-[10px] font-black text-slate-700 uppercase tracking-wider">Print Vouchers</h4>
-                  <p className="text-[9px] text-slate-400 font-semibold mt-0.5">
-                    Record counter payments and print official receipts instantly. Shows discounts and remaining
-                    balances.
-                  </p>
+              )}
+
+              {/* View 2: Recent Receipts */}
+              {quickBrowseMode === "recent" && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-slate-400 px-1">
+                    <span>Last {Math.min(10, receipts.length)} Vouchers Recorded</span>
+                    <span>Click to print or reprint voucher</span>
+                  </div>
+
+                  {receipts.length > 0 ? (
+                    <div className="divide-y divide-slate-100 bg-white border border-slate-200/80 rounded-2xl overflow-hidden max-h-[380px] overflow-y-auto">
+                      {receipts.slice(0, 10).map((r) => (
+                        <div
+                          key={r.id}
+                          className="p-3 hover:bg-slate-50/80 flex items-center justify-between gap-3 transition-colors text-xs"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                              <FileText className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-extrabold text-slate-850 truncate">{r.studentName}</span>
+                                <span className="text-[9px] font-black uppercase bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
+                                  {r.classSection}
+                                </span>
+                                <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${
+                                  r.paymentMethod === "CASH"
+                                    ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                    : "bg-indigo-50 text-indigo-700 border border-indigo-200"
+                                }`}>
+                                  {r.paymentMethod}
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+                                Rec: {r.receiptNo} {r.manualReceiptNo ? `• Book: ${r.manualReceiptNo}` : ""} • Date: {r.createdAt}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3 shrink-0">
+                            <span className="font-black text-slate-900 text-xs sm:text-sm">
+                              {formatP(r.amount)}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => onOpenReceipt(r)}
+                              className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold rounded-lg transition-colors cursor-pointer flex items-center gap-1 border border-slate-200/60"
+                            >
+                              <Printer className="w-3 h-3 text-slate-500" />
+                              Print
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center text-xs font-semibold text-slate-400 bg-slate-50 border border-slate-200/60 rounded-2xl">
+                      No fee receipts have been recorded yet.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Informational Guidance Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                <div className="p-3 bg-slate-50/70 border border-slate-200/50 rounded-xl flex gap-2.5 items-center">
+                  <div className="p-1.5 bg-indigo-50 rounded-lg text-indigo-600 h-fit border border-indigo-100/50 shrink-0">
+                    <Users className="h-3.5 w-3.5" />
+                  </div>
+                  <div>
+                    <h4 className="text-[10px] font-black text-slate-700 uppercase tracking-wider">Family Accounts</h4>
+                    <p className="text-[9px] text-slate-400 font-semibold leading-tight">
+                      Selecting any student automatically bundles their siblings for unified billing.
+                    </p>
+                  </div>
+                </div>
+                <div className="p-3 bg-slate-50/70 border border-slate-200/50 rounded-xl flex gap-2.5 items-center">
+                  <div className="p-1.5 bg-emerald-50 rounded-lg text-emerald-600 h-fit border border-emerald-100/50 shrink-0">
+                    <Printer className="h-3.5 w-3.5" />
+                  </div>
+                  <div>
+                    <h4 className="text-[10px] font-black text-slate-700 uppercase tracking-wider">Instant Print</h4>
+                    <p className="text-[9px] text-slate-400 font-semibold leading-tight">
+                      Generates dual copy (School & Parent) with 1-click WhatsApp receipt dispatch.
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>

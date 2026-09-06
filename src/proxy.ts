@@ -14,16 +14,6 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // If user is already authenticated and visits /login, redirect to ERP dashboard
-  if (pathname === "/login" && token) {
-    try {
-      await jwtVerify(token, JWT_SECRET);
-      return NextResponse.redirect(new URL("/?view=erp", request.url));
-    } catch (err) {
-      // Token invalid, allow accessing the login page
-    }
-  }
-
   // All website routes (/, /about, /academics, /admissions, /facilities, /gallery, /notices, /contact, /videos, etc.)
   // and login page are publicly accessible
   return NextResponse.next();

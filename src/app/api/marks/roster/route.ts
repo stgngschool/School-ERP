@@ -46,9 +46,23 @@ export async function GET(request: Request) {
       targetSessionId = currentSession ? currentSession.id : null;
     }
 
+    const normSub = subject.toUpperCase().trim();
+    let subjectAliases = [subject];
+    if (normSub === "SCIENCE/EVS" || normSub === "SCIENCE" || normSub === "EVS") {
+      subjectAliases = ["SCIENCE/EVS", "SCIENCE", "EVS", "Science"];
+    } else if (normSub === "G.K." || normSub === "GK" || normSub === "GENERAL KNOWLEDGE") {
+      subjectAliases = ["G.K.", "GK", "GENERAL KNOWLEDGE"];
+    } else if (normSub === "DRAWING" || normSub === "ART") {
+      subjectAliases = ["DRAWING", "ART"];
+    } else if (normSub === "SOCIAL SCIENCE" || normSub === "SOCIAL STUDIES" || normSub === "SST") {
+      subjectAliases = ["SOCIAL SCIENCE", "SOCIAL STUDIES", "SST"];
+    } else if (normSub === "COMPUTER" || normSub === "COMPUTER SCIENCE") {
+      subjectAliases = ["COMPUTER", "COMPUTER SCIENCE"];
+    }
+
     const whereClause: any = {
       examName: { equals: examName, mode: "insensitive" },
-      subject: { equals: subject, mode: "insensitive" },
+      OR: subjectAliases.map((sub) => ({ subject: { equals: sub, mode: "insensitive" } })),
       student: {
         class: {
           OR: classOrConditions,

@@ -37,7 +37,9 @@ export async function GET() {
     if (!decoded) {
       const duration = (performance.now() - startTime).toFixed(2);
       console.warn(`[DIAGNOSTIC][API][END] GET /api/auth/me [${reqId}] | status: 401 | duration: ${duration}ms | authenticated: false | reason: JWT decode failed`);
-      return noStoreJson({ authenticated: false }, { status: 401 });
+      const res = noStoreJson({ authenticated: false }, { status: 401 });
+      res.cookies.delete("auth_token");
+      return res;
     }
 
     const dbStart = performance.now();
@@ -73,14 +75,18 @@ export async function GET() {
     if (!user) {
       const duration = (performance.now() - startTime).toFixed(2);
       console.warn(`[DIAGNOSTIC][API][END] GET /api/auth/me [${reqId}] | status: 401 | duration: ${duration}ms | authenticated: false | reason: User not found in DB`);
-      return noStoreJson({ authenticated: false }, { status: 401 });
+      const res = noStoreJson({ authenticated: false }, { status: 401 });
+      res.cookies.delete("auth_token");
+      return res;
     }
 
     // ── C-06 fix: Verify tokenVersion matches DB (catches password reset / logout revocation)
     if (user.tokenVersion && (decoded.tokenVersion ?? 0) < user.tokenVersion) {
       const duration = (performance.now() - startTime).toFixed(2);
       console.warn(`[DIAGNOSTIC][API][END] GET /api/auth/me [${reqId}] | status: 401 | duration: ${duration}ms | authenticated: false | reason: Token revoked`);
-      return noStoreJson({ authenticated: false, error: "Session expired or revoked. Please login again." }, { status: 401 });
+      const res = noStoreJson({ authenticated: false, error: "Session expired or revoked. Please login again." }, { status: 401 });
+      res.cookies.delete("auth_token");
+      return res;
     }
 
     if (user.status === "BLOCKED") {

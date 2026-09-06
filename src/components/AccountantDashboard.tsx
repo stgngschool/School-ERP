@@ -134,7 +134,11 @@ export default function AccountantDashboard() {
     }
   };
 
+  // Record Scope State: Default to "all" so small school accountants see all school data, with toggle to "my"
+  const [recordScope, setRecordScope] = useState<"all" | "my">("all");
+
   // Top KPI Metrics
+  const todayStr = getTodayIST();
   const myReceipts = receipts.filter(
     (r) =>
       r.createdById === user?.id ||
@@ -142,11 +146,21 @@ export default function AccountantDashboard() {
       r.collectedBy === user?.email ||
       r.collectedBy === "Accountant"
   );
-  const todayStr = getTodayIST();
   const myTodayReceipts = myReceipts.filter(
     (r) => r.createdAt && r.createdAt.startsWith(todayStr)
   );
   const myTodayCollections = myTodayReceipts.reduce((sum, r) => sum + r.amount, 0);
+
+  // School-wide totals for instant visibility in single-counter or small school environments
+  const schoolTodayReceipts = receipts.filter(
+    (r) => r.createdAt && r.createdAt.startsWith(todayStr)
+  );
+  const schoolTodayCollections = schoolTodayReceipts.reduce((sum, r) => sum + r.amount, 0);
+
+  const isMyScope = recordScope === "my";
+  const activeReceipts = isMyScope ? myReceipts : receipts;
+  const activeTodayReceipts = isMyScope ? myTodayReceipts : schoolTodayReceipts;
+  const activeTodayCollections = isMyScope ? myTodayCollections : schoolTodayCollections;
 
   return (
     <div className="space-y-4 mobile-edge-grid">
@@ -170,17 +184,34 @@ export default function AccountantDashboard() {
             </div>
 
             <div className="flex items-center gap-3">
-              <div className="text-right hidden sm:block">
-                <p className="text-xs font-bold text-slate-700">
-                  {new Date().toLocaleDateString("en-US", {
-                    weekday: "long",
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                  })}
-                </p>
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Financial Control</p>
+              {/* Scope Switcher: All School vs My Counter */}
+              <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => setRecordScope("all")}
+                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                    !isMyScope
+                      ? "bg-white text-slate-900 shadow-sm font-extrabold"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                  title="View all school financial collections"
+                >
+                  School Total ({receipts.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRecordScope("my")}
+                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                    isMyScope
+                      ? "bg-white text-indigo-700 shadow-sm font-extrabold"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                  title="View only vouchers generated from my login"
+                >
+                  My Counter ({myReceipts.length})
+                </button>
               </div>
+
               <div className="h-10 w-px bg-slate-200 hidden sm:block" />
               <div className="flex items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-full border border-emerald-100">
@@ -196,18 +227,20 @@ export default function AccountantDashboard() {
             <div className="bg-white border border-slate-200/60 p-6 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.015)] transition-all hover:shadow-[0_8px_30px_rgba(0,0,0,0.035)] flex flex-col justify-between">
               <div>
                 <div className="flex justify-between items-center">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">My Daily Collection</span>
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    {isMyScope ? "My Daily Collection" : "Daily Collection (School)"}
+                  </span>
                   <span className="p-2.5 bg-emerald-50 text-emerald-600 rounded-2xl">
                     <TrendingUp className="w-5 h-5" />
                   </span>
                 </div>
                 <h3 className="text-2xl font-black text-slate-800 tracking-tight mt-4">
-                  {formatP(myTodayCollections)}
+                  {formatP(activeTodayCollections)}
                 </h3>
               </div>
               <div className="mt-5 pt-4 border-t border-slate-100/80">
                 <div className="flex items-center justify-between text-[10px] text-slate-400 font-medium">
-                  <span>Today ({new Date().toLocaleDateString("en-IN")})</span>
+                  <span>Today ({new Date().toLocaleDateString("en-IN")}) • {isMyScope ? "My Shift" : "All Counters"}</span>
                   <span className="text-emerald-600 font-bold">Active</span>
                 </div>
                 <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden mt-1.5">
@@ -220,18 +253,23 @@ export default function AccountantDashboard() {
             <div className="bg-white border border-slate-200/60 p-6 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.015)] transition-all hover:shadow-[0_8px_30px_rgba(0,0,0,0.035)] flex flex-col justify-between">
               <div>
                 <div className="flex justify-between items-center">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">My Total Receipts</span>
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    {isMyScope ? "My Total Receipts" : "Total Receipts (School)"}
+                  </span>
                   <span className="p-2.5 bg-indigo-50 text-indigo-600 rounded-2xl">
                     <FileText className="w-5 h-5" />
                   </span>
                 </div>
                 <h3 className="text-2xl font-black text-slate-800 tracking-tight mt-4">
-                  {myReceipts.length} <span className="text-sm text-slate-500 font-bold">Vouchers</span>
+                  {activeReceipts.length} <span className="text-sm text-slate-500 font-bold">Vouchers</span>
                 </h3>
               </div>
               <div className="mt-5 pt-4 border-t border-slate-100/80">
                 <div className="flex items-center justify-between text-[10px] text-slate-400 font-medium">
-                  <span>Total count generated by me</span>
+                  <span>{isMyScope ? "Total count generated by me" : "Total vouchers in system"}</span>
+                  {activeTodayReceipts.length > 0 && (
+                    <span className="text-indigo-600 font-bold">{activeTodayReceipts.length} Today</span>
+                  )}
                 </div>
               </div>
             </div>
@@ -240,24 +278,26 @@ export default function AccountantDashboard() {
             <div className="bg-white border border-slate-200/60 p-6 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.015)] transition-all hover:shadow-[0_8px_30px_rgba(0,0,0,0.035)] flex flex-col justify-between">
               <div>
                 <div className="flex justify-between items-center">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">My Counter Balance</span>
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    {isMyScope ? "My Counter Balance" : "Today's Counter Balance"}
+                  </span>
                   <span className="p-2.5 bg-amber-50 text-amber-600 rounded-2xl">
                     <Coins className="w-5 h-5" />
                   </span>
                 </div>
                 <h3 className="text-2xl font-black text-slate-800 tracking-tight mt-4">
-                  {formatP(myTodayCollections)}
+                  {formatP(activeTodayCollections)}
                 </h3>
               </div>
               <div className="mt-5 pt-4 border-t border-slate-100/80">
                 {(() => {
-                  const todayCash = myTodayReceipts
+                  const todayCash = activeTodayReceipts
                     .filter((r) => r.method === "CASH")
                     .reduce((sum, r) => sum + r.amount, 0);
-                  const todayUpi = myTodayReceipts
+                  const todayUpi = activeTodayReceipts
                     .filter((r) => r.method === "UPI")
                     .reduce((sum, r) => sum + r.amount, 0);
-                  const base = myTodayCollections > 0 ? myTodayCollections : 1;
+                  const base = activeTodayCollections > 0 ? activeTodayCollections : 1;
                   return (
                     <>
                       <div className="flex justify-between items-center text-[10px] mb-1.5 font-bold">

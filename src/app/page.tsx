@@ -58,6 +58,8 @@ export default function IndexPage() {
       } else if (requestedView === "erp") {
         if (user && activeRole) {
           setViewMode("ERP");
+        } else if (!authLoading && !user) {
+          window.location.replace("/login");
         }
       }
     }
