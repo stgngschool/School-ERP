@@ -26,7 +26,8 @@ import {
   X,
   Info,
   Trash2,
-  ArrowUpDown
+  ArrowUpDown,
+  Download
 } from "lucide-react";
 
 const DEFAULT_EXAM_CONFIG: Record<string, { isSplit: boolean; maxMarks: number; components?: { name: string; max: number }[] }> = {
@@ -1989,16 +1990,47 @@ export default function MarksFeedingConsole() {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={loadMarks}
-            disabled={loadingMarks}
-            title="Reload from server"
-            className="self-start sm:self-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-[10px] font-extrabold text-slate-600 hover:bg-slate-50 transition-all cursor-pointer"
-          >
-            <RotateCcw className={`h-3 w-3 ${loadingMarks ? "animate-spin text-indigo-600" : ""}`} />
-            <span>{loadingMarks ? "Loading..." : "Reload Marks"}</span>
-          </button>
+          <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+            {selectedClass && (
+              <a
+                href={`/api/marks/export?type=all&exam=${encodeURIComponent(selectedExam || "Unit-1")}&class=${encodeURIComponent(selectedClass)}`}
+                download
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-teal-200 bg-teal-50 text-[10px] font-black text-teal-700 hover:bg-teal-100 active:scale-95 transition-all cursor-pointer shadow-2xs"
+                title={`Download CSV of marks for ${selectedClass} only`}
+              >
+                <Download className="h-3 w-3 text-teal-600" />
+                <span>Download CSV ({selectedClass})</span>
+              </a>
+            )}
+            <a
+              href={`/api/marks/export?type=all&exam=${encodeURIComponent(selectedExam || "Unit-1")}`}
+              download
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 text-[10px] font-black text-emerald-700 hover:bg-emerald-100 active:scale-95 transition-all cursor-pointer shadow-2xs"
+              title="Download full CSV of all students with marks"
+            >
+              <Download className="h-3 w-3 text-emerald-600" />
+              <span>Download CSV (All)</span>
+            </a>
+            <a
+              href={`/api/marks/export?type=xlsx&exam=${encodeURIComponent(selectedExam || "Unit-1")}`}
+              download
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-indigo-200 bg-indigo-50 text-[10px] font-black text-indigo-700 hover:bg-indigo-100 active:scale-95 transition-all cursor-pointer shadow-2xs"
+              title="Download Excel Report with Summary & Pending sheets"
+            >
+              <Download className="h-3 w-3 text-indigo-600" />
+              <span>Excel Report</span>
+            </a>
+            <button
+              type="button"
+              onClick={loadMarks}
+              disabled={loadingMarks}
+              title="Reload from server"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-[10px] font-extrabold text-slate-600 hover:bg-slate-50 transition-all cursor-pointer"
+            >
+              <RotateCcw className={`h-3 w-3 ${loadingMarks ? "animate-spin text-indigo-600" : ""}`} />
+              <span>{loadingMarks ? "Loading..." : "Reload Marks"}</span>
+            </button>
+          </div>
         </div>
 
         {/* Filters Grid */}
