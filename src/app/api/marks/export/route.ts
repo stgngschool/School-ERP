@@ -134,8 +134,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (authUser.role !== "ADMIN" && authUser.role !== "ACCOUNTANT" && authUser.role !== "TEACHER") {
-      return NextResponse.json({ error: "Forbidden. Admin or Staff access required." }, { status: 403 });
+    if (authUser.role !== "ADMIN" && authUser.role !== "ACCOUNTANT") {
+      return NextResponse.json({ error: "Forbidden. Admin or Accountant access required." }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);
