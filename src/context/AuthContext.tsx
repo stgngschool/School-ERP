@@ -426,7 +426,7 @@ interface AuthContextType {
   triggerAudit: (action: string) => Promise<void>;
   updateStudentStatus: (studentId: string | string[], status: string) => Promise<void>;
   promoteStudent: (studentId: string | string[], classVal: string, section: string) => Promise<void>;
-  editStudentDetails: (studentId: string, studentData: any) => Promise<void>;
+  editStudentDetails: (studentId: string, studentData: any) => Promise<{ success: boolean; error?: string; student?: any }>;
   activeTab: string;
   setActiveTab: (tab: string) => void;
   eventsList: MockCalendarEvent[];
@@ -1829,11 +1829,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ studentId, action: "updateDetails", data: studentData }),
       });
+      const data = await res.json();
       if (res.ok) {
         await refreshStudents();
+        return { success: true, student: data.student };
+      } else {
+        return { success: false, error: data.error || "Failed to update student details" };
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Edit student details failed:", err);
+      return { success: false, error: err.message || "Network error while saving details" };
     }
   };
 

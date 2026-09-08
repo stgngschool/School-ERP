@@ -36,6 +36,9 @@ const AdmissionLeadsDesk = dynamic(() => import("@/components/AdmissionLeadsDesk
 const StudentProfileModal = dynamic(() => import("@/components/StudentProfileModal"), {
   ssr: false,
 });
+const EditStudentModal = dynamic(() => import("@/components/modals/EditStudentModal"), {
+  ssr: false,
+});
 
 import ModernDatePicker from "@/components/ModernDatePicker";
 import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
@@ -673,6 +676,13 @@ export default function AdminDashboard() {
   const [editAdmissionNo, setEditAdmissionNo] = useState("");
   const [editRollNo, setEditRollNo] = useState("");
   const [editGender, setEditGender] = useState("");
+  const [editClass, setEditClass] = useState("");
+  const [editSection, setEditSection] = useState("");
+  const [editStatus, setEditStatus] = useState("ACTIVE");
+  const [editConcessionId, setEditConcessionId] = useState("");
+  const [editTab, setEditTab] = useState<"academic" | "personal" | "parents" | "transport">("academic");
+  const [isSavingStudent, setIsSavingStudent] = useState(false);
+  const [editError, setEditError] = useState("");
   
   // Promotion Fields
   const [promoteClass, setPromoteClass] = useState("");
@@ -10466,334 +10476,14 @@ export default function AdminDashboard() {
 
 
       {/* 2. Edit Profile Modal */}
-      {showEditModal && selectedStudent && (
-        <div className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200/60 rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.015)] relative space-y-5 max-h-[85vh] overflow-y-auto text-left animate-scale-in">
-            <div className="flex justify-between items-center border-b border-slate-200/60 pb-4">
-              <div>
-                <h3 className="text-xs font-black uppercase text-indigo-700 bg-indigo-50 border border-indigo-100/50 px-3 py-1 rounded-xl inline-flex items-center gap-1.5 tracking-wider">
-                  <Edit className="h-3.5 w-3.5" /> Edit Student Account: {selectedStudent.name}
-                </h3>
-                <p className="text-[10px] text-slate-400 font-semibold mt-1.5">Update details and save to system database</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowEditModal(false);
-                  setSelectedStudent(null);
-                }}
-                className="h-8 w-8 bg-slate-50 border border-slate-200/60 text-slate-500 rounded-xl hover:bg-slate-100 hover:text-slate-700 transition-all flex items-center justify-center shrink-0 shadow-2xs active:scale-90 cursor-pointer"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                await editStudentDetails(selectedStudent.id, {
-                  name: editName,
-                  admissionNo: editAdmissionNo,
-                  rollNo: editRollNo,
-                  gender: editGender,
-                  dob: editDob,
-                  aadhaar: editAadhaar,
-                  disability: editDisability,
-                  fatherName: editFatherName,
-                  motherName: editMotherName,
-                  fatherMobile: editFatherMobile,
-                  motherMobile: editMotherMobile,
-                  fatherAadhaar: editFatherAadhaar,
-                  address: editAddress,
-                  parentEmail: editParentEmail,
-                  category: editCategory,
-                  religion: editReligion,
-                  motherTongue: editMotherTongue,
-                  nationality: editNationality,
-                  parentOccupation: editParentOccupation,
-                  familyIncome: editFamilyIncome,
-                  emergencyName: editEmergencyName,
-                  emergencyPhone: editEmergencyPhone,
-                  motherAadhaar: editMotherAadhaar,
-                  transportMode: editTransportMode,
-                  busRoute: editBusRoute,
-                  busStop: editBusStop,
-                  isRte: editIsRte,
-                });
-                setShowEditModal(false);
-                setSelectedStudent(null);
-              }}
-              className="space-y-4"
-            >
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-semibold">
-                <div>
-                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Student Full Name</label>
-                  <input
-                    type="text"
-                    required
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                  />
-                </div>
-                <div>
-                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Date of Birth (YYYY-MM-DD)</label>
-                  <input
-                    type="text"
-                    value={editDob}
-                    onChange={(e) => setEditDob(e.target.value)}
-                    className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                  />
-                </div>
-                <div>
-                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Admission Number</label>
-                  <input
-                    type="text"
-                    value={editAdmissionNo}
-                    onChange={(e) => setEditAdmissionNo(e.target.value)}
-                    className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                  />
-                </div>
-                <div>
-                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Roll Number</label>
-                  <input
-                    type="text"
-                    value={editRollNo}
-                    onChange={(e) => setEditRollNo(e.target.value)}
-                    className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                  />
-                </div>
-                <div>
-                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Gender</label>
-                  <select
-                    value={editGender}
-                    onChange={(e) => setEditGender(e.target.value)}
-                    className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 cursor-pointer"
-                  >
-                    <option value="">Select Gender</option>
-                    <option value="MALE">Male</option>
-                    <option value="FEMALE">Female</option>
-                    <option value="OTHER">Other</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Student Aadhaar Number</label>
-                  <input
-                    type="text"
-                    value={editAadhaar}
-                    onChange={(e) => setEditAadhaar(e.target.value)}
-                    className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                  />
-                </div>
-                <div>
-                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Disability Status</label>
-                  <select
-                    value={editDisability}
-                    onChange={(e) => setEditDisability(e.target.value)}
-                    className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                  >
-                    <option value="No">No</option>
-                    <option value="Yes">Yes</option>
-                  </select>
-                </div>
-
-                <div className="sm:col-span-2 border-t border-slate-100 pt-3">
-                  <h5 className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-2">Parent Details</h5>
-                </div>
-
-                <div>
-                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Father's Full Name</label>
-                  <input
-                    type="text"
-                    required
-                    value={editFatherName}
-                    onChange={(e) => setEditFatherName(e.target.value)}
-                    className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                  />
-                </div>
-                <div>
-                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Mother's Full Name</label>
-                  <input
-                    type="text"
-                    value={editMotherName}
-                    onChange={(e) => setEditMotherName(e.target.value)}
-                    className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                  />
-                </div>
-                <div>
-                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Father's Mobile Phone</label>
-                  <input
-                    type="text"
-                    required
-                    value={editFatherMobile}
-                    onChange={(e) => setEditFatherMobile(e.target.value)}
-                    className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                  />
-                </div>
-                <div>
-                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Mother's Mobile Phone</label>
-                  <input
-                    type="text"
-                    value={editMotherMobile}
-                    onChange={(e) => setEditMotherMobile(e.target.value)}
-                    className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                  />
-                </div>
-                <div>
-                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Father's Aadhaar Number</label>
-                  <input
-                    type="text"
-                    value={editFatherAadhaar}
-                    onChange={(e) => setEditFatherAadhaar(e.target.value)}
-                    className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                  />
-                </div>
-                <div>
-                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Mother's Aadhaar Number</label>
-                  <input
-                    type="text"
-                    value={editMotherAadhaar}
-                    onChange={(e) => setEditMotherAadhaar(e.target.value)}
-                    className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                  />
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Residential Address</label>
-                  <input
-                    type="text"
-                    required
-                    value={editAddress}
-                    onChange={(e) => setEditAddress(e.target.value)}
-                    className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                  />
-                </div>
-                <div>
-                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Parent Email</label>
-                  <input
-                    type="email"
-                    value={editParentEmail}
-                    onChange={(e) => setEditParentEmail(e.target.value)}
-                    className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                  />
-                </div>
-                <div>
-                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Parent Occupation</label>
-                  <input
-                    type="text"
-                    value={editParentOccupation}
-                    onChange={(e) => setEditParentOccupation(e.target.value)}
-                    className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                  />
-                </div>
-
-                <div className="sm:col-span-2 border-t border-slate-100 pt-3">
-                  <h5 className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-2">Other Parameters</h5>
-                </div>
-
-                <div>
-                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Category</label>
-                  <input
-                    type="text"
-                    value={editCategory}
-                    onChange={(e) => setEditCategory(e.target.value)}
-                    className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                  />
-                </div>
-                <div>
-                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Religion</label>
-                  <input
-                    type="text"
-                    value={editReligion}
-                    onChange={(e) => setEditReligion(e.target.value)}
-                    className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                  />
-                </div>
-                <div>
-                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Emergency Name</label>
-                  <input
-                    type="text"
-                    value={editEmergencyName}
-                    onChange={(e) => setEditEmergencyName(e.target.value)}
-                    className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                  />
-                </div>
-                <div>
-                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Emergency Phone</label>
-                  <input
-                    type="text"
-                    value={editEmergencyPhone}
-                    onChange={(e) => setEditEmergencyPhone(e.target.value)}
-                    className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                  />
-                </div>
-                <div>
-                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Transport Mode</label>
-                  <select
-                    value={editTransportMode}
-                    onChange={(e) => setEditTransportMode(e.target.value)}
-                    className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                  >
-                    <option value="Self">Self</option>
-                    <option value="Bus">Bus</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">RTE Student? (100% Waiver)</label>
-                  <select
-                    value={editIsRte ? "Yes" : "No"}
-                    onChange={(e) => setEditIsRte(e.target.value === "Yes")}
-                    className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                  >
-                    <option value="No">No (Standard Billing)</option>
-                    <option value="Yes">Yes (RTE 100% Fee Waiver)</option>
-                  </select>
-                </div>
-                {editTransportMode === "Bus" && (
-                  <>
-                    <div>
-                      <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Bus Route</label>
-                      <input
-                        type="text"
-                        value={editBusRoute}
-                        onChange={(e) => setEditBusRoute(e.target.value)}
-                        className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Bus Stop</label>
-                      <input
-                        type="text"
-                        value={editBusStop}
-                        onChange={(e) => setEditBusStop(e.target.value)}
-                        className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                      />
-                    </div>
-                  </>
-                )}
-              </div>
-
-              <div className="flex gap-2 pt-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowEditModal(false);
-                    setSelectedStudent(null);
-                  }}
-                  className="flex-1 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl text-xs font-bold transition-all cursor-pointer text-center"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-500/10 cursor-pointer text-center"
-                >
-                  Save Profile Changes
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <EditStudentModal
+        isOpen={showEditModal}
+        student={selectedStudent}
+        onClose={() => {
+          setShowEditModal(false);
+          setSelectedStudent(null);
+        }}
+      />
 
       {/* 3. Promote Student Modal */}
       {showPromoteModal && selectedStudent && (

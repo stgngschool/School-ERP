@@ -539,6 +539,39 @@ export async function PATCH(request: Request) {
         }
       }
 
+      // Handle class & section update if provided
+      let newClassId: string | undefined = undefined;
+      if (data.classVal && data.section) {
+        let classObj = await db.class.findFirst({
+          where: { name: String(data.classVal).trim(), section: String(data.section).trim() },
+        });
+        if (!classObj) {
+          classObj = await db.class.create({
+            data: { name: String(data.classVal).trim(), section: String(data.section).trim() },
+          });
+        }
+        newClassId = classObj.id;
+      }
+
+      // Validate roll number uniqueness within target class
+      const targetClassId = newClassId || student?.classId;
+      const targetRoll = data.rollNo ? String(data.rollNo).trim() : undefined;
+      if (targetRoll && targetClassId && (targetRoll !== student?.rollNumber || (newClassId && newClassId !== student?.classId))) {
+        const duplicateRoll = await db.student.findFirst({
+          where: {
+            classId: targetClassId,
+            rollNumber: targetRoll,
+            id: { not: targetId },
+          },
+        });
+        if (duplicateRoll) {
+          return NextResponse.json(
+            { error: `Roll Number "${targetRoll}" is already assigned to "${duplicateRoll.name}" in this class.` },
+            { status: 400 }
+          );
+        }
+      }
+
       // ── S-05: Parent email must not be silently overwritten ──────────────────
       if (data.parentEmail && student?.parentProfile?.user) {
         const existingEmail = student.parentProfile.user.email;
@@ -572,6 +605,8 @@ export async function PATCH(request: Request) {
       const concessionChanged = newConcessionId !== previousConcessionId;
       const transportStopChanged = newTransportStopId !== previousTransportStopId;
 
+      clearServerStudentsCache();
+
       // ── C-03 + T-03 + BL-05: Wrap the student update, stale-discount cleanup,
       // and transport charge management in ONE transaction so the student record and
       // its financial adjustments are either both committed or both rolled back.
@@ -580,8 +615,10 @@ export async function PATCH(request: Request) {
           where: { id: targetId },
           data: {
             name: data.name,
+            classId: newClassId || undefined,
+            status: data.status || undefined,
             admissionNumber: data.admissionNo || undefined,
-            rollNumber: data.rollNo || undefined,
+            rollNumber: data.rollNo !== undefined ? data.rollNo : undefined,
             gender: data.gender !== undefined ? data.gender : undefined,
             dob: data.dob ? new Date(data.dob) : null,
             aadhaar: data.aadhaar || null,
