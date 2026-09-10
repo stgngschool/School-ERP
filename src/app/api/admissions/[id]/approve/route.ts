@@ -109,8 +109,7 @@ export async function POST(
       });
 
       const finalEmail = existingUser ? `parent_${Date.now()}@school.com` : email;
-      const secureRandomPassword = crypto.randomBytes(16).toString("hex");
-      const passwordHash = await bcrypt.hash(secureRandomPassword, 10);
+      const passwordHash = `PENDING_ACTIVATION:${crypto.randomBytes(16).toString("hex")}`;
 
       const user = await db.user.create({
         data: {

@@ -126,3 +126,54 @@ export async function clearAccountRateLimit(account: string): Promise<void> {
     `acc:${normalizedAcc}`
   );
 }
+
+/**
+ * Parent Activation Rate Limiter (SEC-06):
+ * Dual-key protection against brute force and account enumeration:
+ *   1. Network IP limit: 5 attempts per 15 minutes.
+ *   2. Admission + Phone target pair limit: 3 attempts per 15 minutes.
+ */
+export async function checkActivationRateLimit(
+  ip: string,
+  admissionNo: string,
+  phone: string
+): Promise<{ allowed: boolean; reason?: string }> {
+  const normalizedIp = ip.split(",")[0].trim() || "unknown";
+  const normalizedAdm = admissionNo.toUpperCase().trim();
+  const normalizedPhone = phone.replace(/\D/g, "").slice(-10);
+
+  // 1. IP rate check
+  const ipRes = await checkRateLimit(`act_ip:${normalizedIp}`, 5, WINDOW_SECONDS);
+  if (!ipRes.allowed) {
+    return {
+      allowed: false,
+      reason: "Too many activation attempts from this network. Please try again after 15 minutes.",
+    };
+  }
+
+  // 2. Target pair rate check
+  if (normalizedAdm && normalizedPhone) {
+    const pairRes = await checkRateLimit(`act_pair:${normalizedAdm}:${normalizedPhone}`, 3, WINDOW_SECONDS);
+    if (!pairRes.allowed) {
+      return {
+        allowed: false,
+        reason: "Too many activation attempts for this student record. Please try again after 15 minutes.",
+      };
+    }
+  }
+
+  return { allowed: true };
+}
+
+/**
+ * Clear activation rate limit for a student pair upon successful activation.
+ */
+export async function clearActivationRateLimit(admissionNo: string, phone: string): Promise<void> {
+  const normalizedAdm = admissionNo.toUpperCase().trim();
+  const normalizedPhone = phone.replace(/\D/g, "").slice(-10);
+  await db.$queryRawUnsafe(
+    `DELETE FROM "LoginAttempt" WHERE "ip" = $1`,
+    `act_pair:${normalizedAdm}:${normalizedPhone}`
+  );
+}
+

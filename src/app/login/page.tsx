@@ -19,6 +19,7 @@ import {
   CheckCircle2,
   Shield,
   ArrowRight,
+  Sparkles,
 } from "lucide-react";
 
 export default function LoginPage() {
@@ -29,6 +30,78 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Parent first-time activation state (SEC-06)
+  const [isActivating, setIsActivating] = useState(false);
+  const [activationAdmission, setActivationAdmission] = useState("");
+  const [activationMobile, setActivationMobile] = useState("");
+  const [activationPassword, setActivationPassword] = useState("");
+  const [activationConfirmPassword, setActivationConfirmPassword] = useState("");
+  const [showActivationPassword, setShowActivationPassword] = useState(false);
+  const [activationLoading, setActivationLoading] = useState(false);
+  const [activationSuccess, setActivationSuccess] = useState<string | null>(null);
+
+  const handleActivationSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setActivationSuccess(null);
+
+    const cleanAdm = activationAdmission.trim();
+    const cleanMob = activationMobile.replace(/\D/g, "");
+    const cleanPass = activationPassword.trim();
+    const cleanConfirm = activationConfirmPassword.trim();
+
+    if (!cleanAdm || cleanMob.length < 10) {
+      setError("Please enter a valid Admission Number and a 10-digit registered mobile number.");
+      return;
+    }
+
+    if (cleanPass.length < 6) {
+      setError("New password must be at least 6 characters long.");
+      return;
+    }
+
+    if (cleanPass.length > 72) {
+      setError("Password must not exceed 72 characters.");
+      return;
+    }
+
+    if (cleanPass !== cleanConfirm) {
+      setError("Passwords do not match. Please verify and re-type.");
+      return;
+    }
+
+    setActivationLoading(true);
+
+    try {
+      const res = await fetch("/api/auth/activate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          admissionNumber: cleanAdm,
+          mobile: cleanMob,
+          newPassword: cleanPass,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Activation failed. Please check your details.");
+      }
+
+      setActivationSuccess(data.message || "Account activated successfully! Please sign in with your new password.");
+      setUsername(cleanMob);
+      setIsActivating(false);
+      setActivationAdmission("");
+      setActivationMobile("");
+      setActivationPassword("");
+      setActivationConfirmPassword("");
+    } catch (err: any) {
+      setError(err.message || "Activation failed. Please check your details.");
+    } finally {
+      setActivationLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -178,14 +251,29 @@ export default function LoginPage() {
             <h2 className="text-base font-extrabold text-slate-900">
               {activeTab === "STAFF"
                 ? "Staff & Administration Sign In"
+                : isActivating
+                ? "First-Time Parent Activation"
                 : "Parent & Student Portal Sign In"}
             </h2>
             <p className="text-xs text-slate-500 font-medium mt-0.5">
               {activeTab === "STAFF"
                 ? "Enter your assigned staff username and password."
+                : isActivating
+                ? "Verify student Admission Number & registered mobile to set your password."
                 : "Enter your registered 10-digit mobile number or Family ID."}
             </p>
           </div>
+
+          {/* Success Message Box */}
+          {activationSuccess && (
+            <div className="bg-emerald-50 border border-emerald-200/80 text-emerald-800 text-xs p-3.5 rounded-2xl flex items-start gap-2.5 mb-5 animate-scale-in">
+              <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
+              <div className="space-y-0.5">
+                <p className="font-extrabold">Account Activated</p>
+                <p className="font-semibold text-emerald-700">{activationSuccess}</p>
+              </div>
+            </div>
+          )}
 
           {/* Error Message Box */}
           {error && (
@@ -198,110 +286,262 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Username / Phone Input */}
-            <div>
-              <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5 tracking-wider">
-                {activeTab === "STAFF"
-                  ? "Staff Username / Email"
-                  : "Registered Mobile / Family ID"}
-              </label>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                  {activeTab === "STAFF" ? (
-                    <User className="w-4 h-4" />
-                  ) : (
-                    <Phone className="w-4 h-4" />
-                  )}
-                </span>
-                <input
-                  type="text"
-                  required
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  placeholder={
-                    activeTab === "STAFF"
-                      ? "e.g. admin, accountant, teacher"
-                      : "e.g. 9876543210 or FAM-2026-0001"
-                  }
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-slate-50/70 border border-slate-200/80 rounded-2xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-600/15 focus:bg-white transition-all text-sm font-semibold shadow-2xs"
-                />
+          {/* Form: First-Time Activation or Standard Sign In */}
+          {isActivating && activeTab === "PARENT" ? (
+            <form onSubmit={handleActivationSubmit} className="space-y-3.5">
+              {/* Admission Number Input */}
+              <div>
+                <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5 tracking-wider">
+                  Student Admission Number
+                </label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <GraduationCap className="w-4 h-4" />
+                  </span>
+                  <input
+                    type="text"
+                    required
+                    autoCapitalize="characters"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    placeholder="e.g. ADM-2026-0001"
+                    value={activationAdmission}
+                    onChange={(e) => setActivationAdmission(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 bg-slate-50/70 border border-slate-200/80 rounded-2xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-rose-600 focus:ring-2 focus:ring-rose-600/15 focus:bg-white transition-all text-sm font-semibold shadow-2xs"
+                  />
+                </div>
               </div>
-            </div>
 
-            {/* Password Input */}
-            <div>
-              <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5 tracking-wider">
-                Password
-              </label>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                  <Lock className="w-4 h-4" />
-                </span>
-                <input
-                  type={showPassword ? "text" : "password"}
-                  required
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-11 py-3 bg-slate-50/70 border border-slate-200/80 rounded-2xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-600/15 focus:bg-white transition-all text-sm font-semibold shadow-2xs"
-                />
+              {/* Registered Mobile Input */}
+              <div>
+                <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5 tracking-wider">
+                  Registered Mobile Number
+                </label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <Phone className="w-4 h-4" />
+                  </span>
+                  <input
+                    type="tel"
+                    required
+                    maxLength={10}
+                    placeholder="e.g. 9876543210"
+                    value={activationMobile}
+                    onChange={(e) => setActivationMobile(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 bg-slate-50/70 border border-slate-200/80 rounded-2xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-rose-600 focus:ring-2 focus:ring-rose-600/15 focus:bg-white transition-all text-sm font-semibold shadow-2xs"
+                  />
+                </div>
+              </div>
+
+              {/* Password Input */}
+              <div>
+                <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5 tracking-wider">
+                  Create New Password
+                </label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <Lock className="w-4 h-4" />
+                  </span>
+                  <input
+                    type={showActivationPassword ? "text" : "password"}
+                    required
+                    minLength={6}
+                    maxLength={72}
+                    placeholder="At least 6 characters"
+                    value={activationPassword}
+                    onChange={(e) => setActivationPassword(e.target.value)}
+                    className="w-full pl-10 pr-11 py-3 bg-slate-50/70 border border-slate-200/80 rounded-2xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-rose-600 focus:ring-2 focus:ring-rose-600/15 focus:bg-white transition-all text-sm font-semibold shadow-2xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowActivationPassword(!showActivationPassword)}
+                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-700 transition-colors cursor-pointer outline-none focus:outline-none"
+                    title={showActivationPassword ? "Hide password" : "Show password"}
+                  >
+                    {showActivationPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Confirm Password Input */}
+              <div>
+                <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5 tracking-wider">
+                  Confirm Password
+                </label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <ShieldCheck className="w-4 h-4" />
+                  </span>
+                  <input
+                    type={showActivationPassword ? "text" : "password"}
+                    required
+                    minLength={6}
+                    maxLength={72}
+                    placeholder="Repeat new password"
+                    value={activationConfirmPassword}
+                    onChange={(e) => setActivationConfirmPassword(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 bg-slate-50/70 border border-slate-200/80 rounded-2xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-rose-600 focus:ring-2 focus:ring-rose-600/15 focus:bg-white transition-all text-sm font-semibold shadow-2xs"
+                  />
+                </div>
+              </div>
+
+              {/* Submit Activation Button */}
+              <button
+                type="submit"
+                disabled={activationLoading}
+                className="w-full py-3.5 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-sm active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed mt-3 outline-none focus:outline-none bg-rose-600 hover:bg-rose-700 shadow-rose-600/20"
+              >
+                {activationLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                    <span>Activating Account...</span>
+                  </>
+                ) : (
+                  <span>Activate & Set Password</span>
+                )}
+              </button>
+
+              {/* Back to Sign In Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsActivating(false);
+                  setError(null);
+                }}
+                className="w-full py-2.5 text-slate-500 hover:text-slate-800 font-bold text-xs transition-colors cursor-pointer"
+              >
+                ← Back to Parent Sign In
+              </button>
+            </form>
+          ) : (
+            <>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {/* Username / Phone Input */}
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5 tracking-wider">
+                    {activeTab === "STAFF"
+                      ? "Staff Username / Email"
+                      : "Registered Mobile / Family ID"}
+                  </label>
+                  <div className="relative">
+                    <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                      {activeTab === "STAFF" ? (
+                        <User className="w-4 h-4" />
+                      ) : (
+                        <Phone className="w-4 h-4" />
+                      )}
+                    </span>
+                    <input
+                      type="text"
+                      required
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      placeholder={
+                        activeTab === "STAFF"
+                          ? "e.g. admin, accountant, teacher"
+                          : "e.g. 9876543210 or FAM-2026-0001"
+                      }
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 bg-slate-50/70 border border-slate-200/80 rounded-2xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-600/15 focus:bg-white transition-all text-sm font-semibold shadow-2xs"
+                    />
+                  </div>
+                </div>
+
+                {/* Password Input */}
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5 tracking-wider">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                      <Lock className="w-4 h-4" />
+                    </span>
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      required
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full pl-10 pr-11 py-3 bg-slate-50/70 border border-slate-200/80 rounded-2xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-600/15 focus:bg-white transition-all text-sm font-semibold shadow-2xs"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-700 transition-colors cursor-pointer outline-none focus:outline-none"
+                      title={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="w-4 h-4" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Helper Notice */}
+                <div className="text-[11px] text-slate-400 font-medium flex items-center gap-1.5 pt-0.5">
+                  <HelpCircle className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                  <span>
+                    {activeTab === "STAFF"
+                      ? "Access is restricted to authorized school personnel."
+                      : "Parents can view fees, reports, and attendance records."}
+                  </span>
+                </div>
+
+                {/* Submit Button */}
                 <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-700 transition-colors cursor-pointer outline-none focus:outline-none"
-                  title={showPassword ? "Hide password" : "Show password"}
+                  type="submit"
+                  disabled={loading}
+                  className={`w-full py-3.5 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-sm active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed mt-3 outline-none focus:outline-none ${
+                    activeTab === "STAFF"
+                      ? "bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/20"
+                      : "bg-rose-600 hover:bg-rose-700 shadow-rose-600/20"
+                  }`}
                 >
-                  {showPassword ? (
-                    <EyeOff className="w-4 h-4" />
+                  {loading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-white" />
+                      <span>Signing In...</span>
+                    </>
                   ) : (
-                    <Eye className="w-4 h-4" />
+                    <span>
+                      {activeTab === "STAFF"
+                        ? "Access Staff Dashboard"
+                        : "Sign In to Parent Portal"}
+                    </span>
                   )}
                 </button>
-              </div>
-            </div>
+              </form>
 
-            {/* Helper Notice */}
-            <div className="text-[11px] text-slate-400 font-medium flex items-center gap-1.5 pt-0.5">
-              <HelpCircle className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-              <span>
-                {activeTab === "STAFF"
-                  ? "Access is restricted to authorized school personnel."
-                  : "Parents can view fees, reports, and attendance records."}
-              </span>
-            </div>
-
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={loading}
-              className={`w-full py-3.5 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-sm active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed mt-3 outline-none focus:outline-none ${
-                activeTab === "STAFF"
-                  ? "bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/20"
-                  : "bg-rose-600 hover:bg-rose-700 shadow-rose-600/20"
-              }`}
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin text-white" />
-                  <span>Signing In...</span>
-                </>
-              ) : (
-                <span>
-                  {activeTab === "STAFF"
-                    ? "Access Staff Dashboard"
-                    : "Sign In to Parent Portal"}
-                </span>
+              {/* First-Time Parent Activation Toggle Link */}
+              {activeTab === "PARENT" && (
+                <div className="mt-4 pt-4 border-t border-slate-100 text-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsActivating(true);
+                      setError(null);
+                      setActivationSuccess(null);
+                    }}
+                    className="inline-flex items-center gap-1.5 text-xs font-extrabold text-rose-600 hover:text-rose-700 transition-colors cursor-pointer group"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-rose-500 group-hover:scale-110 transition-transform" />
+                    <span>First-Time Login? Activate Parent Account</span>
+                  </button>
+                </div>
               )}
-            </button>
-          </form>
+            </>
+          )}
         </div>
 
         {/* ─── Support & Copyright ─── */}

@@ -289,8 +289,7 @@ export async function POST(request: Request) {
           ? `parent_${Date.now()}@school.com`
           : baseEmail;
 
-        const secureRandomPassword = crypto.randomBytes(16).toString("hex");
-        const passwordHash = await bcrypt.hash(secureRandomPassword, 10);
+        const passwordHash = `PENDING_ACTIVATION:${crypto.randomBytes(16).toString("hex")}`;
 
         const newUser = await tx.user.create({
           data: {

@@ -76,13 +76,19 @@ export async function POST(request: Request) {
       },
     });
 
-    // Fallback for Parent portal: Check Family Code (FAM-XXXX) or Child Admission Number (ADM-XXXX)
+    // Fallback for Parent portal: Check Family Code (FAM-XXXX), Child Admission Number (ADM-XXXX), or registered phone
     if (candidateUsers.length === 0 && (portal === "PARENT" || !portal)) {
       const parentByCode = await db.parentProfile.findFirst({
         where: {
           OR: [
             { familyCode: { equals: cleanInput, mode: "insensitive" } },
             { students: { some: { admissionNumber: { equals: cleanInput, mode: "insensitive" } } } },
+            ...(digitsOnly.length >= 10
+              ? [
+                  { students: { some: { fatherMobile: { contains: digitsOnly.slice(-10) } } } },
+                  { students: { some: { motherMobile: { contains: digitsOnly.slice(-10) } } } },
+                ]
+              : []),
           ],
         },
         include: { user: true },
@@ -96,13 +102,18 @@ export async function POST(request: Request) {
     const dbDuration = (performance.now() - dbStart).toFixed(2);
     console.log(`[DIAGNOSTIC][DB][${reqId}] db.user candidate lookup | duration: ${dbDuration}ms | candidatesFound: ${candidateUsers.length}`);
 
+    const genericAuthError =
+      portal === "PARENT"
+        ? "Invalid username/phone or password. If this is your first time logging in, please activate your account."
+        : "Invalid username/phone or password. Please check your credentials.";
+
     if (candidateUsers.length === 0) {
       // ── SEC-17: Constant-time dummy compare prevents timing-based user enumeration
       await bcrypt.compare(cleanPassword, "$2a$10$wK1hV37P4vK4sO6hWjK/U.0O9/9O1O8O2O3O4O5O6O7O8O9O0O1O2");
       const duration = (performance.now() - startTime).toFixed(2);
       console.warn(`[DIAGNOSTIC][API][END] POST /api/auth/login [${reqId}] | status: 401 | duration: ${duration}ms | reason: Candidate user not found | input: ${cleanInput}`);
       return NextResponse.json(
-        { error: "Invalid username/phone or password. Please check your credentials." },
+        { error: genericAuthError },
         { status: 401 }
       );
     }
@@ -111,14 +122,22 @@ export async function POST(request: Request) {
     let authenticatedUser = null;
     let isBlockedUser = false;
     for (const candidate of candidateUsers) {
-      const isMatch = await bcrypt.compare(cleanPassword, candidate.passwordHash);
-      if (isMatch) {
-        if (candidate.status === "BLOCKED") {
-          isBlockedUser = true;
+      if (candidate.passwordHash && candidate.passwordHash.startsWith("PENDING_ACTIVATION:")) {
+        // Unactivated account cannot be logged into directly; requires first-time activation
+        continue;
+      }
+      try {
+        const isMatch = await bcrypt.compare(cleanPassword, candidate.passwordHash);
+        if (isMatch) {
+          if (candidate.status === "BLOCKED") {
+            isBlockedUser = true;
+            break;
+          }
+          authenticatedUser = candidate;
           break;
         }
-        authenticatedUser = candidate;
-        break;
+      } catch (compareErr) {
+        console.warn(`[DIAGNOSTIC][AUTH] Password compare error for user ${candidate.id}:`, compareErr);
       }
     }
 
@@ -132,10 +151,11 @@ export async function POST(request: Request) {
     }
 
     if (!authenticatedUser) {
+      await bcrypt.compare(cleanPassword, "$2a$10$wK1hV37P4vK4sO6hWjK/U.0O9/9O1O8O2O3O4O5O6O7O8O9O0O1O2");
       const duration = (performance.now() - startTime).toFixed(2);
       console.warn(`[DIAGNOSTIC][API][END] POST /api/auth/login [${reqId}] | status: 401 | duration: ${duration}ms | reason: Password mismatch`);
       return NextResponse.json(
-        { error: "Invalid username/phone or password. Please check your credentials." },
+        { error: genericAuthError },
         { status: 401 }
       );
     }

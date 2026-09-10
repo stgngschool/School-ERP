@@ -91,8 +91,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // 6. Pre-calculate default parent password hash ONCE for speed
-    const defaultParentPasswordHash = await bcrypt.hash("parent123", 10);
+    // 6. Pre-fetch existing user emails for uniqueness checks
     const existingUsers = await db.user.findMany({ select: { email: true } });
     const existingEmailsSet = new Set<string>(existingUsers.map((u) => u.email.toLowerCase()));
 
@@ -132,11 +131,12 @@ export async function POST(request: Request) {
         const finalEmail = existingEmailsSet.has(emailCandidate.toLowerCase()) ? `parent_${uniqueSuffix}@school.com` : emailCandidate;
         existingEmailsSet.add(finalEmail.toLowerCase());
 
+        const pendingActivationToken = `PENDING_ACTIVATION:${crypto.randomBytes(16).toString("hex")}`;
         const user = await db.user.create({
           data: {
             username: `user_${uniqueSuffix}`,
             email: finalEmail,
-            passwordHash: defaultParentPasswordHash,
+            passwordHash: pendingActivationToken,
             role: "PARENT",
             name: String(record.fatherName || record.name).trim(),
             phone: cleanMobile || null,
