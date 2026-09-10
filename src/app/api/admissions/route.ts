@@ -47,15 +47,22 @@ export async function GET(request: Request) {
     const searchQuery = url.searchParams.get("search");
     const limit = url.searchParams.get("limit") ? parseInt(url.searchParams.get("limit")!) : 200;
 
-    // Public Status Tracking Flow
+    // Public Status Tracking Flow (SEC-16)
     if (trackingAppNo && trackingMobile) {
       const cleanMobile = trackingMobile.trim().replace(/\D/g, "");
+      if (cleanMobile.length < 10) {
+        return NextResponse.json(
+          { error: "Please provide your full 10-digit registered mobile number to track status." },
+          { status: 400 }
+        );
+      }
+
       const app = await db.admissionApplication.findFirst({
         where: {
           applicationNo: trackingAppNo.trim().toUpperCase(),
           OR: [
-            { fatherMobile: { contains: cleanMobile } },
-            { motherMobile: { contains: cleanMobile } },
+            { fatherMobile: { equals: cleanMobile } },
+            { motherMobile: { equals: cleanMobile } },
           ],
         },
         select: {
