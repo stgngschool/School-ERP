@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 import { getAuthUser } from "@/lib/auth";
+import { getSafeErrorMessage } from "@/lib/validation";
 
 const mediaConfigPath = path.join(process.cwd(), "src/data/websiteMedia.json");
 
@@ -45,6 +46,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, data: updatedMedia });
   } catch (error: any) {
     console.error("Error writing website media:", error);
-    return NextResponse.json({ error: error.message || "Failed to update website media" }, { status: 500 });
+    const safeError = getSafeErrorMessage(error, "Failed to update website media.");
+    return NextResponse.json({ error: safeError }, { status: 500 });
   }
 }

@@ -5,6 +5,7 @@ import crypto from "crypto";
 import { generateYearlyCharges, getAcademicYear } from "@/lib/generateYearlyCharges";
 import { getNextFamilyCode, getNextAdmissionNumber, findMatchingParentProfile } from "@/lib/family";
 import { getAuthUser } from "@/lib/auth";
+import { getSafeErrorMessage } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -321,8 +322,9 @@ export async function POST(
     });
   } catch (error: any) {
     console.error("Approve admission application error:", error);
+    const safeError = getSafeErrorMessage(error, "Failed to approve admission application.");
     return NextResponse.json(
-      { error: error.message || "Failed to approve admission application" },
+      { error: safeError },
       { status: 500 }
     );
   }

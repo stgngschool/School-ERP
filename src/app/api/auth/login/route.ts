@@ -83,11 +83,12 @@ export async function POST(request: Request) {
     console.log(`[DIAGNOSTIC][DB][${reqId}] db.user candidate lookup | duration: ${dbDuration}ms | candidatesFound: ${candidateUsers.length}`);
 
     if (candidateUsers.length === 0) {
+      // ── SEC-17: Constant-time dummy compare prevents timing-based user enumeration
+      await bcrypt.compare(cleanPassword, "$2a$10$wK1hV37P4vK4sO6hWjK/U.0O9/9O1O8O2O3O4O5O6O7O8O9O0O1O2");
       const duration = (performance.now() - startTime).toFixed(2);
       console.warn(`[DIAGNOSTIC][API][END] POST /api/auth/login [${reqId}] | status: 401 | duration: ${duration}ms | reason: Candidate user not found | input: ${cleanInput}`);
-      const portalName = portal === "STAFF" ? "Staff Login" : portal === "PARENT" ? "Parent Portal" : "system";
       return NextResponse.json(
-        { error: `No account found for ${portalName}. Please check your username/phone.` },
+        { error: "Invalid username/phone or password. Please check your credentials." },
         { status: 401 }
       );
     }
@@ -120,7 +121,7 @@ export async function POST(request: Request) {
       const duration = (performance.now() - startTime).toFixed(2);
       console.warn(`[DIAGNOSTIC][API][END] POST /api/auth/login [${reqId}] | status: 401 | duration: ${duration}ms | reason: Password mismatch`);
       return NextResponse.json(
-        { error: "Invalid password. Please check your credentials." },
+        { error: "Invalid username/phone or password. Please check your credentials." },
         { status: 401 }
       );
     }

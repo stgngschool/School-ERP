@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
+import { getSafeErrorMessage } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -145,6 +146,7 @@ export async function POST(
     return NextResponse.json({ success: true, mark });
   } catch (error: any) {
     console.error("Save student mark error:", error);
-    return NextResponse.json({ error: "Failed to save mark: " + error.message }, { status: 500 });
+    const safeError = getSafeErrorMessage(error, "Failed to save mark.");
+    return NextResponse.json({ error: safeError }, { status: 500 });
   }
 }
