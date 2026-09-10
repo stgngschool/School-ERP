@@ -5,6 +5,7 @@ import crypto from "crypto";
 import { generateYearlyChargesBulk, getAcademicYear } from "@/lib/generateYearlyCharges";
 import { getAuthUser } from "@/lib/auth";
 import { findMatchingParentProfile } from "@/lib/family";
+import { parseCanonicalDOB } from "@/lib/dateUtils";
 
 function getMaxSuffixNumber(codes: (string | null | undefined)[]): number {
   let maxNum = 0;
@@ -252,7 +253,7 @@ export async function POST(request: Request) {
         rollNumber = `${classNameClean}-${sectionClean}-${String(currentRollCount).padStart(2, "0")}`;
       }
 
-      const dobDate = dob ? new Date(dob) : null;
+      const dobDate = parseCanonicalDOB(dob);
       const admDateObj = admissionDate ? new Date(admissionDate) : null;
       const studentId = `std_${Date.now()}_${Math.floor(Math.random() * 1000000)}_${studentsToCreate.length}`;
 
@@ -270,7 +271,7 @@ export async function POST(request: Request) {
         admissionNumber: admissionNo,
         rollNumber,
         gender: cleanGender,
-        dob: dobDate && !isNaN(dobDate.getTime()) ? dobDate : null,
+        dob: dobDate,
         aadhaar: aadhaar ? String(aadhaar).trim() : null,
         disability: disability ? String(disability).trim() : null,
         fatherName: fatherName ? String(fatherName).trim() : "",

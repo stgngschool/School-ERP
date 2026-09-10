@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
+import { parseCanonicalDOB } from "@/lib/dateUtils";
 
 export const dynamic = "force-dynamic";
 
@@ -239,7 +240,7 @@ export async function POST(request: Request) {
         studentName: studentName.trim(),
         classApplied: classApplied.trim(),
         gender: gender || null,
-        dob: dob ? new Date(dob) : null,
+        dob: parseCanonicalDOB(dob),
         aadhaar: aadhaar ? aadhaar.trim() : null,
         category: category || "GENERAL",
         religion: religion || null,

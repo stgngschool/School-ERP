@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { formatP, toPaisa } from "@/lib/currency";
+import { formatCanonicalDOB } from "@/lib/dateUtils";
 import { 
   X, User, ShieldAlert, Phone, Mail, MapPin, CreditCard, 
   Calendar, FileText, CheckCircle2, AlertCircle, Clock, Percent,
@@ -452,7 +453,7 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
                       <div className="grid grid-cols-2 gap-4 text-xs">
                         <div>
                           <p className="text-slate-400 font-bold">Date of Birth</p>
-                          <p className="font-semibold text-slate-700 mt-0.5">{data.dob || "N/A"}</p>
+                          <p className="font-semibold text-slate-700 mt-0.5">{data.dobDisplay || formatCanonicalDOB(data.dob) || "N/A"}</p>
                         </div>
                         <div>
                           <p className="text-slate-400 font-bold">Gender</p>

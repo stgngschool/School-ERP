@@ -46,6 +46,7 @@ export interface MockStudent {
   parentName: string;
   parentPhone: string;
   dob?: string;
+  dobDisplay?: string;
   aadhaar?: string;
   disability?: string;
   fatherName?: string;

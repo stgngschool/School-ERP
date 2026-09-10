@@ -1,6 +1,7 @@
 import { google } from "googleapis";
 import { Readable } from "stream";
 import { db as prisma } from "./db";
+import { formatCanonicalDOB } from "./dateUtils";
 
 // Bulletproof Google Service Account private key sanitizer
 function formatPrivateKey(rawKey: string): string {
@@ -201,7 +202,7 @@ export async function syncStudentsToSheet(spreadsheetId: string) {
       std.parentProfile?.user?.email || "-",
       std.parentProfile?.familyCode || "-",
       std.parentProfile?.address || "-",
-      std.dob ? std.dob.toISOString().split("T")[0] : "-",
+      std.dob ? formatCanonicalDOB(std.dob) : "-",
       std.admissionDate ? std.admissionDate.toISOString().split("T")[0] : "-",
       std.aadhaar || "-",
       std.category || "-",

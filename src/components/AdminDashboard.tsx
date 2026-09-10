@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { useAuth } from "@/context/AuthContext";
 import { formatP, toPaisa, toRupees, numberToIndianWords } from "@/lib/currency";
+import { formatCanonicalDOB, formatCanonicalDOBIso, MONTHS_CANONICAL } from "@/lib/dateUtils";
 
 const ConsoleLoadingFallback = () => (
   <div className="flex flex-col items-center justify-center p-12 bg-white rounded-2xl border border-slate-200 min-h-[300px] shadow-xs">
@@ -2319,51 +2320,19 @@ export default function AdminDashboard() {
             const upcomingBirthdays = students
               .filter(s => {
                 if (!s.dob) return false;
-                let bMonth: number | null = null;
-                const rawDob = s.dob.trim();
-                if (rawDob.includes("-")) {
-                  const parts = rawDob.split("-");
-                  if (parts.length >= 2) {
-                    bMonth = parseInt(parts[1], 10) - 1;
-                  }
-                } else if (rawDob.includes("/")) {
-                  const parts = rawDob.split("/");
-                  if (parts.length >= 2) {
-                    bMonth = parseInt(parts[1], 10) - 1;
-                  }
-                } else {
-                  const bdate = new Date(rawDob);
-                  if (!isNaN(bdate.getTime())) bMonth = bdate.getMonth();
-                }
+                const iso = formatCanonicalDOBIso(s.dob);
+                if (!iso) return false;
+                const parts = iso.split("-");
+                if (parts.length < 2) return false;
+                const bMonth = parseInt(parts[1], 10) - 1;
                 return bMonth === currentMonth;
               })
               .map(s => {
-                const rawDob = s.dob!.trim();
-                let day = 1;
-                let monthName = new Date().toLocaleString("default", { month: "short" });
-                if (rawDob.includes("-")) {
-                  const parts = rawDob.split("-");
-                  if (parts.length >= 3) {
-                    day = parseInt(parts[2].slice(0, 2), 10) || 1;
-                    const mNum = parseInt(parts[1], 10) - 1;
-                    const dObj = new Date(2026, mNum, day);
-                    monthName = dObj.toLocaleString("default", { month: "short" });
-                  }
-                } else if (rawDob.includes("/")) {
-                  const parts = rawDob.split("/");
-                  if (parts.length >= 2) {
-                    day = parseInt(parts[0], 10) || 1;
-                    const mNum = parseInt(parts[1], 10) - 1;
-                    const dObj = new Date(2026, mNum, day);
-                    monthName = dObj.toLocaleString("default", { month: "short" });
-                  }
-                } else {
-                  const bdate = new Date(rawDob);
-                  if (!isNaN(bdate.getTime())) {
-                    day = bdate.getDate();
-                    monthName = bdate.toLocaleString("default", { month: "short" });
-                  }
-                }
+                const iso = formatCanonicalDOBIso(s.dob);
+                const [, mStr, dStr] = (iso || "").split("-");
+                const day = parseInt(dStr, 10) || 1;
+                const mIndex = (parseInt(mStr, 10) || 1) - 1;
+                const monthName = MONTHS_CANONICAL[mIndex] || "Jan";
                 return {
                   id: s.id,
                   name: s.name,
@@ -7437,7 +7406,7 @@ export default function AdminDashboard() {
                             {csvPreview.slice(0, 10).map((row, idx) => (
                               <tr key={idx} className="hover:bg-slate-50/50">
                                 <td className="py-2 px-3 font-bold text-slate-800">{row.name}</td>
-                                <td className="py-2 px-3">{row.dob}</td>
+                                <td className="py-2 px-3">{formatCanonicalDOB(row.dob) || row.dob || "—"}</td>
                                 <td className="py-2 px-3 font-bold">{row.fatherName}</td>
                                 <td className="py-2 px-3">{row.fatherMobile}</td>
                                 <td className="py-2 px-3">{row.classVal}-{row.section}</td>

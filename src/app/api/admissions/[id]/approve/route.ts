@@ -6,6 +6,7 @@ import { generateYearlyCharges, getAcademicYear } from "@/lib/generateYearlyChar
 import { getNextFamilyCode, getNextAdmissionNumber, findMatchingParentProfile } from "@/lib/family";
 import { getAuthUser } from "@/lib/auth";
 import { getSafeErrorMessage } from "@/lib/validation";
+import { parseCanonicalDOB } from "@/lib/dateUtils";
 
 export const dynamic = "force-dynamic";
 
@@ -166,7 +167,7 @@ export async function POST(
         admissionNumber: admissionNo,
         rollNumber,
         gender: application.gender || null,
-        dob: application.dob ? new Date(application.dob) : null,
+        dob: parseCanonicalDOB(application.dob),
         aadhaar: application.aadhaar || null,
         disability: application.disability || null,
         fatherName: application.fatherName || null,

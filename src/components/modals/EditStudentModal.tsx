@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { formatCanonicalDOBIso } from "@/lib/dateUtils";
 import {
   X,
   User,
@@ -89,7 +90,7 @@ export default function EditStudentModal({
       setAdmissionNo(student.admissionNo || "");
       setStatus(student.status || "ACTIVE");
       setGender(student.gender || "");
-      setDob(student.dob ? student.dob.split("T")[0] : "");
+      setDob(formatCanonicalDOBIso(student.dob));
       setAadhaar(student.aadhaar || "");
       setDisability(student.disability || "No");
       setCategory(student.category || "General");

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
+import { formatCanonicalDOBIso } from "@/lib/dateUtils";
 
 export const dynamic = "force-dynamic";
 
@@ -136,7 +137,7 @@ export async function POST(request: Request) {
     }
 
     const trimmedAdm = admissionNumber.trim();
-    const cleanDobInput = dob.trim(); // Expected format: YYYY-MM-DD from HTML date input
+    const cleanDobInput = formatCanonicalDOBIso(dob);
 
     // Find student matching admission number (case-insensitive)
     const student = await db.student.findFirst({
@@ -172,8 +173,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const studentDobIso = student.dob.toISOString().split("T")[0]; // YYYY-MM-DD
-    if (studentDobIso !== cleanDobInput) {
+    const studentDobIso = formatCanonicalDOBIso(student.dob);
+    if (!cleanDobInput || !studentDobIso || studentDobIso !== cleanDobInput) {
       recordFailedAttempt(clientIp);
       return NextResponse.json(
         { error: "Date of Birth does not match school records. Please check and try again." },

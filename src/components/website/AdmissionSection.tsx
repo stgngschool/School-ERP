@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { formatCanonicalDOB } from "@/lib/dateUtils";
 import {
   GraduationCap,
   FileCheck2,
@@ -896,7 +897,7 @@ export default function AdmissionSection({ onSuccessEnquiry }: AdmissionSectionP
                             </div>
                             <div>
                               <span className="text-[10px] text-slate-400 font-bold block">DOB:</span>
-                              <span className="font-extrabold text-slate-900">{formData.dob || "Not provided"}</span>
+                              <span className="font-extrabold text-slate-900">{formData.dob ? formatCanonicalDOB(formData.dob) : "Not provided"}</span>
                             </div>
                           </div>
 

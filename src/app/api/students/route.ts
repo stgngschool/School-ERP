@@ -8,6 +8,7 @@ import { getAuthUser } from "@/lib/auth";
 import { boundPagination, getSafeErrorMessage } from "@/lib/validation";
 import { BoundedCache } from "@/lib/cache/BoundedCache";
 import { validateCsrfOrigin } from "@/lib/security";
+import { formatCanonicalDOB, formatCanonicalDOBIso, parseCanonicalDOB } from "@/lib/dateUtils";
 
 export const dynamic = "force-dynamic";
 
@@ -101,7 +102,8 @@ export async function GET(request: Request) {
       admissionNo: s.admissionNumber,
       rollNo: s.rollNumber || "",
       gender: s.gender || "",
-      dob: s.dob ? s.dob.toISOString().split("T")[0] : "",
+      dob: formatCanonicalDOBIso(s.dob),
+      dobDisplay: formatCanonicalDOB(s.dob),
       aadhaar: s.aadhaar || "",
       fatherName: s.fatherName || "",
       fatherMobile: s.fatherMobile || "",
@@ -361,7 +363,7 @@ export async function POST(request: Request) {
           admissionNumber: admissionNo,
           rollNumber,
           gender: gender || null,
-          dob: dob ? new Date(dob) : null,
+          dob: parseCanonicalDOB(dob),
           aadhaar: aadhaar || null,
           disability: disability || null,
           fatherName: fatherName || null,
@@ -619,7 +621,7 @@ export async function PATCH(request: Request) {
             admissionNumber: data.admissionNo || undefined,
             rollNumber: data.rollNo !== undefined ? data.rollNo : undefined,
             gender: data.gender !== undefined ? data.gender : undefined,
-            dob: data.dob ? new Date(data.dob) : null,
+            dob: parseCanonicalDOB(data.dob),
             aadhaar: data.aadhaar || null,
             disability: data.disability || null,
             fatherName: data.fatherName,

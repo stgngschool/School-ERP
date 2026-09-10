@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { formatCanonicalDOB } from "@/lib/dateUtils";
 import {
   UserPlus,
   Phone,
@@ -1257,7 +1258,7 @@ export default function AdmissionLeadsDesk() {
                   <div>
                     <span className="text-[10px] text-slate-400 font-bold block">DOB:</span>
                     <strong className="text-slate-900">
-                      {selectedAppForView.dob ? new Date(selectedAppForView.dob).toLocaleDateString() : "—"}
+                      {formatCanonicalDOB(selectedAppForView.dob) || "—"}
                     </strong>
                   </div>
                   <div>

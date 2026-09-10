@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
+import { parseCanonicalDOB } from "@/lib/dateUtils";
 
 export const dynamic = "force-dynamic";
 
@@ -103,7 +104,7 @@ export async function PATCH(
     if (motherName !== undefined) updateData.motherName = motherName?.trim() || null;
     if (motherMobile !== undefined) updateData.motherMobile = motherMobile?.trim() || null;
     if (address !== undefined) updateData.address = address.trim();
-    if (dob !== undefined) updateData.dob = dob ? new Date(dob) : null;
+    if (dob !== undefined) updateData.dob = parseCanonicalDOB(dob);
     if (gender !== undefined) updateData.gender = gender;
     if (aadhaar !== undefined) updateData.aadhaar = aadhaar?.trim() || null;
     if (category !== undefined) updateData.category = category;

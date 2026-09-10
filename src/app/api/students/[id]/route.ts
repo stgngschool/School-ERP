@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
+import { formatCanonicalDOB, formatCanonicalDOBIso } from "@/lib/dateUtils";
 
 export const dynamic = "force-dynamic";
 
@@ -221,7 +222,8 @@ export async function GET(
       admissionNo: student.admissionNumber,
       rollNo: student.rollNumber || "",
       gender: student.gender || "",
-      dob: student.dob ? student.dob.toISOString().split("T")[0] : "",
+      dob: formatCanonicalDOBIso(student.dob),
+      dobDisplay: formatCanonicalDOB(student.dob),
       aadhaar: student.aadhaar || "",
       disability: student.disability || "",
       fatherName: student.fatherName || "",
