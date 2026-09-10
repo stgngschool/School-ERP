@@ -1,17 +1,14 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState } from "react";
 import { formatP } from "@/lib/currency";
-import { getISTDateString, getTodayIST } from "@/lib/dateUtils";
 import {
   CreditCard,
   CheckCircle,
   FileText,
   Printer,
-  QrCode,
-  Loader2,
   ShieldCheck,
-  ExternalLink,
+  Info,
 } from "lucide-react";
 import { MockStudent, MockDueItem, MockReceipt, MockSchoolInfo } from "@/context/AuthContext";
 
@@ -42,10 +39,6 @@ export default function ParentFinanceTab({
   billingLoaded = true,
 }: ParentFinanceTabProps) {
   const [selectedDueIds, setSelectedDueIds] = useState<string[]>([]);
-  const [payMethod, setPayMethod] = useState("UPI");
-  const [showPayModal, setShowPayModal] = useState(false);
-  const [payLoading, setPayLoading] = useState(false);
-  const isSubmittingPayment = useRef(false);
 
   // Filter dues for this child
   const childDues = child
@@ -80,84 +73,6 @@ export default function ParentFinanceTab({
     .reduce((sum, item) => sum + item.amount, 0);
 
   const childBalance = childDues.reduce((sum, item) => sum + item.amount, 0);
-
-  const handleCheckoutClick = () => {
-    if (selectedDueIds.length === 0) return;
-    setShowPayModal(true);
-  };
-
-  const handleSimulatePayment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!child) return;
-
-    if (isSubmittingPayment.current) return;
-    isSubmittingPayment.current = true;
-
-    const unpaidItems = childDues.filter((d) => selectedDueIds.includes(d.id));
-    const totalAmount = unpaidItems.reduce((sum, item) => sum + item.amount, 0);
-
-    if (totalAmount <= 0) {
-      isSubmittingPayment.current = false;
-      return;
-    }
-
-    const items = unpaidItems.map((d) => ({
-      ledgerEntryId: d.id,
-      payAmount: d.amount,
-      discountAmount: 0,
-    }));
-
-    setPayLoading(true);
-    try {
-      const payRes = await recordItemizedPayment(child.id, items, payMethod);
-      if (payRes.success) {
-        if (!payRes.receipt?.receiptNo) {
-          alert("Payment recorded but server did not return a valid receipt number.");
-          setSelectedDueIds([]);
-          setShowPayModal(false);
-          return;
-        }
-        const serverRec = payRes.receipt;
-        const matchedReceipt = {
-          receiptNo: serverRec.receiptNo,
-          studentName: serverRec.studentName || child.name,
-          classSection: serverRec.classSection || `${child.class}-${child.section}`,
-          admissionNo: serverRec.admissionNo || child.admissionNo,
-          fatherName: serverRec.fatherName || child.fatherName || "",
-          subtotal: serverRec.subtotal !== undefined ? serverRec.subtotal : totalAmount,
-          amount: serverRec.amount !== undefined ? serverRec.amount : totalAmount,
-          discount: serverRec.discount !== undefined ? serverRec.discount : 0,
-          arrears: serverRec.arrears !== undefined ? serverRec.arrears : 0,
-          method: serverRec.paymentMethod || payMethod,
-          transactionRef: serverRec.transactionRef || "",
-          details: serverRec.details || unpaidItems.map((i) => `${i.name} (${formatP(i.amount)})`).join(" + "),
-          items: serverRec.items || unpaidItems.map((i) => ({ name: i.name, amount: i.amount, originalAmount: i.amount, discount: 0, balance: 0 })),
-          createdAt: serverRec.createdAt ? getISTDateString(serverRec.createdAt) : getTodayIST(),
-        };
-
-        setSelectedDueIds([]);
-        setShowPayModal(false);
-        onOpenReceipt(matchedReceipt);
-      } else {
-        alert(payRes.error || "Payment failed. Please try again.");
-      }
-    } catch (err) {
-      console.error("Payment error:", err);
-    } finally {
-      setPayLoading(false);
-      isSubmittingPayment.current = false;
-    }
-  };
-
-  const hasValidUpi = Boolean(schoolInfo?.upiId && schoolInfo.upiId.trim() !== "" && schoolInfo.upiId !== "school@upi");
-  const upiId = hasValidUpi ? schoolInfo!.upiId!.trim() : "";
-  const upiAmountRupees = (paymentSubtotal / 100).toFixed(2);
-  const upiString = hasValidUpi
-    ? `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(schoolInfo?.name || "School")}&am=${upiAmountRupees}&cu=INR&tn=${encodeURIComponent(`Fee payment for ${child?.name || "Student"}`)}`
-    : "";
-  const qrCodeUrl = hasValidUpi
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(upiString)}`
-    : "";
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in text-left pb-12 font-sans">
@@ -238,29 +153,31 @@ export default function ParentFinanceTab({
             )}
           </div>
 
-          {/* Checkout Breakdown Box */}
+          {/* Fee Balance Summary & Payment Desk Info */}
           <div className="p-4 bg-slate-50/70 rounded-2xl border border-slate-200 flex flex-col justify-between h-full min-h-[180px]">
             <div className="space-y-2">
               <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">
-                Checkout Summary
+                Fee Balance Summary
               </span>
               <div className="flex justify-between text-xs py-1 border-b border-slate-200/80">
                 <span className="text-slate-500 font-semibold">Selected Invoices</span>
                 <span className="font-bold text-slate-800">{selectedDueIds.length} item(s)</span>
               </div>
               <div className="flex justify-between text-xs py-2">
-                <span className="text-slate-800 font-bold">Subtotal Amount</span>
+                <span className="text-slate-800 font-bold">Selected Dues</span>
                 <span className="font-black text-indigo-700 text-sm">{formatP(paymentSubtotal)}</span>
               </div>
             </div>
 
-            <button
-              onClick={handleCheckoutClick}
-              disabled={selectedDueIds.length === 0}
-              className="w-full mt-4 py-3 bg-indigo-600 hover:bg-indigo-700 active:scale-98 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-md shadow-indigo-600/10 cursor-pointer"
-            >
-              Pay Now ({formatP(paymentSubtotal)})
-            </button>
+            <div className="mt-4 p-3 bg-amber-50/90 border border-amber-200/80 rounded-xl space-y-1 text-left">
+              <div className="flex items-center gap-1.5 text-amber-900 text-xs font-bold">
+                <ShieldCheck className="h-4 w-4 text-amber-700 shrink-0" />
+                <span>School Accounts Desk</span>
+              </div>
+              <p className="text-[11px] text-amber-800 font-medium leading-relaxed">
+                Direct online self-checkout is disabled pending gateway integration. Please settle dues directly at the school fee counter or via official school bank transfer.
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -307,84 +224,6 @@ export default function ParentFinanceTab({
           )}
         </div>
       </div>
-
-      {/* ── UPI Payment Checkout Modal ── */}
-      {showPayModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop-optimized">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-100 animate-scale-up text-left">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div>
-                <span className="text-[9px] font-black uppercase text-indigo-600 tracking-wider block">
-                  Online Fee Desk
-                </span>
-                <h3 className="text-base font-black text-slate-900">Confirm Payment</h3>
-              </div>
-              <button
-                onClick={() => setShowPayModal(false)}
-                className="text-slate-400 hover:text-slate-600 text-sm font-bold p-1 cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Total Display */}
-            <div className="bg-indigo-50/70 p-4 rounded-2xl border border-indigo-100/80 text-center">
-              <span className="text-[10px] font-black uppercase text-indigo-600 tracking-wider">Total Payable Amount</span>
-              <h2 className="text-2xl font-black text-indigo-900 mt-0.5">{formatP(paymentSubtotal)}</h2>
-              <p className="text-[10px] text-indigo-600/80 font-bold mt-0.5">
-                {selectedDueIds.length} invoice items for {child?.name}
-              </p>
-            </div>
-
-            {/* UPI QR Code or Warning */}
-            {hasValidUpi ? (
-              <div className="flex flex-col items-center justify-center p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
-                <img
-                  src={qrCodeUrl}
-                  alt="UPI QR Code"
-                  className="w-40 h-40 rounded-xl bg-white p-2 border border-slate-200 shadow-2xs"
-                />
-                <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">
-                  Scan with any UPI App (GPay, PhonePe, Paytm)
-                </span>
-              </div>
-            ) : (
-              <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-center space-y-1">
-                <p className="text-xs font-bold text-amber-800">Online UPI Payment Not Active</p>
-                <p className="text-[10px] text-amber-700 font-medium">
-                  The school has not linked their official UPI VPA yet. Please submit your fee payment directly at the school accounts counter.
-                </p>
-              </div>
-            )}
-
-            {/* Simulated Checkout Button */}
-            <form onSubmit={handleSimulatePayment} className="space-y-3">
-              {hasValidUpi && (
-                <div className="flex items-center gap-2">
-                  <select
-                    value={payMethod}
-                    onChange={(e) => setPayMethod(e.target.value)}
-                    className="w-full text-xs font-bold py-2.5 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                  >
-                    <option value="UPI">UPI / QR Code</option>
-                    <option value="CARD">Debit / Credit Card</option>
-                    <option value="NET_BANKING">Net Banking</option>
-                  </select>
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={payLoading || !hasValidUpi}
-                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-md shadow-emerald-600/10 flex items-center justify-center gap-2"
-              >
-                {payLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-                {payLoading ? "Processing Payment..." : hasValidUpi ? `Confirm Payment (${formatP(paymentSubtotal)})` : "Payment Unavailable"}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

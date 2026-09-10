@@ -914,44 +914,15 @@ export async function POST(request: Request) {
     let resolvedStudentId = studentId || null;
 
     if (authUser.role === "PARENT") {
-      // Parents can only pay online / UPI
-      if (paymentMethod !== "ONLINE" && paymentMethod !== "UPI") {
-        return NextResponse.json({ error: "Forbidden. Parents can only make online/UPI fee payments." }, { status: 403 });
-      }
-
-      // Parents cannot grant discounts
-      const hasDiscount = items.some((i: any) => Number(i.discountAmount) > 0);
-      if (hasDiscount) {
-        return NextResponse.json({ error: "Forbidden. Parents cannot grant fee discounts." }, { status: 403 });
-      }
-
-      // Verify parent profile and children ownership
-      const parentProfile = await db.parentProfile.findUnique({
-        where: { userId: authUser.userId }
-      });
-      if (!parentProfile) {
-        return NextResponse.json({ error: "Forbidden. Parent profile not found." }, { status: 403 });
-      }
-
-      const parentStudents = await db.student.findMany({
-        where: { parentProfileId: parentProfile.id },
-        select: { id: true }
-      });
-      const authorizedStudentIds = parentStudents.map(s => s.id);
-
-      // Verify every charge item belongs to authorized children
-      const chargeIds = items.map((i: any) => i.ledgerEntryId).filter(Boolean);
-      const targetCharges = await db.ledgerEntry.findMany({
-        where: { id: { in: chargeIds } },
-        select: { id: true, studentId: true }
-      });
-
-      const hasUnauthorizedCharge = targetCharges.some(c => !authorizedStudentIds.includes(c.studentId));
-      if (hasUnauthorizedCharge || targetCharges.length !== chargeIds.length) {
-        return NextResponse.json({ error: "Forbidden. You cannot pay for charges outside your authorized family." }, { status: 403 });
-      }
-
-      resolvedParentProfileId = parentProfile.id;
+      // ── SEC-01: Direct client-declared online payment self-settlement is disabled.
+      // An official payment gateway webhook must verify payments cryptographically before creating receipts.
+      return NextResponse.json(
+        {
+          error:
+            "Online fee payment gateway is not yet integrated. Direct online self-settlement is disabled. Please pay outstanding fees at the school accounts desk.",
+        },
+        { status: 400 }
+      );
     } else if (authUser.role !== "ADMIN" && authUser.role !== "ACCOUNTANT") {
       return NextResponse.json({ error: "Forbidden. Only authorized finance staff can record fee receipts." }, { status: 403 });
     }
