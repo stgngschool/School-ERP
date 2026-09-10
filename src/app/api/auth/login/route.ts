@@ -2,7 +2,13 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import db from "@/lib/db";
 import { signToken } from "@/lib/auth";
-import { checkLoginRateLimit, clearLoginRateLimit } from "@/lib/rateLimit";
+import {
+  checkLoginRateLimit,
+  clearLoginRateLimit,
+  getTrustedClientIp,
+  checkAccountRateLimit,
+  clearAccountRateLimit,
+} from "@/lib/rateLimit";
 import { Role } from "@prisma/client";
 
 export async function POST(request: Request) {
@@ -10,15 +16,14 @@ export async function POST(request: Request) {
   const startTime = performance.now();
   console.log(`[DIAGNOSTIC][API][START] POST /api/auth/login [${reqId}] | timestamp: ${new Date().toISOString()}`);
 
-  const rawIp = request.headers.get("x-forwarded-for") || "unknown";
+  // ── SEC-09: Trusted client IP resolution from edge infrastructure (Vercel)
+  const clientIp = getTrustedClientIp(request);
 
-  // ── A-01 fix: DB-backed rate limiting (shared across all serverless instances)
-  // Replaces the old in-process Map which was reset on cold starts and invisible
-  // to other instances.
-  const allowed = await checkLoginRateLimit(rawIp);
+  // Network IP rate limit (10 attempts / 15m)
+  const allowed = await checkLoginRateLimit(clientIp);
   if (!allowed) {
     return NextResponse.json(
-      { error: "Too many login attempts. Please try again after 15 minutes." },
+      { error: "Too many login attempts from this network. Please try again after 15 minutes." },
       { status: 429 }
     );
   }
@@ -38,6 +43,15 @@ export async function POST(request: Request) {
     const cleanInput = String(username).trim();
     const cleanPassword = String(password).trim();
     const digitsOnly = cleanInput.replace(/\D/g, "");
+
+    // ── SEC-09: Account-level lockout (5 failed attempts per 15 minutes)
+    const accountAllowed = await checkAccountRateLimit(cleanInput);
+    if (!accountAllowed) {
+      return NextResponse.json(
+        { error: "Too many failed login attempts for this account. Please try again after 15 minutes." },
+        { status: 429 }
+      );
+    }
 
     // Determine target roles based on login portal selected (STAFF vs PARENT)
     const targetRoles: Role[] =
@@ -126,10 +140,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Successful login — clear the rate limit record for this IP
-    // (prevents legitimate users from being locked out after failed attempts
-    //  in the same window before eventual success)
-    void clearLoginRateLimit(rawIp).catch(() => { /* non-critical, ignore */ });
+    // Successful login — clear rate limit records for both IP and targeted account
+    void clearLoginRateLimit(clientIp).catch(() => { /* non-critical, ignore */ });
+    void clearAccountRateLimit(cleanInput).catch(() => { /* non-critical, ignore */ });
 
     // ── A-02: Sign JWT with current tokenVersion ─────────────────────────────
     // The tokenVersion is verified on every subsequent request in getAuthUser().

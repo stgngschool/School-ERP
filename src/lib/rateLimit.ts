@@ -21,26 +21,43 @@
 
 import db from "./db";
 
-const MAX_ATTEMPTS = 5;
 const WINDOW_SECONDS = 15 * 60; // 15 minutes
 
 /**
- * Returns true if the request is allowed, false if rate-limited.
- *
- * Uses a single atomic UPSERT so concurrent requests from the same IP
- * cannot race past the limit.
+ * Safely extracts client IP from trusted hosting proxy headers.
+ * Prioritizes Vercel-generated edge headers (x-vercel-forwarded-for, x-real-ip)
+ * which cannot be forged by downstream clients on Vercel infrastructure.
  */
-export async function checkLoginRateLimit(ip: string): Promise<boolean> {
-  // Normalise the IP: take only the first value from x-forwarded-for chains
-  // (e.g. "1.2.3.4, 10.0.0.1" → "1.2.3.4") to avoid trivial bypass.
-  const clientIp = ip.split(",")[0].trim() || "unknown";
+export function getTrustedClientIp(request: Request): string {
+  // 1. Vercel trusted edge headers
+  const vercelIp = request.headers.get("x-vercel-forwarded-for");
+  if (vercelIp && vercelIp.trim()) {
+    return vercelIp.split(",")[0].trim();
+  }
 
-  // Single atomic statement:
-  //   • INSERT a fresh row on first attempt from this IP.
-  //   • On conflict (IP already exists):
-  //       - If the window has expired → reset count to 1 and windowStart to NOW.
-  //       - If within the window → increment count by 1.
-  //   • RETURNING lets us read the resulting count + windowStart in one round-trip.
+  const realIp = request.headers.get("x-real-ip");
+  if (realIp && realIp.trim()) {
+    return realIp.trim();
+  }
+
+  // 2. Standard proxy header fallback
+  const forwarded = request.headers.get("x-forwarded-for");
+  if (forwarded && forwarded.trim()) {
+    return forwarded.split(",")[0].trim();
+  }
+
+  return "127.0.0.1";
+}
+
+/**
+ * Single atomic upsert checking and recording rate limits in LoginAttempt table.
+ */
+export async function checkRateLimit(
+  key: string,
+  maxAttempts: number,
+  windowSeconds = WINDOW_SECONDS
+): Promise<{ allowed: boolean; remaining: number }> {
+  const normalizedKey = key.trim();
   const rows: { count: number; windowStart: Date }[] = await db.$queryRawUnsafe(
     `INSERT INTO "LoginAttempt" ("ip", "count", "windowStart")
      VALUES ($1, 1, NOW())
@@ -57,23 +74,55 @@ export async function checkLoginRateLimit(ip: string): Promise<boolean> {
                            ELSE "LoginAttempt"."windowStart"
                          END
      RETURNING "count", "windowStart"`,
-    clientIp,
-    WINDOW_SECONDS
+    normalizedKey,
+    windowSeconds
   );
 
   const count = Number(rows[0]?.count ?? 1);
-  return count <= MAX_ATTEMPTS;
+  return {
+    allowed: count <= maxAttempts,
+    remaining: Math.max(0, maxAttempts - count),
+  };
 }
 
 /**
- * Clear the rate limit record for an IP (e.g. after a successful login).
- * Optional — the window expiry resets automatically, but clearing on success
- * prevents legitimate users from being locked out after a failed-then-succeeded sequence.
+ * IP-level rate limiter: 10 attempts per 15 minutes per network IP.
+ */
+export async function checkLoginRateLimit(ip: string): Promise<boolean> {
+  const normalizedIp = ip.split(",")[0].trim() || "unknown";
+  const res = await checkRateLimit(`ip:${normalizedIp}`, 10, WINDOW_SECONDS);
+  return res.allowed;
+}
+
+/**
+ * Account-level lockout: 5 attempts per 15 minutes per username/phone/code.
+ * Prevents distributed botnets from brute-forcing individual accounts across multiple IPs.
+ */
+export async function checkAccountRateLimit(account: string): Promise<boolean> {
+  const normalizedAcc = account.toLowerCase().trim() || "unknown";
+  const res = await checkRateLimit(`acc:${normalizedAcc}`, 5, WINDOW_SECONDS);
+  return res.allowed;
+}
+
+/**
+ * Clear rate limit records for an IP upon successful login.
  */
 export async function clearLoginRateLimit(ip: string): Promise<void> {
-  const clientIp = ip.split(",")[0].trim() || "unknown";
+  const normalizedIp = ip.split(",")[0].trim() || "unknown";
+  await db.$queryRawUnsafe(
+    `DELETE FROM "LoginAttempt" WHERE "ip" = $1 OR "ip" = $2`,
+    normalizedIp,
+    `ip:${normalizedIp}`
+  );
+}
+
+/**
+ * Clear rate limit records for an account upon successful login.
+ */
+export async function clearAccountRateLimit(account: string): Promise<void> {
+  const normalizedAcc = account.toLowerCase().trim() || "unknown";
   await db.$queryRawUnsafe(
     `DELETE FROM "LoginAttempt" WHERE "ip" = $1`,
-    clientIp
+    `acc:${normalizedAcc}`
   );
 }
