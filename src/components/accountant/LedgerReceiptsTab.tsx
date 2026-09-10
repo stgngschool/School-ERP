@@ -27,7 +27,7 @@ export default function LedgerReceiptsTab({
   const [ledgerSearch, setLedgerSearch] = useState("");
   const deferredLedgerSearch = useDeferredValue(ledgerSearch);
   const [ledgerDate, setLedgerDate] = useState("");
-  const [ledgerStaffFilter, setLedgerStaffFilter] = useState("All");
+  const [ledgerStaffFilter, setLedgerStaffFilter] = useState(user?.role === "ADMIN" ? "All" : "ME");
   const [visibleReceiptsCount, setVisibleReceiptsCount] = useState(25);
   const [visibleLedgerCount, setVisibleLedgerCount] = useState(30);
 
@@ -121,29 +121,36 @@ export default function LedgerReceiptsTab({
 
         {/* Cashier / Staff Filter */}
         <div>
-          <select
-            value={ledgerStaffFilter}
-            onChange={(e) => setLedgerStaffFilter(e.target.value)}
-            className="w-full text-xs font-bold py-2.5 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 transition-all text-slate-700 cursor-pointer"
-          >
-            <option value="All">All Cashiers & Staff</option>
-            <option value="ME">My Receipts ({user?.name || "Accountant"})</option>
-            {Array.from(new Set(receipts.map((r) => r.collectedBy).filter(Boolean))).map((cName) => (
-              <option key={cName} value={cName as string}>
-                Cashier: {cName}
-              </option>
-            ))}
-          </select>
+          {user?.role === "ADMIN" ? (
+            <select
+              value={ledgerStaffFilter}
+              onChange={(e) => setLedgerStaffFilter(e.target.value)}
+              className="w-full text-xs font-bold py-2.5 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 transition-all text-slate-700 cursor-pointer"
+            >
+              <option value="All">All Cashiers & Staff</option>
+              <option value="ME">My Receipts ({user?.name || "Accountant"})</option>
+              {Array.from(new Set(receipts.map((r) => r.collectedBy).filter(Boolean))).map((cName) => (
+                <option key={cName} value={cName as string}>
+                  Cashier: {cName}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div className="w-full text-xs font-bold py-2.5 px-3 border border-slate-200 rounded-xl bg-slate-50 text-slate-700 flex items-center justify-between">
+              <span>My Receipts ({user?.name || "Accountant"})</span>
+              <span className="text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md font-bold">Counter</span>
+            </div>
+          )}
         </div>
 
         {/* Clear Filters Button */}
-        {ledgerSearch || ledgerDate || ledgerStaffFilter !== "All" ? (
+        {ledgerSearch || ledgerDate || (user?.role === "ADMIN" && ledgerStaffFilter !== "All") ? (
           <button
             type="button"
             onClick={() => {
               setLedgerSearch("");
               setLedgerDate("");
-              setLedgerStaffFilter("All");
+              if (user?.role === "ADMIN") setLedgerStaffFilter("All");
             }}
             className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all self-stretch cursor-pointer border border-slate-200/50"
           >
@@ -212,12 +219,21 @@ export default function LedgerReceiptsTab({
                     </span>
                     <span className="text-sm font-black text-slate-850 mt-1 block">{filtered.length} Vouchers</span>
                   </div>
-                  <div className="p-3 bg-white border border-slate-200/70 rounded-2xl shadow-2xs">
-                    <span className="text-[8px] font-black text-indigo-500 uppercase tracking-widest block">
-                      Total Collection
-                    </span>
-                    <span className="text-sm font-black text-slate-900 mt-1 block">{formatP(totalAmt)}</span>
-                  </div>
+                  {user?.role === "ADMIN" ? (
+                    <div className="p-3 bg-white border border-slate-200/70 rounded-2xl shadow-2xs">
+                      <span className="text-[8px] font-black text-indigo-500 uppercase tracking-widest block">
+                        Total Collection
+                      </span>
+                      <span className="text-sm font-black text-slate-900 mt-1 block">{formatP(totalAmt)}</span>
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-white border border-slate-200/70 rounded-2xl shadow-2xs">
+                      <span className="text-[8px] font-black text-indigo-500 uppercase tracking-widest block">
+                        Shift Status
+                      </span>
+                      <span className="text-sm font-black text-emerald-600 mt-1 block">Counter Active</span>
+                    </div>
+                  )}
                   <div className="p-3 bg-white border border-slate-200/70 rounded-2xl shadow-2xs">
                     <span className="text-[8px] font-black text-emerald-500 uppercase tracking-widest block">
                       Cash in Drawer
@@ -232,8 +248,8 @@ export default function LedgerReceiptsTab({
                   </div>
                 </div>
 
-                {/* Cashier-wise Shift Breakdown Card */}
-                {cashierList.length > 1 && (
+                {/* Cashier-wise Shift Breakdown Card (Admin Only) */}
+                {user?.role === "ADMIN" && cashierList.length > 1 && (
                   <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-2.5">
                     <div className="flex items-center justify-between">
                       <span className="text-[9px] font-black uppercase text-slate-600 tracking-wider flex items-center gap-1.5">

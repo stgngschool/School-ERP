@@ -532,40 +532,6 @@ export default function DefaultersReportTab({
               <span>Sheet View</span>
             </button>
           </div>
-
-          <button
-            onClick={() => {
-              exportMasterFeeRegisterXLS({
-                students,
-                dueItems,
-                receipts,
-                schoolInfo,
-                selectedClass: defaulterClass,
-                searchQuery: defaulterSearch,
-              });
-            }}
-            className="flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 active:scale-95 border border-emerald-200/80 rounded-xl py-2 px-3.5 text-[11px] font-bold text-emerald-800 cursor-pointer transition-all shadow-2xs"
-            title="Export complete Multi-Sheet Excel Workbook (.xlsx) with student-by-student monthly fee breakdown"
-          >
-            <FileSpreadsheet className="h-4 w-4 text-emerald-600" /> Export XLS{" "}
-            {defaulterClass !== "All" ? `(Class ${defaulterClass})` : "(All Students)"}
-          </button>
-          <button
-            onClick={() => {
-              exportFeeRegisterCSV({
-                students,
-                dueItems,
-                receipts,
-                schoolInfo,
-                selectedClass: defaulterClass,
-                searchQuery: defaulterSearch,
-              });
-            }}
-            className="flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 active:scale-95 border border-slate-200 rounded-xl py-2 px-3 text-[11px] font-bold text-slate-700 cursor-pointer transition-all shadow-2xs"
-            title="Export Fee Register as CSV (.csv)"
-          >
-            <Download className="h-4 w-4 text-slate-600" /> Export CSV
-          </button>
         </div>
       </div>
 
@@ -771,7 +737,7 @@ export default function DefaultersReportTab({
           { label: "Total Students", value: students.length, color: "text-slate-800" },
           { label: "Showing Students", value: filteredDefaulters.length, color: "text-indigo-600" },
           { label: "Fully Cleared", value: fullyClearedCount, color: "text-emerald-600" },
-          { label: "Filtered Outstanding", value: `${formatP(totalOutstanding)}`, color: "text-rose-700" },
+          { label: "Defaulter Students", value: allUnpaidDefaultersCount, color: "text-rose-700" },
         ].map((stat) => (
           <div
             key={stat.label}

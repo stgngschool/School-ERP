@@ -76,7 +76,9 @@ const getNavItems = (activeRole: string): NavItem[] => {
       ];
     case "ACCOUNTANT":
       return [
+        { category: "Overview", name: "Accountant Dashboard", shortName: "Dashboard", icon: LayoutDashboard, tab: "dashboard" },
         { category: "Fee Transactions", name: "Fee Collection", shortName: "Collect", icon: CreditCard, tab: "collect" },
+        { category: "Student Management", name: "Student Directory", shortName: "Students", icon: Users, tab: "students" },
         { category: "Academic Marks", name: "Class Marks Entry", shortName: "Marks", icon: GraduationCap, tab: "marks" },
         { category: "Fee Transactions", name: "Fee Defaulters & Dues", shortName: "Dues", icon: AlertTriangle, tab: "defaulters" },
         { category: "Academic Marks", name: "Print Marksheets", shortName: "Marksheets", icon: Printer, tab: "print_marksheets", desktopOnly: true },
@@ -173,6 +175,16 @@ const getMegaMenuData = (activeRole: string): MegaMenuCategory[] => {
     case "ACCOUNTANT":
       return [
         {
+          title: "Overview",
+          textColor: "text-indigo-600",
+          bgColor: "bg-indigo-50",
+          borderColor: "border-indigo-100",
+          icon: LayoutDashboard,
+          items: [
+            { name: "Accountant Dashboard", tab: "dashboard" },
+          ]
+        },
+        {
           title: "Fee Transactions",
           textColor: "text-emerald-600",
           bgColor: "bg-emerald-50",
@@ -182,6 +194,16 @@ const getMegaMenuData = (activeRole: string): MegaMenuCategory[] => {
             { name: "Collect Fees Counter", tab: "collect" },
             { name: "Outstanding Dues Ledger", tab: "defaulters" },
             { name: "All Receipts Ledger", tab: "ledger" },
+          ]
+        },
+        {
+          title: "Student Management",
+          textColor: "text-indigo-600",
+          bgColor: "bg-indigo-50",
+          borderColor: "border-indigo-100",
+          icon: Users,
+          items: [
+            { name: "Student Directory", tab: "students", mode: "directory" },
           ]
         },
         {

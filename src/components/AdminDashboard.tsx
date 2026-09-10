@@ -70,6 +70,7 @@ import {
   PlusCircle,
   ArrowRight,
   Shield,
+  ShieldCheck,
   Layers,
   Settings,
   ListCollapse,
@@ -95,6 +96,7 @@ import {
   UserMinus,
   ArrowUpRight,
   Eye,
+  EyeOff,
   Search,
   ArrowLeft,
   FileSpreadsheet,
@@ -439,10 +441,16 @@ export default function AdminDashboard() {
   const [showPasswordResetModal, setShowPasswordResetModal] = useState(false);
   const [resetUserId, setResetUserId] = useState("");
   const [resetUserName, setResetUserName] = useState("");
+  const [resetCurrentPassword, setResetCurrentPassword] = useState("");
+  const [resetAdminPassword, setResetAdminPassword] = useState("");
   const [resetNewPassword, setResetNewPassword] = useState("");
   const [resetConfirmPassword, setResetConfirmPassword] = useState("");
   const [resetModalError, setResetModalError] = useState("");
   const [resetModalSuccess, setResetModalSuccess] = useState("");
+  const [resetModalLoading, setResetModalLoading] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   // Admin Profile and Add Staff Modal States
   const [adminFormName, setAdminFormName] = useState("");
   const [adminFormUsername, setAdminFormUsername] = useState("");
@@ -5264,57 +5272,80 @@ export default function AdminDashboard() {
                                   <td className="py-3.5 px-4 text-right">
                                     <div className="inline-flex gap-2">
                                       {/* 1. Lock/Unlock Button */}
-                                      <button
-                                        onClick={() => toggleUserStatus(usr.id)}
-                                        title={isBlocked ? "Unlock Account" : "Lock Account"}
-                                        className={`py-1 px-2.5 text-[10px] font-bold rounded-lg border transition-all cursor-pointer ${
-                                          !isBlocked
-                                            ? "bg-rose-50 hover:bg-rose-100 text-rose-600 border-rose-150"
-                                            : "bg-green-50 hover:bg-green-100 text-green-600 border-green-150"
-                                        }`}
-                                      >
-                                        {isBlocked ? "🔓 Unlock" : "🔒 Lock"}
-                                      </button>
+                                      {usr.id === user?.id ? (
+                                        <span
+                                          title="You cannot lock your own active administrator account"
+                                          className="py-1 px-2.5 text-[10px] font-bold rounded-lg border border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed inline-flex items-center gap-1"
+                                        >
+                                          🔒 Protected
+                                        </span>
+                                      ) : (
+                                        <button
+                                          onClick={() => toggleUserStatus(usr.id)}
+                                          title={isBlocked ? "Unlock Account" : "Lock Account"}
+                                          className={`py-1 px-2.5 text-[10px] font-bold rounded-lg border transition-all cursor-pointer ${
+                                            !isBlocked
+                                              ? "bg-rose-50 hover:bg-rose-100 text-rose-600 border-rose-150"
+                                              : "bg-green-50 hover:bg-green-100 text-green-600 border-green-150"
+                                          }`}
+                                        >
+                                          {isBlocked ? "🔓 Unlock" : "🔒 Lock"}
+                                        </button>
+                                      )}
 
                                       {/* 2. Reset Password Modal Trigger */}
                                       <button
                                         onClick={() => {
                                           setResetUserId(usr.id);
                                           setResetUserName(usr.name);
+                                          setResetCurrentPassword("");
+                                          setResetAdminPassword("");
                                           setResetNewPassword("");
                                           setResetConfirmPassword("");
                                           setResetModalError("");
                                           setResetModalSuccess("");
+                                          setShowCurrentPassword(false);
+                                          setShowNewPassword(false);
+                                          setShowConfirmPassword(false);
                                           setShowPasswordResetModal(true);
                                         }}
-                                        title="Reset User Password"
+                                        title={usr.id === user?.id ? "Change My Password" : "Reset User Password"}
                                         className="py-1 px-2 text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-150 hover:bg-indigo-100 rounded-lg transition-all cursor-pointer"
                                       >
-                                        🔑 Reset PW
+                                        🔑 {usr.id === user?.id ? "Change PW" : "Reset PW"}
                                       </button>
 
                                       {/* 3. Delete User Trigger */}
-                                      <button
-                                        onClick={async () => {
-                                          const confirmMsg = 
-                                            usr.role === "PARENT"
-                                              ? `CAUTION: Are you sure you want to permanently delete parent account "${usr.name}"? This will ALSO delete their registered children, dues, fee invoices, ledger transactions, and attendance logs. This action CANNOT be undone.`
-                                              : `Are you sure you want to permanently delete staff account "${usr.name}"? This action CANNOT be undone.`;
-                                          
-                                          if (confirm(confirmMsg)) {
-                                            const res = await deleteUser(usr.id);
-                                            if (res.success) {
-                                              alert("User successfully deleted.");
-                                            } else {
-                                              alert("Error: " + res.error);
+                                      {usr.id === user?.id ? (
+                                        <span
+                                          title="You cannot delete your own active administrator account"
+                                          className="py-1 px-2 text-[10px] font-bold rounded-lg border border-slate-200 bg-slate-50 text-slate-300 cursor-not-allowed inline-flex items-center gap-1"
+                                        >
+                                          🗑️ Self
+                                        </span>
+                                      ) : (
+                                        <button
+                                          onClick={async () => {
+                                            const confirmMsg = 
+                                              usr.role === "PARENT"
+                                                ? `CAUTION: Are you sure you want to permanently delete parent account "${usr.name}"? This will ALSO delete their registered children, dues, fee invoices, ledger transactions, and attendance logs. This action CANNOT be undone.`
+                                                : `Are you sure you want to permanently delete staff account "${usr.name}"? This action CANNOT be undone.`;
+                                            
+                                            if (confirm(confirmMsg)) {
+                                              const res = await deleteUser(usr.id);
+                                              if (res.success) {
+                                                alert("User successfully deleted.");
+                                              } else {
+                                                alert("Error: " + res.error);
+                                              }
                                             }
-                                          }
-                                        }}
-                                        title="Delete User Account"
-                                        className="py-1 px-2 text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-150 hover:bg-rose-100 rounded-lg transition-all cursor-pointer"
-                                      >
-                                        🗑️ Delete
-                                      </button>
+                                          }}
+                                          title="Delete User Account"
+                                          className="py-1 px-2 text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-150 hover:bg-rose-100 rounded-lg transition-all cursor-pointer"
+                                        >
+                                          🗑️ Delete
+                                        </button>
+                                      )}
 
                                       {/* 4. Assign Class Teacher */}
                                       {usr.role === "TEACHER" && (
@@ -10654,127 +10685,262 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* 5. Custom Password Reset Modal */}
-      {showPasswordResetModal && (
-        <div className="fixed inset-0 z-45 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-sm w-full p-6 shadow-2xl relative space-y-4 text-left animate-fade-in">
-            <div className="flex justify-between items-start border-b border-slate-100 pb-3">
-              <div>
-                <h4 className="font-extrabold text-slate-800 text-base">Reset User Password</h4>
-                <p className="text-[10px] text-slate-400 font-bold mt-0.5">Set a new access password for {resetUserName}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowPasswordResetModal(false);
-                  setResetUserId("");
-                  setResetUserName("");
-                  setResetNewPassword("");
-                  setResetConfirmPassword("");
-                  setResetModalError("");
-                  setResetModalSuccess("");
-                }}
-                className="text-slate-400 hover:text-slate-600 text-xs font-bold py-1 px-2 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer"
-              >
-                Cancel
-              </button>
-            </div>
+      {/* 5. Custom Secure Password Reset Modal */}
+      {showPasswordResetModal && (() => {
+        const isSelfReset = resetUserId === user?.id;
 
-            {resetModalError && (
-              <div className="bg-rose-50 text-rose-700 p-2.5 rounded-lg border border-rose-100 text-[10px] font-bold">
-                ⚠️ {resetModalError}
-              </div>
-            )}
-
-            {resetModalSuccess && (
-              <div className="bg-green-50 text-green-700 p-2.5 rounded-lg border border-green-100 text-[10px] font-bold">
-                ✓ {resetModalSuccess}
-              </div>
-            )}
-
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                setResetModalError("");
-                setResetModalSuccess("");
-
-                if (resetNewPassword !== resetConfirmPassword) {
-                  setResetModalError("Passwords do not match!");
-                  return;
-                }
-                if (resetNewPassword.length < 6) {
-                  setResetModalError("Password must be at least 6 characters long.");
-                  return;
-                }
-
-                const res = await resetUserPassword(resetUserId, resetNewPassword);
-                if (res.success) {
-                  setResetModalSuccess("Password has been changed successfully.");
-                  setResetNewPassword("");
-                  setResetConfirmPassword("");
-                  setTimeout(() => {
-                    setShowPasswordResetModal(false);
-                    setResetUserId("");
-                    setResetUserName("");
-                    setResetModalSuccess("");
-                  }, 1500);
-                } else {
-                  setResetModalError(res.error || "Failed to reset password.");
-                }
-              }}
-              className="space-y-4"
-            >
-              <div>
-                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">New Password</label>
-                <input
-                  type="password"
-                  required
-                  value={resetNewPassword}
-                  onChange={(e) => setResetNewPassword(e.target.value)}
-                  placeholder="Minimum 6 characters"
-                  className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                />
-              </div>
-
-              <div>
-                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Confirm New Password</label>
-                <input
-                  type="password"
-                  required
-                  value={resetConfirmPassword}
-                  onChange={(e) => setResetConfirmPassword(e.target.value)}
-                  placeholder="Repeat new password"
-                  className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600"
-                />
-              </div>
-
-              <div className="flex gap-2 pt-2">
+        return (
+          <div className="fixed inset-0 z-45 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-6 shadow-2xl relative space-y-5 text-left animate-fade-in">
+              <div className="flex justify-between items-start border-b border-slate-100 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className={`p-2.5 rounded-2xl ${isSelfReset ? "bg-emerald-50 text-emerald-600 border border-emerald-100" : "bg-indigo-50 text-indigo-600 border border-indigo-100"}`}>
+                    <ShieldCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-black text-slate-900 text-base">
+                      {isSelfReset ? "Change My Password" : `Reset Password: ${resetUserName}`}
+                    </h4>
+                    <p className="text-[11px] text-slate-400 font-bold mt-0.5">
+                      {isSelfReset
+                        ? "Verify current password to securely set a new password"
+                        : "Requires Admin authorization password to prevent unauthorized changes"
+                      }
+                    </p>
+                  </div>
+                </div>
                 <button
                   type="button"
                   onClick={() => {
                     setShowPasswordResetModal(false);
                     setResetUserId("");
                     setResetUserName("");
+                    setResetCurrentPassword("");
+                    setResetAdminPassword("");
                     setResetNewPassword("");
                     setResetConfirmPassword("");
                     setResetModalError("");
                     setResetModalSuccess("");
                   }}
-                  className="flex-1 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl text-xs font-bold transition-all cursor-pointer text-center"
+                  className="text-slate-400 hover:text-slate-600 text-xs font-bold p-1.5 border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer"
                 >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-500/10 cursor-pointer text-center"
-                >
-                  Save Password
+                  <X className="w-4 h-4" />
                 </button>
               </div>
-            </form>
+
+              {resetModalError && (
+                <div className="bg-rose-50 text-rose-700 p-3 rounded-xl border border-rose-100 text-xs font-bold flex items-center gap-2 animate-shake">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+                  <span>{resetModalError}</span>
+                </div>
+              )}
+
+              {resetModalSuccess && (
+                <div className="bg-emerald-50 text-emerald-700 p-3 rounded-xl border border-emerald-100 text-xs font-bold flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 shrink-0 text-emerald-500" />
+                  <span>{resetModalSuccess}</span>
+                </div>
+              )}
+
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  setResetModalError("");
+                  setResetModalSuccess("");
+
+                  if (isSelfReset && !resetCurrentPassword.trim()) {
+                    setResetModalError("Please enter your current password.");
+                    return;
+                  }
+                  if (!isSelfReset && !resetAdminPassword.trim()) {
+                    setResetModalError("Please enter your Admin authorization password.");
+                    return;
+                  }
+                  if (resetNewPassword !== resetConfirmPassword) {
+                    setResetModalError("New passwords do not match!");
+                    return;
+                  }
+                  if (resetNewPassword.length < 6) {
+                    setResetModalError("New password must be at least 6 characters long.");
+                    return;
+                  }
+
+                  setResetModalLoading(true);
+                  try {
+                    const res = await resetUserPassword(
+                      resetUserId,
+                      resetNewPassword,
+                      isSelfReset ? resetCurrentPassword : undefined,
+                      !isSelfReset ? resetAdminPassword : undefined
+                    );
+
+                    if (res.success) {
+                      setResetModalSuccess(isSelfReset ? "Your password has been changed successfully!" : "User password has been updated successfully.");
+                      setResetCurrentPassword("");
+                      setResetAdminPassword("");
+                      setResetNewPassword("");
+                      setResetConfirmPassword("");
+                      setTimeout(() => {
+                        setShowPasswordResetModal(false);
+                        setResetUserId("");
+                        setResetUserName("");
+                        setResetModalSuccess("");
+                      }, 1800);
+                    } else {
+                      setResetModalError(res.error || "Failed to reset password.");
+                    }
+                  } catch (err: any) {
+                    setResetModalError(err.message || "An unexpected error occurred.");
+                  } finally {
+                    setResetModalLoading(false);
+                  }
+                }}
+                className="space-y-3.5"
+              >
+                {/* 1. Identity Verification Field */}
+                {isSelfReset ? (
+                  <div>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">
+                      Current Password <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showCurrentPassword ? "text" : "password"}
+                        required
+                        value={resetCurrentPassword}
+                        onChange={(e) => setResetCurrentPassword(e.target.value)}
+                        placeholder="Enter your current password"
+                        className="w-full text-xs font-bold py-2.5 pl-3 pr-10 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                        className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                        tabIndex={-1}
+                      >
+                        {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="text-[10px] font-black text-indigo-700 uppercase tracking-wider block mb-1 flex items-center gap-1">
+                      <Lock className="w-3 h-3 text-indigo-500" />
+                      Admin Authorization Password <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showCurrentPassword ? "text" : "password"}
+                        required
+                        value={resetAdminPassword}
+                        onChange={(e) => setResetAdminPassword(e.target.value)}
+                        placeholder="Enter your Master Admin password"
+                        className="w-full text-xs font-bold py-2.5 pl-3 pr-10 border border-indigo-200 rounded-xl outline-none bg-indigo-50/30 focus:bg-white focus:border-indigo-600 transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                        className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                        tabIndex={-1}
+                      >
+                        {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    <span className="text-[9px] text-slate-400 font-semibold mt-1 block">
+                      Confirms that you are the authorized school administrator.
+                    </span>
+                  </div>
+                )}
+
+                {/* 2. New Password */}
+                <div>
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">
+                    New Password <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showNewPassword ? "text" : "password"}
+                      required
+                      value={resetNewPassword}
+                      onChange={(e) => setResetNewPassword(e.target.value)}
+                      placeholder="Minimum 6 characters"
+                      className="w-full text-xs font-bold py-2.5 pl-3 pr-10 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                      tabIndex={-1}
+                    >
+                      {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* 3. Confirm New Password */}
+                <div>
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">
+                    Confirm New Password <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showConfirmPassword ? "text" : "password"}
+                      required
+                      value={resetConfirmPassword}
+                      onChange={(e) => setResetConfirmPassword(e.target.value)}
+                      placeholder="Repeat new password"
+                      className="w-full text-xs font-bold py-2.5 pl-3 pr-10 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                      tabIndex={-1}
+                    >
+                      {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex gap-2.5 pt-3">
+                  <button
+                    type="button"
+                    disabled={resetModalLoading}
+                    onClick={() => {
+                      setShowPasswordResetModal(false);
+                      setResetUserId("");
+                      setResetUserName("");
+                      setResetCurrentPassword("");
+                      setResetAdminPassword("");
+                      setResetNewPassword("");
+                      setResetConfirmPassword("");
+                      setResetModalError("");
+                      setResetModalSuccess("");
+                    }}
+                    className="flex-1 py-2.5 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl text-xs font-bold transition-all cursor-pointer text-center"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={resetModalLoading}
+                    className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-500/10 cursor-pointer text-center flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-50"
+                  >
+                    {resetModalLoading ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Verifying...</span>
+                      </>
+                    ) : (
+                      <span>{isSelfReset ? "Update My Password" : "Save User Password"}</span>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* 6. Register New Staff Account Modal */}
       {showAddStaffModal && (

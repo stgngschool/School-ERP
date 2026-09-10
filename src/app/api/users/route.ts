@@ -62,7 +62,7 @@ export async function PATCH(request: Request) {
     }
 
     const body = await request.json();
-    const { userId, action, newPassword, name, username, email, phone } = body;
+    const { userId, action, newPassword, currentPassword, adminPassword, name, username, email, phone } = body;
 
     if (!userId) {
       return NextResponse.json({ error: "User ID is required." }, { status: 400 });
@@ -80,11 +80,42 @@ export async function PATCH(request: Request) {
       if (!newPassword || newPassword.length < 6) {
         return NextResponse.json({ error: "New password must be at least 6 characters." }, { status: 400 });
       }
+
+      // Fetch the authenticated admin user's credentials to verify authorization
+      const adminUser = await db.user.findUnique({
+        where: { id: authUser.userId }
+      });
+
+      if (!adminUser) {
+        return NextResponse.json({ error: "Authenticated administrator not found." }, { status: 401 });
+      }
+
+      const isSelfReset = (userId === authUser.userId);
+
+      if (isSelfReset) {
+        // Changing own password: must verify Current Password
+        if (!currentPassword) {
+          return NextResponse.json({ error: "Current password is required to change your password." }, { status: 400 });
+        }
+        const isCurrentValid = await bcrypt.compare(currentPassword, adminUser.passwordHash);
+        if (!isCurrentValid) {
+          return NextResponse.json({ error: "Incorrect current password. Verification failed." }, { status: 400 });
+        }
+      } else {
+        // Resetting another user's password: must verify Admin Authorization Password
+        if (!adminPassword) {
+          return NextResponse.json({ error: "Admin authorization password is required to reset user password." }, { status: 400 });
+        }
+        const isAdminValid = await bcrypt.compare(adminPassword, adminUser.passwordHash);
+        if (!isAdminValid) {
+          return NextResponse.json({ error: "Incorrect Admin password. Authorization denied." }, { status: 400 });
+        }
+      }
+
       const passwordHash = await bcrypt.hash(newPassword, 10);
       await db.user.update({
         where: { id: userId },
-        // ── A-02: Also increment tokenVersion so any live sessions with the
-        // old password are immediately revoked. The user must re-login.
+        // ── A-02: Increment tokenVersion so any existing rogue sessions are immediately revoked
         data: { passwordHash, tokenVersion: { increment: 1 } },
       });
 
@@ -92,14 +123,17 @@ export async function PATCH(request: Request) {
       await db.auditLog.create({
         data: {
           userId: authUser.userId,
-          action: "USER_PASSWORD_RESET",
+          action: isSelfReset ? "SELF_PASSWORD_CHANGED" : "USER_PASSWORD_RESET",
           entityType: "User",
           entityId: userId,
-          newValues: JSON.stringify({ targetUsername: user.username, resetBy: authUser.username }),
+          newValues: JSON.stringify({ targetUsername: user.username, resetBy: authUser.username, isSelfReset }),
         },
       }).catch((err) => console.error("Audit log error on password reset:", err));
 
-      return NextResponse.json({ success: true, message: "Password updated successfully" });
+      return NextResponse.json({
+        success: true,
+        message: isSelfReset ? "Your password has been changed successfully." : `Password for ${user.name} updated successfully.`
+      });
     }
 
     if (action === "ASSIGN_CLASS") {
@@ -159,6 +193,11 @@ export async function PATCH(request: Request) {
         data: { name, username, email, phone },
       });
       return NextResponse.json({ success: true, message: "Profile updated successfully" });
+    }
+
+    // Self-lock protection: Admin cannot block their own account
+    if (userId === authUser.userId) {
+      return NextResponse.json({ error: "You cannot lock or block your own administrator account." }, { status: 400 });
     }
 
     const newStatus = user.status === "ACTIVE" ? "BLOCKED" : "ACTIVE";

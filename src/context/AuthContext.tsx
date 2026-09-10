@@ -323,7 +323,7 @@ interface AuthContextType {
   attendanceLoaded: boolean;
   switchRole: (role: Role) => Promise<void>;
   toggleUserStatus: (userId: string) => Promise<void>;
-  resetUserPassword: (userId: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
+  resetUserPassword: (userId: string, newPassword: string, currentPassword?: string, adminPassword?: string) => Promise<{ success: boolean; error?: string }>;
   deleteUser: (userId: string) => Promise<{ success: boolean; error?: string }>;
   updateAdminProfile: (userId: string, data: { name: string; username: string; email: string; phone?: string }) => Promise<{ success: boolean; error?: string }>;
   registerNewStaff: (data: any) => Promise<{ success: boolean; error?: string }>;
@@ -494,7 +494,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (activeRole === "PARENT") setActiveTab("dashboard");
     if (activeRole === "TEACHER") setActiveTab("attendance");
-    if (activeRole === "ACCOUNTANT") setActiveTab("collect");
+    if (activeRole === "ACCOUNTANT") setActiveTab("dashboard");
     if (activeRole === "ADMIN") setActiveTab("dashboard");
   }, [activeRole]);
 
@@ -1113,12 +1113,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const resetUserPassword = async (userId: string, newPassword: string) => {
+  const resetUserPassword = async (
+    userId: string,
+    newPassword: string,
+    currentPassword?: string,
+    adminPassword?: string
+  ) => {
     try {
       const res = await fetch("/api/users", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, action: "RESET_PASSWORD", newPassword }),
+        body: JSON.stringify({ userId, action: "RESET_PASSWORD", newPassword, currentPassword, adminPassword }),
       });
       const data = await res.json();
       if (res.ok) {
