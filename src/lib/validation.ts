@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Validation utilities for School Finance OS.
  * Enforces strict boundaries, safe financial ranges, and sanitized errors.
  */
@@ -128,4 +128,87 @@ export function getSafeErrorMessage(error: unknown, fallback = "An internal serv
   }
 
   return fallback;
+}
+
+export interface FileValidationOptions {
+  allowedExtensions?: string[];
+  allowedMimeTypes?: string[];
+  maxSizeBytes?: number;
+}
+
+/**
+ * Validates uploaded files to prevent arbitrary file upload, stored XSS,
+ * and denial-of-service via large file storage (SEC-03).
+ */
+export function validateUploadedFile(
+  file: unknown,
+  options: FileValidationOptions = {}
+): { valid: boolean; error?: string } {
+  if (!file || typeof file !== "object") {
+    return { valid: false, error: "No file provided." };
+  }
+
+  const f = file as { name?: unknown; size?: unknown; type?: unknown };
+
+  if (typeof f.size !== "number" || f.size <= 0) {
+    return { valid: false, error: "Empty or invalid file uploaded." };
+  }
+
+  const {
+    allowedExtensions = ["pdf", "jpg", "jpeg", "png", "webp"],
+    allowedMimeTypes = [
+      "application/pdf",
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+    ],
+    maxSizeBytes = 5 * 1024 * 1024, // 5MB
+  } = options;
+
+  if (f.size > maxSizeBytes) {
+    const mbLimit = (maxSizeBytes / (1024 * 1024)).toFixed(1).replace(/\.0$/, "");
+    return {
+      valid: false,
+      error: `File size exceeds permissible limit of ${mbLimit}MB.`,
+    };
+  }
+
+  const rawName = typeof f.name === "string" ? f.name : "";
+  const nameParts = rawName.split(".");
+  const ext = nameParts.length > 1 ? nameParts.pop()!.toLowerCase().trim() : "";
+
+  if (!ext || !allowedExtensions.map((e) => e.toLowerCase()).includes(ext)) {
+    return {
+      valid: false,
+      error: `Unsupported file extension .${ext || "unknown"}. Permitted formats: ${allowedExtensions.join(", ")}.`,
+    };
+  }
+
+  const rawMime = typeof f.type === "string" ? f.type.toLowerCase().trim() : "";
+
+  // Explicitly block SVG and scriptable types even if someone tries to disguise them
+  if (
+    rawMime === "image/svg+xml" ||
+    rawMime.includes("html") ||
+    rawMime.includes("javascript") ||
+    rawMime.includes("xml")
+  ) {
+    return {
+      valid: false,
+      error: "Unsupported file type. Executable or scriptable files (including SVG/HTML) are strictly forbidden.",
+    };
+  }
+
+  if (
+    allowedMimeTypes.length > 0 &&
+    rawMime &&
+    !allowedMimeTypes.some((m) => rawMime === m.toLowerCase())
+  ) {
+    return {
+      valid: false,
+      error: `Invalid file MIME type (${rawMime}). Allowed types: ${allowedMimeTypes.join(", ")}.`,
+    };
+  }
+
+  return { valid: true };
 }

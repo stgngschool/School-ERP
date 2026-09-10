@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { uploadFile } from "@/lib/storage";
 import { getAuthUser } from "@/lib/auth";
+import { validateUploadedFile, getSafeErrorMessage } from "@/lib/validation";
 
 export async function POST(request: Request) {
   const authUser = await getAuthUser(request);
@@ -30,15 +31,14 @@ export async function POST(request: Request) {
       }
     }
 
-    // Validate format: image format (JPG/PNG/WEBP)
-    const isImage = file.type.startsWith("image/") || /\.(jpg|jpeg|png|webp)$/i.test(file.name);
-    if (!isImage) {
-      return NextResponse.json({ error: "Only image files (JPG/PNG/WEBP) are supported." }, { status: 400 });
-    }
-
-    // Limit maximum photo size to 2MB to prevent large Supabase Storage egress
-    if (file.size > 2 * 1024 * 1024) {
-      return NextResponse.json({ error: "File size exceeds 2MB limit. Please upload a smaller image." }, { status: 400 });
+    // Validate format: strict image whitelist (JPG/JPEG/PNG/WEBP, max 2MB, rejects SVG)
+    const validation = validateUploadedFile(file, {
+      allowedExtensions: ["jpg", "jpeg", "png", "webp"],
+      allowedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
+      maxSizeBytes: 2 * 1024 * 1024,
+    });
+    if (!validation.valid) {
+      return NextResponse.json({ error: validation.error || "Invalid photo file." }, { status: 400 });
     }
 
     // Read file to Buffer
@@ -61,6 +61,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, photoUrl: student.photoUrl });
   } catch (error: any) {
     console.error("Photo upload error:", error);
-    return NextResponse.json({ error: "Failed to upload photo: " + (error?.message || "Unknown error") }, { status: 500 });
+    const safeError = getSafeErrorMessage(error, "Failed to upload photo.");
+    return NextResponse.json({ error: safeError }, { status: 500 });
   }
 }

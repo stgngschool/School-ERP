@@ -3,6 +3,7 @@ import db from "@/lib/db";
 import { uploadFile } from "@/lib/storage";
 import { getAuthUser } from "@/lib/auth";
 import { LeaveStatus } from "@prisma/client";
+import { validateUploadedFile } from "@/lib/validation";
 
 export async function GET(request: Request) {
   try {
@@ -89,12 +90,21 @@ export async function POST(request: Request) {
 
     let fileUrl: string | null = null;
     if (file && file.size > 0) {
+      const validation = validateUploadedFile(file, {
+        allowedExtensions: ["pdf", "jpg", "jpeg", "png", "webp"],
+        allowedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/webp"],
+        maxSizeBytes: 5 * 1024 * 1024,
+      });
+      if (!validation.valid) {
+        return NextResponse.json({ error: validation.error || "Invalid file upload." }, { status: 400 });
+      }
+
       const arrayBuffer = await file.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
-      const fileExtension = file.name.split(".").pop();
+      const fileExtension = file.name.split(".").pop()?.toLowerCase() || "pdf";
       const fileName = `leave-${Date.now()}-${Math.floor(100 + Math.random() * 900)}.${fileExtension}`;
       
-      fileUrl = await uploadFile("leave-certificates", `slips/${fileName}`, buffer, file.type);
+      fileUrl = await uploadFile("leave-certificates", `slips/${fileName}`, buffer, file.type || "application/pdf");
     }
 
     const student = await db.student.findUnique({
