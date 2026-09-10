@@ -49,7 +49,9 @@ import {
   normalizeDisplayClassName,
   sortClasses,
   normalizeClassName,
-  normalizeSectionName
+  normalizeSectionName,
+  isGhostClassName,
+  sortClassObjects,
 } from "@/lib/classUtils";
 import {
   generateFeeReminderWhatsAppUrl,
@@ -130,6 +132,7 @@ import {
   Globe,
   QrCode,
   Lock,
+  Unlock,
 } from "lucide-react";
 
 import { getGroupedReceiptItems } from "@/lib/receipts";
@@ -223,12 +226,92 @@ export default function AdminDashboard() {
     studentsLoaded,
     billingLoaded,
     attendanceLoaded,
+    showToast,
   } = useAuth();
 
   // Redesigned Dashboard State
   const [hoveredMonth, setHoveredMonth] = useState<string | null>(null);
   const [notes, setNotes] = useState<string[]>([]);
   const [newNoteText, setNewNoteText] = useState("");
+
+  // ── Privacy / Masking Mode for Sensitive Financial Figures (Default to PROTECTED / HIDDEN)
+  const [privacyMode, setPrivacyMode] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("admin_privacy_mode");
+      return saved !== null ? saved === "true" : true; // Default true (hidden)
+    }
+    return true;
+  });
+
+  const [revealedCards, setRevealedCards] = useState<Record<string, boolean>>({});
+
+  const toggleCardPrivacy = (cardKey: string) => {
+    setRevealedCards((prev) => ({
+      ...prev,
+      [cardKey]: !prev[cardKey],
+    }));
+  };
+
+  const toggleGlobalPrivacy = () => {
+    setPrivacyMode((prev) => {
+      const next = !prev;
+      if (typeof window !== "undefined") {
+        localStorage.setItem("admin_privacy_mode", String(next));
+      }
+      if (next) {
+        setRevealedCards({});
+      } else {
+        setRevealedCards({
+          revenue: true,
+          dues: true,
+          chart: true,
+          efficiency: true,
+          today: true,
+          recent: true,
+          classes: true,
+          collectors: true,
+          defaulters: true,
+          ledger: true,
+          audit: true,
+        });
+      }
+      return next;
+    });
+  };
+
+  const isCardMasked = (cardKey: string) => {
+    if (!privacyMode) return false;
+    return !revealedCards[cardKey];
+  };
+
+  const PrivacyEyeButton = ({
+    cardKey,
+    title = "Amount",
+    className = "",
+  }: {
+    cardKey: string;
+    title?: string;
+    className?: string;
+  }) => {
+    const masked = isCardMasked(cardKey);
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          toggleCardPrivacy(cardKey);
+        }}
+        title={masked ? `Reveal ${title}` : `Hide ${title}`}
+        className={`p-1 rounded-lg transition-all cursor-pointer hover:bg-slate-100 active:scale-90 ${
+          masked ? "text-slate-400 hover:text-slate-700" : "text-indigo-600 hover:text-indigo-800 bg-indigo-50/70"
+        } ${className}`}
+        aria-label={masked ? `Reveal ${title}` : `Hide ${title}`}
+      >
+        {masked ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+      </button>
+    );
+  };
+
 
   // ── M-03: Hydrate notes from DB schoolInfo (PostgreSQL) with localStorage cache fallback
   useEffect(() => {
@@ -415,7 +498,6 @@ export default function AdminDashboard() {
   const handleSaveLateFeeRules = async (e: React.FormEvent) => {
     e.preventDefault();
     setLateFeeSaving(true);
-    setLateFeeMsg(null);
     try {
       // ── SCH-02: Merge late-fee fields into the already-loaded schoolInfo state
       // instead of doing a GET→merge→POST which can cause concurrent-update races.
@@ -425,12 +507,11 @@ export default function AdminDashboard() {
         lateFeeAmount,
         lateFeeType,
       });
-      setLateFeeMsg("✓ Late fee rules saved successfully!");
+      showToast("success", "Late Fee Rules Saved", "Automatic fine calculation rules updated successfully.");
     } catch (err: any) {
-      setLateFeeMsg(`Error: ${err.message || "Failed to save"}`);
+      showToast("error", "Save Failed", err?.message || "Failed to save late fee rules.");
     } finally {
       setLateFeeSaving(false);
-      setTimeout(() => setLateFeeMsg(null), 4000);
     }
   };
 
@@ -842,6 +923,7 @@ export default function AdminDashboard() {
   const [newCompMax, setNewCompMax] = useState("");
   const [schoolEnablePublicResults, setSchoolEnablePublicResults] = useState(true);
   const [schoolAllowedPublicExams, setSchoolAllowedPublicExams] = useState<string[]>(["Unit-1"]);
+  const [schoolLockedExams, setSchoolLockedExams] = useState<string[]>([]);
 
   // Sync settings form states when schoolInfo loads
   React.useEffect(() => {
@@ -900,6 +982,9 @@ export default function AdminDashboard() {
         Array.isArray(schoolInfo.allowedPublicExams) && schoolInfo.allowedPublicExams.length > 0
           ? schoolInfo.allowedPublicExams
           : ["Unit-1"]
+      );
+      setSchoolLockedExams(
+        Array.isArray(schoolInfo.lockedExams) ? schoolInfo.lockedExams : []
       );
     }
   }, [schoolInfo]);
@@ -1158,8 +1243,7 @@ export default function AdminDashboard() {
       setNoticeCategory("GENERAL");
       setNoticeIsUrgent(false);
       setNoticeFileUrl("");
-      setNoticeSuccess(true);
-      setTimeout(() => setNoticeSuccess(false), 3500);
+      showToast("success", "Notice Broadcasted", "Circular posted live across ERP portals and website.");
     } catch (err) {
       console.error(err);
     } finally {
@@ -1183,10 +1267,10 @@ export default function AdminDashboard() {
         fileUrl: editingNotice.fileUrl,
       });
       setEditingNotice(null);
-      setNoticeSuccess(true);
-      setTimeout(() => setNoticeSuccess(false), 3500);
+      showToast("success", "Notice Updated", "Circular updated successfully.");
     } catch (err) {
       console.error("Update notice error:", err);
+      showToast("error", "Update Failed", "Could not update notice. Please retry.");
     } finally {
       setNoticeLoading(false);
     }
@@ -1197,8 +1281,10 @@ export default function AdminDashboard() {
     setDeletingNoticeId(id);
     try {
       await deleteNotice(id);
+      showToast("info", "Notice Removed", "Circular has been deleted.");
     } catch (err) {
       console.error("Delete notice error:", err);
+      showToast("error", "Deletion Failed", "Could not delete notice.");
     } finally {
       setDeletingNoticeId(null);
     }
@@ -1297,33 +1383,36 @@ export default function AdminDashboard() {
     setStdRollNo("");
     setStdGender("");
 
-    setStdSuccess(true);
-    setTimeout(() => setStdSuccess(false), 3000);
+    showToast("success", "Pupil Registered", `Student profile for "${stdName}" created and dues assigned successfully.`);
   };
 
-  const handleUpdateSchool = (e: React.FormEvent) => {
+  const handleUpdateSchool = async (e: React.FormEvent) => {
     e.preventDefault();
-    updateSchoolInfo({
-      ...schoolInfo,
-      name: schoolName,
-      address: schoolAddress,
-      phone: schoolPhone,
-      alternatePhone: schoolAlternatePhone,
-      whatsappNumber: schoolWhatsapp,
-      schoolTimings: schoolTimings,
-      admissionSession: schoolAdmissionSession,
-      admissionStatus: schoolAdmissionStatus,
-      admissionClasses: schoolAdmissionClasses,
-      marqueeText: schoolMarqueeText,
-      googleMapsUrl: schoolGoogleMapsUrl,
-      youtubeUrl: schoolYoutubeUrl,
-      email: schoolEmail,
-      udiseCode: schoolUdiseCode,
-      upiId: schoolUpiId,
-      upiMerchantName: schoolUpiMerchantName,
-    });
-    setSchoolSuccess(true);
-    setTimeout(() => setSchoolSuccess(false), 3000);
+    try {
+      await updateSchoolInfo({
+        ...schoolInfo,
+        name: schoolName,
+        address: schoolAddress,
+        phone: schoolPhone,
+        alternatePhone: schoolAlternatePhone,
+        whatsappNumber: schoolWhatsapp,
+        schoolTimings: schoolTimings,
+        admissionSession: schoolAdmissionSession,
+        admissionStatus: schoolAdmissionStatus,
+        admissionClasses: schoolAdmissionClasses,
+        marqueeText: schoolMarqueeText,
+        googleMapsUrl: schoolGoogleMapsUrl,
+        youtubeUrl: schoolYoutubeUrl,
+        email: schoolEmail,
+        udiseCode: schoolUdiseCode,
+        upiId: schoolUpiId,
+        upiMerchantName: schoolUpiMerchantName,
+      });
+      showToast("success", "Settings Saved", "School configuration and website details updated successfully.");
+    } catch (err: any) {
+      console.error(err);
+      showToast("error", "Save Failed", err?.message || "Failed to update school settings.");
+    }
   };
 
   // Fee Collection Handlers (ported from Accountant)
@@ -1547,7 +1636,7 @@ export default function AdminDashboard() {
       const cleanManualNo = manualReceiptNo && manualReceiptNo.trim() ? manualReceiptNo.trim() : undefined;
       const payRes = await recordItemizedPayment(null, items, payMethod, finalTransactionRef, undefined, cleanManualNo);
       if (!payRes.success) {
-        alert(payRes.error || "Payment failed. Please check backend logs or try again.");
+        showToast("error", "Payment Failed", payRes.error || "Payment failed. Please check backend logs or try again.");
         setIsSubmittingPayment(false);
         return;
       }
@@ -1564,7 +1653,7 @@ export default function AdminDashboard() {
       // AD-02: Never fabricate a receipt number — if the server did not return one,
       // the transaction itself is unreliable and we must surface a clear error.
       if (!payRes.receipt?.receiptNo) {
-        alert("Payment was recorded but the server did not return a valid receipt number. Please contact your system administrator.");
+        showToast("error", "Transaction Warning", "Payment was recorded but the server did not return a valid receipt number. Please contact your system administrator.");
         setIsSubmittingPayment(false);
         await refreshBilling();
         return;
@@ -1632,10 +1721,9 @@ export default function AdminDashboard() {
     e.preventDefault();
     if (!newClassName || !newClassSection) return;
     addClass(newClassName, newClassSection);
+    showToast("success", "Class Added", `Class ${newClassName}-${newClassSection} created successfully.`);
     setNewClassName("");
     setNewClassSection("A");
-    setClassSuccess(true);
-    setTimeout(() => setClassSuccess(false), 3000);
   };
 
   // Fee Head & Structure Handlers
@@ -1643,6 +1731,7 @@ export default function AdminDashboard() {
     e.preventDefault();
     if (!newHead) return;
     addFeeHead(newHead, newHeadFreq);
+    showToast("success", "Fee Head Created", `Fee category "${newHead}" created successfully.`);
     setNewHead("");
     setNewHeadFreq("monthly");
   };
@@ -1664,10 +1753,9 @@ export default function AdminDashboard() {
     });
 
     addFeeStructure(templateName, newStructFreq, total, newStructClass, itemsList);
+    showToast("success", "Fee Structure Created", `Fee template for Class ${newStructClass} saved successfully.`);
     setNewStructName("");
     setNewStructAmount("");
-    setStructSuccess(true);
-    setTimeout(() => setStructSuccess(false), 3000);
   };
 
   const handleSaveClassGrid = (clsId: string, className: string) => {
@@ -1686,8 +1774,7 @@ export default function AdminDashboard() {
     });
 
     addFeeStructure(templateName, freq, total, className, itemsList);
-    setStructSuccess(true);
-    setTimeout(() => setStructSuccess(false), 3000);
+    showToast("success", "Fee Schedule Saved", `Class ${className} fee schedule updated successfully.`);
   };
 
   // Bulk Import CSV Logic
@@ -2120,9 +2207,9 @@ export default function AdminDashboard() {
       }
       
       await refreshStudents();
-      alert("Photo uploaded and updated successfully!");
+      showToast("success", "Photo Uploaded", "Student profile photo compressed and updated successfully.");
     } catch (err: any) {
-      alert("Auto-compress & upload failed: " + err.message);
+      showToast("error", "Upload Failed", err.message || "Failed to process and upload student photo.");
     } finally {
       setCompressingStudentId(null);
     }
@@ -2174,19 +2261,28 @@ export default function AdminDashboard() {
     });
   }, [students, debouncedDirSearch, dirClassFilter, dirSectionFilter, dirFamilyFilter, dirStatusFilter, dirRteFilter, dirCategoryFilter, dirDuesFilter, unpaidStudentIdsSet]);
 
+  const filteredSortedClasses = React.useMemo(() => {
+    return sortClassObjects(
+      (classes || []).filter(
+        (c: any) => c && c.name && !isGhostClassName(c.name)
+      )
+    );
+  }, [classes]);
+
   const classOptions = React.useMemo(() => {
     const classSet = new Set<string>();
-    classes.forEach((c: any) => {
+    filteredSortedClasses.forEach((c: any) => {
       const norm = normalizeClassName(c.name);
       if (norm) classSet.add(norm);
     });
     students.forEach((s: any) => {
+      if (isGhostClassName(s.class)) return;
       const norm = normalizeClassName(s.class);
       if (norm) classSet.add(norm);
     });
     return sortClasses(Array.from(classSet));
-  }, [classes, students]);
-  const sectionOptions = React.useMemo(() => Array.from(new Set([...classes.map((c: any) => c.section), ...students.map((s: any) => s.section)])).filter(Boolean).sort(), [classes, students]);
+  }, [filteredSortedClasses, students]);
+  const sectionOptions = React.useMemo(() => Array.from(new Set([...filteredSortedClasses.map((c: any) => c.section), ...students.map((s: any) => s.section)])).filter(Boolean).sort(), [filteredSortedClasses, students]);
   const familyOptions = React.useMemo(() => Array.from(new Set(students.map((s: any) => s.familyCode).filter(Boolean))).sort(), [students]);
   const activeFilterCount = [dirClassFilter, dirSectionFilter, dirFamilyFilter, dirStatusFilter !== "ALL" ? "1" : "", dirRteFilter !== "ALL" ? "1" : "", dirCategoryFilter !== "ALL" ? "1" : "", dirDuesFilter !== "ALL" ? "1" : ""].filter(Boolean).length;
 
@@ -2245,9 +2341,20 @@ export default function AdminDashboard() {
             const girlsPct = totalStudents > 0 ? Math.round((girlsCount / totalStudents) * 100) : 0;
             const boysPct = totalStudents > 0 ? 100 - girlsPct : 0;
 
+            const currentYear = new Date().getFullYear();
+            const sessionStartYear = new Date().getMonth() >= 3 ? currentYear : currentYear - 1;
+            const sessionStartDate = new Date(`${sessionStartYear}-04-01`);
+
             const newAdmissionsCount = students.filter(s => {
-              const idNum = parseInt(s.id.replace("std-id-", ""));
-              return !isNaN(idNum) && idNum <= 120;
+              if (s.admissionDate) {
+                const d = new Date(s.admissionDate);
+                if (!isNaN(d.getTime())) return d >= sessionStartDate;
+              }
+              if ((s as any).createdAt) {
+                const d = new Date((s as any).createdAt);
+                if (!isNaN(d.getTime())) return d >= sessionStartDate;
+              }
+              return false;
             }).length;
             const oldStudentsCount = totalStudents - newAdmissionsCount;
 
@@ -2349,7 +2456,7 @@ export default function AdminDashboard() {
             const absentCount = attendances.filter(a => a.status === "ABSENT").length;
             const lateCount = attendances.filter(a => a.status === "LATE").length;
             const leaveCount = attendances.filter(a => a.status === "LEAVE").length;
-            const attendanceRate = totalAttendance > 0 ? Math.round((presentCount / totalAttendance) * 100) : 92;
+            const attendanceRate = totalAttendance > 0 ? Math.round((presentCount / totalAttendance) * 100) : 0;
 
             const monthlyRevenue: { [key: string]: number } = {
               "Apr": 0, "May": 0, "Jun": 0, "Jul": 0, "Aug": 0, "Sep": 0,
@@ -2367,6 +2474,7 @@ export default function AdminDashboard() {
               }
             });
             const monthsOrder = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
+            const currentMonthShort = new Date().toLocaleString("en-US", { month: "short" });
             
             // Custom SVG Line Chart Coordinates
             const maxRev = Math.max(...Object.values(monthlyRevenue), 1000);
@@ -2534,6 +2642,26 @@ export default function AdminDashboard() {
                       <Printer className="w-3.5 h-3.5 text-slate-500" />
                       <span>Marksheets</span>
                     </button>
+                    <button
+                      onClick={toggleGlobalPrivacy}
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-2xl border text-xs font-bold transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95 ${
+                        privacyMode
+                          ? "bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-200/80"
+                          : "bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border-emerald-200/80"
+                      }`}
+                      title={
+                        privacyMode
+                          ? "Privacy Mode is ON (Financial numbers protected). Click to reveal all."
+                          : "Privacy Mode is OFF (Financial numbers visible). Click to protect all."
+                      }
+                    >
+                      {privacyMode ? (
+                        <EyeOff className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                      ) : (
+                        <Eye className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      )}
+                      <span>{privacyMode ? "Privacy: Hidden" : "Privacy: Visible"}</span>
+                    </button>
                   </div>
                 </div>
 
@@ -2543,7 +2671,10 @@ export default function AdminDashboard() {
                   <div className="bg-white rounded-3xl border border-slate-200/60 p-6 shadow-[0_8px_30px_rgb(0,0,0,0.015)] transition-all hover:shadow-[0_8px_30px_rgb(0,0,0,0.035)] flex flex-col justify-between">
                     <div>
                       <div className="flex justify-between items-center">
-                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Collected Revenue</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Collected Revenue</span>
+                          <PrivacyEyeButton cardKey="revenue" title="Collected Revenue" />
+                        </div>
                         <span className="p-2.5 bg-indigo-50 text-indigo-600 rounded-2xl">
                           <TrendingUp className="w-5 h-5" />
                         </span>
@@ -2553,7 +2684,13 @@ export default function AdminDashboard() {
                           <div className="h-8 w-28 bg-slate-200/70 rounded-xl" />
                         </div>
                       ) : (
-                        <h3 className="text-2xl font-black text-slate-800 tracking-tight mt-4">{formatP(totalEarnings)}</h3>
+                        <h3 className="text-2xl font-black text-slate-800 tracking-tight mt-4">
+                          {isCardMasked("revenue") ? (
+                            <span className="font-mono tracking-widest text-slate-400 select-none">₹••••••</span>
+                          ) : (
+                            formatP(totalEarnings)
+                          )}
+                        </h3>
                       )}
                     </div>
                     <div className="mt-5 pt-4 border-t border-slate-100/80">
@@ -2572,7 +2709,7 @@ export default function AdminDashboard() {
                             <div className="h-full bg-indigo-600 rounded-full" style={{ width: `${collectionEfficiency}%` }}></div>
                           </div>
                           <div className="flex items-center justify-between mt-2.5 text-[10px] text-slate-400 font-medium">
-                            <span>This month: <strong className="text-slate-600">+{formatP(monthlyTotal)}</strong></span>
+                            <span>This month: <strong className="text-slate-600">+{isCardMasked("revenue") ? "₹••••" : formatP(monthlyTotal)}</strong></span>
                           </div>
                         </>
                       )}
@@ -2624,7 +2761,10 @@ export default function AdminDashboard() {
                   <div className="bg-white rounded-3xl border border-slate-200/60 p-6 shadow-[0_8px_30px_rgb(0,0,0,0.015)] transition-all hover:shadow-[0_8px_30px_rgb(0,0,0,0.035)] flex flex-col justify-between">
                     <div>
                       <div className="flex justify-between items-center">
-                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pending Dues</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pending Dues</span>
+                          <PrivacyEyeButton cardKey="dues" title="Pending Dues" />
+                        </div>
                         <span className="p-2.5 bg-rose-50 text-rose-600 rounded-2xl">
                           <AlertTriangle className="w-5 h-5" />
                         </span>
@@ -2634,7 +2774,13 @@ export default function AdminDashboard() {
                           <div className="h-8 w-28 bg-slate-200/70 rounded-xl" />
                         </div>
                       ) : (
-                        <h3 className="text-2xl font-black text-rose-600 tracking-tight mt-4">{formatP(totalDues)}</h3>
+                        <h3 className="text-2xl font-black text-rose-600 tracking-tight mt-4">
+                          {isCardMasked("dues") ? (
+                            <span className="font-mono tracking-widest text-slate-400 select-none">₹••••••</span>
+                          ) : (
+                            formatP(totalDues)
+                          )}
+                        </h3>
                       )}
                     </div>
                     <div className="mt-5 pt-4 border-t border-slate-100/80">
@@ -2716,8 +2862,9 @@ export default function AdminDashboard() {
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] font-extrabold bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-xl border border-indigo-100">
-                          Total: {formatP(totalEarnings)}
+                          Total: {isCardMasked("chart") ? "₹••••••" : formatP(totalEarnings)}
                         </span>
+                        <PrivacyEyeButton cardKey="chart" title="Chart Revenue" />
                       </div>
                     </div>
 
@@ -2725,7 +2872,7 @@ export default function AdminDashboard() {
                       {monthsOrder.map((m) => {
                         const val = monthlyRevenue[m] || 0;
                         const heightPct = maxRev > 0 ? Math.max((val / maxRev) * 100, val > 0 ? 8 : 3) : 3;
-                        const isCurrentMonth = m === "Aug";
+                        const isCurrentMonth = m.toLowerCase() === currentMonthShort.toLowerCase();
                         const isHighest = val === Math.max(...Object.values(monthlyRevenue)) && val > 0;
 
                         return (
@@ -2736,13 +2883,13 @@ export default function AdminDashboard() {
                             {/* Hover Tooltip Popup */}
                             <div className="absolute -top-9 opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none bg-slate-900 text-white text-[10px] font-bold py-1 px-2 rounded-lg shadow-xl whitespace-nowrap z-20">
                               <span className="text-slate-300">{m}: </span>
-                              <span className="text-amber-300 font-black">₹{val.toLocaleString('en-IN')}</span>
+                              <span className="text-amber-300 font-black">{isCardMasked("chart") ? "₹••••••" : `₹${val.toLocaleString('en-IN')}`}</span>
                             </div>
 
                             {/* Top value label for active months */}
                             {val > 0 && (
                               <span className="text-[9px] font-black text-slate-700 mb-1.5 tracking-tight group-hover:text-indigo-600">
-                                {val >= 100000 ? `₹${(val / 100000).toFixed(1)}L` : val >= 1000 ? `₹${Math.round(val / 1000)}k` : `₹${val}`}
+                                {isCardMasked("chart") ? "••••" : (val >= 100000 ? `₹${(val / 100000).toFixed(1)}L` : val >= 1000 ? `₹${Math.round(val / 1000)}k` : `₹${val}`)}
                               </span>
                             )}
 
@@ -2778,9 +2925,12 @@ export default function AdminDashboard() {
 
                   {/* Collection efficiency Doughnut */}
                   <div className="bg-white rounded-3xl border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.015)] p-6 flex flex-col justify-between">
-                    <div>
-                      <h4 className="text-sm font-black text-slate-800 tracking-tight">Collection Efficiency</h4>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Collected vs Pending Target</p>
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <h4 className="text-sm font-black text-slate-800 tracking-tight">Collection Efficiency</h4>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Collected vs Pending Target</p>
+                      </div>
+                      <PrivacyEyeButton cardKey="efficiency" title="Efficiency Breakdown" />
                     </div>
 
                     <div className="flex items-center justify-center my-4 relative">
@@ -2818,16 +2968,16 @@ export default function AdminDashboard() {
                       <div className="flex justify-between items-center">
                         <div className="flex items-center gap-2">
                           <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 block" />
-                          <span className="text-slate-505">Collected Revenue</span>
+                          <span className="text-slate-500">Collected Revenue</span>
                         </div>
-                        <span className="text-slate-800 font-black">{formatP(totalEarnings)}</span>
+                        <span className="text-slate-800 font-black">{isCardMasked("efficiency") ? "₹••••••" : formatP(totalEarnings)}</span>
                       </div>
                       <div className="flex justify-between items-center">
                         <div className="flex items-center gap-2">
-                          <span className="w-2.5 h-2.5 rounded-full bg-rose-505 block" />
-                          <span className="text-slate-505">Outstanding Dues</span>
+                          <span className="w-2.5 h-2.5 rounded-full bg-rose-500 block" />
+                          <span className="text-slate-500">Outstanding Dues</span>
                         </div>
-                        <span className="text-rose-600 font-black">{formatP(totalDues)}</span>
+                        <span className="text-rose-600 font-black">{isCardMasked("efficiency") ? "₹••••••" : formatP(totalDues)}</span>
                       </div>
                     </div>
                   </div>
@@ -2838,9 +2988,12 @@ export default function AdminDashboard() {
                   {/* Recent Collections Table */}
                   <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.015)] overflow-hidden flex flex-col justify-between">
                     <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-                      <div>
-                        <h4 className="text-sm font-black text-slate-800 tracking-tight">Recent Fee Collections</h4>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Last 5 counter payments</p>
+                      <div className="flex items-center gap-2">
+                        <div>
+                          <h4 className="text-sm font-black text-slate-800 tracking-tight">Recent Fee Collections</h4>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Last 5 counter payments</p>
+                        </div>
+                        <PrivacyEyeButton cardKey="recent" title="Recent Receipts" />
                       </div>
                       <button onClick={() => setActiveTab("ledger")} className="text-xs font-bold text-indigo-600 hover:underline cursor-pointer">All Vouchers</button>
                     </div>
@@ -2864,7 +3017,7 @@ export default function AdminDashboard() {
                                 <p className="font-extrabold text-slate-800">{rec.studentName}</p>
                                 <p className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">{rec.classSection}</p>
                               </td>
-                              <td className="py-3.5 px-6 text-slate-555 text-[10px] font-bold">{rec.createdAt}</td>
+                              <td className="py-3.5 px-6 text-slate-500 text-[10px] font-bold">{rec.createdAt}</td>
                               <td className="py-3.5 px-6">
                                 <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-lg border ${
                                   rec.method === "CASH"
@@ -2875,7 +3028,7 @@ export default function AdminDashboard() {
                                 </span>
                               </td>
                               <td className="py-3.5 px-6 text-right font-black text-slate-900">
-                                {formatP(rec.amount)}
+                                {isCardMasked("recent") ? "₹••••••" : formatP(rec.amount)}
                               </td>
                             </tr>
                           ))}
@@ -2893,9 +3046,12 @@ export default function AdminDashboard() {
 
                   {/* Today's Collection summary */}
                   <div className="bg-white rounded-3xl border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.015)] p-6 flex flex-col justify-between">
-                    <div>
-                      <h4 className="text-sm font-black text-slate-800 tracking-tight">Today's Collections</h4>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Tally by payment modes</p>
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <h4 className="text-sm font-black text-slate-800 tracking-tight">Today's Collections</h4>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Tally by payment modes</p>
+                      </div>
+                      <PrivacyEyeButton cardKey="today" title="Today's Collections" />
                     </div>
 
                     <div className="space-y-3.5 my-5">
@@ -2904,27 +3060,27 @@ export default function AdminDashboard() {
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 block" />
                           <span className="text-xs font-semibold text-slate-600">Cash Counter</span>
                         </div>
-                        <span className="text-sm font-black text-slate-855">{formatP(todayCash)}</span>
+                        <span className="text-sm font-black text-slate-800">{isCardMasked("today") ? "₹••••••" : formatP(todayCash)}</span>
                       </div>
                       <div className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-100 bg-slate-50/50">
                         <div className="flex items-center gap-3">
                           <span className="w-1.5 h-1.5 rounded-full bg-blue-500 block" />
                           <span className="text-xs font-semibold text-slate-600">UPI Smart Pay</span>
                         </div>
-                        <span className="text-sm font-black text-slate-855">{formatP(todayUpi)}</span>
+                        <span className="text-sm font-black text-slate-800">{isCardMasked("today") ? "₹••••••" : formatP(todayUpi)}</span>
                       </div>
                       <div className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-100 bg-slate-50/50">
                         <div className="flex items-center gap-3">
                           <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 block" />
                           <span className="text-xs font-semibold text-slate-600">Bank / Online / Cheques</span>
                         </div>
-                        <span className="text-sm font-black text-slate-855">{formatP(todayBank)}</span>
+                        <span className="text-sm font-black text-slate-800">{isCardMasked("today") ? "₹••••••" : formatP(todayBank)}</span>
                       </div>
                     </div>
 
                     <div className="flex items-center justify-between p-4 rounded-2xl bg-indigo-50/75 border border-indigo-100/50">
                       <span className="text-xs font-bold text-indigo-900 uppercase tracking-wide">Total Collected Today</span>
-                      <span className="text-xl font-black text-indigo-700">{formatP(todayTotal)}</span>
+                      <span className="text-xl font-black text-indigo-700">{isCardMasked("today") ? "₹••••••" : formatP(todayTotal)}</span>
                     </div>
                   </div>
                 </div>
@@ -2934,9 +3090,12 @@ export default function AdminDashboard() {
                   
                   {/* Class breakdown */}
                   <div className="bg-white rounded-3xl border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.015)] p-6 flex flex-col justify-between">
-                    <div>
-                      <h4 className="text-sm font-black text-slate-800 tracking-tight">Class-wise Revenue</h4>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Top 5 classes by collection</p>
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <h4 className="text-sm font-black text-slate-800 tracking-tight">Class-wise Revenue</h4>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Top 5 classes by collection</p>
+                      </div>
+                      <PrivacyEyeButton cardKey="classes" title="Class Revenue" />
                     </div>
 
                     <div className="space-y-4 my-5 flex-1 justify-center flex flex-col">
@@ -2944,10 +3103,10 @@ export default function AdminDashboard() {
                         <div key={idx} className="space-y-1.5">
                           <div className="flex justify-between items-center text-xs font-semibold">
                             <span className="text-slate-700">Class {item.className} <span className="text-[10px] text-slate-400 font-medium">({item.count} std)</span></span>
-                            <span className="text-slate-855 font-black">{formatP(item.collected)} <span className="text-[9px] text-rose-500 font-medium ml-1">({formatP(item.dues)} due)</span></span>
+                            <span className="text-slate-800 font-black">{isCardMasked("classes") ? "₹••••" : formatP(item.collected)} <span className="text-[9px] text-rose-500 font-medium ml-1">({isCardMasked("classes") ? "₹••••" : formatP(item.dues)} due)</span></span>
                           </div>
                           <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden flex">
-                            <div className="bg-indigo-505 h-full rounded-l-full" style={{ width: `${item.efficiency}%` }} />
+                            <div className="bg-indigo-500 h-full rounded-l-full" style={{ width: `${item.efficiency}%` }} />
                             <div className="bg-rose-200 h-full rounded-r-full" style={{ width: `${100 - item.efficiency}%` }} />
                           </div>
                         </div>
@@ -2962,9 +3121,12 @@ export default function AdminDashboard() {
 
                   {/* Top collectors */}
                   <div className="bg-white rounded-3xl border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.015)] p-6 flex flex-col justify-between">
-                    <div>
-                      <h4 className="text-sm font-black text-slate-800 tracking-tight">Staff Collectors Ledger</h4>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Aggregate logs by users</p>
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <h4 className="text-sm font-black text-slate-800 tracking-tight">Staff Collectors Ledger</h4>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Aggregate logs by users</p>
+                      </div>
+                      <PrivacyEyeButton cardKey="collectors" title="Staff Totals" />
                     </div>
 
                     <div className="divide-y divide-slate-100 flex-1 overflow-y-auto max-h-[220px] pr-1 scrollbar-thin my-4 space-y-1">
@@ -2982,7 +3144,7 @@ export default function AdminDashboard() {
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="text-xs font-black text-slate-855">{formatP(col.total)}</p>
+                            <p className="text-xs font-black text-slate-800">{isCardMasked("collectors") ? "₹••••••" : formatP(col.total)}</p>
                             <p className="text-[9px] text-slate-400 font-bold mt-0.5">{col.count} Vouchers</p>
                           </div>
                         </div>
@@ -3055,6 +3217,7 @@ export default function AdminDashboard() {
                         <h4 className="text-sm font-black text-slate-900 tracking-tight">
                           Critical Fee Defaulters Alert
                         </h4>
+                        <PrivacyEyeButton cardKey="defaulters" title="Defaulter Amounts" />
                       </div>
                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">
                         Top outstanding accounts requiring administrative follow-up
@@ -3111,7 +3274,7 @@ export default function AdminDashboard() {
                               </span>
                             </td>
                             <td className="py-3 px-4 text-right font-black text-rose-600">
-                              {formatP(def.amount)}
+                              {isCardMasked("defaulters") ? "₹••••••" : formatP(def.amount)}
                             </td>
                             <td className="py-3 px-4 text-right">
                               <div className="flex items-center justify-end gap-1.5">
@@ -3184,7 +3347,7 @@ export default function AdminDashboard() {
                           <span className="text-[8px] text-pink-500 uppercase font-black">{s.month}</span>
                         </div>
                         <div className="overflow-hidden">
-                          <p className="text-xs font-black text-slate-855 truncate group-hover:text-pink-600 transition-colors">{s.name}</p>
+                          <p className="text-xs font-black text-slate-800 truncate group-hover:text-pink-600 transition-colors">{s.name}</p>
                           <p className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">{s.classSection}</p>
                         </div>
                       </div>
@@ -4354,19 +4517,20 @@ export default function AdminDashboard() {
                       </div>
                     </div>
 
-                    {lateFeeMsg && (
-                      <div className="p-3 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold animate-fade-in">
-                        {lateFeeMsg}
-                      </div>
-                    )}
-
                     <div className="flex justify-end pt-2 border-t">
                       <button
                         type="submit"
                         disabled={lateFeeSaving}
-                        className="py-2.5 px-6 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md shadow-indigo-600/20 cursor-pointer transition-all"
+                        className="inline-flex items-center gap-2 py-2.5 px-6 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md shadow-indigo-600/20 cursor-pointer transition-all disabled:opacity-60"
                       >
-                        {lateFeeSaving ? "Saving..." : "Save Late Fee Rules"}
+                        {lateFeeSaving ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Saving Rules...</span>
+                          </>
+                        ) : (
+                          <span>Save Late Fee Rules</span>
+                        )}
                       </button>
                     </div>
                   </form>
@@ -4660,11 +4824,6 @@ export default function AdminDashboard() {
                         <p>Saving a row instantly updates the 12-month billing ledger for all active students in that class. Existing unpaid amounts are adjusted automatically.</p>
                       </div>
                     </div>
-                    {structSuccess && (
-                      <div className="flex items-center gap-2 bg-green-50 text-green-700 py-1.5 px-3 rounded-lg border border-green-200 text-[10px] font-bold animate-fade-in">
-                        <CheckCircle className="h-4 w-4" /> Saved!
-                      </div>
-                    )}
                   </div>
 
                   {cleanFeeHeads.length === 0 ? (
@@ -4748,8 +4907,8 @@ export default function AdminDashboard() {
                           </tr>
 
                           {/* Dynamic Class Rows */}
-                          {classes.length > 0 ? (
-                            classes.map((cls) => {
+                          {filteredSortedClasses.length > 0 ? (
+                            filteredSortedClasses.map((cls) => {
                               const annualTotal = cleanFeeHeads.reduce((sum, head) => {
                                 const amt = parseFloat(gridInputs[cls.id]?.[head.name] || "0") || 0;
                                 if (head.frequency === "monthly") return sum + amt * 12;
@@ -4842,12 +5001,6 @@ export default function AdminDashboard() {
                       <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Create classes and sections for your school (KG to 12th).</p>
                     </div>
 
-                    {classSuccess && (
-                      <div className="flex items-center gap-2 bg-green-50 text-green-700 p-2 rounded border border-green-100 text-[10px] font-semibold">
-                        <CheckCircle className="h-3.5 w-3.5" /> Class added successfully!
-                      </div>
-                    )}
-
                     <form onSubmit={handleAddClass} className="space-y-2.5">
                       <div className="grid grid-cols-2 gap-2">
                         <div>
@@ -4882,10 +5035,10 @@ export default function AdminDashboard() {
                     </form>
 
                     <div className="space-y-1.5 pt-3 border-t border-slate-200/80">
-                      <p className="text-[9px] font-black uppercase text-slate-400">Active Classes ({classes.length})</p>
+                      <p className="text-[9px] font-black uppercase text-slate-400">Active Classes ({filteredSortedClasses.length})</p>
                       <div className="space-y-1 max-h-[130px] overflow-y-auto pr-1">
-                        {classes.length > 0 ? (
-                          classes.map((cls) => (
+                        {filteredSortedClasses.length > 0 ? (
+                          filteredSortedClasses.map((cls) => (
                             <div key={cls.id} className="flex justify-between items-center p-2 border border-slate-200/80 rounded-lg bg-slate-50/50 hover:bg-slate-50 text-xs font-semibold text-slate-700 transition-all">
                               <span>Class {cls.name} &mdash; {cls.section}</span>
                               <button
@@ -5303,9 +5456,9 @@ export default function AdminDashboard() {
                                             if (confirm(confirmMsg)) {
                                               const res = await deleteUser(usr.id);
                                               if (res.success) {
-                                                alert("User successfully deleted.");
+                                                showToast("success", "Account Deleted", `User account "${usr.name}" deleted successfully.`);
                                               } else {
-                                                alert("Error: " + res.error);
+                                                showToast("error", "Deletion Failed", res.error || "Could not delete user account.");
                                               }
                                             }
                                           }}
@@ -5374,7 +5527,7 @@ export default function AdminDashboard() {
                       <span className="text-slate-800 font-extrabold">
                         {Math.min(parentsCurrentPage * itemsPerPageLocal, totalItems)}
                       </span>{" "}
-                      of <span className="text-slate-855 font-black">{totalItems}</span> parents
+                      of <span className="text-slate-800 font-black">{totalItems}</span> parents
                     </div>
                     <div className="flex gap-1 flex-wrap items-center">
                       <button
@@ -5456,13 +5609,6 @@ export default function AdminDashboard() {
           {/* TAB 2: Notice Board (Full ERP & Live Website Control) */}
           {activeTab === "notices" && (
             <div className="space-y-6">
-              {noticeSuccess && (
-                <div className="flex items-center gap-2 bg-emerald-50 text-emerald-800 p-3 rounded-2xl border border-emerald-200 text-xs font-bold animate-fade-in shadow-2xs">
-                  <CheckCircle className="h-4 w-4 shrink-0 text-emerald-600" />
-                  <span>Notice broadcasted live across ERP portals and Public Website!</span>
-                </div>
-              )}
-
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Left Column: Create Notice Form */}
                 <div className="lg:col-span-1 space-y-4">
@@ -6618,7 +6764,7 @@ export default function AdminDashboard() {
                               <span className="text-slate-800 font-extrabold">
                                 {Math.min(startIndex + itemsPerPage, totalItems)}
                               </span>{" "}
-                              of <span className="text-slate-855 font-black">{totalItems}</span> students
+                              of <span className="text-slate-800 font-black">{totalItems}</span> students
                             </div>
                             
                             {/* Desktop Pagination Buttons */}
@@ -6663,12 +6809,6 @@ export default function AdminDashboard() {
                         Fill details accurately. Parent accounts are auto-linked or created.
                       </p>
                     </div>
-
-                    {stdSuccess && (
-                      <div className="flex items-center gap-2 bg-green-50 text-green-700 p-2.5 rounded border border-green-100 text-[11px] font-semibold animate-fade-in">
-                        <CheckCircle className="h-4 w-4" /> Pupil registered and dues assigned successfully!
-                      </div>
-                    )}
 
                     <form onSubmit={handleRegisterStudent} className="space-y-6">
                       {/* Section 1: Student Info & Demographics */}
@@ -6834,7 +6974,7 @@ export default function AdminDashboard() {
                               onChange={(e) => {
                                 const selectedName = e.target.value;
                                 setStdClass(selectedName);
-                                const matched = classes.find(c => c.name === selectedName);
+                                const matched = filteredSortedClasses.find(c => c.name === selectedName);
                                 if (matched) {
                                   setStdSection(matched.section);
                                 }
@@ -6842,7 +6982,7 @@ export default function AdminDashboard() {
                               className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
                             >
                               <option value="">Select Class</option>
-                              {Array.from(new Set(classes.map(c => c.name))).map((className) => (
+                              {sortClasses(Array.from(new Set(filteredSortedClasses.map(c => c.name)))).map((className) => (
                                 <option key={className} value={className}>{className}</option>
                               ))}
                             </select>
@@ -7467,7 +7607,7 @@ export default function AdminDashboard() {
                     {sortClasses(
                       Array.from(
                         new Set([
-                          ...classes.map((cls: any) => getCleanClassKey(cls.name, cls.section)),
+                          ...filteredSortedClasses.map((cls: any) => getCleanClassKey(cls.name, cls.section)),
                           ...students.map((std: any) => getCleanClassKey(std.class, std.section)),
                         ])
                       ).filter(Boolean)
@@ -7621,7 +7761,7 @@ export default function AdminDashboard() {
               </div>
 
               {/* Sub-tab Panels */}
-              <div className="max-w-2xl w-full">
+              <div className={`w-full transition-all duration-300 ${activeSchoolSubTab === "exams" ? "max-w-6xl" : "max-w-2xl"}`}>
                 {activeSchoolSubTab === "website" && (
                   <div className="bg-white border border-slate-200/60 p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] space-y-5 animate-scale-in">
                     <div>
@@ -7633,15 +7773,9 @@ export default function AdminDashboard() {
                       </p>
                     </div>
 
-                    {schoolSuccess && (
-                      <div className="flex items-center gap-2 bg-emerald-50 text-emerald-700 p-2.5 rounded-xl border border-emerald-100 text-[11px] font-bold">
-                        <CheckCircle className="h-4 w-4 shrink-0" /> Website settings updated live!
-                      </div>
-                    )}
-
                     <form onSubmit={handleUpdateSchool} className="space-y-5">
                       {/* 1. Dedicated Box for Top Announcement / Notice */}
-                      <div className="p-4 sm:p-5 bg-gradient-to-br from-amber-500/5 via-slate-50 to-indigo-500/5 border-2 border-amber-300/70 rounded-2xl space-y-3.5 shadow-xs">
+                      <div className="p-4 sm:p-5 bg-amber-50/40 border border-amber-200/80 rounded-2xl space-y-3.5 shadow-2xs">
                         <div className="flex items-center justify-between flex-wrap gap-2">
                           <label className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
                             <span className="p-1.5 rounded-lg bg-amber-500 text-white shadow-xs">
@@ -7918,12 +8052,6 @@ export default function AdminDashboard() {
                       </p>
                     </div>
 
-                    {schoolSuccess && (
-                      <div className="flex items-center gap-2 bg-emerald-50 text-emerald-700 p-2.5 rounded-xl border border-emerald-100 text-[11px] font-bold">
-                        <CheckCircle className="h-4 w-4 shrink-0" /> Institutional details updated successfully!
-                      </div>
-                    )}
-
                     <form onSubmit={handleUpdateSchool} className="space-y-4">
                       <div>
                         <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">School Name</label>
@@ -8022,18 +8150,6 @@ export default function AdminDashboard() {
                       </p>
                     </div>
 
-                    {adminProfileSuccess && (
-                      <div className="flex items-center gap-2 bg-emerald-50 text-emerald-700 p-2.5 rounded-xl border border-emerald-100 text-[10px] font-bold">
-                        ✓ {adminProfileSuccess}
-                      </div>
-                    )}
-
-                    {adminProfileError && (
-                      <div className="flex items-center gap-2 bg-rose-50 text-rose-700 p-2.5 rounded-xl border border-rose-100 text-[10px] font-bold">
-                        ⚠️ {adminProfileError}
-                      </div>
-                    )}
-
                     <form
                       onSubmit={async (e) => {
                         e.preventDefault();
@@ -8049,9 +8165,9 @@ export default function AdminDashboard() {
                         });
 
                         if (res.success) {
-                          setAdminProfileSuccess("Admin profile details updated successfully!");
+                          showToast("success", "Profile Updated", "Admin profile details updated successfully!");
                         } else {
-                          setAdminProfileError(res.error || "Failed to update profile details.");
+                          showToast("error", "Update Failed", res.error || "Failed to update profile details.");
                         }
                       }}
                       className="space-y-4"
@@ -8315,271 +8431,402 @@ export default function AdminDashboard() {
                         )}
                       </div>
 
-                      {/* Active Exam Parameters Configurator */}
-                      {selectedConfigExam && (() => {
-                        const config = schoolExamConfig[selectedConfigExam] || { isSplit: false, maxMarks: 100, components: [] };
-                        return (
-                          <div className="border border-slate-200/60 rounded-2xl p-4 bg-slate-50/30 space-y-4 animate-scale-in">
-                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                              <h4 className="text-xs font-black uppercase text-slate-800">
-                                Configuration for {selectedConfigExam}
-                              </h4>
-                              <div className="flex items-center gap-2">
-                                <span className="text-[10px] text-slate-400 font-bold uppercase">Total Marks:</span>
-                                <span className="bg-rose-50 border border-rose-100 text-rose-700 px-2 py-0.5 rounded-lg text-xs font-black">
-                                  {config.maxMarks}
-                                </span>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-3">
-                              <input
-                                type="checkbox"
-                                id="isSplitCheckbox"
-                                checked={config.isSplit}
-                                onChange={(e) => {
-                                  setSchoolExamConfig((prev: any) => ({
-                                    ...prev,
-                                    [selectedConfigExam]: {
-                                      ...config,
-                                      isSplit: e.target.checked,
-                                      components: e.target.checked ? config.components : []
-                                    }
-                                  }));
-                                }}
-                                className="h-4 w-4 text-rose-600 border-slate-300 rounded focus:ring-rose-500"
-                              />
-                              <label htmlFor="isSplitCheckbox" className="text-xs font-extrabold text-slate-700 cursor-pointer">
-                                Enable Marks Breakdown/Split (e.g. Written, Practical, Notebook)
-                              </label>
-                            </div>
-
-                            {!config.isSplit ? (
-                              <div className="max-w-xs space-y-1">
-                                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Max Examination Marks</label>
-                                <input
-                                  type="number"
-                                  placeholder="100"
-                                  value={config.maxMarks}
-                                  onChange={(e) => {
-                                    const val = parseFloat(e.target.value) || 0;
-                                    setSchoolExamConfig((prev: any) => ({
-                                      ...prev,
-                                      [selectedConfigExam]: { ...config, maxMarks: val }
-                                    }));
-                                  }}
-                                  className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-white focus:border-rose-500 shadow-2xs"
-                                />
-                              </div>
-                            ) : (
-                              <div className="space-y-3">
-                                {/* Component List */}
-                                <div className="space-y-1.5">
-                                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Configured Components</label>
-                                  {config.components && config.components.length > 0 ? (
-                                    <div className="divide-y divide-slate-100 bg-white border border-slate-200/60 rounded-xl overflow-hidden shadow-2xs">
-                                      {config.components.map((comp: any, idx: number) => (
-                                        <div key={idx} className="flex items-center justify-between p-2.5 hover:bg-slate-50">
-                                          <div>
-                                            <span className="text-xs font-extrabold text-slate-800">{comp.name}</span>
-                                            <span className="text-[10px] text-slate-400 font-bold ml-1.5">(Weight: {comp.max} marks)</span>
-                                          </div>
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              setSchoolExamConfig((prev: any) => {
-                                                const comps = (config.components || []).filter((_: any, i: number) => i !== idx);
-                                                const total = comps.reduce((sum: number, c: any) => sum + (c.max || 0), 0);
-                                                return {
-                                                  ...prev,
-                                                  [selectedConfigExam]: { ...config, components: comps, maxMarks: total }
-                                                };
-                                              });
-                                            }}
-                                            className="p-1 text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
-                                            title="Delete Component"
-                                          >
-                                            <Trash2 className="h-3.5 w-3.5" />
-                                          </button>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    <p className="text-[10px] font-bold text-slate-400 italic">No breakdown components added yet.</p>
-                                  )}
-                                </div>
-
-                                {/* Add Component inline */}
-                                <div className="flex gap-2 items-end pt-1 bg-white p-3 rounded-xl border border-slate-200/60">
-                                  <div className="flex-1">
-                                    <label className="text-[8.5px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
-                                      Component Name
-                                    </label>
-                                    <input
-                                      type="text"
-                                      placeholder="e.g. Notebook, Practical"
-                                      value={newCompName}
-                                      onChange={(e) => setNewCompName(e.target.value)}
-                                      className="w-full text-xs font-semibold py-1.5 px-2 border border-slate-200 rounded-lg outline-none focus:border-rose-500"
-                                    />
+                      {/* 2-Column Responsive Layout: Left = Exam Breakdown & Config, Right = Marks Entry Lock & Public Portal */}
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+                        {/* LEFT COLUMN: Exam Breakdown / Split Config */}
+                        <div className="space-y-4">
+                          {selectedConfigExam && (() => {
+                            const config = schoolExamConfig[selectedConfigExam] || { isSplit: false, maxMarks: 100, components: [] };
+                            return (
+                              <div className="border border-slate-200/70 rounded-2xl p-4.5 bg-slate-50/40 space-y-4 shadow-2xs">
+                                <div className="flex items-center justify-between border-b border-slate-200/60 pb-2.5">
+                                  <div>
+                                    <h4 className="text-xs font-black uppercase text-slate-800 tracking-tight">
+                                      Configuration for {selectedConfigExam}
+                                    </h4>
+                                    <p className="text-[9.5px] text-slate-400 font-semibold mt-0.5">
+                                      Set max marks or split breakdown components
+                                    </p>
                                   </div>
-                                  <div className="w-24">
-                                    <label className="text-[8.5px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
-                                      Max Marks
-                                    </label>
-                                    <input
-                                      type="number"
-                                      placeholder="10"
-                                      value={newCompMax}
-                                      onChange={(e) => setNewCompMax(e.target.value)}
-                                      className="w-full text-xs font-semibold py-1.5 px-2 border border-slate-200 rounded-lg outline-none focus:border-rose-500"
-                                    />
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const name = newCompName.trim();
-                                      const maxVal = parseFloat(newCompMax) || 0;
-                                      if (name && maxVal > 0) {
-                                        setSchoolExamConfig((prev: any) => {
-                                          const current = prev[selectedConfigExam] || { components: [] };
-                                          const comps = [...(current.components || []), { name, max: maxVal }];
-                                          const total = comps.reduce((sum: number, c: any) => sum + (c.max || 0), 0);
-                                          return {
-                                            ...prev,
-                                            [selectedConfigExam]: {
-                                              ...current,
-                                              components: comps,
-                                              maxMarks: total
-                                            }
-                                          };
-                                        });
-                                        setNewCompName("");
-                                        setNewCompMax("");
-                                      }
-                                    }}
-                                    className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold transition-all cursor-pointer"
-                                  >
-                                    Add
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()}
-
-                      {/* Online Examination Results Portal Controls & Publishing Lock */}
-                      <div className="border-t border-slate-200/80 pt-5 mt-5 space-y-4">
-                        <div className="flex items-start justify-between gap-4 p-4 rounded-2xl bg-gradient-to-r from-emerald-50/70 to-teal-50/70 border border-emerald-250/60">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-black uppercase text-emerald-800 tracking-wider flex items-center gap-1.5">
-                                <Globe className="h-3.5 w-3.5 text-emerald-600" />
-                                Online Results Portal (वेबसाइट परिणाम पोर्टल)
-                              </span>
-                              <span
-                                className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${
-                                  schoolEnablePublicResults
-                                    ? "bg-emerald-150 text-emerald-800 border-emerald-300"
-                                    : "bg-slate-200 text-slate-700 border-slate-300"
-                                }`}
-                              >
-                                {schoolEnablePublicResults ? "LIVE / सक्रिय" : "OFFLINE / बंद"}
-                              </span>
-                            </div>
-                            <p className="text-[10.5px] text-emerald-950/80 leading-relaxed font-medium">
-                              अगर यह चालू (ON) है, तो अभिभावक स्कूल वेबसाइट से बिना लॉगिन किए सीधे रोल/एडमिशन नंबर व जन्मतिथि डालकर रिजल्ट देख व मार्कशीट डाउनलोड कर सकेंगे।
-                            </p>
-                          </div>
-                          <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
-                            <input
-                              type="checkbox"
-                              checked={schoolEnablePublicResults}
-                              onChange={(e) => setSchoolEnablePublicResults(e.target.checked)}
-                              className="sr-only peer"
-                            />
-                            <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
-                          </label>
-                        </div>
-
-                        {/* Exam Locking / Publishing Selection */}
-                        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <label className="text-xs font-black uppercase text-slate-800 tracking-wide flex items-center gap-1.5">
-                                <Lock className="h-3.5 w-3.5 text-rose-500" />
-                                Published Exams (कौन-सा रिजल्ट पब्लिक में दिखे)
-                              </label>
-                              <p className="text-[10px] text-slate-500 font-semibold mt-0.5">
-                                जिन परीक्षाओं पर टिक (✓) रहेगा केवल उन्हीं का रिजल्ट अभिभावक वेबसाइट पर देख सकेंगे। बाकी सभी पर 🔒 लॉक रहेगा।
-                              </p>
-                            </div>
-                            <span className="text-[10px] font-bold text-slate-500 bg-white px-2.5 py-1 rounded-lg border border-slate-200">
-                              {schoolAllowedPublicExams.length} Published
-                            </span>
-                          </div>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                            {schoolExams.map((exam) => {
-                              const isPublished = schoolAllowedPublicExams.includes(exam);
-                              return (
-                                <button
-                                  key={exam}
-                                  type="button"
-                                  onClick={() => {
-                                    if (isPublished) {
-                                      // Must keep at least one if preferred, or allow unchecking
-                                      setSchoolAllowedPublicExams((prev) => prev.filter((e) => e !== exam));
-                                    } else {
-                                      setSchoolAllowedPublicExams((prev) => [...prev, exam]);
-                                    }
-                                  }}
-                                  className={`flex items-center justify-between p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                                    isPublished
-                                      ? "bg-emerald-50/80 border-emerald-300 text-emerald-950 shadow-2xs font-bold"
-                                      : "bg-white border-slate-200/80 text-slate-600 hover:border-slate-300"
-                                  }`}
-                                >
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <div
-                                      className={`w-4 h-4 rounded flex items-center justify-center text-[10px] font-black shrink-0 ${
-                                        isPublished
-                                          ? "bg-emerald-600 text-white"
-                                          : "border border-slate-300 text-transparent"
-                                      }`}
-                                    >
-                                      ✓
-                                    </div>
-                                    <span className="text-xs font-black uppercase tracking-tight truncate">
-                                      {exam}
+                                  <div className="flex items-center gap-1.5 bg-rose-50 border border-rose-200/80 px-2.5 py-1 rounded-xl">
+                                    <span className="text-[9px] text-rose-600 font-black uppercase">Total Marks:</span>
+                                    <span className="text-xs font-black text-rose-700">
+                                      {config.maxMarks}
                                     </span>
                                   </div>
-                                  <span
-                                    className={`text-[9.5px] font-black uppercase px-2 py-0.5 rounded-md ${
-                                      isPublished
-                                        ? "bg-emerald-200/70 text-emerald-900"
-                                        : "bg-slate-150 text-slate-500"
-                                    }`}
-                                  >
-                                    {isPublished ? "Published ✓" : "Locked 🔒"}
-                                  </span>
+                                </div>
+
+                                <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-200/70">
+                                  <input
+                                    type="checkbox"
+                                    id="isSplitCheckbox"
+                                    checked={config.isSplit}
+                                    onChange={(e) => {
+                                      setSchoolExamConfig((prev: any) => ({
+                                        ...prev,
+                                        [selectedConfigExam]: {
+                                          ...config,
+                                          isSplit: e.target.checked,
+                                          components: e.target.checked ? config.components : []
+                                        }
+                                      }));
+                                    }}
+                                    className="h-4 w-4 accent-rose-600 rounded cursor-pointer"
+                                  />
+                                  <label htmlFor="isSplitCheckbox" className="text-xs font-extrabold text-slate-700 cursor-pointer">
+                                    Enable Marks Breakdown/Split (e.g. Written, Practical, Notebook)
+                                  </label>
+                                </div>
+
+                                {!config.isSplit ? (
+                                  <div className="space-y-1 bg-white p-3 rounded-xl border border-slate-200/70">
+                                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Max Examination Marks</label>
+                                    <input
+                                      type="number"
+                                      placeholder="100"
+                                      value={config.maxMarks}
+                                      onChange={(e) => {
+                                        const val = parseFloat(e.target.value) || 0;
+                                        setSchoolExamConfig((prev: any) => ({
+                                          ...prev,
+                                          [selectedConfigExam]: { ...config, maxMarks: val }
+                                        }));
+                                      }}
+                                      className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-white focus:border-rose-500 shadow-2xs"
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className="space-y-3">
+                                    {/* Component List */}
+                                    <div className="space-y-1.5">
+                                      <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Configured Components</label>
+                                      {config.components && config.components.length > 0 ? (
+                                        <div className="divide-y divide-slate-100 bg-white border border-slate-200/60 rounded-xl overflow-hidden shadow-2xs">
+                                          {config.components.map((comp: any, idx: number) => (
+                                            <div key={idx} className="flex items-center justify-between p-2.5 hover:bg-slate-50">
+                                              <div>
+                                                <span className="text-xs font-extrabold text-slate-800">{comp.name}</span>
+                                                <span className="text-[10px] text-slate-400 font-bold ml-1.5">(Weight: {comp.max} marks)</span>
+                                              </div>
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setSchoolExamConfig((prev: any) => {
+                                                    const comps = (config.components || []).filter((_: any, i: number) => i !== idx);
+                                                    const total = comps.reduce((sum: number, c: any) => sum + (c.max || 0), 0);
+                                                    return {
+                                                      ...prev,
+                                                      [selectedConfigExam]: { ...config, components: comps, maxMarks: total }
+                                                    };
+                                                  });
+                                                }}
+                                                className="p-1 text-rose-600 hover:bg-rose-50 rounded-lg transition-all cursor-pointer"
+                                                title="Delete Component"
+                                              >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                              </button>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <p className="text-[10px] font-bold text-slate-400 italic">No breakdown components added yet.</p>
+                                      )}
+                                    </div>
+
+                                    {/* Add Component inline */}
+                                    <div className="flex gap-2 items-end pt-1 bg-white p-3 rounded-xl border border-slate-200/60">
+                                      <div className="flex-1">
+                                        <label className="text-[8.5px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
+                                          Component Name
+                                        </label>
+                                        <input
+                                          type="text"
+                                          placeholder="e.g. Notebook, Practical"
+                                          value={newCompName}
+                                          onChange={(e) => setNewCompName(e.target.value)}
+                                          className="w-full text-xs font-semibold py-1.5 px-2 border border-slate-200 rounded-lg outline-none focus:border-rose-500"
+                                        />
+                                      </div>
+                                      <div className="w-24">
+                                        <label className="text-[8.5px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
+                                          Max Marks
+                                        </label>
+                                        <input
+                                          type="number"
+                                          placeholder="10"
+                                          value={newCompMax}
+                                          onChange={(e) => setNewCompMax(e.target.value)}
+                                          className="w-full text-xs font-semibold py-1.5 px-2 border border-slate-200 rounded-lg outline-none focus:border-rose-500"
+                                        />
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const name = newCompName.trim();
+                                          const maxVal = parseFloat(newCompMax) || 0;
+                                          if (name && maxVal > 0) {
+                                            setSchoolExamConfig((prev: any) => {
+                                              const current = prev[selectedConfigExam] || { components: [] };
+                                              const comps = [...(current.components || []), { name, max: maxVal }];
+                                              const total = comps.reduce((sum: number, c: any) => sum + (c.max || 0), 0);
+                                              return {
+                                                ...prev,
+                                                [selectedConfigExam]: {
+                                                  ...current,
+                                                  components: comps,
+                                                  maxMarks: total
+                                                }
+                                              };
+                                            });
+                                            setNewCompName("");
+                                            setNewCompMax("");
+                                          }
+                                        }}
+                                        className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-bold transition-all cursor-pointer"
+                                      >
+                                        Add
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </div>
+
+                        {/* RIGHT COLUMN: Marks Entry Lock Management Controls */}
+                        <div className="space-y-4">
+                          {/* 🔒 1. MARKS ENTRY LOCK MANAGEMENT CONTROLS */}
+                          <div className="border border-slate-200/70 rounded-2xl p-4.5 bg-slate-50/40 space-y-4 shadow-2xs">
+                            <div className="flex items-center justify-between border-b border-slate-200/60 pb-2.5">
+                              <div>
+                                <h4 className="text-xs font-black uppercase text-slate-800 tracking-tight flex items-center gap-1.5">
+                                  <Lock className="h-3.5 w-3.5 text-rose-600" />
+                                  Marks Entry Lock
+                                </h4>
+                                <p className="text-[9.5px] text-slate-400 font-semibold mt-0.5">
+                                  Freeze exams to prevent teachers from editing marks
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    setSchoolLockedExams([...schoolExams]);
+                                    try {
+                                      await updateSchoolInfo({ lockedExams: [...schoolExams] });
+                                      showToast("info", "All Exams Locked", "All exams have been frozen from teacher marks entry.");
+                                    } catch (err) {
+                                      console.error("Lock all err:", err);
+                                      showToast("error", "Action Failed", "Could not lock all exams. Please retry.");
+                                    }
+                                  }}
+                                  className="text-[9.5px] font-bold px-2.5 py-1 bg-white hover:bg-rose-50 text-rose-600 rounded-lg border border-slate-200 hover:border-rose-200 transition-all cursor-pointer shadow-2xs active:scale-95"
+                                  title="Lock all exams from editing"
+                                >
+                                  Lock All
                                 </button>
-                              );
-                            })}
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    setSchoolLockedExams([]);
+                                    try {
+                                      await updateSchoolInfo({ lockedExams: [] });
+                                      showToast("success", "All Exams Unlocked", "All exams are now open for teacher marks entry.");
+                                    } catch (err) {
+                                      console.error("Unlock all err:", err);
+                                      showToast("error", "Action Failed", "Could not unlock exams. Please retry.");
+                                    }
+                                  }}
+                                  className="text-[9.5px] font-bold px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-600 rounded-lg border border-slate-200 transition-all cursor-pointer shadow-2xs active:scale-95"
+                                  title="Unlock all exams"
+                                >
+                                  Unlock All
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* List of Lockable Exams */}
+                            <div className="space-y-2">
+                              {schoolExams.length > 0 ? (
+                                schoolExams.map((exam) => {
+                                  const isLocked = schoolLockedExams.some(
+                                    (e) => e.trim().toLowerCase() === exam.trim().toLowerCase()
+                                  );
+                                  return (
+                                    <div
+                                      key={exam}
+                                      className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
+                                        isLocked
+                                          ? "bg-rose-50/40 border-rose-200 shadow-2xs"
+                                          : "bg-white border-slate-200/70 hover:border-slate-300 shadow-2xs"
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-2.5 min-w-0">
+                                        <span
+                                          className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border ${
+                                            isLocked
+                                              ? "bg-rose-100 text-rose-700 border-rose-200"
+                                              : "bg-slate-100 text-slate-400 border-slate-200"
+                                          }`}
+                                        >
+                                          {isLocked ? (
+                                            <Lock className="h-3.5 w-3.5 text-rose-600" />
+                                          ) : (
+                                            <Unlock className="h-3.5 w-3.5 text-slate-400" />
+                                          )}
+                                        </span>
+                                        <div className="min-w-0">
+                                          <p className="text-xs font-black uppercase tracking-tight text-slate-800 truncate">
+                                            {exam}
+                                          </p>
+                                          <p className="text-[9.5px] font-semibold text-slate-400">
+                                            {isLocked ? "Locked • Marks cannot be edited" : "Open • Editable by teachers"}
+                                          </p>
+                                        </div>
+                                      </div>
+
+                                      <div className="flex items-center gap-2.5">
+                                        <span
+                                          className={`text-[9.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md border ${
+                                            isLocked
+                                              ? "bg-rose-100/80 text-rose-700 border-rose-250"
+                                              : "bg-slate-100 text-slate-500 border-slate-200"
+                                          }`}
+                                        >
+                                          {isLocked ? "Locked" : "Open"}
+                                        </span>
+                                        <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                                          <input
+                                            type="checkbox"
+                                            checked={isLocked}
+                                            onChange={async (e) => {
+                                              const checked = e.target.checked;
+                                              const updated = checked
+                                                ? [...schoolLockedExams.filter((ex) => ex.trim().toLowerCase() !== exam.trim().toLowerCase()), exam]
+                                                : schoolLockedExams.filter(
+                                                    (ex) => ex.trim().toLowerCase() !== exam.trim().toLowerCase()
+                                                  );
+                                              setSchoolLockedExams(updated);
+                                              try {
+                                                await updateSchoolInfo({ lockedExams: updated });
+                                                if (checked) {
+                                                  showToast("info", "Exam Locked", `${exam} is now locked. Teachers cannot edit marks.`);
+                                                } else {
+                                                  showToast("success", "Exam Unlocked", `${exam} is now unlocked and open for marks entry.`);
+                                                }
+                                              } catch (err) {
+                                                console.error("Auto lock err:", err);
+                                                showToast("error", "Update Failed", "Could not update exam lock state.");
+                                              }
+                                            }}
+                                            className="sr-only peer"
+                                          />
+                                          <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-600"></div>
+                                        </label>
+                                      </div>
+                                    </div>
+                                  );
+                                })
+                              ) : (
+                                <p className="text-[10px] font-bold text-slate-400 italic">No exams configured yet.</p>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* 🌐 2. ONLINE EXAMINATION RESULTS PORTAL CONTROLS */}
+                          <div className="border border-slate-200/70 rounded-2xl p-4.5 bg-slate-50/40 space-y-4 shadow-2xs">
+                            <div className="flex items-center justify-between border-b border-slate-200/60 pb-2.5">
+                              <div>
+                                <h4 className="text-xs font-black uppercase text-slate-800 tracking-tight flex items-center gap-1.5">
+                                  <Globe className="h-3.5 w-3.5 text-indigo-600" />
+                                  Online Results Portal
+                                </h4>
+                                <p className="text-[9.5px] text-slate-400 font-semibold mt-0.5">
+                                  Allow students and parents to view published report cards online
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`text-[9.5px] font-black uppercase px-2 py-0.5 rounded-md border ${
+                                    schoolEnablePublicResults
+                                      ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                                      : "bg-slate-100 text-slate-500 border-slate-200"
+                                  }`}
+                                >
+                                  {schoolEnablePublicResults ? "Live" : "Offline"}
+                                </span>
+                                <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                                  <input
+                                    type="checkbox"
+                                    checked={schoolEnablePublicResults}
+                                    onChange={(e) => setSchoolEnablePublicResults(e.target.checked)}
+                                    className="sr-only peer"
+                                  />
+                                  <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                                </label>
+                              </div>
+                            </div>
+
+                            {/* Public Published Exams Checkboxes */}
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <label className="text-[9.5px] font-bold uppercase text-slate-400 tracking-wider">
+                                  Published On Website
+                                </label>
+                                <span className="text-[9px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-md shadow-2xs">
+                                  {schoolAllowedPublicExams.length} Published
+                                </span>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-2">
+                                {schoolExams.map((exam) => {
+                                  const isPublished = schoolAllowedPublicExams.includes(exam);
+                                  return (
+                                    <button
+                                      key={exam}
+                                      type="button"
+                                      onClick={() => {
+                                        if (isPublished) {
+                                          setSchoolAllowedPublicExams((prev) => prev.filter((e) => e !== exam));
+                                        } else {
+                                          setSchoolAllowedPublicExams((prev) => [...prev, exam]);
+                                        }
+                                      }}
+                                      className={`flex items-center justify-between p-2.5 rounded-xl border text-left transition-all cursor-pointer shadow-2xs ${
+                                        isPublished
+                                          ? "bg-indigo-50/70 border-indigo-300 text-indigo-950 font-bold"
+                                          : "bg-white border-slate-200/70 text-slate-600 hover:border-slate-300"
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-1.5 min-w-0">
+                                        <div
+                                          className={`w-3.5 h-3.5 rounded flex items-center justify-center text-[9px] font-black shrink-0 ${
+                                            isPublished
+                                              ? "bg-indigo-600 text-white"
+                                              : "border border-slate-300 text-transparent"
+                                          }`}
+                                        >
+                                          ✓
+                                        </div>
+                                        <span className="text-[11px] font-black uppercase tracking-tight truncate">
+                                          {exam}
+                                        </span>
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
 
                       {/* Save button */}
                       <div className="border-t border-slate-100 pt-4 flex items-center justify-between">
-                        {schoolSuccess ? (
-                          <span className="text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl">
-                            ✓ Exam and Result Portal settings saved successfully!
-                          </span>
-                        ) : (
-                          <span />
-                        )}
+                        <p className="text-[11px] text-slate-400 font-semibold hidden sm:block">
+                          Exam configurations and lock permissions are synchronized live across all teacher consoles
+                        </p>
                         <button
                           type="button"
                           onClick={async () => {
@@ -8591,19 +8838,38 @@ export default function AdminDashboard() {
                                 examConfig: schoolExamConfig,
                                 enablePublicResults: schoolEnablePublicResults,
                                 allowedPublicExams: schoolAllowedPublicExams,
+                                lockedExams: schoolLockedExams,
                               });
-                              setSchoolSuccess(true);
-                              setTimeout(() => setSchoolSuccess(false), 3000);
-                            } catch (err) {
+                              showToast(
+                                "success",
+                                "Exam & Lock Settings Saved",
+                                "Exam parameters and lock status have been updated successfully."
+                              );
+                            } catch (err: any) {
                               console.error(err);
+                              showToast(
+                                "error",
+                                "Failed to Save",
+                                err?.message || "Could not save exam settings. Please try again."
+                              );
                             } finally {
                               setSavingExams(false);
                             }
                           }}
                           disabled={savingExams}
-                          className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-rose-500/20 cursor-pointer disabled:opacity-55 active:scale-95"
+                          className="inline-flex items-center gap-2 px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-rose-500/20 cursor-pointer disabled:opacity-55 active:scale-95"
                         >
-                          {savingExams ? "Saving Settings..." : "Save Exam & Portal Settings"}
+                          {savingExams ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              <span>Saving Settings...</span>
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle className="w-3.5 h-3.5" />
+                              <span>Save Exam & Lock Settings</span>
+                            </>
+                          )}
                         </button>
                       </div>
                     </div>
@@ -8822,21 +9088,24 @@ export default function AdminDashboard() {
                       <div className="space-y-3">
                         {/* Overall Totals */}
                         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                          <div className="p-3 bg-white border border-slate-200/70 rounded-2xl shadow-2xs">
-                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">Total Receipts</span>
-                            <span className="text-sm font-black text-slate-800 mt-1 block">{filtered.length} Vouchers</span>
+                          <div className="p-3 bg-white border border-slate-200/70 rounded-2xl shadow-2xs flex justify-between items-start">
+                            <div>
+                              <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">Total Receipts</span>
+                              <span className="text-sm font-black text-slate-800 mt-1 block">{filtered.length} Vouchers</span>
+                            </div>
+                            <PrivacyEyeButton cardKey="audit" title="Shift Reconciliation" />
                           </div>
                           <div className="p-3 bg-white border border-slate-200/70 rounded-2xl shadow-2xs">
                             <span className="text-[8px] font-black text-indigo-500 uppercase tracking-widest block">Total Collection</span>
-                            <span className="text-sm font-black text-slate-900 mt-1 block">{formatP(totalAmt)}</span>
+                            <span className="text-sm font-black text-slate-900 mt-1 block">{isCardMasked("audit") ? "₹••••••" : formatP(totalAmt)}</span>
                           </div>
                           <div className="p-3 bg-white border border-slate-200/70 rounded-2xl shadow-2xs">
                             <span className="text-[8px] font-black text-emerald-500 uppercase tracking-widest block">Cash in Drawer</span>
-                            <span className="text-sm font-black text-emerald-700 mt-1 block">{formatP(cashAmt)}</span>
+                            <span className="text-sm font-black text-emerald-700 mt-1 block">{isCardMasked("audit") ? "₹••••••" : formatP(cashAmt)}</span>
                           </div>
                           <div className="p-3 bg-white border border-slate-200/70 rounded-2xl shadow-2xs">
                             <span className="text-[8px] font-black text-blue-500 uppercase tracking-widest block">UPI & Bank Transfer</span>
-                            <span className="text-sm font-black text-blue-700 mt-1 block">{formatP(upiAmt + bankAmt)}</span>
+                            <span className="text-sm font-black text-blue-700 mt-1 block">{isCardMasked("audit") ? "₹••••••" : formatP(upiAmt + bankAmt)}</span>
                           </div>
                         </div>
 
@@ -8866,12 +9135,12 @@ export default function AdminDashboard() {
                                     </span>
                                   </div>
                                   <div className="grid grid-cols-2 gap-1 text-[9px] font-bold text-slate-500">
-                                    <span>Cash: <strong className="text-emerald-700 font-extrabold">{formatP(c.cash)}</strong></span>
-                                    <span>UPI/Bank: <strong className="text-blue-700 font-extrabold">{formatP(c.upi + c.bank)}</strong></span>
+                                    <span>Cash: <strong className="text-emerald-700 font-extrabold">{isCardMasked("audit") ? "₹••••" : formatP(c.cash)}</strong></span>
+                                    <span>UPI/Bank: <strong className="text-blue-700 font-extrabold">{isCardMasked("audit") ? "₹••••" : formatP(c.upi + c.bank)}</strong></span>
                                   </div>
                                   <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-[10px] font-black text-slate-900">
                                     <span>Total Collected:</span>
-                                    <span className="text-indigo-600">{formatP(c.total)}</span>
+                                    <span className="text-indigo-600">{isCardMasked("audit") ? "₹••••" : formatP(c.total)}</span>
                                   </div>
                                 </div>
                               ))}
@@ -9259,7 +9528,7 @@ export default function AdminDashboard() {
                       {sortClasses(
                         Array.from(
                           new Set([
-                            ...classes.map((c) => getCleanClassKey(c.name, c.section)),
+                            ...filteredSortedClasses.map((c) => getCleanClassKey(c.name, c.section)),
                             ...students.map((s) => getCleanClassKey(s.class, s.section)),
                           ])
                         ).filter(Boolean)
@@ -11042,7 +11311,7 @@ export default function AdminDashboard() {
                     className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 cursor-pointer"
                   >
                     <option value="">No Class (Subject Teacher)</option>
-                    {classes.map((cls: any) => (
+                    {filteredSortedClasses.map((cls: any) => (
                       <option key={cls.id} value={cls.id}>
                         Class {cls.name}-{cls.section}
                       </option>
@@ -11218,7 +11487,7 @@ export default function AdminDashboard() {
                   className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 cursor-pointer"
                 >
                   <option value="">No Class (Subject Teacher)</option>
-                  {classes.map((cls: any) => (
+                  {filteredSortedClasses.map((cls: any) => (
                     <option key={cls.id} value={cls.id}>
                       Class {cls.name}-{cls.section}
                     </option>

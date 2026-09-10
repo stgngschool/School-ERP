@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 
 export default function PrintMarksheets() {
-  const { students, schoolInfo, refreshStudents } = useAuth();
+  const { students, schoolInfo, refreshStudents, showToast } = useAuth();
 
   const availableClasses = useMemo(() => {
     const classSet = new Set<string>();
@@ -120,15 +120,21 @@ export default function PrintMarksheets() {
   const handleClaimToggle = async (student: any) => {
     try {
       setClaiming(true);
+      const newClaimed = !student.isMarksheetClaimed;
       const res = await fetch(`/api/students/claim-marksheet`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ studentId: student.id, isMarksheetClaimed: !student.isMarksheetClaimed })
+        body: JSON.stringify({ studentId: student.id, isMarksheetClaimed: newClaimed })
       });
       if (res.ok) {
         await refreshStudents(); // Refresh students to get the new claim status
+        showToast("success", "Distribution Updated", `Marksheet for ${student.name} marked as ${newClaimed ? "Collected" : "Pending"}.`);
+      } else {
+        showToast("error", "Update Failed", "Could not update distribution status.");
       }
+    } catch {
+      showToast("error", "Network Error", "Failed to update distribution status.");
     } finally {
       setClaiming(false);
     }

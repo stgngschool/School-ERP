@@ -93,7 +93,28 @@ export async function GET(request: Request) {
       marksRecord[m.studentId] = m;
     });
 
-    return NextResponse.json(marksRecord);
+    // ── Check if Exam is Locked in SchoolConfig (Fresh real-time DB check)
+    let isExamLocked = false;
+    let lockedExams: string[] = [];
+    try {
+      const schoolConfigRow = await db.schoolConfig.findUnique({ where: { id: "singleton" } });
+      const cfgData = (schoolConfigRow?.data as any) || {};
+      lockedExams = Array.isArray(cfgData.lockedExams) ? cfgData.lockedExams : [];
+      isExamLocked = lockedExams.some((e: string) => e.trim().toLowerCase() === examName.trim().toLowerCase());
+    } catch (cfgErr) {
+      console.warn("Could not check lockedExams in marks roster:", cfgErr);
+    }
+
+    return NextResponse.json({
+      isLocked: isExamLocked,
+      lockedExams,
+      marks: marksRecord,
+      ...marksRecord,
+    }, {
+      headers: {
+        "Cache-Control": "private, no-cache, no-store, must-revalidate",
+      },
+    });
   } catch (error: any) {
     console.error("Failed to fetch marks roster:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });

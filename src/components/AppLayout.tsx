@@ -89,6 +89,7 @@ const getNavItems = (activeRole: string): NavItem[] => {
       return [
         { category: "Overview", name: "Admin Dashboard", shortName: "Dashboard", icon: LayoutDashboard, tab: "dashboard" },
         { category: "Student & Academics", name: "Student Management", shortName: "Students", icon: Users, tab: "students" },
+        { category: "Student & Academics", name: "Admissions & Applications", shortName: "Admissions", icon: UserPlus, tab: "enquiries" },
         { category: "Student & Academics", name: "Attendance Console", shortName: "Attendance", icon: UserCheck, tab: "attendance" },
         { category: "Student & Academics", name: "Class Marks Entry", shortName: "Marks", icon: GraduationCap, tab: "marks" },
         { category: "Student & Academics", name: "Print Marksheets", shortName: "Marksheets", icon: Printer, tab: "print_marksheets", desktopOnly: true },
@@ -99,7 +100,6 @@ const getNavItems = (activeRole: string): NavItem[] => {
         { category: "Finance & Fees", name: "Fee Structure Setup", shortName: "Fee Setup", icon: Settings, tab: "structures", desktopOnly: true },
         { category: "System & Communication", name: "Website Photos & Media", shortName: "Media", icon: Camera, tab: "website_media" },
         { category: "System & Communication", name: "Notices & Announcements", shortName: "Notices", icon: Bell, tab: "notices" },
-        { category: "Student & Academics", name: "Admissions & Applications", shortName: "Admissions", icon: UserPlus, tab: "enquiries" },
         { category: "System & Communication", name: "User Access Control", shortName: "Users", icon: ShieldCheck, tab: "users", desktopOnly: true },
         { category: "System & Communication", name: "School Settings", shortName: "Settings", icon: Building2, tab: "school", desktopOnly: true },
         { category: "System & Communication", name: "System Audit Logs", shortName: "Audit", icon: FileSpreadsheet, tab: "audit", desktopOnly: true },

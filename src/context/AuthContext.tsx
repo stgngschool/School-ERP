@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
 import { useAuthLogic } from "../hooks/useAuthLogic";
+import { CheckCircle2, AlertCircle, AlertTriangle, Info, X } from "lucide-react";
 
 export type Role = "ADMIN" | "ACCOUNTANT" | "TEACHER" | "PARENT";
 type UserStatus = "ACTIVE" | "BLOCKED";
@@ -219,6 +220,7 @@ export interface MockSchoolInfo {
   examConfig?: any;
   enablePublicResults?: boolean;
   allowedPublicExams?: string[];
+  lockedExams?: string[];
   adminNotes?: string[];
   googleSpreadsheetId?: string;
   googleFolderId?: string;
@@ -464,6 +466,19 @@ interface AuthContextType {
   currentStage: AuthStage;
   stageError: string | null;
   retryInitSession: () => void;
+  showToast: (
+    type: "success" | "error" | "info" | "warning",
+    title: string,
+    message: string,
+    duration?: number
+  ) => void;
+}
+
+export interface ToastNotification {
+  id: string;
+  type: "success" | "error" | "info" | "warning";
+  title: string;
+  message: string;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -491,6 +506,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const [usersList, setUsersList] = useState<MockUser[]>([]);
   const [activeTab, setActiveTab] = useState<string>("");
+
+  // Global floating toast state
+  const [activeToast, setActiveToast] = useState<ToastNotification | null>(null);
+  const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const showToast = useCallback(
+    (type: "success" | "error" | "info" | "warning", title: string, message: string, duration = 3500) => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      const id = Math.random().toString(36).substring(2, 9);
+      setActiveToast({ id, type, title, message });
+      toastTimerRef.current = setTimeout(() => {
+        setActiveToast((current) => (current?.id === id ? null : current));
+      }, duration);
+    },
+    []
+  );
 
   useEffect(() => {
     if (activeRole === "PARENT") setActiveTab("dashboard");
@@ -567,6 +598,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           maxMarks: 80
         }
       },
+      lockedExams: [],
     })
   );
   const [students, setStudents] = useState<MockStudent[]>(() =>
@@ -792,7 +824,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // ─── Parallel Core Data Hydration (Instant & Progressive) ───
       // 1. Metadata (Instant cached responses)
-      const schoolLoad = apiFetch("/api/school", {}, 10000, true).then((data) => {
+      const schoolLoad = apiFetch("/api/school", { cache: "no-store" }, 10000, false).then((data) => {
         if (data) {
           setSchoolInfo(data);
           setLocalCache("gng_cached_schoolInfo", data);
@@ -984,10 +1016,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshSchool = async () => {
     clearApiCache("/api/school");
-    const data = await apiFetch("/api/school", { cache: "no-store" }, 10000, false);
-    if (data) {
-      setSchoolInfo(data);
-      setLocalCache("gng_cached_schoolInfo", data);
+    try {
+      const res = await fetch("/api/school", { credentials: "include", cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        setSchoolInfo(data);
+        setLocalCache("gng_cached_schoolInfo", data);
+      }
+    } catch (err) {
+      console.error("Refresh school failed:", err);
     }
   };
 
@@ -1971,8 +2008,58 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         studentsLoaded,
         billingLoaded,
         attendanceLoaded,
+        showToast,
       }}
     >
+      {/* ─── GLOBAL FLOATING TOAST (Viewport-Fixed, Above All Portals & Modals) ─── */}
+      {activeToast && (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className={`fixed top-4 left-1/2 -translate-x-1/2 z-[99999] w-[92%] sm:w-auto min-w-[320px] max-w-md flex items-center justify-between gap-3 px-4 py-3 rounded-2xl border shadow-[0_16px_40px_rgba(0,0,0,0.22)] backdrop-blur-md transition-all animate-in fade-in slide-in-from-top-3 duration-200 pointer-events-auto ${
+            activeToast.type === "success"
+              ? "bg-slate-900/95 border-emerald-500/40 text-white"
+              : activeToast.type === "error"
+              ? "bg-slate-900/95 border-rose-500/40 text-white"
+              : activeToast.type === "warning"
+              ? "bg-slate-900/95 border-amber-500/40 text-white"
+              : "bg-slate-900/95 border-indigo-500/40 text-white"
+          }`}
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            {activeToast.type === "success" ? (
+              <div className="h-7 w-7 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400 shrink-0">
+                <CheckCircle2 className="h-4 w-4" />
+              </div>
+            ) : activeToast.type === "error" ? (
+              <div className="h-7 w-7 rounded-xl bg-rose-500/20 border border-rose-400/40 flex items-center justify-center text-rose-400 shrink-0">
+                <AlertCircle className="h-4 w-4" />
+              </div>
+            ) : activeToast.type === "warning" ? (
+              <div className="h-7 w-7 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-400 shrink-0">
+                <AlertTriangle className="h-4 w-4" />
+              </div>
+            ) : (
+              <div className="h-7 w-7 rounded-xl bg-indigo-500/20 border border-indigo-400/40 flex items-center justify-center text-indigo-400 shrink-0">
+                <Info className="h-4 w-4" />
+              </div>
+            )}
+            <div className="min-w-0 text-left">
+              <p className="text-xs font-black leading-tight text-white">{activeToast.title}</p>
+              <p className="text-[11px] text-slate-300 font-semibold leading-tight truncate mt-0.5">{activeToast.message}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActiveToast(null)}
+            className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer shrink-0"
+            aria-label="Close notification"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
       {children}
     </AuthContext.Provider>
   );

@@ -33,6 +33,7 @@ export default function StudentDirectoryTab({ onCollectFee }: StudentDirectoryTa
     dueItems,
     updateStudentStatus,
     promoteStudent,
+    showToast,
   } = useAuth();
 
   // Search and debounce states
@@ -545,6 +546,7 @@ export default function StudentDirectoryTab({ onCollectFee }: StudentDirectoryTa
               onClick={async () => {
                 if (confirm(`Suspend ${selectedStudentIds.length} selected students?`)) {
                   await updateStudentStatus(selectedStudentIds, "SUSPENDED");
+                  showToast("warning", "Status Updated", `${selectedStudentIds.length} students marked as SUSPENDED.`);
                   setSelectedStudentIds([]);
                 }
               }}
@@ -559,6 +561,7 @@ export default function StudentDirectoryTab({ onCollectFee }: StudentDirectoryTa
               onClick={async () => {
                 if (confirm(`Mark ${selectedStudentIds.length} selected students as LEFT (TC Issued)?`)) {
                   await updateStudentStatus(selectedStudentIds, "LEFT");
+                  showToast("info", "Status Updated", `${selectedStudentIds.length} students marked as LEFT.`);
                   setSelectedStudentIds([]);
                 }
               }}
@@ -894,6 +897,7 @@ export default function StudentDirectoryTab({ onCollectFee }: StudentDirectoryTa
                                   onClick={async () => {
                                     if (confirm(`Are you sure you want to suspend ${std.name}?`)) {
                                       await updateStudentStatus(std.id, "SUSPENDED");
+                                      showToast("warning", "Student Suspended", `${std.name} has been suspended.`);
                                     }
                                     setActiveMenuStudentId(null);
                                   }}
@@ -906,6 +910,7 @@ export default function StudentDirectoryTab({ onCollectFee }: StudentDirectoryTa
                                   type="button"
                                   onClick={async () => {
                                     await updateStudentStatus(std.id, "ACTIVE");
+                                    showToast("success", "Student Activated", `${std.name} is now ACTIVE.`);
                                     setActiveMenuStudentId(null);
                                   }}
                                   className="w-full px-4 py-2 hover:bg-emerald-50 text-[11px] font-bold text-emerald-700 flex items-center gap-2 cursor-pointer"
@@ -924,6 +929,7 @@ export default function StudentDirectoryTab({ onCollectFee }: StudentDirectoryTa
                                       )
                                     ) {
                                       await updateStudentStatus(std.id, "LEFT");
+                                      showToast("info", "Student Marked Left", `${std.name} status set to LEFT (TC Issued).`);
                                     }
                                     setActiveMenuStudentId(null);
                                   }}

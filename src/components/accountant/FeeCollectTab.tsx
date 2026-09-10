@@ -17,7 +17,7 @@ import {
 import { formatP, toRupees, toPaisa, numberToIndianWords } from "@/lib/currency";
 import { getISTDateString, getTodayIST } from "@/lib/dateUtils";
 import { isDueUpToCurrentMonth } from "@/lib/whatsapp";
-import { MockStudent, MockDueItem, MockReceipt, MockSchoolInfo } from "@/context/AuthContext";
+import { MockStudent, MockDueItem, MockReceipt, MockSchoolInfo, useAuth } from "@/context/AuthContext";
 
 interface FeeCollectTabProps {
   students: MockStudent[];
@@ -57,6 +57,7 @@ export default function FeeCollectTab({
   recordItemizedPayment,
   refreshBilling,
 }: FeeCollectTabProps) {
+  const { showToast } = useAuth();
   const [selectedDueIds, setSelectedDueIds] = useState<string[]>([]);
   const [payMethod, setPayMethod] = useState("CASH");
   const [discountsState, setDiscountsState] = useState<Record<string, number>>({});
@@ -394,7 +395,7 @@ export default function FeeCollectTab({
         cleanManualNo
       );
       if (!payRes.success) {
-        alert(payRes.error || "Payment failed. Please check backend logs or try again.");
+        showToast("error", "Payment Failed", payRes.error || "Payment failed. Please check backend logs or try again.");
         setIsSubmittingPayment(false);
         return;
       }
@@ -412,7 +413,7 @@ export default function FeeCollectTab({
       const isSingleSibling = siblingStudents.length === 1;
 
       if (!payRes.receipt?.receiptNo) {
-        alert("Payment was recorded but server did not return a valid receipt number.");
+        showToast("error", "Transaction Warning", "Payment was recorded but server did not return a valid receipt number.");
         setIsSubmittingPayment(false);
         await refreshBilling();
         return;
@@ -483,7 +484,7 @@ export default function FeeCollectTab({
       setSearchQuery("");
     } catch (error) {
       console.error("Payment submission error:", error);
-      alert("An unexpected error occurred while recording the payment.");
+      showToast("error", "Payment Error", "An unexpected error occurred while recording the payment.");
     } finally {
       setIsSubmittingPayment(false);
     }

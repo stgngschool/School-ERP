@@ -125,6 +125,15 @@ export const classOrderScore = (cls: string): number => {
 };
 
 /**
+ * Detects orphan or corrupted dummy class names like "Class_8a2d0b05", "sec-A", etc.
+ */
+export function isGhostClassName(name?: string | null): boolean {
+  if (!name) return true;
+  const n = name.trim().toLowerCase();
+  return n.startsWith("class_") || n.startsWith("sec-") || n.startsWith("undefined") || n.startsWith("null");
+}
+
+/**
  * Sorts class keys in natural school progression order
  */
 export const sortClasses = (list: string[]): string[] => {
@@ -135,3 +144,18 @@ export const sortClasses = (list: string[]): string[] => {
     return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
   });
 };
+
+/**
+ * Sorts class objects (with name & section) in natural school progression order
+ */
+export const sortClassObjects = <T extends { name: string; section?: string }>(list: T[]): T[] => {
+  return [...list].sort((a, b) => {
+    const scoreA = classOrderScore(a.name);
+    const scoreB = classOrderScore(b.name);
+    if (scoreA !== scoreB) return scoreA - scoreB;
+    const cmp = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
+    if (cmp !== 0) return cmp;
+    return (a.section || "").localeCompare(b.section || "", undefined, { numeric: true, sensitivity: "base" });
+  });
+};
+

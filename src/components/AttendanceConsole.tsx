@@ -33,6 +33,7 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
     attendances,
     leaveRequests,
     markBatchAttendance,
+    showToast,
   } = useAuth();
 
   // Selected Class & Date
@@ -51,7 +52,6 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
 
   // Save feedback state
   const [isSaving, setIsSaving] = useState<boolean>(false);
-  const [saveSuccessMessage, setSaveSuccessMessage] = useState<string>("");
 
   // Get available classes from classes & students list with natural order
   const availableClasses = useMemo(() => {
@@ -179,7 +179,6 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
   const handleSaveAttendance = async () => {
     if (classStudents.length === 0) return;
     setIsSaving(true);
-    setSaveSuccessMessage("");
 
     // ── AT-04: Include expectedUpdatedAt for records that already exist on the
     // server so the API can detect concurrent writes from another session/user.
@@ -197,21 +196,14 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
       await markBatchAttendance(records);
       setIsSaving(false);
       setIsModified(false);
-      setSaveSuccessMessage(`Attendance saved for ${records.length} students`);
-      setTimeout(() => setSaveSuccessMessage(""), 3500);
+      showToast("success", "Attendance Saved", `Attendance recorded for ${records.length} students.`);
     } catch (err: any) {
       setIsSaving(false);
       if (err?.isConflict) {
-        // ── AT-04: Another user saved attendance for this class after we loaded it.
-        // attendances state is already refreshed by markBatchAttendance — reset local map.
-        setSaveSuccessMessage("");
-        alert(
-          "Attendance was updated by another user while you were editing. " +
-          "The view has been refreshed with the latest data. Please review and save again."
-        );
+        showToast("warning", "Attendance Conflict", "Attendance was updated by another user while you were editing. The view has been refreshed.");
       } else {
         console.error(err);
-        alert("Failed to save attendance. Please try again.");
+        showToast("error", "Save Failed", "Failed to save attendance. Please try again.");
       }
     }
   };
@@ -358,13 +350,7 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
         </div>
       </div>
 
-      {/* Save Toast */}
-      {saveSuccessMessage && (
-        <div className="mx-3 sm:mx-0 bg-emerald-600 text-white rounded-xl px-4 py-2 text-xs font-black flex items-center justify-between shadow-xs">
-          <span>✓ {saveSuccessMessage}</span>
-          <span className="text-[10px] uppercase font-bold bg-white/20 px-2 py-0.5 rounded">Synced</span>
-        </div>
-      )}
+
 
       {/* ─── FULL-WIDTH ROSTER LIST (ZERO SIDE PADDING WASTE) ─── */}
       {activeView === "ROSTER" && (

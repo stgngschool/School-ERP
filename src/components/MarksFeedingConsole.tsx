@@ -27,7 +27,9 @@ import {
   Info,
   Trash2,
   ArrowUpDown,
-  Download
+  Download,
+  Lock,
+  Unlock
 } from "lucide-react";
 
 const DEFAULT_EXAM_CONFIG: Record<string, { isSplit: boolean; maxMarks: number; components?: { name: string; max: number }[] }> = {
@@ -156,6 +158,7 @@ const StudentMobileCard = React.memo(function StudentMobileCard({
   onToggleAbsent,
   onClearSingle,
   wasSavedInDb,
+  isLocked,
 }: {
   student: any;
   entry: StudentEntry;
@@ -172,6 +175,7 @@ const StudentMobileCard = React.memo(function StudentMobileCard({
   onToggleAbsent?: (studentId: string) => void;
   onClearSingle?: (studentId: string) => void;
   wasSavedInDb?: boolean;
+  isLocked?: boolean;
 }) {
   const nameParts = student.name.trim().split(" ");
   const initials = nameParts.length >= 2
@@ -237,12 +241,15 @@ const StudentMobileCard = React.memo(function StudentMobileCard({
             {/* 🔴 ABSENT TOGGLE BUTTON */}
             <button
               type="button"
+              disabled={isLocked}
               onClick={() => onToggleAbsent?.(student.id)}
-              title={isAbsent ? "Click to Mark Present" : "Click to Mark Absent"}
-              className={`px-2.5 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border cursor-pointer ${
-                isAbsent
-                  ? "bg-rose-600 text-white border-rose-600 shadow-2xs"
-                  : "bg-slate-50 hover:bg-rose-50 text-slate-500 hover:text-rose-600 border-slate-200 hover:border-rose-200"
+              title={isLocked ? "Exam is Locked" : isAbsent ? "Click to Mark Present" : "Click to Mark Absent"}
+              className={`px-2.5 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border ${
+                isLocked
+                  ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-75"
+                  : isAbsent
+                  ? "bg-rose-600 text-white border-rose-600 shadow-2xs cursor-pointer"
+                  : "bg-slate-50 hover:bg-rose-50 text-slate-500 hover:text-rose-600 border-slate-200 hover:border-rose-200 cursor-pointer"
               }`}
             >
               {isAbsent ? "✓ Absent" : "AB"}
@@ -274,13 +281,15 @@ const StudentMobileCard = React.memo(function StudentMobileCard({
                   step="0.5"
                   min="0"
                   max={comp.max}
-                  placeholder={isAbsent ? "AB" : "-"}
-                  disabled={isAbsent}
+                  placeholder={isAbsent ? "AB" : isLocked ? "-" : "-"}
+                  disabled={isAbsent || isLocked}
                   value={isAbsent ? "AB" : valStr}
                   onFocus={(e) => e.target.select()}
                   onChange={(e) => onBreakdownChange(student.id, comp.name, e.target.value)}
                   className={`w-full text-center font-black py-2 px-2 border rounded-xl outline-none text-base transition-all ${
-                    isAbsent
+                    isLocked
+                      ? "border-slate-200 bg-slate-100/90 text-slate-600 cursor-not-allowed select-none"
+                      : isAbsent
                       ? "border-rose-300 bg-rose-100/50 text-rose-700 cursor-not-allowed"
                       : isValInvalid
                       ? "border-rose-500 bg-rose-50 text-rose-700 ring-2 ring-rose-200"
@@ -307,7 +316,11 @@ const StudentMobileCard = React.memo(function StudentMobileCard({
           </div>
 
           <div className="flex items-center gap-2">
-            {isSaving ? (
+            {isLocked ? (
+              <span className="inline-flex items-center gap-1 text-[10px] font-black px-2.5 py-1.5 rounded-xl bg-slate-100 text-slate-500 border border-slate-200">
+                <Lock className="h-3 w-3 text-slate-400" /> Locked
+              </span>
+            ) : isSaving ? (
               <span className="inline-flex items-center gap-1 text-[10px] font-black px-3 py-1.5 rounded-xl bg-slate-100 text-slate-500">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving...
               </span>
@@ -416,12 +429,15 @@ const StudentMobileCard = React.memo(function StudentMobileCard({
           {/* 🔴 ABSENT TOGGLE BUTTON */}
           <button
             type="button"
+            disabled={isLocked}
             onClick={() => onToggleAbsent?.(student.id)}
-            title={isAbsent ? "Click to Mark Present" : "Click to Mark Absent"}
-            className={`px-2.5 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border cursor-pointer ${
-              isAbsent
-                ? "bg-rose-600 text-white border-rose-600 shadow-2xs"
-                : "bg-slate-50 hover:bg-rose-50 text-slate-500 hover:text-rose-600 border-slate-200 hover:border-rose-200"
+            title={isLocked ? "Exam is Locked" : isAbsent ? "Click to Mark Present" : "Click to Mark Absent"}
+            className={`px-2.5 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border ${
+              isLocked
+                ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-75"
+                : isAbsent
+                ? "bg-rose-600 text-white border-rose-600 shadow-2xs cursor-pointer"
+                : "bg-slate-50 hover:bg-rose-50 text-slate-500 hover:text-rose-600 border-slate-200 hover:border-rose-200 cursor-pointer"
             }`}
           >
             {isAbsent ? "✓ Absent" : "AB"}
@@ -442,13 +458,15 @@ const StudentMobileCard = React.memo(function StudentMobileCard({
             step="0.5"
             min="0"
             max={maxMarks}
-            placeholder={isAbsent ? "AB" : "-"}
-            disabled={isAbsent}
+            placeholder={isAbsent ? "AB" : isLocked ? "-" : "-"}
+            disabled={isAbsent || isLocked}
             value={isAbsent ? "AB" : scoreStr}
             onFocus={(e) => e.target.select()}
             onChange={(e) => onMarkChange(student.id, e.target.value)}
             className={`w-full text-center font-black py-2.5 px-3 border rounded-xl outline-none text-base transition-all ${
-              isAbsent
+              isLocked
+                ? "border-slate-200 bg-slate-100/90 text-slate-600 cursor-not-allowed select-none"
+                : isAbsent
                 ? "border-rose-300 bg-rose-100/50 text-rose-700 cursor-not-allowed"
                 : isInvalid
                 ? "border-rose-500 bg-rose-50 text-rose-700 ring-2 ring-rose-200"
@@ -466,7 +484,11 @@ const StudentMobileCard = React.memo(function StudentMobileCard({
         </div>
 
         <div className="shrink-0 pt-4">
-          {isSaving ? (
+          {isLocked ? (
+            <span className="inline-flex items-center gap-1 text-[10px] font-black px-3 py-2 rounded-xl bg-slate-100 text-slate-500 border border-slate-200">
+              <Lock className="h-3 w-3 text-slate-400" /> Locked
+            </span>
+          ) : isSaving ? (
             <span className="inline-flex items-center gap-1 text-[10px] font-black px-3 py-2 rounded-xl bg-slate-100 text-slate-500">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             </span>
@@ -551,7 +573,8 @@ const StudentMobileCard = React.memo(function StudentMobileCard({
     prev.onRemarksChange === next.onRemarksChange &&
     prev.onSaveSingle === next.onSaveSingle &&
     prev.onToggleAbsent === next.onToggleAbsent &&
-    prev.onClearSingle === next.onClearSingle
+    prev.onClearSingle === next.onClearSingle &&
+    prev.isLocked === next.isLocked
   );
 });
 
@@ -572,6 +595,7 @@ const StudentTableRow = React.memo(
     onToggleAbsent,
     onClearSingle,
     wasSavedInDb,
+    isLocked,
   }: {
     student: any;
     entry: StudentEntry;
@@ -587,6 +611,7 @@ const StudentTableRow = React.memo(
     onToggleAbsent: (studentId: string) => void;
     onClearSingle: (studentId: string) => void;
     wasSavedInDb?: boolean;
+    isLocked?: boolean;
   }) {
     const isAbsent = !!entry.isAbsent;
 
@@ -636,12 +661,15 @@ const StudentTableRow = React.memo(
               </div>
               <button
                 type="button"
+                disabled={isLocked}
                 onClick={() => onToggleAbsent(student.id)}
-                title={isAbsent ? "Click to Mark Present" : "Click to Mark Absent"}
-                className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all border shrink-0 cursor-pointer ${
-                  isAbsent
-                    ? "bg-rose-600 text-white border-rose-600 shadow-2xs"
-                    : "bg-slate-50 hover:bg-rose-50 text-slate-400 hover:text-rose-600 border-slate-200 hover:border-rose-200"
+                title={isLocked ? "Exam is Locked" : isAbsent ? "Click to Mark Present" : "Click to Mark Absent"}
+                className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all border shrink-0 ${
+                  isLocked
+                    ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-75"
+                    : isAbsent
+                    ? "bg-rose-600 text-white border-rose-600 shadow-2xs cursor-pointer"
+                    : "bg-slate-50 hover:bg-rose-50 text-slate-400 hover:text-rose-600 border-slate-200 hover:border-rose-200 cursor-pointer"
                 }`}
               >
                 {isAbsent ? "✓ AB" : "AB"}
@@ -661,13 +689,15 @@ const StudentTableRow = React.memo(
                   step="0.5"
                   min="0"
                   max={comp.max}
-                  placeholder={isAbsent ? "AB" : "-"}
-                  disabled={isAbsent}
+                  placeholder={isAbsent ? "AB" : isLocked ? "-" : "-"}
+                  disabled={isAbsent || isLocked}
                   value={isAbsent ? "AB" : valStr}
                   onFocus={(e) => e.target.select()}
                   onChange={(e) => onBreakdownChange(student.id, comp.name, e.target.value)}
                   className={`w-20 text-center font-bold py-1.5 px-2 border rounded-xl outline-none text-xs transition-all ${
-                    isAbsent
+                    isLocked
+                      ? "border-slate-200 bg-slate-100/90 text-slate-600 cursor-not-allowed select-none"
+                      : isAbsent
                       ? "border-rose-300 bg-rose-100/50 text-rose-700 cursor-not-allowed"
                       : isValInvalid
                       ? "border-rose-500 bg-rose-50 text-rose-700"
@@ -686,7 +716,11 @@ const StudentTableRow = React.memo(
             </span>
           </td>
           <td className="py-3 px-2 text-center">
-            {isRowSaving ? (
+            {isLocked ? (
+              <span className="inline-flex items-center gap-1 text-[9px] font-black px-2 py-1 rounded-lg bg-slate-100 text-slate-500 border border-slate-200">
+                <Lock className="h-2.5 w-2.5 text-slate-400" /> Locked
+              </span>
+            ) : isRowSaving ? (
               <span className="inline-flex items-center gap-1 text-[10px] font-black px-2.5 py-1 rounded-xl bg-slate-100 text-slate-500">
                 <Loader2 className="h-3 w-3 animate-spin" />
               </span>
@@ -783,12 +817,15 @@ const StudentTableRow = React.memo(
               </div>
               <button
                 type="button"
+                disabled={isLocked}
                 onClick={() => onToggleAbsent(student.id)}
-                title={isAbsent ? "Click to Mark Present" : "Click to Mark Absent"}
-                className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all border shrink-0 cursor-pointer ${
-                  isAbsent
-                    ? "bg-rose-600 text-white border-rose-600 shadow-2xs"
-                    : "bg-slate-50 hover:bg-rose-50 text-slate-400 hover:text-rose-600 border-slate-200 hover:border-rose-200"
+                title={isLocked ? "Exam is Locked" : isAbsent ? "Click to Mark Present" : "Click to Mark Absent"}
+                className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all border shrink-0 ${
+                  isLocked
+                    ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-75"
+                    : isAbsent
+                    ? "bg-rose-600 text-white border-rose-600 shadow-2xs cursor-pointer"
+                    : "bg-slate-50 hover:bg-rose-50 text-slate-400 hover:text-rose-600 border-slate-200 hover:border-rose-200 cursor-pointer"
                 }`}
               >
                 {isAbsent ? "✓ AB" : "AB"}
@@ -802,13 +839,15 @@ const StudentTableRow = React.memo(
               step="0.5"
               min="0"
               max={maxMarks}
-              placeholder={isAbsent ? "AB" : "-"}
-              disabled={isAbsent}
+              placeholder={isAbsent ? "AB" : isLocked ? "-" : "-"}
+              disabled={isAbsent || isLocked}
               value={isAbsent ? "AB" : scoreStr}
               onFocus={(e) => e.target.select()}
               onChange={(e) => onMarkChange(student.id, e.target.value)}
               className={`w-28 text-center font-bold py-1.5 px-2 border rounded-xl outline-none text-xs transition-all ${
-                isAbsent
+                isLocked
+                  ? "border-slate-200 bg-slate-100/90 text-slate-600 cursor-not-allowed select-none"
+                  : isAbsent
                   ? "border-rose-300 bg-rose-100/50 text-rose-700 cursor-not-allowed font-black"
                   : isInvalid
                   ? "border-rose-500 bg-rose-50 text-rose-700"
@@ -828,7 +867,11 @@ const StudentTableRow = React.memo(
             </span>
           </td>
           <td className="py-3 px-2 text-center">
-            {isRowSaving ? (
+            {isLocked ? (
+              <span className="inline-flex items-center gap-1 text-[9px] font-black px-2 py-1 rounded-lg bg-slate-100 text-slate-500 border border-slate-200">
+                <Lock className="h-2.5 w-2.5 text-slate-400" /> Locked
+              </span>
+            ) : isRowSaving ? (
               <span className="inline-flex items-center gap-1 text-[10px] font-black px-2.5 py-1 rounded-xl bg-slate-100 text-slate-500">
                 <Loader2 className="h-3 w-3 animate-spin" />
               </span>
@@ -915,14 +958,15 @@ const StudentTableRow = React.memo(
       prev.onBreakdownChange === next.onBreakdownChange &&
       prev.onSaveSingle === next.onSaveSingle &&
       prev.onToggleAbsent === next.onToggleAbsent &&
-      prev.onClearSingle === next.onClearSingle
+      prev.onClearSingle === next.onClearSingle &&
+      prev.isLocked === next.isLocked
     );
   }
 );
 
 // ─── MAIN COMPONENT ─────────────────────────────────────────────────────────
 export default function MarksFeedingConsole() {
-  const { user, activeRole, students, classes, schoolInfo } = useAuth();
+  const { user, activeRole, students, classes, schoolInfo, refreshSchool } = useAuth();
   const canExport = activeRole === "ADMIN" || activeRole === "ACCOUNTANT" || user?.role === "ADMIN" || user?.role === "ACCOUNTANT";
 
   const availableClasses = useMemo(() => {
@@ -973,16 +1017,41 @@ export default function MarksFeedingConsole() {
 
   // Derive active exam configuration
   const activeExamKey = selectedExam || availableExams[0] || "Unit-1";
-  const examConfig = (schoolInfo.examConfig && schoolInfo.examConfig[activeExamKey]) || DEFAULT_EXAM_CONFIG[activeExamKey] || {
-    isSplit: false,
-    maxMarks: 80,
-    components: []
-  };
+  const EMPTY_COMPONENTS = useMemo(() => [] as { name: string; max: number }[], []);
+  const examConfig = useMemo(() => {
+    return (schoolInfo.examConfig && schoolInfo.examConfig[activeExamKey]) || DEFAULT_EXAM_CONFIG[activeExamKey] || {
+      isSplit: false,
+      maxMarks: 80,
+      components: EMPTY_COMPONENTS
+    };
+  }, [schoolInfo.examConfig, activeExamKey, EMPTY_COMPONENTS]);
 
-  const isSplitExam = examConfig.isSplit;
-  const splitComponents = examConfig.components || [];
+  const isSplitExam = !!examConfig.isSplit;
+  const splitComponents = Array.isArray(examConfig.components) ? examConfig.components : EMPTY_COMPONENTS;
   const maxMarks = (examConfig.maxMarks ?? (isSplitExam ? 20 : 80)).toString();
   const maxValNum = parseFloat(maxMarks) || 100;
+
+  // Real-time server-side exam locked state from /api/marks/roster
+  const [serverIsExamLocked, setServerIsExamLocked] = useState<boolean | null>(null);
+
+  // Reset server lock state when selected exam changes
+  useEffect(() => {
+    setServerIsExamLocked(null);
+  }, [selectedExam]);
+
+  // Keep school info fresh on mount and when exam changes
+  useEffect(() => {
+    refreshSchool?.();
+  }, [refreshSchool, selectedExam]);
+
+  // 🔒 Check if current selected exam is locked by Admin (Authoritative & Case-insensitive)
+  const isExamLocked = useMemo(() => {
+    if (typeof serverIsExamLocked === "boolean") {
+      return serverIsExamLocked;
+    }
+    const lockedList = Array.isArray(schoolInfo.lockedExams) ? schoolInfo.lockedExams : [];
+    return lockedList.some((e: string) => e.trim().toLowerCase() === activeExamKey.trim().toLowerCase());
+  }, [serverIsExamLocked, schoolInfo.lockedExams, activeExamKey]);
 
   const [marksRoster, setMarksRoster] = useState<{
     [studentId: string]: StudentEntry;
@@ -992,9 +1061,6 @@ export default function MarksFeedingConsole() {
   const [savingStudentId, setSavingStudentId] = useState<string | null>(null);
   const [savedMap, setSavedMap] = useState<Record<string, boolean>>({});
   const [savedInDbMap, setSavedInDbMap] = useState<Record<string, boolean>>({});
-  const [successMsg, setSuccessMsg] = useState("");
-  const [errorMsg, setErrorMsg] = useState("");
-  const [isEditMode, setIsEditMode] = useState(false);
   const [isDraftRestored, setIsDraftRestored] = useState(false);
   const [loadingMarks, setLoadingMarks] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -1131,13 +1197,23 @@ export default function MarksFeedingConsole() {
     }
   }, [availableExams, selectedExam]);
 
+  // ─── STABLE REFS FOR LOAD MARKS (Prevents infinite re-render cycles) ───────
+  const studentsRef = useRef(students);
+  studentsRef.current = students;
+  const classStudentsRef = useRef(classStudents);
+  classStudentsRef.current = classStudents;
+  const splitComponentsRef = useRef(splitComponents);
+  splitComponentsRef.current = splitComponents;
+  const isSplitExamRef = useRef(isSplitExam);
+  isSplitExamRef.current = isSplitExam;
+  const maxValNumRef = useRef(maxValNum);
+  maxValNumRef.current = maxValNum;
+
   // ─── LOAD MARKS FUNCTION (With Draft & Server Sync) ─────────────────────────
   const loadMarks = useCallback(async () => {
     if (!selectedClass || !selectedExam || !selectedSubject) return;
 
     setLoadingMarks(true);
-    setErrorMsg("");
-    setSuccessMsg("");
     setIsDraftRestored(false);
 
     try {
@@ -1170,7 +1246,11 @@ export default function MarksFeedingConsole() {
           }
         );
         if (res.ok) {
-          serverRecord = await res.json();
+          const resData = await res.json();
+          if (typeof resData.isLocked === "boolean") {
+            setServerIsExamLocked(resData.isLocked);
+          }
+          serverRecord = resData.marks || resData;
         }
       } catch (fetchErr: any) {
         if (fetchErr.name !== "AbortError") {
@@ -1184,9 +1264,15 @@ export default function MarksFeedingConsole() {
       let foundServer = false;
       let hasDraft = false;
 
-      const studentsToUse = classStudents.length > 0
-        ? classStudents
-        : students.filter((s) => matchStudentToClass(s, selectedClass));
+      const currentClassStudents = classStudentsRef.current;
+      const currentStudents = studentsRef.current;
+      const currentSplitComponents = splitComponentsRef.current;
+      const currentIsSplit = isSplitExamRef.current;
+      const currentMaxValNum = maxValNumRef.current;
+
+      const studentsToUse = currentClassStudents.length > 0
+        ? currentClassStudents
+        : currentStudents.filter((s) => matchStudentToClass(s, selectedClass));
 
       studentsToUse.forEach((student) => {
         const existingMark = serverRecord[student.id];
@@ -1200,8 +1286,8 @@ export default function MarksFeedingConsole() {
               const val = draftMark.breakdown[k];
               if (val !== "") {
                 const n = parseFloat(val);
-                const comp = splitComponents.find((c: any) => c.name === k);
-                const maxVal = comp ? comp.max : maxValNum;
+                const comp = currentSplitComponents.find((c: any) => c.name === k);
+                const maxVal = comp ? comp.max : currentMaxValNum;
                 if (!isNaN(n) && (n > maxVal || n < 0)) {
                   draftMark.breakdown[k] = "";
                 }
@@ -1210,7 +1296,7 @@ export default function MarksFeedingConsole() {
           }
           if (draftMark.marksObtained !== "") {
             const n = parseFloat(draftMark.marksObtained);
-            if (!isNaN(n) && (n > maxValNum || n < 0)) {
+            if (!isNaN(n) && (n > currentMaxValNum || n < 0)) {
               draftMark.marksObtained = "";
             }
           }
@@ -1234,9 +1320,9 @@ export default function MarksFeedingConsole() {
             Object.entries(existingMark.breakdown).forEach(([k, v]) => {
               initialBreakdown[k] = v !== null && v !== undefined ? (v as any).toString() : "";
             });
-          } else if (isSplitExam) {
+          } else if (currentIsSplit) {
             let hasColumnFields = false;
-            splitComponents.forEach((comp: any) => {
+            currentSplitComponents.forEach((comp: any) => {
               const normalizedKey = comp.name.toLowerCase().replace(/[^a-z]/g, "");
               if (normalizedKey.includes("written") || normalizedKey.includes("exam")) {
                 if (existingMark.writtenExam !== null && existingMark.writtenExam !== undefined) {
@@ -1265,8 +1351,8 @@ export default function MarksFeedingConsole() {
             if (!hasColumnFields && existingMark.marksObtained !== null && existingMark.marksObtained !== undefined && !isAbsent) {
               const total = parseFloat(existingMark.marksObtained) || 0;
               let rem = total;
-              splitComponents.forEach((comp: any, idx: number) => {
-                if (idx === splitComponents.length - 1) {
+              currentSplitComponents.forEach((comp: any, idx: number) => {
+                if (idx === currentSplitComponents.length - 1) {
                   initialBreakdown[comp.name] = Math.min(rem, comp.max).toString();
                 } else {
                   const val = Math.min(rem, comp.max);
@@ -1324,14 +1410,13 @@ export default function MarksFeedingConsole() {
       setMarksRoster(newRoster);
       setSavedMap(newSavedMap);
       setSavedInDbMap(newSavedInDbMap);
-      setIsEditMode(foundServer);
       if (hasDraft) {
         setIsDraftRestored(true);
       }
     } catch (err) {
       console.error("loadMarks error:", err);
       const fallbackRoster: Record<string, StudentEntry> = {};
-      classStudents.forEach((student) => {
+      classStudentsRef.current.forEach((student) => {
         fallbackRoster[student.id] = { marksObtained: "", remarks: "", breakdown: {}, isAbsent: false };
       });
       setMarksRoster(fallbackRoster);
@@ -1340,14 +1425,14 @@ export default function MarksFeedingConsole() {
     } finally {
       setLoadingMarks(false);
     }
-  }, [selectedClass, selectedExam, selectedSubject, classStudents, students, isSplitExam, splitComponents, maxValNum]);
+  }, [selectedClass, selectedExam, selectedSubject]);
 
-  // ─── AUTO-LOAD MARKS WHEN FILTER OR STUDENTS CHANGE ─────────────────────────
+  // ─── AUTO-LOAD MARKS WHEN FILTER CHANGES ─────────────────────────
   useEffect(() => {
     if (selectedClass && selectedExam && selectedSubject) {
       loadMarks();
     }
-  }, [selectedClass, selectedExam, selectedSubject, classStudents.length, loadMarks]);
+  }, [selectedClass, selectedExam, selectedSubject, loadMarks]);
 
   // ─── DRAFT AUTO-SAVE TO LOCALSTORAGE ON EDIT (Debounced by 800ms) ──────────
   useEffect(() => {
@@ -1561,6 +1646,10 @@ export default function MarksFeedingConsole() {
   // ─── CLEAR / RESET SINGLE STUDENT MARKS ─────────────────────────────────────
   const handleClearSingle = useCallback(
     async (studentId: string) => {
+      if (isExamLocked) {
+        showToast("error", "Exam Locked 🔒", `Examination '${selectedExam}' is confirmed and locked. Edits are disabled.`);
+        return;
+      }
       const student = classStudents.find((s) => s.id === studentId);
       const studentName = student ? student.name : "Student";
       const wasSaved = !!savedInDbMap[studentId];
@@ -1661,6 +1750,10 @@ export default function MarksFeedingConsole() {
   // ─── INSTANT SAVE FOR A SINGLE STUDENT ──────────────────────────────────────
   const handleSaveSingle = useCallback(
     async (studentId: string) => {
+      if (isExamLocked) {
+        showToast("error", "Exam Locked 🔒", `Examination '${selectedExam}' is confirmed and locked. Edits are disabled.`);
+        return;
+      }
       const student = classStudents.find((s) => s.id === studentId);
       const studentName = student ? student.name : "Student";
 
@@ -1681,7 +1774,6 @@ export default function MarksFeedingConsole() {
       }
 
       setSavingStudentId(studentId);
-      setErrorMsg("");
 
       try {
         const res = await fetch("/api/marks/bulk", {
@@ -1712,11 +1804,15 @@ export default function MarksFeedingConsole() {
         setSavingStudentId(null);
       }
     },
-    [classStudents, selectedSubject, selectedExam, getStudentPayload, maxValNum, showToast]
+    [classStudents, selectedSubject, selectedExam, getStudentPayload, maxValNum, showToast, isExamLocked]
   );
 
   // ─── SAVE ALL MARKS (Safe Chunked 15-Student Execution) ──────────────────────
   const handleSaveAll = async () => {
+    if (isExamLocked) {
+      showToast("error", "Exam Locked 🔒", `Examination '${selectedExam}' is locked by Admin. Marks cannot be modified.`);
+      return;
+    }
     if (hasValidationError) {
       showToast("error", "Invalid Marks", "Please fix marks highlighted in red before saving.", 4000);
       if (firstErrorStudentId) {
@@ -1762,8 +1858,6 @@ export default function MarksFeedingConsole() {
     }
 
     setSaving(true);
-    setSuccessMsg("");
-    setErrorMsg("");
 
     const BATCH_SIZE = 15;
     const totalBatches = Math.max(1, Math.ceil(marksList.length / BATCH_SIZE));
@@ -1853,7 +1947,6 @@ export default function MarksFeedingConsole() {
         localStorage.removeItem(draftKey);
       } catch (e) {}
       setIsDraftRestored(false);
-      setIsEditMode(true);
 
       // Trigger the reassuring Confirmation Popup Modal!
       setSaveSuccessModal({
@@ -2058,19 +2151,29 @@ export default function MarksFeedingConsole() {
           </div>
 
           <div>
-            <label className="text-[8.5px] sm:text-[9px] font-black uppercase text-slate-400 block mb-1 tracking-wider">
-              Exam Name
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[8.5px] sm:text-[9px] font-black uppercase text-slate-400 block tracking-wider">
+                Exam Name
+              </label>
+              {isExamLocked && (
+                <span className="text-[8px] font-bold uppercase tracking-wider text-slate-600 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                  <Lock className="h-2.5 w-2.5 text-slate-500" /> Locked
+                </span>
+              )}
+            </div>
             <select
               value={selectedExam}
               onChange={(e) => setSelectedExam(e.target.value)}
               className="w-full text-[10.5px] sm:text-[11px] font-extrabold py-2 px-2.5 sm:py-2.5 sm:px-3 border border-slate-200/60 rounded-xl sm:rounded-2xl outline-none bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300 focus:bg-white focus:border-indigo-600 text-slate-700 transition-all cursor-pointer shadow-2xs"
             >
-              {availableExams.map((ex) => (
-                <option key={ex} value={ex}>
-                  {ex}
-                </option>
-              ))}
+              {availableExams.map((ex) => {
+                const isThisLocked = (schoolInfo.lockedExams || []).includes(ex);
+                return (
+                  <option key={ex} value={ex}>
+                    {ex} {isThisLocked ? "• Locked" : ""}
+                  </option>
+                );
+              })}
             </select>
           </div>
 
@@ -2110,6 +2213,34 @@ export default function MarksFeedingConsole() {
           </div>
         </div>
       </div>
+
+      {/* ─── 🔒 EXAM LOCKED STATUS NOTICE ─── */}
+      {isExamLocked && (
+        <div className="bg-white border border-slate-200/70 p-4 rounded-2xl sm:rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5 text-left animate-fade-in">
+          <div className="flex items-center gap-3.5">
+            <div className="h-10 w-10 rounded-2xl bg-slate-100 border border-slate-200/80 text-slate-700 flex items-center justify-center shrink-0 shadow-2xs">
+              <Lock className="h-4.5 w-4.5 text-slate-600" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="text-xs font-black uppercase tracking-tight text-slate-800">
+                  {selectedExam} • Marks Entry Locked
+                </h4>
+                <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200">
+                  Read Only
+                </span>
+              </div>
+              <p className="text-[11.5px] text-slate-500 font-medium mt-0.5">
+                Marks entries for this examination have been finalized by School Administration. Editing is disabled.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-wider text-slate-600 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl self-end sm:self-center shrink-0 shadow-2xs">
+            <Lock className="h-3 w-3 text-slate-400" />
+            <span>Editing Disabled</span>
+          </div>
+        </div>
+      )}
 
       {/* ─── Draft Restored Alert Banner ─── */}
       {isDraftRestored && (
@@ -2181,24 +2312,14 @@ export default function MarksFeedingConsole() {
 
       {/* ─── Search & Status Row ─── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 sm:p-3.5 sm:rounded-2xl rounded-xl border-y sm:border border-slate-200/90 shadow-2xs text-left">
-        <div className="flex items-center gap-2 flex-wrap">
-          {isEditMode ? (
-            <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 rounded-lg px-2.5 py-1 font-bold uppercase tracking-wider">
-              📝 Saved Marks (Edit Mode)
+        <div className="flex items-center gap-2">
+          {loadingMarks ? (
+            <span className="text-[11px] font-semibold text-slate-500 inline-flex items-center gap-1.5">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-600" /> Loading marks...
             </span>
           ) : (
-            <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg px-2.5 py-1 font-bold uppercase tracking-wider">
-              ✨ Fresh Entry
-            </span>
-          )}
-          {isSplitExam && (
-            <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg px-2.5 py-1 font-bold uppercase tracking-wider">
-              🧩 Component Marks
-            </span>
-          )}
-          {loadingMarks && (
-            <span className="text-[10px] bg-slate-100 text-slate-600 rounded-lg px-2 py-0.5 font-bold inline-flex items-center gap-1">
-              <Loader2 className="h-3 w-3 animate-spin" /> Fetching...
+            <span className="text-xs font-bold text-slate-600 tracking-tight">
+              {filteredStudents.length} {filteredStudents.length === 1 ? "Student" : "Students"}
             </span>
           )}
         </div>
@@ -2233,19 +2354,6 @@ export default function MarksFeedingConsole() {
         </div>
       </div>
 
-      {successMsg && (
-        <div className="flex items-center gap-2.5 bg-emerald-50 text-emerald-800 p-4 rounded-2xl border border-emerald-200 text-xs font-bold text-left shadow-2xs animate-fade-in">
-          <CheckCircle className="h-5 w-5 text-emerald-600 shrink-0" />
-          {successMsg}
-        </div>
-      )}
-
-      {errorMsg && (
-        <div className="flex items-center gap-2.5 bg-rose-50 text-rose-800 p-4 rounded-2xl border border-rose-200 text-xs font-bold text-left shadow-2xs animate-fade-in">
-          <AlertCircle className="h-5 w-5 text-rose-600 shrink-0" />
-          {errorMsg}
-        </div>
-      )}
 
       {/* ─── Student List & Save Header ─── */}
       <div className="text-left">
@@ -2258,10 +2366,19 @@ export default function MarksFeedingConsole() {
           </div>
           <button
             onClick={handleSaveAll}
-            disabled={saving || classStudents.length === 0}
-            className="hidden sm:flex items-center gap-1.5 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-indigo-500/15 disabled:opacity-50 cursor-pointer"
+            disabled={saving || classStudents.length === 0 || isExamLocked}
+            className={`hidden sm:flex items-center gap-1.5 px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all ${
+              isExamLocked
+                ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed shadow-none"
+                : "bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white shadow-md shadow-indigo-500/15 disabled:opacity-50 cursor-pointer"
+            }`}
           >
-            {saving ? (
+            {isExamLocked ? (
+              <>
+                <Lock className="h-4 w-4 text-slate-400" />
+                <span>Exam Locked</span>
+              </>
+            ) : saving ? (
               <>
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 <span>
@@ -2300,6 +2417,7 @@ export default function MarksFeedingConsole() {
                 onToggleAbsent={handleToggleAbsent}
                 onClearSingle={handleClearSingle}
                 wasSavedInDb={!!savedInDbMap[student.id]}
+                isLocked={isExamLocked}
               />
             ))
           ) : (
@@ -2406,6 +2524,7 @@ export default function MarksFeedingConsole() {
                       onToggleAbsent={handleToggleAbsent}
                       onClearSingle={handleClearSingle}
                       wasSavedInDb={!!savedInDbMap[student.id]}
+                      isLocked={isExamLocked}
                     />
                   ))
                 ) : (
@@ -2427,10 +2546,19 @@ export default function MarksFeedingConsole() {
         <div className="hidden sm:flex p-5 bg-slate-50/50 border-t border-slate-200/60 justify-end rounded-b-3xl">
           <button
             onClick={handleSaveAll}
-            disabled={saving || classStudents.length === 0}
-            className="flex items-center gap-2 py-3 px-7 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-indigo-500/15 disabled:opacity-50 cursor-pointer"
+            disabled={saving || classStudents.length === 0 || isExamLocked}
+            className={`flex items-center gap-2 py-3 px-7 rounded-2xl text-xs font-black uppercase tracking-wider transition-all ${
+              isExamLocked
+                ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed shadow-none"
+                : "bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white shadow-md shadow-indigo-500/15 disabled:opacity-50 cursor-pointer"
+            }`}
           >
-            {saving ? (
+            {isExamLocked ? (
+              <>
+                <Lock className="h-4 w-4 text-slate-400" />
+                <span>Exam Locked (Cannot Save)</span>
+              </>
+            ) : saving ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
                 <span>
@@ -2466,10 +2594,19 @@ export default function MarksFeedingConsole() {
         <button
           type="button"
           onClick={handleSaveAll}
-          disabled={saving || classStudents.length === 0}
-          className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-indigo-600/20 disabled:opacity-50 cursor-pointer"
+          disabled={saving || classStudents.length === 0 || isExamLocked}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all ${
+            isExamLocked
+              ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed shadow-none"
+              : "bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white shadow-md shadow-indigo-600/20 disabled:opacity-50 cursor-pointer"
+          }`}
         >
-          {saving ? (
+          {isExamLocked ? (
+            <>
+              <Lock className="h-4 w-4 text-slate-400" />
+              <span>Locked</span>
+            </>
+          ) : saving ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
               <span>

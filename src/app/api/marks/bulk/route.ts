@@ -20,6 +20,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing examName or subject." }, { status: 400 });
     }
 
+    // ── Check if Exam is Locked by Admin
+    const cleanExamName = examName.trim();
+    const cleanSubject = subject.trim();
+    try {
+      const schoolConfigRow = await db.schoolConfig.findUnique({ where: { id: "singleton" } });
+      const cfgData = (schoolConfigRow?.data as any) || {};
+      const lockedExams: string[] = Array.isArray(cfgData.lockedExams) ? cfgData.lockedExams : [];
+      const isLocked = lockedExams.some((e: string) => e.trim().toLowerCase() === cleanExamName.toLowerCase());
+      if (isLocked && authUser.role !== "ADMIN") {
+        return NextResponse.json({
+          error: `Examination '${cleanExamName}' is confirmed and locked by Admin. Marks cannot be entered or edited.`,
+        }, { status: 403 });
+      }
+    } catch (cfgErr) {
+      console.warn("Could not check lockedExams in bulk marks:", cfgErr);
+    }
+
     const hasMarksList = Array.isArray(marksList) && marksList.length > 0;
     const hasDeletions = Array.isArray(deletedStudentIds) && deletedStudentIds.length > 0;
 
@@ -134,9 +151,6 @@ export async function POST(request: Request) {
     if (validEntries.length === 0 && validationErrors.length > 0) {
       return NextResponse.json({ error: validationErrors[0] }, { status: 400 });
     }
-
-    const cleanSubject = subject.trim();
-    const cleanExamName = examName.trim();
 
     // If any students need to be deleted (cleared marks)
     let deletedCount = 0;
@@ -261,6 +275,21 @@ export async function DELETE(request: Request) {
     const idsToDelete: string[] = studentId ? [studentId] : studentIds;
     const cleanSubject = subject.trim();
     const cleanExamName = examName.trim();
+
+    // ── Check if Exam is Locked by Admin
+    try {
+      const schoolConfigRow = await db.schoolConfig.findUnique({ where: { id: "singleton" } });
+      const cfgData = (schoolConfigRow?.data as any) || {};
+      const lockedExams: string[] = Array.isArray(cfgData.lockedExams) ? cfgData.lockedExams : [];
+      const isLocked = lockedExams.some((e: string) => e.trim().toLowerCase() === cleanExamName.toLowerCase());
+      if (isLocked && authUser.role !== "ADMIN") {
+        return NextResponse.json({
+          error: `Examination '${cleanExamName}' is confirmed and locked by Admin. Marks cannot be deleted or reset.`,
+        }, { status: 403 });
+      }
+    } catch (cfgErr) {
+      console.warn("Could not check lockedExams in delete marks:", cfgErr);
+    }
 
     const delResult = await db.mark.deleteMany({
       where: {

@@ -69,6 +69,7 @@ export default function TeacherDashboard() {
     activeTab,
     setActiveTab,
     studentsLoaded,
+    showToast,
   } = useAuth();
 
   const currentTab = VALID_TEACHER_TABS.includes(activeTab as any) ? activeTab : "attendance";
@@ -127,7 +128,6 @@ export default function TeacherDashboard() {
   const [hwTitle, setHwTitle] = useState("");
   const [hwDesc, setHwDesc] = useState("");
   const [hwDueDate, setHwDueDate] = useState("");
-  const [hwSuccess, setHwSuccess] = useState(false);
 
   // ── M-13: Homework history pagination limit
   const [homeworkLimit, setHomeworkLimit] = useState(15);
@@ -178,8 +178,7 @@ export default function TeacherDashboard() {
     setHwTitle("");
     setHwDesc("");
     setHwDueDate("");
-    setHwSuccess(true);
-    setTimeout(() => setHwSuccess(false), 3000);
+    showToast("success", "Homework Assigned", `Coursework published for class ${selectedClass}`);
   };
 
   // Compute stats for today
@@ -256,11 +255,6 @@ export default function TeacherDashboard() {
                   </p>
                 </div>
 
-                {hwSuccess && (
-                  <div className="flex items-center gap-2 bg-green-50 text-green-700 p-3 rounded-xl border border-green-100 text-sm font-semibold">
-                    <CheckCircle className="h-4 w-4 shrink-0" /> Homework assigned successfully!
-                  </div>
-                )}
 
                 <form onSubmit={handleAddHomework} className="space-y-3">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
@@ -326,8 +320,12 @@ export default function TeacherDashboard() {
                           </div>
                           <h4 className="font-bold text-slate-800 mt-1 text-sm truncate">{hw.title}</h4>
                         </div>
-                        <button onClick={() => deleteHomework(hw.id)}
-                          className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors shrink-0 press-scale cursor-pointer">
+                        <button onClick={() => {
+                          deleteHomework(hw.id);
+                          showToast("info", "Homework Deleted", "Assignment removed.");
+                        }}
+                          className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors shrink-0 press-scale cursor-pointer"
+                          title="Delete Homework">
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
@@ -398,14 +396,20 @@ export default function TeacherDashboard() {
                     {/* Actions */}
                     <div className="grid grid-cols-2 gap-2 sm:gap-3">
                       <button
-                        onClick={() => updateLeaveStatus(lv.id, "REJECTED", "Sorry, attendance is running low.")}
-                        className="flex items-center justify-center gap-2 py-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-600 text-sm font-bold press-scale transition-all"
+                        onClick={() => {
+                          updateLeaveStatus(lv.id, "REJECTED", "Sorry, attendance is running low.");
+                          showToast("info", "Leave Rejected", `Leave request for ${lv.studentName} has been rejected.`);
+                        }}
+                        className="flex items-center justify-center gap-2 py-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-600 text-sm font-bold press-scale transition-all cursor-pointer hover:bg-slate-100"
                       >
                         <XCircle className="h-4 w-4 text-rose-500" /> Reject
                       </button>
                       <button
-                        onClick={() => updateLeaveStatus(lv.id, "APPROVED", "Approved. Stay healthy.")}
-                        className="flex items-center justify-center gap-2 py-3 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-bold press-scale transition-all shadow-lg shadow-green-500/20"
+                        onClick={() => {
+                          updateLeaveStatus(lv.id, "APPROVED", "Approved. Stay healthy.");
+                          showToast("success", "Leave Approved", `Leave request for ${lv.studentName} has been approved.`);
+                        }}
+                        className="flex items-center justify-center gap-2 py-3 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-bold press-scale transition-all shadow-lg shadow-green-500/20 cursor-pointer"
                       >
                         <CheckCircle className="h-4 w-4" /> Approve
                       </button>

@@ -1,8 +1,9 @@
-﻿"use client";
+"use client";
 
 import React, { useState } from "react";
 import { PlusCircle, CheckCircle } from "lucide-react";
 import { formatP, toPaisa } from "@/lib/currency";
+import { useAuth } from "@/context/AuthContext";
 
 interface FeeStructuresTabProps {
   feeHeads: { name: string; frequency: string }[];
@@ -31,6 +32,7 @@ export default function FeeStructuresTab({
   addFeeHead,
   addFeeStructure,
 }: FeeStructuresTabProps) {
+  const { showToast } = useAuth();
   const [newHead, setNewHead] = useState("");
   const [newStructName, setNewStructName] = useState("");
   const [newStructFreq, setNewStructFreq] = useState("monthly");
@@ -42,6 +44,7 @@ export default function FeeStructuresTab({
     e.preventDefault();
     if (!newHead.trim()) return;
     addFeeHead(newHead.trim());
+    showToast("success", "Fee Head Created", `Fee category "${newHead.trim()}" added to ledger.`);
     setNewHead("");
   };
 
@@ -61,7 +64,7 @@ export default function FeeStructuresTab({
     });
 
     if (itemsList.length === 0) {
-      alert("Please enter a value greater than 0 for at least one Fee Head.");
+      showToast("warning", "Invalid Amount", "Please enter a value greater than 0 for at least one Fee Head.");
       return;
     }
 
@@ -70,8 +73,7 @@ export default function FeeStructuresTab({
     setNewStructFreq("monthly");
     setNewStructClass("All");
     setStructFeeInputs({});
-    setStructSuccess(true);
-    setTimeout(() => setStructSuccess(false), 3000);
+    showToast("success", "Fee Structure Created", `Fee structure "${newStructName.trim()}" added successfully.`);
   };
 
   return (
@@ -124,12 +126,6 @@ export default function FeeStructuresTab({
         <p className="text-[10px] text-slate-500 font-semibold mt-0.5">
           Set fees for a specific class. Saving instantly updates the 12-month billing ledger for all active students in that class.
         </p>
-
-        {structSuccess && (
-          <div className="flex items-center gap-2 bg-green-50 text-green-700 p-2.5 rounded border border-green-100 text-[11px] font-semibold">
-            <CheckCircle className="h-4 w-4" /> Fee structure added successfully!
-          </div>
-        )}
 
         <form onSubmit={handleAddStructure} className="space-y-3 bg-slate-50/40 p-4 border border-slate-200/60 rounded-xl">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">

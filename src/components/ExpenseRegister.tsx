@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { PlusCircle, Receipt, Trash2, Calendar } from "lucide-react";
 import { formatP, toPaisa } from "@/lib/currency";
 import { getTodayIST } from "@/lib/dateUtils";
+import { useAuth } from "@/context/AuthContext";
 
 export type Expense = {
   id: string;
@@ -20,6 +21,7 @@ interface ExpenseRegisterProps {
 }
 
 export default function ExpenseRegister({ expenses, setExpenses }: ExpenseRegisterProps) {
+  const { showToast } = useAuth();
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState("Utility");
   const [description, setDescription] = useState("");
@@ -45,12 +47,14 @@ export default function ExpenseRegister({ expenses, setExpenses }: ExpenseRegist
 
     // ── H-07 fix: Use functional updater to prevent race condition on rapid submissions
     setExpenses((prev) => [newExpense, ...prev]);
+    showToast("success", "Expense Recorded", `₹${amount} recorded under ${category}.`);
     setAmount("");
     setDescription("");
   };
 
   const handleDelete = (id: string) => {
     setExpenses((prev) => prev.filter(e => e.id !== id));
+    showToast("info", "Expense Removed", "Expense entry deleted from register.");
   };
 
   return (

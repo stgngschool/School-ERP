@@ -6,6 +6,7 @@ import { generateYearlyChargesBulk, getAcademicYear } from "@/lib/generateYearly
 import { getAuthUser } from "@/lib/auth";
 import { findMatchingParentProfile } from "@/lib/family";
 import { parseCanonicalDOB } from "@/lib/dateUtils";
+import { normalizeClassName, normalizeSectionName, isGhostClassName } from "@/lib/classUtils";
 
 function getMaxSuffixNumber(codes: (string | null | undefined)[]): number {
   let maxNum = 0;
@@ -79,8 +80,9 @@ export async function POST(request: Request) {
     // 5. Pre-create any missing classes
     for (const record of students) {
       if (!record.name || !record.classVal || !record.section || (!record.fatherName && !record.fatherMobile)) continue;
-      const classNameClean = String(record.classVal).trim();
-      const sectionClean = String(record.section).trim();
+      const classNameClean = normalizeClassName(String(record.classVal).trim());
+      const sectionClean = normalizeSectionName(String(record.section).trim(), String(record.classVal).trim());
+      if (!classNameClean || isGhostClassName(classNameClean) || isGhostClassName(sectionClean)) continue;
       const classKey = `${classNameClean.toUpperCase()}-${sectionClean.toUpperCase()}`;
 
       if (!classMap.has(classKey)) {
@@ -210,8 +212,8 @@ export async function POST(request: Request) {
 
       if (!name || !classVal || !section || (!fatherName && !fatherMobile)) continue;
 
-      const classNameClean = String(classVal).trim();
-      const sectionClean = String(section).trim();
+      const classNameClean = normalizeClassName(String(classVal).trim());
+      const sectionClean = normalizeSectionName(String(section).trim(), String(classVal).trim());
       const classKey = `${classNameClean.toUpperCase()}-${sectionClean.toUpperCase()}`;
       const classObj = classMap.get(classKey);
 

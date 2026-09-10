@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Sparkles,
   TrendingUp,
@@ -20,6 +20,8 @@ import {
   Wallet,
   Receipt,
   UserCheck,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { formatP } from "@/lib/currency";
 import { getTodayIST } from "@/lib/dateUtils";
@@ -56,6 +58,76 @@ export default function AccountantOverviewTab({
   onOpenReceipt,
 }: AccountantOverviewTabProps) {
   const todayStr = getTodayIST();
+
+  // Privacy / Masking Mode for Sensitive Financial Figures (Default to PROTECTED / HIDDEN)
+  const [privacyMode, setPrivacyMode] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("accountant_privacy_mode");
+      return saved !== null ? saved === "true" : true;
+    }
+    return true;
+  });
+
+  const [revealedCards, setRevealedCards] = useState<Record<string, boolean>>({});
+
+  const toggleCardPrivacy = (cardKey: string) => {
+    setRevealedCards((prev) => ({
+      ...prev,
+      [cardKey]: !prev[cardKey],
+    }));
+  };
+
+  const toggleGlobalPrivacy = () => {
+    setPrivacyMode((prev) => {
+      const next = !prev;
+      if (typeof window !== "undefined") {
+        localStorage.setItem("accountant_privacy_mode", String(next));
+      }
+      if (next) {
+        setRevealedCards({});
+      } else {
+        setRevealedCards({
+          counter: true,
+          drawer: true,
+          reconciliation: true,
+        });
+      }
+      return next;
+    });
+  };
+
+  const isCardMasked = (cardKey: string) => {
+    if (!privacyMode) return false;
+    return !revealedCards[cardKey];
+  };
+
+  const PrivacyEyeButton = ({
+    cardKey,
+    title = "Amount",
+    className = "",
+  }: {
+    cardKey: string;
+    title?: string;
+    className?: string;
+  }) => {
+    const masked = isCardMasked(cardKey);
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          toggleCardPrivacy(cardKey);
+        }}
+        title={masked ? `Reveal ${title}` : `Hide ${title}`}
+        className={`p-1 rounded-lg transition-all cursor-pointer hover:bg-slate-100 active:scale-90 ${
+          masked ? "text-slate-400 hover:text-slate-700" : "text-indigo-600 hover:text-indigo-800 bg-indigo-50/70"
+        } ${className}`}
+        aria-label={masked ? `Reveal ${title}` : `Hide ${title}`}
+      >
+        {masked ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+      </button>
+    );
+  };
 
   // Accountant view is strictly locked to their OWN counter to protect macro school financials
   const myReceipts = useMemo(() => {
@@ -238,6 +310,26 @@ export default function AccountantOverviewTab({
             <Printer className="w-3.5 h-3.5 text-slate-500" />
             <span>Print Marksheets</span>
           </button>
+          <button
+            onClick={toggleGlobalPrivacy}
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-2xl border text-xs font-bold transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95 ${
+              privacyMode
+                ? "bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-200/80"
+                : "bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border-emerald-200/80"
+            }`}
+            title={
+              privacyMode
+                ? "Privacy Mode is ON (Amounts hidden). Click to reveal."
+                : "Privacy Mode is OFF (Amounts visible). Click to protect."
+            }
+          >
+            {privacyMode ? (
+              <EyeOff className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+            ) : (
+              <Eye className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+            )}
+            <span>{privacyMode ? "Privacy: Hidden" : "Privacy: Visible"}</span>
+          </button>
         </div>
       </div>
 
@@ -247,9 +339,12 @@ export default function AccountantOverviewTab({
         <div className="bg-white border border-slate-200/60 p-6 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.015)] transition-all hover:shadow-[0_8px_30px_rgba(0,0,0,0.035)] flex flex-col justify-between">
           <div>
             <div className="flex justify-between items-center">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                My Counter Collection
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                  My Counter Collection
+                </span>
+                <PrivacyEyeButton cardKey="counter" title="Counter Collections" />
+              </div>
               <span className="p-2.5 bg-emerald-50 text-emerald-600 rounded-2xl">
                 <TrendingUp className="w-5 h-5" />
               </span>
@@ -260,7 +355,11 @@ export default function AccountantOverviewTab({
               </div>
             ) : (
               <h3 className="text-2xl font-black text-slate-800 tracking-tight mt-4">
-                {formatP(activeTodayCollections)}
+                {isCardMasked("counter") ? (
+                  <span className="font-mono tracking-widest text-slate-400 select-none">₹••••••</span>
+                ) : (
+                  formatP(activeTodayCollections)
+                )}
               </h3>
             )}
           </div>
@@ -308,9 +407,12 @@ export default function AccountantOverviewTab({
         <div className="bg-white border border-slate-200/60 p-6 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.015)] transition-all hover:shadow-[0_8px_30px_rgba(0,0,0,0.035)] flex flex-col justify-between">
           <div>
             <div className="flex justify-between items-center">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                My Counter Cash in Hand
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                  My Counter Cash in Hand
+                </span>
+                <PrivacyEyeButton cardKey="drawer" title="Drawer Cash" />
+              </div>
               <span className="p-2.5 bg-amber-50 text-amber-600 rounded-2xl">
                 <Coins className="w-5 h-5" />
               </span>
@@ -321,14 +423,18 @@ export default function AccountantOverviewTab({
               </div>
             ) : (
               <h3 className="text-2xl font-black text-slate-800 tracking-tight mt-4">
-                {formatP(todayCash)}
+                {isCardMasked("drawer") ? (
+                  <span className="font-mono tracking-widest text-slate-400 select-none">₹••••••</span>
+                ) : (
+                  formatP(todayCash)
+                )}
               </h3>
             )}
           </div>
           <div className="mt-5 pt-4 border-t border-slate-100/80">
             <div className="flex justify-between items-center text-[10px] mb-1.5 font-bold">
-              <span className="text-slate-600">Cash: {formatP(todayCash)}</span>
-              <span className="text-indigo-600">UPI: {formatP(todayUpi)}</span>
+              <span className="text-slate-600">Cash: {isCardMasked("drawer") ? "₹••••" : formatP(todayCash)}</span>
+              <span className="text-indigo-600">UPI: {isCardMasked("drawer") ? "₹••••" : formatP(todayUpi)}</span>
             </div>
             <div className="w-full h-1.5 bg-slate-100 rounded-full flex overflow-hidden">
               <div className="h-full bg-slate-400" style={{ width: `${(todayCash / baseRatio) * 100}%` }} />
@@ -569,6 +675,7 @@ export default function AccountantOverviewTab({
                 <h4 className="text-sm font-black text-slate-800 tracking-tight">
                   My Shift Drawer Reconciliation
                 </h4>
+                <PrivacyEyeButton cardKey="reconciliation" title="Shift Reconciliation" />
               </div>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
                 Today
@@ -581,27 +688,27 @@ export default function AccountantOverviewTab({
                   <span className="w-2 h-2 rounded-full bg-slate-400" />
                   Cash in My Drawer:
                 </span>
-                <span className="font-bold text-slate-800">{formatP(todayCash)}</span>
+                <span className="font-bold text-slate-800">{isCardMasked("reconciliation") ? "₹••••••" : formatP(todayCash)}</span>
               </div>
               <div className="flex items-center justify-between text-xs">
                 <span className="text-slate-500 font-medium flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-indigo-500" />
                   UPI / QR Collections:
                 </span>
-                <span className="font-bold text-indigo-600">{formatP(todayUpi)}</span>
+                <span className="font-bold text-indigo-600">{isCardMasked("reconciliation") ? "₹••••••" : formatP(todayUpi)}</span>
               </div>
               <div className="flex items-center justify-between text-xs">
                 <span className="text-slate-500 font-medium flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-blue-500" />
                   Bank / Cheque / Online:
                 </span>
-                <span className="font-bold text-blue-600">{formatP(todayBank)}</span>
+                <span className="font-bold text-blue-600">{isCardMasked("reconciliation") ? "₹••••••" : formatP(todayBank)}</span>
               </div>
 
               <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
                 <span className="text-xs font-black text-slate-900">Shift Total Handover:</span>
                 <span className="text-sm font-black text-emerald-600">
-                  {formatP(activeTodayCollections)}
+                  {isCardMasked("reconciliation") ? "₹••••••" : formatP(activeTodayCollections)}
                 </span>
               </div>
             </div>
