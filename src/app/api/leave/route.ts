@@ -3,7 +3,7 @@ import db from "@/lib/db";
 import { uploadFile } from "@/lib/storage";
 import { getAuthUser } from "@/lib/auth";
 import { LeaveStatus } from "@prisma/client";
-import { validateUploadedFile } from "@/lib/validation";
+import { validateUploadedFile, getSafeErrorMessage } from "@/lib/validation";
 
 export async function GET(request: Request) {
   try {
@@ -23,6 +23,13 @@ export async function GET(request: Request) {
       }
       const studentIds = parentProfile.students.map((s) => s.id);
       whereClause = { studentId: { in: studentIds } };
+    } else if (authUser.role === "TEACHER") {
+      const teacherProfile = await db.teacherProfile.findUnique({
+        where: { userId: authUser.userId },
+        include: { classes: { select: { id: true } } },
+      });
+      const assignedClassIds = teacherProfile?.classes.map((c) => c.id) || [];
+      whereClause = { student: { classId: { in: assignedClassIds } } };
     }
 
     const leaves = await db.leaveRequest.findMany({
@@ -167,6 +174,39 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Leave request ID and status are required." }, { status: 400 });
     }
 
+    // ── SEC-08: Verify target leave and enforce class-level teacher scoping
+    const targetLeave = await db.leaveRequest.findUnique({
+      where: { id },
+      include: {
+        student: {
+          select: { id: true, name: true, classId: true },
+        },
+      },
+    });
+
+    if (!targetLeave) {
+      return NextResponse.json({ error: "Leave request not found." }, { status: 404 });
+    }
+
+    if (authUser.role === "TEACHER") {
+      const teacherProfile = await db.teacherProfile.findUnique({
+        where: { userId: authUser.userId },
+        include: { classes: { select: { id: true } } },
+      });
+
+      const assignedClassIds = new Set(teacherProfile?.classes.map((c) => c.id) || []);
+
+      if (!targetLeave.student || !assignedClassIds.has(targetLeave.student.classId)) {
+        return NextResponse.json(
+          {
+            error:
+              "Forbidden. Teachers can only approve or reject leave requests for students in their assigned class.",
+          },
+          { status: 403 }
+        );
+      }
+    }
+
     const leave = await db.leaveRequest.update({
       where: { id },
       data: {
@@ -224,7 +264,8 @@ export async function PATCH(request: Request) {
     });
   } catch (error: any) {
     console.error("Update leave error:", error);
-    return NextResponse.json({ error: "Failed to update leave request status" }, { status: 500 });
+    const safeError = getSafeErrorMessage(error, "Failed to update leave request status.");
+    return NextResponse.json({ error: safeError }, { status: 500 });
   }
 }
 
