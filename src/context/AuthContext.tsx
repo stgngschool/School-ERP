@@ -86,6 +86,8 @@ export interface MockStudent {
   photoUrl?: string;
   isMarksheetClaimed?: boolean;
   gender?: string;
+  status?: string;
+  admissionDateDisplay?: string;
 }
 
 export interface MockDueItem {

@@ -17,10 +17,16 @@ import {
   ChevronDown,
   CreditCard,
   Users,
+  FileSpreadsheet,
+  Download,
 } from "lucide-react";
 import { sortClasses, normalizeClassName, normalizeSectionName } from "@/lib/classUtils";
 import StudentProfileModal from "@/components/StudentProfileModal";
 import EditStudentModal from "@/components/modals/EditStudentModal";
+import {
+  exportStudentDirectoryXLS,
+  exportStudentDirectoryCSV,
+} from "@/lib/exportStudentXLS";
 
 interface StudentDirectoryTabProps {
   onCollectFee?: (studentId: string) => void;
@@ -31,6 +37,7 @@ export default function StudentDirectoryTab({ onCollectFee }: StudentDirectoryTa
     students,
     classes,
     dueItems,
+    schoolInfo,
     updateStudentStatus,
     promoteStudent,
     showToast,
@@ -54,6 +61,7 @@ export default function StudentDirectoryTab({ onCollectFee }: StudentDirectoryTa
   // Selection & menu states
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [activeMenuStudentId, setActiveMenuStudentId] = useState<string | null>(null);
+  const [showStudentExportMenu, setShowStudentExportMenu] = useState(false);
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -272,7 +280,108 @@ export default function StudentDirectoryTab({ onCollectFee }: StudentDirectoryTa
             )}
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap relative">
+            {/* Export to Excel Dropdown */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowStudentExportMenu((prev) => !prev)}
+                className="py-2 px-3.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer border border-emerald-200/80 shadow-2xs hover:shadow-xs active:scale-95"
+                title="Download Student Directory as Excel (.xlsx)"
+              >
+                <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+                <span>Download Excel</span>
+                <ChevronDown className={`h-3.5 w-3.5 text-emerald-600 transition-transform ${showStudentExportMenu ? "rotate-180" : ""}`} />
+              </button>
+
+              {showStudentExportMenu && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowStudentExportMenu(false)}
+                  />
+                  <div className="absolute right-0 top-full mt-1.5 w-64 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 py-1.5 animate-in fade-in zoom-in-95 duration-100 font-sans text-left">
+                    <div className="px-3 py-1.5 border-b border-slate-100">
+                      <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Export Student Directory</p>
+                    </div>
+
+                    {/* Option 1: Download All Students */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowStudentExportMenu(false);
+                        exportStudentDirectoryXLS({
+                          students,
+                          allStudents: students,
+                          dueItems,
+                          schoolInfo,
+                          fileNamePrefix: "Student_Directory_All",
+                          filterDescription: "All_Students",
+                          useServerFirst: true,
+                        });
+                      }}
+                      className="w-full px-3 py-2.5 text-left text-xs font-bold text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 flex items-center gap-2 transition-colors cursor-pointer"
+                    >
+                      <FileSpreadsheet className="h-4 w-4 text-emerald-600 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-black text-[11px] text-slate-900">Download All Students (.xlsx)</p>
+                        <p className="text-[10px] text-slate-500 font-semibold">Master directory ({students.length} students)</p>
+                      </div>
+                    </button>
+
+                    {/* Option 2: Download Filtered Students (if filters active) */}
+                    {(dirSearch || activeFilterCount > 0) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowStudentExportMenu(false);
+                          const desc = dirClassFilter ? `Class_${dirClassFilter}` : "Filtered";
+                          exportStudentDirectoryXLS({
+                            students: filteredStudents,
+                            allStudents: students,
+                            dueItems,
+                            schoolInfo,
+                            fileNamePrefix: `Student_Directory_${desc}`,
+                            filterDescription: desc,
+                            useServerFirst: false,
+                          });
+                        }}
+                        className="w-full px-3 py-2.5 text-left text-xs font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-800 flex items-center gap-2 transition-colors cursor-pointer border-t border-slate-100"
+                      >
+                        <Filter className="h-4 w-4 text-indigo-600 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-black text-[11px] text-slate-900">Download Filtered List (.xlsx)</p>
+                          <p className="text-[10px] text-slate-500 font-semibold">{filteredStudents.length} students matching filters</p>
+                        </div>
+                      </button>
+                    )}
+
+                    {/* Option 3: Download CSV */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowStudentExportMenu(false);
+                        const exportList = (dirSearch || activeFilterCount > 0) ? filteredStudents : students;
+                        exportStudentDirectoryCSV({
+                          students: exportList,
+                          dueItems,
+                          schoolInfo,
+                          filterDescription: "Directory",
+                        });
+                      }}
+                      className="w-full px-3 py-2.5 text-left text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2 transition-colors cursor-pointer border-t border-slate-100"
+                    >
+                      <Download className="h-4 w-4 text-slate-500 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-black text-[11px] text-slate-900">Download CSV Format</p>
+                        <p className="text-[10px] text-slate-500 font-semibold">Universal comma-separated format</p>
+                      </div>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+
             {(dirSearch || activeFilterCount > 0) && (
               <button
                 type="button"
@@ -528,6 +637,27 @@ export default function StudentDirectoryTab({ onCollectFee }: StudentDirectoryTa
             <span className="inline sm:hidden">Selected</span>
           </div>
           <div className="flex gap-1.5 flex-wrap justify-end">
+            <button
+              type="button"
+              onClick={() => {
+                const selectedList = students.filter((s: any) => selectedStudentIds.includes(s.id));
+                exportStudentDirectoryXLS({
+                  students: selectedList,
+                  allStudents: students,
+                  dueItems,
+                  schoolInfo,
+                  fileNamePrefix: `Selected_${selectedList.length}_Students`,
+                  filterDescription: `${selectedList.length}_Selected_Students`,
+                  useServerFirst: false,
+                });
+              }}
+              className="py-1.5 px-2.5 sm:px-3 bg-white border border-emerald-200 hover:bg-emerald-50 text-emerald-700 rounded-xl font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-2xs text-xs"
+              title="Export selected students to Excel (.xlsx)"
+            >
+              <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600" />
+              <span className="hidden sm:inline">Export Selected ({selectedStudentIds.length})</span>
+              <span className="inline sm:hidden">Export ({selectedStudentIds.length})</span>
+            </button>
             <button
               type="button"
               onClick={() => {

@@ -4,6 +4,8 @@ import * as XLSX from "xlsx";
 import { getAuthUser } from "@/lib/auth";
 import { toRupees } from "@/lib/currency";
 import { getSafeErrorMessage } from "@/lib/validation";
+import { formatCanonicalDOB } from "@/lib/dateUtils";
+import { formatExcelNumericDate } from "@/lib/exportStudentXLS";
 
 export const dynamic = "force-dynamic";
 
@@ -193,6 +195,154 @@ export async function GET(request: Request) {
         (s.fatherMobile && s.fatherMobile.includes(searchQuery))
       );
     });
+
+    // ── Full Student Directory Master Export ─────────────────────────────────
+    if (type === "directory" || type === "students") {
+      const directoryRows = filteredStudents.map((s: any, idx: number) => {
+        let totalFee = 0;
+        let totalPaid = 0;
+
+        s.ledgerEntries?.forEach((e: any) => {
+          totalFee += e.amount;
+          const p = e.receiptItems?.reduce((sum: number, item: any) => sum + item.amount, 0) || 0;
+          totalPaid += p;
+        });
+
+        const totalDue = Math.max(0, totalFee - totalPaid);
+        const feeStatus = totalDue <= 0 && totalFee > 0 ? "CLEARED" : totalPaid > 0 ? "PARTIALLY PAID" : totalDue > 0 ? "UNPAID" : "NO RECORD";
+
+        const dobNumeric = formatExcelNumericDate(s.dob);
+        const dobText = formatCanonicalDOB(s.dob) || dobNumeric;
+        const admDateNumeric = formatExcelNumericDate(s.admissionDate);
+
+        return {
+          "S.No.": idx + 1,
+          "Admission No": s.admissionNumber || "-",
+          "Roll No": s.rollNumber || "-",
+          "Student Name": s.name || "-",
+          "Class": s.class?.name || "-",
+          "Section": s.class?.section || "-",
+          "Class & Section": `${s.class?.name || ""}-${s.class?.section || ""}`,
+          "Gender": s.gender || "-",
+          "Date of Birth (DD-MM-YYYY)": dobNumeric,
+          "DOB (Readable)": dobText,
+          "Admission Date (DD-MM-YYYY)": admDateNumeric,
+          "Status": s.status || "ACTIVE",
+          "Category": s.category || "General",
+          "Billing Type / RTE": s.isRte ? "RTE (100% Waiver)" : "Standard",
+          "Father Name": s.fatherName || s.parentProfile?.user?.name || "-",
+          "Father Mobile": s.fatherMobile || s.parentProfile?.user?.phone || "-",
+          "Mother Name": s.motherName || "-",
+          "Mother Mobile": s.motherMobile || "-",
+          "Student Aadhaar": s.aadhaar ? `'${s.aadhaar}` : "-",
+          "Father Aadhaar": s.fatherAadhaar ? `'${s.fatherAadhaar}` : "-",
+          "Mother Aadhaar": s.motherAadhaar ? `'${s.motherAadhaar}` : "-",
+          "Family ID": s.parentProfile?.familyCode || "-",
+          "Address": s.parentProfile?.address || "-",
+          "Parent Email": s.parentProfile?.user?.email || "-",
+          "Religion": s.religion || "-",
+          "Mother Tongue": s.motherTongue || "-",
+          "Nationality": s.nationality || "Indian",
+          "Disability / Special Needs": s.disability || "None",
+          "Parent Occupation": s.parentOccupation || "-",
+          "Annual Family Income": s.familyIncome || "-",
+          "Emergency Contact Person": s.emergencyName || "-",
+          "Emergency Contact Phone": s.emergencyPhone || "-",
+          "Transport Mode": s.transportMode || "Self",
+          "Bus Route": s.busRoute || "-",
+          "Bus Stop": s.busStop || "-",
+          "Previous School": s.prevSchoolName || "-",
+          "Previous Class Passed": s.prevClassPassed || "-",
+          "TC Number": s.tcNumber || "-",
+          "Board Reg No": s.boardRegNo || "-",
+          "Total Fee (Rs)": toRupees(totalFee),
+          "Total Paid (Rs)": toRupees(totalPaid),
+          "Remaining Due (Rs)": toRupees(totalDue),
+          "Fee Status": feeStatus,
+        };
+      });
+
+      const safeSchool = schoolName.replace(/[^a-zA-Z0-9]/g, "_");
+      const classTag = selectedClass && selectedClass !== "All" ? `_Class_${selectedClass.replace(/[^a-zA-Z0-9]/g, "_")}` : "_All_Students";
+      const filename = `${safeSchool}_Student_Directory${classTag}_${dateStr}.${format === "csv" ? "csv" : "xlsx"}`;
+
+      if (format === "csv") {
+        const ws = XLSX.utils.json_to_sheet(directoryRows);
+        const csv = XLSX.utils.sheet_to_csv(ws);
+        return new NextResponse(csv, {
+          headers: {
+            "Content-Type": "text/csv; charset=utf-8",
+            "Content-Disposition": `attachment; filename="${filename}"`,
+          },
+        });
+      }
+
+      // Class-wise summary
+      const classMap = new Map<string, any[]>();
+      for (const s of filteredStudents) {
+        const key = `${s.class?.name || ""}-${s.class?.section || ""}`;
+        if (!classMap.has(key)) classMap.set(key, []);
+        classMap.get(key)!.push(s);
+      }
+
+      const classSummaryRows = Array.from(classMap.entries()).map(([clsKey, classStdList], idx) => {
+        let boys = 0;
+        let girls = 0;
+        let rte = 0;
+        let active = 0;
+        let left = 0;
+        for (const std of classStdList) {
+          const g = (std.gender || "").toLowerCase();
+          if (g.startsWith("f") || g === "girl") girls++;
+          else if (g.startsWith("m") || g === "boy") boys++;
+          if (std.isRte) rte++;
+          if ((std.status || "ACTIVE") === "ACTIVE") active++;
+          else left++;
+        }
+        return {
+          "S.No.": idx + 1,
+          "Class & Section": clsKey,
+          "Total Enrolled": classStdList.length,
+          "Active Students": active,
+          "Left / Suspended": left,
+          "Boys": boys,
+          "Girls": girls,
+          "RTE Students": rte,
+        };
+      });
+
+      const wb = XLSX.utils.book_new();
+      const wsDir = XLSX.utils.json_to_sheet(directoryRows);
+      const wsSum = XLSX.utils.json_to_sheet(classSummaryRows);
+
+      const setColWidths = (ws: XLSX.WorkSheet, data: any[]) => {
+        if (!data || data.length === 0) return;
+        const keys = Object.keys(data[0]);
+        const colWidths: { [key: string]: number } = {};
+        for (const k of keys) colWidths[k] = Math.max(k.length, 10);
+        for (const row of data) {
+          for (const k of keys) {
+            const valStr = String(row[k] ?? "");
+            colWidths[k] = Math.max(colWidths[k], Math.min(valStr.length, 45));
+          }
+        }
+        ws["!cols"] = keys.map((k) => ({ wch: colWidths[k] + 3 }));
+      };
+
+      setColWidths(wsDir, directoryRows);
+      setColWidths(wsSum, classSummaryRows);
+
+      XLSX.utils.book_append_sheet(wb, wsDir, "Student Directory");
+      XLSX.utils.book_append_sheet(wb, wsSum, "Class-Wise Summary");
+
+      const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+      return new NextResponse(buffer, {
+        headers: {
+          "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "Content-Disposition": `attachment; filename="${filename}"`,
+        },
+      });
+    }
 
     // ── Single Student Statement Export ──────────────────────────────────────
     if (type === "statement" && filteredStudents.length === 1) {
