@@ -16,7 +16,8 @@ import {
   BookOpen,
   Search,
   CheckCircle2,
-  Loader2
+  Loader2,
+  Calendar
 } from "lucide-react";
 
 export default function PrintMarksheets() {
@@ -36,6 +37,29 @@ export default function PrintMarksheets() {
   const availableExams = schoolInfo.exams && schoolInfo.exams.length > 0
     ? schoolInfo.exams
     : ["Unit-1", "Half Yearly", "Unit-2", "Annual"];
+
+  const [sessions, setSessions] = useState<{ id: string; name: string; isCurrent: boolean }[]>([]);
+  const [selectedSession, setSelectedSession] = useState<string>("2026-2027");
+  const [issueDateIso, setIssueDateIso] = useState<string>(() => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  });
+
+  useEffect(() => {
+    fetch("/api/sessions", { credentials: "include", cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setSessions(data);
+          const current = data.find((s) => s.isCurrent);
+          if (current) setSelectedSession(current.name);
+        }
+      })
+      .catch((err) => console.error("Failed to fetch sessions", err));
+  }, []);
 
   const [selectedClass, setSelectedClass] = useState(availableClasses[0] || "");
   const [selectedReportCardStudentId, setSelectedReportCardStudentId] = useState("");
@@ -90,18 +114,29 @@ export default function PrintMarksheets() {
 
   const [isDataLoaded, setIsDataLoaded] = useState(false);
 
-  // When class changes, reset the data loaded state so they have to fetch again
+  // When class or session changes, reset the data loaded state so they have to fetch again
   useEffect(() => {
     setIsDataLoaded(false);
     setClassMarks([]);
-  }, [selectedClass]);
+  }, [selectedClass, selectedSession]);
+
+  const formatDisplayDate = (isoStr: string) => {
+    if (!isoStr) return "";
+    const parts = isoStr.split("-");
+    if (parts.length === 3) {
+      return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    }
+    return isoStr;
+  };
 
   const loadClassData = () => {
     if (!selectedClass) return;
     const cName = normalizeClassName(selectedClass);
     const cSec = normalizeSectionName(undefined, selectedClass);
+    const targetSessionObj = sessions.find((s) => s.name === selectedSession);
+    const sessionQuery = targetSessionObj ? `&sessionId=${encodeURIComponent(targetSessionObj.id)}` : "";
     setLoadingMarks(true);
-    fetch(`/api/marks/class?class=${encodeURIComponent(cName)}&section=${encodeURIComponent(cSec)}`, {
+    fetch(`/api/marks/class?class=${encodeURIComponent(cName)}&section=${encodeURIComponent(cSec)}${sessionQuery}`, {
       credentials: "include",
       cache: "no-store",
     })
@@ -170,7 +205,7 @@ export default function PrintMarksheets() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mt-4">
           <div>
             <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider block mb-1">
               Select Class
@@ -190,7 +225,7 @@ export default function PrintMarksheets() {
             </select>
           </div>
 
-          <div className="md:col-span-2">
+          <div className="sm:col-span-2 lg:col-span-1">
             <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider block mb-1">
               Search & Select Student
             </label>
@@ -199,10 +234,10 @@ export default function PrintMarksheets() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Search name, roll..."
+                  placeholder="Search..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2.5 text-xs font-bold border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 text-slate-700 shadow-2xs"
+                  className="w-full pl-9 pr-2 py-2.5 text-xs font-bold border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 text-slate-700 shadow-2xs"
                 />
               </div>
               <select
@@ -211,11 +246,11 @@ export default function PrintMarksheets() {
                   setSelectedReportCardStudentId(e.target.value);
                   setIsBulkPrintMode(false);
                 }}
-                className="w-1/2 text-xs font-bold py-2.5 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 text-slate-700 shadow-2xs"
+                className="w-1/2 text-xs font-bold py-2.5 px-2 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 text-slate-700 shadow-2xs truncate"
               >
                 {filteredStudents.map((std) => (
                   <option key={std.id} value={std.id}>
-                    {std.name} (Roll: {std.rollNo || "--"})
+                    {std.name} ({std.rollNo || "--"})
                   </option>
                 ))}
               </select>
@@ -236,6 +271,45 @@ export default function PrintMarksheets() {
                 <option key={ex} value={ex}>{ex} Only</option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider block mb-1">
+              Academic Session
+            </label>
+            <select
+              value={selectedSession}
+              onChange={(e) => {
+                setSelectedSession(e.target.value);
+                setIsBulkPrintMode(false);
+              }}
+              className="w-full text-xs font-bold py-2.5 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 text-slate-700 shadow-2xs"
+            >
+              {sessions.length > 0 ? (
+                sessions.map((s) => (
+                  <option key={s.id} value={s.name}>
+                    {s.name} {s.isCurrent ? "★" : ""}
+                  </option>
+                ))
+              ) : (
+                <>
+                  <option value="2026-2027">2026-2027</option>
+                  <option value="2025-2026">2025-2026</option>
+                </>
+              )}
+            </select>
+          </div>
+
+          <div>
+            <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider block mb-1">
+              Date of Issue
+            </label>
+            <input
+              type="date"
+              value={issueDateIso}
+              onChange={(e) => setIssueDateIso(e.target.value)}
+              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 text-slate-700 shadow-2xs"
+            />
           </div>
         </div>
 
@@ -408,6 +482,8 @@ export default function PrintMarksheets() {
                 selectedReportCardExam={selectedReportCardExam}
                 getCbseGrade={getCbseGrade}
                 classMarks={classMarks}
+                sessionYear={selectedSession}
+                issueDate={formatDisplayDate(issueDateIso)}
               />
             ))}
           </div>
@@ -440,6 +516,8 @@ export default function PrintMarksheets() {
                   selectedReportCardExam={selectedReportCardExam}
                   getCbseGrade={getCbseGrade}
                   classMarks={classMarks}
+                  sessionYear={selectedSession}
+                  issueDate={formatDisplayDate(issueDateIso)}
                 />
               </div>
             );
@@ -467,14 +545,22 @@ function SingleMarksheetCard({
   selectedReportCardExam,
   getCbseGrade,
   classMarks,
+  sessionYear,
+  issueDate,
 }: {
   student: any;
   availableExams: string[];
   selectedReportCardExam: string;
   getCbseGrade: (pct: number) => string;
   classMarks: any[];
+  sessionYear: string;
+  issueDate: string;
 }) {
   const sMarks: any[] = classMarks.filter(m => m.studentId === student.id);
+  const sessionStartYear = (sessionYear || "2026").split("-")[0] || "2026";
+  const shortSession = (sessionYear || "2026-2027").includes("-")
+    ? `${(sessionYear || "").split("-")[0]}-${(sessionYear || "").split("-")[1]?.slice(-2)}`
+    : sessionYear;
   
   const classKey = student.class || "";
   const normClass = classKey.toUpperCase().trim();
@@ -591,8 +677,15 @@ function SingleMarksheetCard({
       subEnri2 = Number(b2["Subject Enrichment"] ?? b2["Sub. Enrich."] ?? t2Match.subjectEnrichment ?? 0);
       yearly2 = Number(b2["Written Exam"] ?? b2["Written"] ?? (t2Match.writtenExam ?? Math.max(0, t2Match.marksObtained - prAct2 - noteBook2 - subEnri2)));
       obt2 = prAct2 + noteBook2 + subEnri2 + yearly2;
-    } else if (subMarks.length > 1 && subMarks[1] !== t1Match) {
-       // fallback to second exam if t2 not found
+    } else if (
+      subMarks.length > 1 &&
+      subMarks[1] !== t1Match &&
+      !subMarks[1].examName.toLowerCase().includes("unit 1") &&
+      !subMarks[1].examName.toLowerCase().includes("unit-1") &&
+      !subMarks[1].examName.toLowerCase().includes("half") &&
+      subMarks[1].examName.toLowerCase() !== t1Match?.examName?.toLowerCase()
+    ) {
+       // fallback to second exam if t2 not found and not a term-1/duplicate exam
        const m = subMarks[1];
        obt2 = m.marksObtained;
        yearly2 = m.marksObtained;
@@ -600,7 +693,7 @@ function SingleMarksheetCard({
 
     // Calculate dynamic max marks based on active terms (100 per conducted term or recorded maxMarks)
     const hasTerm1 = t1Match || (subMarks.length > 0 && !t2Match);
-    const hasTerm2 = !!t2Match || (subMarks.length > 1);
+    const hasTerm2 = !!t2Match || (yearly2 > 0 || obt2 > 0);
     const term1Max = t1Match?.maxMarks ? Number(t1Match.maxMarks) : (hasTerm1 ? 100 : 0);
     const term2Max = t2Match?.maxMarks ? Number(t2Match.maxMarks) : (hasTerm2 ? 100 : 0);
     const maxM = (term1Max + term2Max) > 0 ? (term1Max + term2Max) : 100;
@@ -642,7 +735,7 @@ function SingleMarksheetCard({
             <div className="grid grid-cols-3 items-center px-1">
               <div className="text-left text-[9px] font-sans font-extrabold text-slate-800 space-y-1.5 pt-1">
                 <p>SCHOOL CODE: <span className="font-black text-slate-950">09670707502</span></p>
-                <p>REPORT CARD NO: <span className="font-bold text-slate-700">GNG/2025/{student.id.slice(0, 5).toUpperCase()}</span></p>
+                <p>REPORT CARD NO: <span className="font-bold text-slate-700">GNG/{sessionStartYear}/{student.id.slice(0, 5).toUpperCase()}</span></p>
               </div>
 
               <div className="flex justify-center items-center">
@@ -666,7 +759,7 @@ function SingleMarksheetCard({
               </p>
             </div>
             <div className="mt-1 inline-block bg-slate-950 text-amber-300 px-5 py-0.5 text-[11px] font-sans font-black tracking-widest uppercase rounded shadow-sm">
-              ANNUAL ACADEMIC PROGRESS REPORT CARD (SESSION 2025-2026)
+              ANNUAL ACADEMIC PROGRESS REPORT CARD (SESSION {sessionYear})
             </div>
           </div>
 
@@ -684,11 +777,11 @@ function SingleMarksheetCard({
             <div className="grid grid-cols-2 divide-x-2 divide-slate-900 p-2">
               <div>
                 <span className="text-[8.5px] font-bold text-slate-500 uppercase tracking-wider block">Father's Name</span>
-                <span className="font-extrabold text-slate-900 text-xs uppercase">{student.parentName || student.fatherName || "AJAY PANDEY"}</span>
+                <span className="font-extrabold text-slate-900 text-xs uppercase">{student.parentName || student.fatherName || "--"}</span>
               </div>
               <div className="pl-3">
                 <span className="text-[8.5px] font-bold text-slate-500 uppercase tracking-wider block">Mother's Name</span>
-                <span className="font-extrabold text-slate-900 text-xs uppercase">{student.motherName || "SUMAN SHARMA"}</span>
+                <span className="font-extrabold text-slate-900 text-xs uppercase">{student.motherName || "--"}</span>
               </div>
             </div>
             <div className="grid grid-cols-3 divide-x-2 divide-slate-900 p-2">
@@ -702,7 +795,7 @@ function SingleMarksheetCard({
               </div>
               <div className="pl-3">
                 <span className="text-[8.5px] font-bold text-slate-500 uppercase tracking-wider block">Academic Session</span>
-                <span className="font-extrabold text-slate-900 text-xs">2025 - 2026</span>
+                <span className="font-extrabold text-slate-900 text-xs">{sessionYear.replace("-", " - ")}</span>
               </div>
             </div>
           </div>
@@ -783,7 +876,7 @@ function SingleMarksheetCard({
               <h3 className="text-sm font-black text-emerald-950 tracking-tight uppercase">
                 {overallPercentage >= 33 ? "PASSED & PROMOTED" : "NEEDS IMPROVEMENT"}
               </h3>
-              <p className="text-[7.5px] font-extrabold text-emerald-800 uppercase mt-0.5">ACADEMIC SESSION 2025-26</p>
+              <p className="text-[7.5px] font-extrabold text-emerald-800 uppercase mt-0.5">ACADEMIC SESSION {shortSession}</p>
             </div>
           </div>
           <div className="my-1.5 border border-slate-400 p-1.5 text-[7.5px] font-sans font-extrabold text-slate-700 text-center uppercase tracking-wider bg-slate-50">
@@ -795,7 +888,7 @@ function SingleMarksheetCard({
           <div className="flex items-end justify-between gap-4">
             <div className="text-center text-[8.5px]">
               <p className="font-black text-slate-900">DATE OF ISSUE</p>
-              <p className="font-extrabold text-slate-700 mt-0.5">20-07-2026</p>
+              <p className="font-extrabold text-slate-700 mt-0.5">{issueDate}</p>
             </div>
             <div className="text-center space-y-1">
               <div className="h-7"></div>

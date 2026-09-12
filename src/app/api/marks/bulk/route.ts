@@ -22,7 +22,7 @@ export async function POST(request: Request) {
 
     // ── Check if Exam is Locked by Admin
     const cleanExamName = examName.trim();
-    const cleanSubject = subject.trim();
+    const cleanSubject = subject.trim().toUpperCase();
     try {
       const schoolConfigRow = await db.schoolConfig.findUnique({ where: { id: "singleton" } });
       const cfgData = (schoolConfigRow?.data as any) || {};
@@ -273,7 +273,7 @@ export async function DELETE(request: Request) {
     }
 
     const idsToDelete: string[] = studentId ? [studentId] : studentIds;
-    const cleanSubject = subject.trim();
+    const cleanSubject = subject.trim().toUpperCase();
     const cleanExamName = examName.trim();
 
     // ── Check if Exam is Locked by Admin
