@@ -19,6 +19,7 @@ import LedgerReceiptsTab from "@/components/accountant/LedgerReceiptsTab";
 import DefaultersReportTab from "@/components/accountant/DefaultersReportTab";
 import FeeCollectTab from "@/components/accountant/FeeCollectTab";
 import StudentDirectoryTab from "@/components/accountant/StudentDirectoryTab";
+import FamilyHubTab from "@/components/accountant/FamilyHubTab";
 
 // ── H-10 / L-09 / L-02: Stable module-level valid tabs list.
 // Excludes unrendered tabs ('idcards', 'audit') to prevent blank screens for accountants.
@@ -26,6 +27,7 @@ const VALID_ACCOUNTANT_TABS = [
   "dashboard",
   "collect",
   "students",
+  "families",
   "attendance",
   "defaulters",
   "ledger",
@@ -171,6 +173,8 @@ export default function AccountantDashboard() {
             setActiveTab("collect");
           }}
         />
+      ) : currentTab === "families" ? (
+        <FamilyHubTab />
       ) : (
         <div className="bg-white border-y sm:border border-slate-200/60 p-4 sm:p-8 sm:rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)]">
           {/* TAB: Collect Fee */}

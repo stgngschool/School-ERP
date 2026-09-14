@@ -321,24 +321,32 @@ export function findMatchingParentProfile(
       const matchBothParents = profile.students.some((s) => {
         const sFather = normalizeName(s.fatherName);
         const sMother = normalizeName(s.motherName);
-        return (sFather === normFather && sMother === normMother) ||
-               (sFather === normFather && normalizeName(profile.user?.name) === normFather && sMother === normMother);
+        return (
+          (sFather === normFather && sMother === normMother) ||
+          (sFather === normFather && normalizeName(profile.user?.name) === normFather && sMother === normMother)
+        );
       });
       if (matchBothParents) return profile;
     }
 
     // ── Signal 4: Corroborated Parent Name + Exact Specific House/Address Match
     // (LF-03: Prevents false merges of unrelated families with common names in the same city/locality)
-    if (normFather && normFather.length >= 4 && record.address && profile.address) {
+    if (normFather && normMother && normFather.length >= 4 && normMother.length >= 4 && record.address && profile.address) {
       const fatherMatches =
         normalizeName(profile.user?.name) === normFather ||
         profile.students.some((s) => normalizeName(s.fatherName) === normFather);
+      const motherMatches = profile.students.some((s) => normalizeName(s.motherName) === normMother);
 
-      if (fatherMatches && isCorroboratedAddressMatch(record.address, profile.address)) {
+      if (fatherMatches && motherMatches && isCorroboratedAddressMatch(record.address, profile.address)) {
         // Guard against conflicting primary phone numbers if both records have full phones
         const profileFatherPhone = profile.students.find((s) => s.fatherMobile)?.fatherMobile?.trim().replace(/\D/g, "");
-        if (cleanFatherMobile && profileFatherPhone && cleanFatherMobile !== profileFatherPhone) {
-          // Explicitly different phone numbers with only single-parent match -> do not auto-merge
+        const profileMotherPhone = profile.students.find((s) => s.motherMobile)?.motherMobile?.trim().replace(/\D/g, "");
+        if (
+          (cleanFatherMobile && profileFatherPhone && cleanFatherMobile !== profileFatherPhone) ||
+          (cleanFatherMobile && userPhone && cleanFatherMobile !== userPhone) ||
+          (cleanMotherMobile && profileMotherPhone && cleanMotherMobile !== profileMotherPhone)
+        ) {
+          // Explicitly different phone numbers -> do not auto-merge
           continue;
         }
         return profile;

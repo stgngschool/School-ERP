@@ -13,6 +13,7 @@ import {
   Loader2,
   BookOpen,
   ArrowRight,
+  UserX,
 } from "lucide-react";
 import { formatP, toRupees, toPaisa, numberToIndianWords } from "@/lib/currency";
 import { getISTDateString, getTodayIST } from "@/lib/dateUtils";
@@ -745,10 +746,10 @@ export default function FeeCollectTab({
                           key={child.id}
                           type="button"
                           onClick={() => setActiveSiblingTabId(child.id)}
-                          className={`px-3 py-2 rounded-xl border text-left transition-all duration-150 cursor-pointer flex items-center gap-3 shrink-0 ${
+                          className={`flex items-center gap-3 px-3 py-2 rounded-xl border transition-all duration-150 cursor-pointer text-left shrink-0 ${
                             isActive
-                              ? "bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-600/10"
-                              : "bg-white border-slate-200/80 text-slate-600 hover:border-slate-350 hover:bg-slate-50/50"
+                              ? "bg-indigo-600 border-indigo-600 shadow-md shadow-indigo-600/10 text-white"
+                              : "bg-white border-slate-200/80 text-slate-600 hover:border-slate-350"
                           }`}
                         >
                           <span

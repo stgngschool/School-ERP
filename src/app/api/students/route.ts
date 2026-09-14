@@ -566,7 +566,7 @@ export async function PATCH(request: Request) {
       const targetId = Array.isArray(studentId) ? studentId[0] : studentId;
       const student = await db.student.findUnique({
         where: { id: targetId },
-        include: { parentProfile: { include: { user: true } } }
+        include: { parentProfile: { include: { user: true, students: { select: { id: true } } } } }
       });
 
       // Check admissionNumber uniqueness if changed
@@ -689,7 +689,12 @@ export async function PATCH(request: Request) {
           },
         });
 
-        if (student?.parentProfile) {
+        // Only update the shared Parent user and profile if this student is the only child
+        // in this family, or if the update explicitly matches existing parent identity.
+        // If there are multiple siblings, updating one student's individual parent fields
+        // should NOT overwrite the parent account for all other siblings.
+        const siblingCount = student?.parentProfile?.students?.length || 0;
+        if (student?.parentProfile && siblingCount <= 1) {
           await tx.parentProfile.update({
             where: { id: student.parentProfile.id },
             data: {

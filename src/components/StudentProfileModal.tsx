@@ -6,8 +6,9 @@ import { formatCanonicalDOB } from "@/lib/dateUtils";
 import { 
   X, User, ShieldAlert, Phone, Mail, MapPin, CreditCard, 
   Calendar, FileText, CheckCircle2, AlertCircle, Clock, Percent,
-  TrendingDown, TrendingUp, Bus, Gift, Award
+  TrendingDown, TrendingUp, Bus, Gift, Award, Users, Loader2
 } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
 interface StudentProfileModalProps {
   studentId: string;
@@ -17,6 +18,7 @@ interface StudentProfileModalProps {
 }
 
 export default function StudentProfileModal({ studentId, isOpen, onClose, isInline = false }: StudentProfileModalProps) {
+  const { showToast } = useAuth();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -535,9 +537,42 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
                             <span className="truncate">{data.parent?.email || "N/A"}</span>
                           </p>
                         </div>
-                        <div>
-                          <p className="text-slate-400 font-bold">Family Code</p>
-                          <p className="font-black text-indigo-600 mt-0.5">{data.parent?.familyCode || "N/A"}</p>
+                        <div className="col-span-2 bg-slate-50 border border-slate-200/80 rounded-xl p-3 space-y-2">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                              <p className="text-slate-400 font-bold uppercase text-[9px] tracking-wider">Family ID & Linked Sibling Status</p>
+                              <p className="font-black text-indigo-700 text-sm mt-0.5 flex items-center gap-1.5">
+                                <Users className="h-4 w-4 text-indigo-600" />
+                                <span>{data.parent?.familyCode || "No Family Code"}</span>
+                                {data.parent?.siblings && data.parent.siblings.length > 0 ? (
+                                  <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full border border-amber-200">
+                                    {data.parent.siblings.length} Sibling(s) Linked
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">
+                                    Independent Family
+                                  </span>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+
+                          {data.parent?.siblings && data.parent.siblings.length > 0 && (
+                            <div className="pt-2 border-t border-slate-200/60">
+                              <p className="text-[10px] font-bold text-slate-500 mb-1">Siblings Sharing this Family ID:</p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {data.parent.siblings.map((sib: any) => (
+                                  <span
+                                    key={sib.id}
+                                    className="inline-flex items-center gap-1 text-[10px] font-bold bg-white text-slate-700 px-2 py-0.5 rounded-md border border-slate-200 shadow-2xs"
+                                  >
+                                    <span>{sib.name}</span>
+                                    <span className="text-slate-400 font-normal">({sib.class})</span>
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                         <div>
                           <p className="text-slate-400 font-bold">Parent Occupation</p>

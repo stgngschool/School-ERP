@@ -88,6 +88,14 @@ export async function GET(
                 phone: true,
               },
             },
+            students: {
+              select: {
+                id: true,
+                name: true,
+                admissionNumber: true,
+                class: { select: { name: true, section: true } },
+              },
+            },
           },
         },
         concession: {
@@ -271,6 +279,14 @@ export async function GET(
         phone: student.parentProfile.user?.phone || student.fatherMobile || "",
         address: student.parentProfile.address || "",
         familyCode: student.parentProfile.familyCode,
+        siblings: (student.parentProfile.students || [])
+          .filter((s) => s.id !== student.id)
+          .map((s) => ({
+            id: s.id,
+            name: s.name,
+            admissionNo: s.admissionNumber,
+            class: `${s.class.name}-${s.class.section}`,
+          })),
       } : null,
 
       concession: student.concession ? {

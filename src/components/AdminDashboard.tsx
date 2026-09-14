@@ -40,6 +40,10 @@ const StudentProfileModal = dynamic(() => import("@/components/StudentProfileMod
 const EditStudentModal = dynamic(() => import("@/components/modals/EditStudentModal"), {
   ssr: false,
 });
+const FamilyHubTab = dynamic(() => import("@/components/accountant/FamilyHubTab"), {
+  loading: ConsoleLoadingFallback,
+  ssr: false,
+});
 
 import ModernDatePicker from "@/components/ModernDatePicker";
 import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
@@ -157,6 +161,7 @@ const VALID_ADMIN_TABS = [
   "ledger",
   "structures",
   "students",
+  "families",
   "users",
   "idcards",
   "notices",
@@ -198,6 +203,7 @@ export default function AdminDashboard() {
     setActiveTab,
     dueItems,
     receipts,
+    billingSummary,
     recordItemizedPayment,
     addFeeHead,
     removeFeeHead,
@@ -868,6 +874,7 @@ export default function AdminDashboard() {
   const [ledgerSearch, setLedgerSearch] = useState("");
   const [ledgerDate, setLedgerDate] = useState("");
   const [ledgerStaffFilter, setLedgerStaffFilter] = useState("All");
+  const [shiftScope, setShiftScope] = useState<"today" | "all">("today");
   const [visibleReceiptsCount, setVisibleReceiptsCount] = useState(25);
   const [visibleLedgerCount, setVisibleLedgerCount] = useState(30);
 
@@ -896,7 +903,7 @@ export default function AdminDashboard() {
   React.useEffect(() => {
     setVisibleReceiptsCount(25);
     setVisibleLedgerCount(30);
-  }, [ledgerSearch, ledgerDate, ledgerSubTab]);
+  }, [ledgerSearch, ledgerDate, ledgerSubTab, ledgerStaffFilter, shiftScope]);
   
   // School Customizer Settings Form State
   const [activeSchoolSubTab, setActiveSchoolSubTab] = useState<"profile" | "website" | "admin" | "sync" | "exams">("profile");
@@ -6019,6 +6026,11 @@ export default function AdminDashboard() {
             <AdmissionLeadsDesk />
           )}
 
+          {/* TAB: Family Management Hub */}
+          {activeTab === "families" && (
+            <FamilyHubTab />
+          )}
+
           {/* TAB 3: Register Student */}
           {activeTab === "students" && (
             <div className="space-y-6">
@@ -6048,8 +6060,17 @@ export default function AdminDashboard() {
 
                 <button
                   type="button"
+                  onClick={() => setActiveTab("families")}
+                  className="flex items-center gap-1.5 px-4 py-2 border border-indigo-200/80 bg-white hover:bg-indigo-50/70 rounded-2xl text-xs font-black text-slate-700 hover:text-indigo-700 transition-all cursor-pointer shadow-2xs ml-auto"
+                >
+                  <Home className="h-3.5 w-3.5 text-indigo-600" />
+                  <span>Family Hub</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => setActiveTab("enquiries")}
-                  className="flex items-center gap-1.5 px-4 py-2 border border-indigo-200/80 bg-indigo-50/70 hover:bg-indigo-100/80 rounded-2xl text-xs font-black text-indigo-700 transition-all cursor-pointer shadow-2xs ml-auto"
+                  className="flex items-center gap-1.5 px-4 py-2 border border-indigo-200/80 bg-indigo-50/70 hover:bg-indigo-100/80 rounded-2xl text-xs font-black text-indigo-700 transition-all cursor-pointer shadow-2xs"
                 >
                   <UserPlus className="h-3.5 w-3.5" />
                   <span>Online Admissions Review Desk</span>
@@ -9196,9 +9217,15 @@ export default function AdminDashboard() {
                     const upiAmt = filtered.filter(r => r.method === "UPI").reduce((sum, r) => sum + r.amount, 0);
                     const bankAmt = filtered.filter(r => r.method === "ONLINE" || r.method === "CHEQUE" || r.method === "BANK_TRANSFER").reduce((sum, r) => sum + r.amount, 0);
 
+                    const todayIST = getTodayIST();
                     // Cashier-wise grouping for Day-End Shift Closing
+                    // If shiftScope is 'today' and no custom date filter is set, show today's counter shift; otherwise show filtered
+                    const shiftReceipts = (shiftScope === "today" && !ledgerDate)
+                      ? receipts.filter(r => r.createdAt === todayIST && (ledgerStaffFilter === "All" || (ledgerStaffFilter === "ME" ? r.createdById === user?.id : r.collectedBy === ledgerStaffFilter)))
+                      : filtered;
+
                     const cashierMap: { [key: string]: { name: string; role: string; count: number; cash: number; upi: number; bank: number; total: number } } = {};
-                    filtered.forEach(r => {
+                    shiftReceipts.forEach(r => {
                       const cName = r.collectedBy || "Finance Desk";
                       const cRole = r.collectedByRole || "STAFF";
                       if (!cashierMap[cName]) {
@@ -9239,16 +9266,50 @@ export default function AdminDashboard() {
                         </div>
 
                         {/* Cashier-wise Shift Breakdown Card */}
-                        {cashierList.length > 1 && (
-                          <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-2.5">
-                            <div className="flex items-center justify-between">
-                              <span className="text-[9px] font-black uppercase text-slate-600 tracking-wider flex items-center gap-1.5">
-                                <Users className="h-3.5 w-3.5 text-indigo-600" /> Cashier-wise Shift Handover & Reconciliation
+                        <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-2.5">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-[10px] font-black uppercase text-slate-700 tracking-wider flex items-center gap-1.5">
+                                <Users className="h-4 w-4 text-indigo-600" /> Cashier-wise Shift Handover & Reconciliation
                               </span>
-                              <span className="text-[8px] font-bold text-slate-400">
-                                {cashierList.length} Active Staff Counters
+                              <span className="text-[8px] font-bold text-slate-500 bg-white border border-slate-200/80 px-2 py-0.5 rounded-full">
+                                {shiftScope === "today" && !ledgerDate ? `Today's Shift (${todayIST})` : `${cashierList.length} Active Counter${cashierList.length === 1 ? "" : "s"}`}
                               </span>
                             </div>
+
+                            {!ledgerDate && (
+                              <div className="flex bg-slate-200/70 p-0.5 rounded-xl select-none text-[10px] font-bold shrink-0 self-start sm:self-auto">
+                                <button
+                                  type="button"
+                                  onClick={() => setShiftScope("today")}
+                                  className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                                    shiftScope === "today"
+                                      ? "bg-white text-indigo-700 shadow-xs font-black"
+                                      : "text-slate-600 hover:text-slate-900"
+                                  }`}
+                                >
+                                  Today's Shift
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setShiftScope("all")}
+                                  className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                                    shiftScope === "all"
+                                      ? "bg-white text-indigo-700 shadow-xs font-black"
+                                      : "text-slate-600 hover:text-slate-900"
+                                  }`}
+                                >
+                                  All-Time / Filtered
+                                </button>
+                              </div>
+                            )}
+                          </div>
+
+                          {cashierList.length === 0 ? (
+                            <div className="bg-white border border-slate-200/80 rounded-xl p-3 text-center text-xs text-slate-500 font-semibold">
+                              No vouchers issued yet today ({todayIST}). Switch to "All-Time / Filtered" to view full cashier shift history.
+                            </div>
+                          ) : (
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
                               {cashierList.map((c) => (
                                 <div key={c.name} className="bg-white border border-slate-200/80 p-2.5 rounded-xl shadow-2xs space-y-1.5 text-xs">
@@ -9274,61 +9335,60 @@ export default function AdminDashboard() {
                                 </div>
                               ))}
                             </div>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
                     );
                   })()}
 
-                  {/* Receipts Vouchers Table */}
+                  {/* Receipts Vouchers Container */}
                   <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.015)]">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse">
-                        <thead>
-                          <tr className="bg-slate-50/75 border-b border-slate-200 text-[9px] font-bold uppercase text-slate-500 tracking-wider">
-                            <th className="py-3 px-4">Receipt No</th>
-                            <th className="py-3 px-4">Student & Class</th>
-                            <th className="py-3 px-4">Collected By</th>
-                            <th className="py-3 px-4">Description</th>
-                            <th className="py-3 px-4">Date</th>
-                            <th className="py-3 px-4">Mode</th>
-                            <th className="py-3 px-4 text-right">Amount</th>
-                            <th className="py-3 px-4 text-center">Action</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-700">
-                          {(() => {
-                            const filtered = receipts.filter((r) => {
-                              const matchesStaff =
-                                ledgerStaffFilter === "All"
-                                  ? true
-                                  : ledgerStaffFilter === "ME"
-                                  ? r.createdById === user?.id
-                                  : r.collectedBy === ledgerStaffFilter;
-                              const matchesSearch =
-                                !ledgerSearch.trim() ||
-                                r.receiptNo?.toLowerCase().includes(ledgerSearch.toLowerCase()) ||
-                                r.manualReceiptNo?.toLowerCase().includes(ledgerSearch.toLowerCase()) ||
-                                r.studentName?.toLowerCase().includes(ledgerSearch.toLowerCase()) ||
-                                r.details?.toLowerCase().includes(ledgerSearch.toLowerCase());
-                              const matchesDate = !ledgerDate || r.createdAt.startsWith(ledgerDate);
-                              return matchesStaff && matchesSearch && matchesDate;
-                            });
+                    {(() => {
+                      const filtered = receipts.filter((r) => {
+                        const matchesStaff =
+                          ledgerStaffFilter === "All"
+                            ? true
+                            : ledgerStaffFilter === "ME"
+                            ? r.createdById === user?.id
+                            : r.collectedBy === ledgerStaffFilter;
+                        const matchesSearch =
+                          !ledgerSearch.trim() ||
+                          r.receiptNo?.toLowerCase().includes(ledgerSearch.toLowerCase()) ||
+                          r.manualReceiptNo?.toLowerCase().includes(ledgerSearch.toLowerCase()) ||
+                          r.studentName?.toLowerCase().includes(ledgerSearch.toLowerCase()) ||
+                          r.details?.toLowerCase().includes(ledgerSearch.toLowerCase());
+                        const matchesDate = !ledgerDate || r.createdAt.startsWith(ledgerDate);
+                        return matchesStaff && matchesSearch && matchesDate;
+                      });
 
-                            if (filtered.length === 0) {
-                              return (
-                                <tr>
-                                  <td colSpan={8} className="py-8 text-center text-[11px] text-slate-400 font-semibold italic bg-slate-50/30">
-                                    No receipts found matching filters.
-                                  </td>
+                      if (filtered.length === 0) {
+                        return (
+                          <div className="py-12 text-center text-xs text-slate-400 font-semibold italic bg-slate-50/30">
+                            No receipts found matching filters.
+                          </div>
+                        );
+                      }
+
+                      const visibleReceipts = filtered.slice(0, visibleReceiptsCount);
+
+                      return (
+                        <>
+                          {/* Desktop View: Full detailed table (md and above) */}
+                          <div className="hidden md:block overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                              <thead>
+                                <tr className="bg-slate-50/75 border-b border-slate-200 text-[9px] font-bold uppercase text-slate-500 tracking-wider">
+                                  <th className="py-3 px-4">Receipt No</th>
+                                  <th className="py-3 px-4">Student & Class</th>
+                                  <th className="py-3 px-4">Collected By</th>
+                                  <th className="py-3 px-4">Description</th>
+                                  <th className="py-3 px-4">Date</th>
+                                  <th className="py-3 px-4">Mode</th>
+                                  <th className="py-3 px-4 text-right">Amount</th>
+                                  <th className="py-3 px-4 text-center">Action</th>
                                 </tr>
-                              );
-                            }
-
-                            const visibleReceipts = filtered.slice(0, visibleReceiptsCount);
-
-                            return (
-                              <>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-700">
                                 {visibleReceipts.map((rec) => (
                                   <tr key={rec.id} className="hover:bg-slate-50/40 transition-colors">
                                     <td className="py-3.5 px-4 font-black text-indigo-755">
@@ -9384,31 +9444,101 @@ export default function AdminDashboard() {
                                           setShowReceiptModal(true);
                                         }}
                                         className="p-1.5 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg text-slate-400 transition-all cursor-pointer"
+                                        title="View / Print Receipt"
                                       >
                                         <Printer className="h-3.5 w-3.5" />
                                       </button>
                                     </td>
                                   </tr>
                                 ))}
-                                {filtered.length > visibleReceiptsCount && (
-                                  <tr>
-                                    <td colSpan={8} className="py-4 text-center bg-slate-50/60 border-t border-slate-100">
-                                      <button
-                                        type="button"
-                                        onClick={() => setVisibleReceiptsCount((prev) => prev + 30)}
-                                        className="py-2 px-5 bg-white hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-indigo-600 text-xs font-extrabold rounded-xl shadow-xs transition-all cursor-pointer"
-                                      >
-                                        Load More Receipts (Showing {visibleReceipts.length} of {filtered.length})
-                                      </button>
-                                    </td>
-                                  </tr>
+                              </tbody>
+                            </table>
+                          </div>
+
+                          {/* Mobile View: Touch-Friendly Receipt Cards (< md) */}
+                          <div className="md:hidden divide-y divide-slate-100 p-3 space-y-3">
+                            {visibleReceipts.map((rec) => (
+                              <div key={rec.id} className="p-3.5 bg-slate-50/60 hover:bg-slate-50 border border-slate-200/80 rounded-2xl space-y-2.5 transition-all">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="font-black text-indigo-700 text-xs">{rec.receiptNo}</span>
+                                    {rec.manualReceiptNo && (
+                                      <span className="text-[9px] font-extrabold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/70">
+                                        Book: {rec.manualReceiptNo}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border ${
+                                    rec.method === "CASH"
+                                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                      : "bg-blue-50 text-blue-700 border-blue-200"
+                                  }`}>
+                                    {rec.method}
+                                  </span>
+                                </div>
+
+                                <div className="flex items-start justify-between gap-2">
+                                  <div>
+                                    <p className="font-black text-slate-900 text-sm">{rec.studentName}</p>
+                                    <p className="text-[10px] text-slate-400 font-bold uppercase">{rec.classSection}</p>
+                                  </div>
+                                  <div className="text-right shrink-0">
+                                    <span className="text-sm font-black text-slate-900 block">{formatP(rec.amount)}</span>
+                                    <span className="text-[10px] text-slate-400 font-semibold">{rec.createdAt}</span>
+                                  </div>
+                                </div>
+
+                                {rec.details && (
+                                  <p className="text-[10px] text-slate-500 font-medium line-clamp-2 bg-white p-2 rounded-xl border border-slate-200/50">
+                                    {rec.details}
+                                  </p>
                                 )}
-                              </>
-                            );
-                          })()}
-                        </tbody>
-                      </table>
-                    </div>
+
+                                <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-[11px]">
+                                  <span className="inline-flex items-center gap-1 text-slate-600 font-bold text-[10px]">
+                                    <User className="h-3 w-3 text-indigo-500" />
+                                    {rec.collectedBy || "Admin Desk"}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const std = students.find((s) => s.id === rec.studentId);
+                                      setActiveReceipt({
+                                        ...rec,
+                                        admissionNo: rec.admissionNo || (std ? std.admissionNo : "Unified/Family"),
+                                        fatherName: rec.fatherName || std?.fatherName || std?.parentName || "",
+                                        subtotal: rec.subtotal || rec.amount,
+                                        discount: rec.discount || 0,
+                                        arrears: rec.arrears || 0,
+                                        amountInWords: rec.amountInWords || numberToIndianWords(rec.amount),
+                                      });
+                                      setShowReceiptModal(true);
+                                    }}
+                                    className="flex items-center gap-1.5 text-indigo-700 font-black bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/80 px-3 py-1.5 rounded-xl transition-all cursor-pointer active:scale-95 text-xs shadow-2xs"
+                                  >
+                                    <Printer className="h-3.5 w-3.5 text-indigo-600" />
+                                    <span>View / Print</span>
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Pagination Footer */}
+                          {filtered.length > visibleReceiptsCount && (
+                            <div className="py-4 px-4 text-center bg-slate-50/60 border-t border-slate-100">
+                              <button
+                                type="button"
+                                onClick={() => setVisibleReceiptsCount((prev) => prev + 30)}
+                                className="w-full sm:w-auto py-2.5 px-6 bg-white hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-indigo-600 text-xs font-black rounded-xl shadow-xs transition-all cursor-pointer"
+                              >
+                                Load More Receipts (Showing {visibleReceipts.length} of {filtered.length})
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               )}
@@ -9429,7 +9559,7 @@ export default function AdminDashboard() {
                           !ledgerSearch.trim() ||
                           student?.name.toLowerCase().includes(ledgerSearch.toLowerCase()) ||
                           log.description.toLowerCase().includes(ledgerSearch.toLowerCase());
-                        const matchesDate = !ledgerDate || log.createdAt.startsWith(ledgerDate);
+                        const matchesDate = !ledgerDate || (Boolean(log.createdAt) && log.createdAt.startsWith(ledgerDate));
                         return matchesSearch && matchesDate;
                       });
 

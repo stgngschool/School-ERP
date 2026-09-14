@@ -93,6 +93,7 @@ export async function GET(request: Request) {
     const receiptNoParam = searchParams.get("receiptNo") || searchParams.get("receiptNumber");
     const studentIdParam = searchParams.get("studentId");
     const searchParam = (searchParams.get("search") || searchParams.get("q") || "").trim();
+    const allParam = searchParams.get("all") === "true";
 
     // ── B-11: Clamped pagination parameters with safe defaults
     const pageParam = parseInt(searchParams.get("page") || "1", 10);
@@ -316,10 +317,21 @@ export async function GET(request: Request) {
     }
 
     // SCH-01: school config is now fetched from DB in the same parallel batch
-    const [ledger, receipts, totalReceiptsCount, charges, discounts, paidGroups, schoolConfigRow] = await Promise.all([
+    const [
+      ledger,
+      receipts,
+      totalReceiptsCount,
+      charges,
+      discounts,
+      paidGroups,
+      schoolConfigRow,
+      receiptsAggregate,
+      receiptsByMethod,
+      receiptsByCashier
+    ] = await Promise.all([
       db.ledgerEntry.findMany({
         where: ledgerWhere,
-        take: 150,
+        take: allParam ? undefined : 150,
         orderBy: { createdAt: "desc" },
         select: {
           id: true,
@@ -328,13 +340,14 @@ export async function GET(request: Request) {
           amount: true,
           description: true,
           createdById: true,
+          createdAt: true,
         },
       }),
       // ── B-11: Paginated receipt query
       db.receipt.findMany({
         where: receiptWhere,
-        skip,
-        take: limit,
+        skip: allParam ? 0 : skip,
+        take: allParam ? undefined : limit,
         select: {
           id: true,
           studentId: true,
@@ -419,8 +432,24 @@ export async function GET(request: Request) {
       }),
       // SCH-01: Fetch school config from DB (replaces fs.readFileSync on school.json)
       db.schoolConfig.findUnique({ where: { id: "singleton" } }),
+      // Server aggregates for accurate accounting dashboards
+      db.receipt.aggregate({
+        where: receiptWhere,
+        _sum: { amountPaid: true },
+      }),
+      db.receipt.groupBy({
+        by: ["paymentMethod"],
+        where: receiptWhere,
+        _sum: { amountPaid: true },
+        _count: { id: true },
+      }),
+      db.receipt.groupBy({
+        by: ["createdById", "paymentMethod"],
+        where: receiptWhere,
+        _sum: { amountPaid: true },
+        _count: { id: true },
+      }),
     ]);
-
 
     const formattedLedger = ledger.map((l) => ({
       id: l.id,
@@ -429,7 +458,56 @@ export async function GET(request: Request) {
       amount: l.amount,
       description: l.description,
       createdById: l.createdById,
+      createdAt: getISTDateString(l.createdAt),
     }));
+
+    const cashierUserIds = Array.from(new Set(receiptsByCashier.map((c) => c.createdById).filter(Boolean)));
+    const cashierUsers = cashierUserIds.length > 0
+      ? await db.user.findMany({
+          where: { id: { in: cashierUserIds } },
+          select: { id: true, name: true, role: true },
+        })
+      : [];
+    const cashierUserMap = new Map(cashierUsers.map((u) => [u.id, u]));
+
+    const cashierSummaries: Record<string, { id: string; name: string; role: string; count: number; cash: number; upi: number; bank: number; total: number }> = {};
+    for (const row of receiptsByCashier) {
+      const u = cashierUserMap.get(row.createdById);
+      const name = u?.name || "Staff";
+      const role = u?.role || "STAFF";
+      if (!cashierSummaries[name]) {
+        cashierSummaries[name] = { id: row.createdById, name, role, count: 0, cash: 0, upi: 0, bank: 0, total: 0 };
+      }
+      const amt = row._sum.amountPaid || 0;
+      cashierSummaries[name].count += row._count.id || 0;
+      cashierSummaries[name].total += amt;
+      if (row.paymentMethod === PaymentMethod.CASH) {
+        cashierSummaries[name].cash += amt;
+      } else if (row.paymentMethod === PaymentMethod.UPI) {
+        cashierSummaries[name].upi += amt;
+      } else {
+        cashierSummaries[name].bank += amt;
+      }
+    }
+
+    let totalCashPaisa = 0;
+    let totalUpiPaisa = 0;
+    let totalBankPaisa = 0;
+    for (const m of receiptsByMethod) {
+      const amt = m._sum.amountPaid || 0;
+      if (m.paymentMethod === PaymentMethod.CASH) totalCashPaisa += amt;
+      else if (m.paymentMethod === PaymentMethod.UPI) totalUpiPaisa += amt;
+      else totalBankPaisa += amt;
+    }
+
+    const summary = {
+      totalReceiptsCount,
+      totalCollectedPaisa: receiptsAggregate._sum.amountPaid || 0,
+      totalCashPaisa,
+      totalUpiPaisa,
+      totalBankPaisa,
+      cashierList: Object.values(cashierSummaries),
+    };
 
     const formattedReceipts = receipts.map((r: any) => {
       const studentIds = Array.from(
@@ -524,7 +602,7 @@ export async function GET(request: Request) {
         paymentMethod: r.paymentMethod,
         method: r.paymentMethod,
         transactionRef: r.transactionReference || "",
-        createdAt: r.createdAt.toISOString().split("T")[0],
+        createdAt: getISTDateString(r.createdAt),
         studentName: r.student?.name || studentNames.join(", "),
         classSection: sClass,
         admissionNo,
@@ -624,6 +702,7 @@ export async function GET(request: Request) {
       ledgerEntries: formattedLedger,
       receipts: formattedReceipts,
       dueItems: formattedDues,
+      summary,
       pagination: {
         page,
         limit,

@@ -79,16 +79,18 @@ const getNavItems = (activeRole: string): NavItem[] => {
         { category: "Overview", name: "Accountant Dashboard", shortName: "Dashboard", icon: LayoutDashboard, tab: "dashboard" },
         { category: "Fee Transactions", name: "Fee Collection", shortName: "Collect", icon: CreditCard, tab: "collect" },
         { category: "Student Management", name: "Student Directory", shortName: "Students", icon: Users, tab: "students" },
+        { category: "Student Management", name: "Family Management Hub", shortName: "Families", icon: Home, tab: "families" },
         { category: "Academic Marks", name: "Class Marks Entry", shortName: "Marks", icon: GraduationCap, tab: "marks" },
         { category: "Fee Transactions", name: "Fee Defaulters & Dues", shortName: "Dues", icon: AlertTriangle, tab: "defaulters" },
         { category: "Academic Marks", name: "Print Marksheets", shortName: "Marksheets", icon: Printer, tab: "print_marksheets", desktopOnly: true },
-        { category: "Fee Transactions", name: "Receipts & Ledger Logs", shortName: "Ledger", icon: ArrowRightLeft, tab: "ledger", desktopOnly: true },
+        { category: "Fee Transactions", name: "Receipts & Ledger Logs", shortName: "Ledger", icon: ArrowRightLeft, tab: "ledger" },
         { category: "Communication", name: "Notices & Circulars", shortName: "Notices", icon: Bell, tab: "notices" },
       ];
     case "ADMIN":
       return [
         { category: "Overview", name: "Admin Dashboard", shortName: "Dashboard", icon: LayoutDashboard, tab: "dashboard" },
         { category: "Student & Academics", name: "Student Management", shortName: "Students", icon: Users, tab: "students" },
+        { category: "Student & Academics", name: "Family Management Hub", shortName: "Families", icon: Home, tab: "families" },
         { category: "Student & Academics", name: "Admissions & Applications", shortName: "Admissions", icon: UserPlus, tab: "enquiries" },
         { category: "Student & Academics", name: "Attendance Console", shortName: "Attendance", icon: UserCheck, tab: "attendance" },
         { category: "Student & Academics", name: "Class Marks Entry", shortName: "Marks", icon: GraduationCap, tab: "marks" },
@@ -96,7 +98,7 @@ const getNavItems = (activeRole: string): NavItem[] => {
         { category: "Student & Academics", name: "ID Cards & Photos", shortName: "ID Cards", icon: UserCheck, tab: "idcards", desktopOnly: true },
         { category: "Finance & Fees", name: "Fee Collection", shortName: "Collect", icon: CreditCard, tab: "collect" },
         { category: "Finance & Fees", name: "Fee Defaulters & Dues", shortName: "Dues", icon: AlertTriangle, tab: "defaulters" },
-        { category: "Finance & Fees", name: "Receipts & Ledger", shortName: "Ledger", icon: ArrowRightLeft, tab: "ledger", desktopOnly: true },
+        { category: "Finance & Fees", name: "Receipts & Ledger", shortName: "Ledger", icon: ArrowRightLeft, tab: "ledger" },
         { category: "Finance & Fees", name: "Fee Structure Setup", shortName: "Fee Setup", icon: Settings, tab: "structures", desktopOnly: true },
         { category: "System & Communication", name: "Website Photos & Media", shortName: "Media", icon: Camera, tab: "website_media" },
         { category: "System & Communication", name: "Notices & Announcements", shortName: "Notices", icon: Bell, tab: "notices" },
@@ -137,6 +139,7 @@ const getMegaMenuData = (activeRole: string): MegaMenuCategory[] => {
           icon: Users,
           items: [
             { name: "Student Directory", tab: "students", mode: "directory" },
+            { name: "Family Management Hub", tab: "families" },
             { name: "New Admission", tab: "students", mode: "single" },
             { name: "Bulk Import (CSV)", tab: "students", mode: "bulk" },
             { name: "Attendance Console", tab: "attendance" },
@@ -204,6 +207,7 @@ const getMegaMenuData = (activeRole: string): MegaMenuCategory[] => {
           icon: Users,
           items: [
             { name: "Student Directory", tab: "students", mode: "directory" },
+            { name: "Family Management Hub", tab: "families" },
           ]
         },
         {

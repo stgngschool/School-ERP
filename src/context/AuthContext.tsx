@@ -432,6 +432,9 @@ interface AuthContextType {
   updateStudentStatus: (studentId: string | string[], status: string) => Promise<void>;
   promoteStudent: (studentId: string | string[], classVal: string, section: string) => Promise<void>;
   editStudentDetails: (studentId: string, studentData: any) => Promise<{ success: boolean; error?: string; student?: any }>;
+  splitStudentFamily: (studentId: string) => Promise<{ success: boolean; newFamilyCode?: string; error?: string }>;
+  transferStudentFamily: (studentId: string, targetFamilyCode: string) => Promise<{ success: boolean; error?: string }>;
+  mergeFamilies: (sourceFamilyCode: string, targetFamilyCode: string) => Promise<{ success: boolean; error?: string }>;
   activeTab: string;
   setActiveTab: (tab: string) => void;
   eventsList: MockCalendarEvent[];
@@ -450,6 +453,7 @@ interface AuthContextType {
   refreshData: () => Promise<void>;
   refreshStudents: () => Promise<void>;
   refreshBilling: () => Promise<void>;
+  billingSummary: any | null;
   fetchBillingSummary: () => Promise<any>;
   refreshAttendance: () => Promise<void>;
   refreshHomework: () => Promise<void>;
@@ -623,6 +627,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
   const [receipts, setReceipts] = useState<MockReceipt[]>(() =>
     getLocalCache("gng_cached_receipts", [])
+  );
+  const [billingSummary, setBillingSummary] = useState<any | null>(() =>
+    getLocalCache("gng_cached_billingSummary", null)
   );
   const [feeHeads, setFeeHeads] = useState<{ name: string; frequency: string }[]>(() =>
     getLocalCache("gng_cached_feeHeads", [])
@@ -872,11 +879,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       });
 
-      const billingLoad = apiFetch("/api/billing", {}, 15000, true).then((data) => {
+      const billingLoad = apiFetch("/api/billing?all=true", {}, 15000, true).then((data) => {
         if (data) {
           setLedgerEntries(data.ledgerEntries || []);
           setReceipts(data.receipts || []);
           setDueItems(data.dueItems || []);
+          if (data.summary) {
+            setBillingSummary(data.summary);
+            setLocalCache("gng_cached_billingSummary", data.summary);
+          }
           setBillingLoaded(true);
           setLocalCache("gng_cached_dueItems", data.dueItems || []);
           setLocalCache("gng_cached_receipts", data.receipts || []);
@@ -962,11 +973,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshBilling = async () => {
     clearApiCache("/api/billing");
-    const data = await apiFetch("/api/billing");
+    const data = await apiFetch("/api/billing?all=true");
     if (data) {
       setLedgerEntries(data.ledgerEntries || []);
       setReceipts(data.receipts || []);
       setDueItems(data.dueItems || []);
+      if (data.summary) {
+        setBillingSummary(data.summary);
+        setLocalCache("gng_cached_billingSummary", data.summary);
+      }
       setBillingLoaded(true);
       setLocalCache("gng_cached_dueItems", data.dueItems || []);
       setLocalCache("gng_cached_receipts", data.receipts || []);
@@ -1887,6 +1902,78 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const splitStudentFamily = async (studentId: string) => {
+    try {
+      const res = await fetch("/api/families", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "SPLIT", studentId }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        await refreshStudents();
+        await refreshBilling();
+        showToast("success", "Family Separated", data.message || `New Family Code: ${data.newFamilyCode}`);
+        return { success: true, newFamilyCode: data.newFamilyCode };
+      } else {
+        showToast("error", "Split Failed", data.error || "Could not split family.");
+        return { success: false, error: data.error };
+      }
+    } catch (err: any) {
+      console.error("splitStudentFamily error:", err);
+      showToast("error", "Network Error", err.message || "Failed to split family.");
+      return { success: false, error: err.message };
+    }
+  };
+
+  const transferStudentFamily = async (studentId: string, targetFamilyCode: string) => {
+    try {
+      const res = await fetch("/api/families", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "TRANSFER", studentId, targetFamilyCode }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        await refreshStudents();
+        await refreshBilling();
+        showToast("success", "Family Transferred", data.message || `Linked to ${targetFamilyCode}`);
+        return { success: true };
+      } else {
+        showToast("error", "Transfer Failed", data.error || "Could not transfer family.");
+        return { success: false, error: data.error };
+      }
+    } catch (err: any) {
+      console.error("transferStudentFamily error:", err);
+      showToast("error", "Network Error", err.message || "Failed to transfer family.");
+      return { success: false, error: err.message };
+    }
+  };
+
+  const mergeFamilies = async (sourceFamilyCode: string, targetFamilyCode: string) => {
+    try {
+      const res = await fetch("/api/families", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "MERGE_FAMILIES", sourceFamilyCode, targetFamilyCode }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        await refreshStudents();
+        await refreshBilling();
+        showToast("success", "Families Merged", data.message || `Merged into ${targetFamilyCode}`);
+        return { success: true };
+      } else {
+        showToast("error", "Merge Failed", data.error || "Could not merge families.");
+        return { success: false, error: data.error };
+      }
+    } catch (err: any) {
+      console.error("mergeFamilies error:", err);
+      showToast("error", "Network Error", err.message || "Failed to merge families.");
+      return { success: false, error: err.message };
+    }
+  };
+
   const addEvent = async (title: string, day: number, weekday: string) => {
     try {
       const res = await fetch("/api/events", {
@@ -1975,6 +2062,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         updateStudentStatus,
         promoteStudent,
         editStudentDetails,
+        splitStudentFamily,
+        transferStudentFamily,
+        mergeFamilies,
         activeTab,
         setActiveTab,
         eventsList,
@@ -1993,6 +2083,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         refreshData,
         refreshStudents,
         refreshBilling,
+        billingSummary,
         fetchBillingSummary,
         refreshAttendance,
         refreshHomework,
