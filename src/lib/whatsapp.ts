@@ -165,3 +165,52 @@ export function generateFeeReminderWhatsAppUrl(params: FeeReminderParams): strin
   }
   return `https://wa.me/${cleaned}?text=${encodeURIComponent(text)}`;
 }
+
+export interface BirthdayWishParams {
+  student: {
+    id: string;
+    name: string;
+    class: string;
+    section: string;
+    rollNo?: string;
+    admissionNo?: string;
+    fatherName?: string;
+    fatherMobile?: string;
+    motherMobile?: string;
+    parentPhone?: string;
+  };
+  schoolInfo: {
+    name?: string;
+    phone?: string;
+  };
+}
+
+export function generateBirthdayWishText(params: BirthdayWishParams): string {
+  const { student, schoolInfo } = params;
+  const schoolName = schoolInfo?.name || "St. GNG School";
+  const className = student.class ? `Class ${student.class}${student.section ? `-${student.section}` : ""}` : "School";
+  
+  return `🎂 *Happy Birthday ${student.name}!* 🎉
+
+Dear Parent,
+Heartiest congratulations and warmest wishes from the entire *${schoolName}* Family on the birthday of your beloved child, *${student.name}* (${className})! 💐✨
+
+May Almighty bless them with radiant health, sharp wisdom, joyful laughter, and shining success in every step of life. 🌟
+
+With warm regards & blessings,
+*Principal & Management*
+— *${schoolName}*`.trim();
+}
+
+export function generateBirthdayWishWhatsAppUrl(params: BirthdayWishParams): string {
+  const { student } = params;
+  const targetPhone = student.fatherMobile || student.motherMobile || student.parentPhone || "";
+  const cleaned = cleanPhoneNumber(targetPhone);
+  const text = generateBirthdayWishText(params);
+  
+  if (!cleaned) {
+    return `https://wa.me/?text=${encodeURIComponent(text)}`;
+  }
+  return `https://wa.me/${cleaned}?text=${encodeURIComponent(text)}`;
+}
+

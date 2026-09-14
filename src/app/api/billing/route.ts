@@ -103,7 +103,7 @@ export async function GET(request: Request) {
     const skip = (page - 1) * limit;
 
     let ledgerWhere: any = {};
-    let receiptWhere: any = {};
+    let receiptWhere: any = { status: { not: "REVERSED" } };
     let chargesWhere: any = { entryType: EntryType.CHARGE };
     let discountsWhere: any = { entryType: EntryType.DISCOUNT };
     let scopedStudentIds: string[] | undefined = undefined;
@@ -159,6 +159,7 @@ export async function GET(request: Request) {
       discountsWhere = { entryType: EntryType.DISCOUNT, studentId: { in: scopedStudentIds } };
 
       const teacherConditions: any[] = [
+        { status: { not: "REVERSED" } },
         {
           OR: [
             { studentId: { in: scopedStudentIds } },
@@ -250,6 +251,7 @@ export async function GET(request: Request) {
       };
 
       const parentConditions: any[] = [
+        { status: { not: "REVERSED" } },
         studentIdParam
           ? { studentId: studentIdParam }
           : { OR: [{ studentId: { in: authorizedStudentIds } }, { parentProfileId: parentProfile.id }] }
@@ -278,7 +280,9 @@ export async function GET(request: Request) {
         discountsWhere.studentId = studentIdParam;
       }
 
-      const adminConditions: any[] = [];
+      const adminConditions: any[] = [
+        { status: { not: "REVERSED" } }
+      ];
       if (studentIdParam) adminConditions.push({ studentId: studentIdParam });
       if (receiptIdParam) adminConditions.push({ id: receiptIdParam });
       if (receiptNoParam) adminConditions.push({ receiptNumber: receiptNoParam });
@@ -356,6 +360,7 @@ export async function GET(request: Request) {
           paymentMethod: true,
           transactionReference: true,
           amountPaid: true,
+          status: true,
           remarks: true,
           createdAt: true,
           createdById: true,
@@ -591,6 +596,7 @@ export async function GET(request: Request) {
         studentId: r.studentId || (studentIds.length === 1 ? (studentIds[0] as string) : null),
         studentIds,
         receiptNo: r.receiptNumber,
+        status: r.status || "ACTIVE",
         manualReceiptNo: r.manualReceiptNo || meta?.manualReceiptNo || null,
         amount: r.amountPaid,
         subtotal,

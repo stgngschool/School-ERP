@@ -175,6 +175,7 @@ export interface MockReceipt {
   paymentMethod: string;
   transactionRef: string;
   createdAt: string;
+  status?: string;
   items: {
     name: string;
     amount: number;

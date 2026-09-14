@@ -59,6 +59,7 @@ import {
 } from "@/lib/classUtils";
 import {
   generateFeeReminderWhatsAppUrl,
+  generateBirthdayWishWhatsAppUrl,
   isDueUpToCurrentMonth,
   getCurrentMonthName,
 } from "@/lib/whatsapp";
@@ -2342,10 +2343,9 @@ export default function AdminDashboard() {
             const girlsFirstNames = ["diya", "anya", "ananya", "kiara", "priya", "sneha", "pooja", "neha", "riya", "simran", "kajal", "preeti", "shalini", "deepika", "kiran", "aisha", "jyoti", "meera", "geeta", "rekha", "sunita", "anita", "kavita", "mamta", "babita", "sapna", "poonam", "usha"];
             const totalStudents = students.length;
             const girlsCount = students.filter(s => {
-              if (s.gender) {
-                const g = s.gender.toUpperCase();
-                return g === "FEMALE" || g === "GIRL";
-              }
+              const g = (s.gender || "").trim().toUpperCase();
+              if (g.startsWith("FEM") || g === "GIRL" || g === "F") return true;
+              if (g === "MALE" || g === "BOY" || g === "M") return false;
               const firstName = s.name.split(" ")[0].toLowerCase();
               return girlsFirstNames.includes(firstName);
             }).length;
@@ -2370,30 +2370,39 @@ export default function AdminDashboard() {
             }).length;
             const oldStudentsCount = totalStudents - newAdmissionsCount;
 
-            const totalEarnings = receipts.reduce((sum, r) => sum + r.amount, 0);
+            const activeReceipts = receipts.filter(r => r.status !== "REVERSED");
+            const totalEarnings = activeReceipts.reduce((sum, r) => sum + r.amount, 0);
+
+            // Dues Segregation: Current Overdue (due up to current month) vs Future Academic Year Target
+            const currentDueItems = dueItems.filter(d => d.status === "UNPAID" && isDueUpToCurrentMonth(d));
+            const currentOverdueAmount = currentDueItems.reduce((sum, d) => sum + d.amount, 0);
+            const futureUnbilledItems = dueItems.filter(d => d.status === "UNPAID" && !isDueUpToCurrentMonth(d));
+            const futureUnbilledAmount = futureUnbilledItems.reduce((sum, d) => sum + d.amount, 0);
             const totalDues = dueItems.reduce((sum, d) => sum + d.amount, 0);
+
+            // Collection Efficiency:
+            // 1. Current Recovery Rate (Collected vs total due demand up to current month)
+            const currentTotalDemand = totalEarnings + currentOverdueAmount;
+            const currentCollectionEfficiency = currentTotalDemand > 0 ? Math.round((totalEarnings / currentTotalDemand) * 100) : 0;
+
+            // 2. Full Session Annual Realization (Collected vs full 12-month budget target)
             const totalSales = totalEarnings + totalDues;
-            const collectionEfficiency = totalSales > 0 ? Math.round((totalEarnings / totalSales) * 100) : 0;
+            const fullYearCollectionEfficiency = totalSales > 0 ? Math.round((totalEarnings / totalSales) * 100) : 0;
+            const collectionEfficiency = currentCollectionEfficiency;
 
-            const cashTally = receipts.filter(r => r.method === "CASH").reduce((sum, r) => sum + r.amount, 0);
-            const upiTally = receipts.filter(r => r.method === "UPI").reduce((sum, r) => sum + r.amount, 0);
-            const bankTally = receipts.filter(r => r.method === "BANK_TRANSFER" || r.method === "CHEQUE" || r.method === "ONLINE").reduce((sum, r) => sum + r.amount, 0);
+            const cashTally = activeReceipts.filter(r => r.method === "CASH").reduce((sum, r) => sum + r.amount, 0);
+            const upiTally = activeReceipts.filter(r => r.method === "UPI").reduce((sum, r) => sum + r.amount, 0);
+            const bankTally = activeReceipts.filter(r => r.method === "BANK_TRANSFER" || r.method === "CHEQUE" || r.method === "ONLINE").reduce((sum, r) => sum + r.amount, 0);
 
-            const todayStr = (() => {
-              const d = new Date();
-              return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-            })();
-            const todayReceipts = receipts.filter(r => r.createdAt === todayStr);
+            const todayStr = getTodayIST();
+            const todayReceipts = activeReceipts.filter(r => r.createdAt === todayStr);
             const todayCash = todayReceipts.filter(r => r.method === "CASH").reduce((sum, r) => sum + r.amount, 0);
             const todayUpi = todayReceipts.filter(r => r.method === "UPI").reduce((sum, r) => sum + r.amount, 0);
             const todayBank = todayReceipts.filter(r => r.method === "BANK_TRANSFER" || r.method === "CHEQUE" || r.method === "ONLINE").reduce((sum, r) => sum + r.amount, 0);
             const todayTotal = todayReceipts.reduce((sum, r) => sum + r.amount, 0);
 
-            const currentMonthStr = (() => {
-              const d = new Date();
-              return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-            })();
-            const monthlyReceipts = receipts.filter(r => r.createdAt.startsWith(currentMonthStr));
+            const currentMonthStr = todayStr.slice(0, 7);
+            const monthlyReceipts = activeReceipts.filter(r => r.createdAt.startsWith(currentMonthStr));
             const monthlyTotal = monthlyReceipts.reduce((sum, r) => sum + r.amount, 0);
 
             const staffUsers = usersList.filter(u => u.role === "ADMIN" || u.role === "ACCOUNTANT" || u.role === "TEACHER");
@@ -2435,40 +2444,88 @@ export default function AdminDashboard() {
               .sort((a, b) => b.amount - a.amount)
               .slice(0, 5);
 
-            const currentMonth = new Date().getMonth();
-            const upcomingBirthdays = students
-              .filter(s => {
-                if (!s.dob) return false;
-                const iso = formatCanonicalDOBIso(s.dob);
-                if (!iso) return false;
-                const parts = iso.split("-");
-                if (parts.length < 2) return false;
-                const bMonth = parseInt(parts[1], 10) - 1;
-                return bMonth === currentMonth;
-              })
+            // Date-wise rolling birthday window: excludes past days, celebrates today, and looks ahead 30 days
+            const todayISTStrForBday = getTodayIST(); // "YYYY-MM-DD"
+            const [bYearCurStr, bMonthCurStr, bDayCurStr] = todayISTStrForBday.split("-");
+            const curCalYear = parseInt(bYearCurStr, 10);
+            const curCalMonthIdx = parseInt(bMonthCurStr, 10) - 1;
+            const curCalDay = parseInt(bDayCurStr, 10);
+            const todayCalMidnight = new Date(curCalYear, curCalMonthIdx, curCalDay);
+
+            const allComputedBirthdays = students
               .map(s => {
+                if (!s.dob) return null;
                 const iso = formatCanonicalDOBIso(s.dob);
-                const [, mStr, dStr] = (iso || "").split("-");
-                const day = parseInt(dStr, 10) || 1;
-                const mIndex = (parseInt(mStr, 10) || 1) - 1;
-                const monthName = MONTHS_CANONICAL[mIndex] || "Jan";
+                if (!iso) return null;
+                const parts = iso.split("-");
+                if (parts.length < 3) return null;
+                const birthYear = parseInt(parts[0], 10);
+                const bMonthIdx = parseInt(parts[1], 10) - 1;
+                const bDay = parseInt(parts[2], 10);
+
+                const bDateThisYear = new Date(curCalYear, bMonthIdx, bDay);
+                let diffTime = bDateThisYear.getTime() - todayCalMidnight.getTime();
+                let diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+                // If birthday has already passed this calendar year (diffDays < 0), calculate for next year
+                if (diffDays < 0) {
+                  const bDateNextYear = new Date(curCalYear + 1, bMonthIdx, bDay);
+                  diffDays = Math.round((bDateNextYear.getTime() - todayCalMidnight.getTime()) / (1000 * 60 * 60 * 24));
+                }
+
+                const turningAge = (diffDays === 0 || bMonthIdx >= curCalMonthIdx)
+                  ? curCalYear - birthYear
+                  : curCalYear + 1 - birthYear;
+
+                const monthName = MONTHS_CANONICAL[bMonthIdx] || "Jan";
+
                 return {
                   id: s.id,
                   name: s.name,
-                  classSection: `${s.class}-${s.section}`,
-                  day,
-                  month: monthName
+                  class: s.class || "",
+                  section: s.section || "",
+                  classSection: `${s.class || ""}${s.section ? `-${s.section}` : ""}`,
+                  day: bDay,
+                  month: monthName,
+                  monthIdx: bMonthIdx,
+                  birthYear,
+                  formattedDob: `${bDay} ${monthName} ${birthYear}`,
+                  diffDays,
+                  turningAge: turningAge > 0 && turningAge < 35 ? turningAge : null,
+                  phone: s.fatherMobile || s.motherMobile || s.parentPhone || "",
                 };
               })
-              .sort((a, b) => a.day - b.day)
-              .slice(0, 8);
+              .filter(Boolean) as Array<{
+                id: string;
+                name: string;
+                class: string;
+                section: string;
+                classSection: string;
+                day: number;
+                month: string;
+                monthIdx: number;
+                birthYear: number;
+                formattedDob: string;
+                diffDays: number;
+                turningAge: number | null;
+                phone: string;
+              }>;
 
-            const totalAttendance = attendances.length;
-            const presentCount = attendances.filter(a => a.status === "PRESENT").length;
-            const absentCount = attendances.filter(a => a.status === "ABSENT").length;
-            const lateCount = attendances.filter(a => a.status === "LATE").length;
-            const leaveCount = attendances.filter(a => a.status === "LEAVE").length;
+            allComputedBirthdays.sort((a, b) => a.diffDays - b.diffDays);
+            const todayBirthdays = allComputedBirthdays.filter(b => b.diffDays === 0);
+            const upcomingBirthdays = allComputedBirthdays.filter(b => b.diffDays > 0 && b.diffDays <= 30).slice(0, 10);
+
+            const todayDateStr = getTodayIST();
+            const todayAttendances = attendances.filter(a => getISTDateString(a.date) === todayDateStr);
+            const hasTodayAttendance = todayAttendances.length > 0;
+            const activeAttendanceList = hasTodayAttendance ? todayAttendances : attendances;
+            const totalAttendance = activeAttendanceList.length;
+            const presentCount = activeAttendanceList.filter(a => a.status === "PRESENT").length;
+            const absentCount = activeAttendanceList.filter(a => a.status === "ABSENT").length;
+            const lateCount = activeAttendanceList.filter(a => a.status === "LATE").length;
+            const leaveCount = activeAttendanceList.filter(a => a.status === "LEAVE").length;
             const attendanceRate = totalAttendance > 0 ? Math.round((presentCount / totalAttendance) * 100) : 0;
+            const latestRecordedDate = !hasTodayAttendance && attendances.length > 0 ? getISTDateString(attendances[0].date) : null;
 
             const monthlyRevenue: { [key: string]: number } = {
               "Apr": 0, "May": 0, "Jun": 0, "Jul": 0, "Aug": 0, "Sep": 0,
@@ -2478,10 +2535,13 @@ export default function AdminDashboard() {
               "04": "Apr", "05": "May", "06": "Jun", "07": "Jul", "08": "Aug", "09": "Sep",
               "10": "Oct", "11": "Nov", "12": "Dec", "01": "Jan", "02": "Feb", "03": "Mar"
             };
-            receipts.forEach(r => {
-              const monthKey = r.createdAt.split("-")[1];
+            activeReceipts.forEach(r => {
+              const parts = r.createdAt.split("-");
+              const yearKey = parseInt(parts[0], 10);
+              const monthKey = parts[1];
               const monthName = monthMapping[monthKey];
-              if (monthName) {
+              const expectedYear = parseInt(monthKey, 10) >= 4 ? sessionStartYear : sessionStartYear + 1;
+              if (monthName && (!yearKey || yearKey === expectedYear)) {
                 monthlyRevenue[monthName] += r.amount;
               }
             });
@@ -2786,16 +2846,21 @@ export default function AdminDashboard() {
                           <div className="h-8 w-28 bg-slate-200/70 rounded-xl" />
                         </div>
                       ) : (
-                        <h3 className="text-2xl font-black text-rose-600 tracking-tight mt-4">
-                          {isCardMasked("dues") ? (
-                            <span className="font-mono tracking-widest text-slate-400 select-none">₹••••••</span>
-                          ) : (
-                            formatP(totalDues)
-                          )}
-                        </h3>
+                        <div className="mt-4">
+                          <h3 className="text-2xl font-black text-rose-600 tracking-tight">
+                            {isCardMasked("dues") ? (
+                              <span className="font-mono tracking-widest text-slate-400 select-none">₹••••••</span>
+                            ) : (
+                              formatP(currentOverdueAmount)
+                            )}
+                          </h3>
+                          <p className="text-[10px] text-slate-400 font-bold mt-0.5">
+                            Full Year Target: <span className="text-slate-600 font-extrabold">{isCardMasked("dues") ? "₹••••••" : formatP(totalDues)}</span>
+                          </p>
+                        </div>
                       )}
                     </div>
-                    <div className="mt-5 pt-4 border-t border-slate-100/80">
+                    <div className="mt-4 pt-3 border-t border-slate-100/80">
                       {!billingLoaded ? (
                         <div className="space-y-2 animate-pulse">
                           <div className="h-3 w-full bg-slate-100 rounded-full" />
@@ -2804,14 +2869,14 @@ export default function AdminDashboard() {
                       ) : (
                         <>
                           <div className="flex items-center justify-between text-xs mb-1.5">
-                            <span className="text-slate-400 font-semibold">Pending Ratio</span>
+                            <span className="text-slate-400 font-semibold">Overdue Ratio</span>
                             <span className="text-rose-600 font-black">{100 - collectionEfficiency}%</span>
                           </div>
                           <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
                             <div className="h-full bg-rose-500 rounded-full" style={{ width: `${100 - collectionEfficiency}%` }} />
                           </div>
                           <div className="flex items-center justify-between mt-2.5 text-[10px] text-slate-400 font-medium">
-                            <span>Invoices: <strong className="text-slate-600">{dueItems.filter(d => d.status === "UNPAID").length} unpaid</strong></span>
+                            <span>Invoices: <strong className="text-slate-600">{currentDueItems.length} overdue</strong> <span className="text-slate-400">({dueItems.filter(d => d.status === "UNPAID").length} total)</span></span>
                             <button onClick={() => setActiveTab("defaulters")} className="text-indigo-600 hover:underline font-bold cursor-pointer">View List</button>
                           </div>
                         </>
@@ -2824,7 +2889,7 @@ export default function AdminDashboard() {
                     <div>
                       <div className="flex justify-between items-center">
                         <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Attendance Rate</span>
-                        <span className="p-2.5 bg-emerald-50 text-emerald-600 rounded-2xl">
+                        <span className={`p-2.5 rounded-2xl ${hasTodayAttendance ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"}`}>
                           <UserCheck className="w-5 h-5" />
                         </span>
                       </div>
@@ -2833,13 +2898,27 @@ export default function AdminDashboard() {
                           <div className="h-8 w-20 bg-slate-200/70 rounded-xl" />
                         </div>
                       ) : (
-                        <h3 className="text-2xl font-black text-emerald-600 tracking-tight mt-4">{attendanceRate}%</h3>
+                        <div className="mt-4">
+                          <div className="flex items-baseline gap-2">
+                            <h3 className={`text-2xl font-black tracking-tight ${hasTodayAttendance ? "text-emerald-600" : "text-amber-600"}`}>
+                              {hasTodayAttendance ? `${attendanceRate}%` : "Pending"}
+                            </h3>
+                            {!hasTodayAttendance && latestRecordedDate && (
+                              <span className="text-[10px] font-bold text-slate-400">
+                                (Last: {attendanceRate}%)
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[10px] font-bold text-slate-400 mt-0.5">
+                            {hasTodayAttendance ? "Today's Live Roll Call" : "Today not marked yet"}
+                          </p>
+                        </div>
                       )}
                     </div>
-                    <div className="mt-5 pt-4 border-t border-slate-100/80">
+                    <div className="mt-4 pt-3 border-t border-slate-100/80">
                       {!attendanceLoaded ? (
                         <div className="h-8 w-full bg-slate-100 rounded-xl animate-pulse" />
-                      ) : (
+                      ) : hasTodayAttendance ? (
                         <div className="grid grid-cols-4 gap-1 text-center text-[10px] font-bold text-slate-500">
                           <div className="bg-emerald-50 text-emerald-700 py-1 rounded">
                             <p className="text-[8px] uppercase">Pres</p>
@@ -2857,6 +2936,11 @@ export default function AdminDashboard() {
                             <p className="text-[8px] uppercase">Lv</p>
                             <p>{leaveCount}</p>
                           </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 bg-amber-50/70 px-2.5 py-1.5 rounded-xl border border-amber-100">
+                          <span className="text-amber-800 font-semibold">Roll call not taken</span>
+                          <button onClick={() => setActiveTab("attendance")} className="text-indigo-600 hover:underline font-extrabold cursor-pointer">Mark Now</button>
                         </div>
                       )}
                     </div>
@@ -2882,10 +2966,11 @@ export default function AdminDashboard() {
 
                     <div className="relative w-full h-[210px] flex items-end justify-between gap-1.5 sm:gap-3 pt-6 pb-2 px-1">
                       {monthsOrder.map((m) => {
-                        const val = monthlyRevenue[m] || 0;
-                        const heightPct = maxRev > 0 ? Math.max((val / maxRev) * 100, val > 0 ? 8 : 3) : 3;
+                        const valPaise = monthlyRevenue[m] || 0;
+                        const valRupees = Math.round(valPaise / 100);
+                        const heightPct = maxRev > 0 ? Math.max((valPaise / maxRev) * 100, valPaise > 0 ? 8 : 3) : 3;
                         const isCurrentMonth = m.toLowerCase() === currentMonthShort.toLowerCase();
-                        const isHighest = val === Math.max(...Object.values(monthlyRevenue)) && val > 0;
+                        const isHighest = valPaise === Math.max(...Object.values(monthlyRevenue)) && valPaise > 0;
 
                         return (
                           <div 
@@ -2895,13 +2980,13 @@ export default function AdminDashboard() {
                             {/* Hover Tooltip Popup */}
                             <div className="absolute -top-9 opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none bg-slate-900 text-white text-[10px] font-bold py-1 px-2 rounded-lg shadow-xl whitespace-nowrap z-20">
                               <span className="text-slate-300">{m}: </span>
-                              <span className="text-amber-300 font-black">{isCardMasked("chart") ? "₹••••••" : `₹${val.toLocaleString('en-IN')}`}</span>
+                              <span className="text-amber-300 font-black">{isCardMasked("chart") ? "₹••••••" : `₹${valRupees.toLocaleString('en-IN')}`}</span>
                             </div>
 
                             {/* Top value label for active months */}
-                            {val > 0 && (
+                            {valRupees > 0 && (
                               <span className="text-[9px] font-black text-slate-700 mb-1.5 tracking-tight group-hover:text-indigo-600">
-                                {isCardMasked("chart") ? "••••" : (val >= 100000 ? `₹${(val / 100000).toFixed(1)}L` : val >= 1000 ? `₹${Math.round(val / 1000)}k` : `₹${val}`)}
+                                {isCardMasked("chart") ? "••••" : (valRupees >= 100000 ? `₹${(valRupees / 100000).toFixed(1)}L` : valRupees >= 1000 ? `₹${(valRupees / 1000).toFixed(valRupees % 1000 === 0 ? 0 : 1)}k` : `₹${valRupees}`)}
                               </span>
                             )}
 
@@ -2912,12 +2997,12 @@ export default function AdminDashboard() {
                                 className={`w-full rounded-xl transition-all duration-500 relative ${
                                   isHighest
                                     ? "bg-gradient-to-t from-indigo-600 to-indigo-400 shadow-md shadow-indigo-500/30"
-                                    : val > 0
+                                    : valRupees > 0
                                     ? "bg-gradient-to-t from-indigo-500 to-indigo-300"
                                     : "bg-slate-200/50"
                                 } group-hover:brightness-110`}
                               >
-                                {isCurrentMonth && val > 0 && (
+                                {isCurrentMonth && valRupees > 0 && (
                                   <span className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-amber-400 border border-white animate-ping" />
                                 )}
                               </div>
@@ -2972,7 +3057,7 @@ export default function AdminDashboard() {
                       {/* Percent Center Label */}
                       <div className="absolute text-center">
                         <p className="text-2xl font-black text-slate-800 tracking-tight">{collectionEfficiency}%</p>
-                        <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Collected</p>
+                        <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Recovered</p>
                       </div>
                     </div>
 
@@ -2987,9 +3072,13 @@ export default function AdminDashboard() {
                       <div className="flex justify-between items-center">
                         <div className="flex items-center gap-2">
                           <span className="w-2.5 h-2.5 rounded-full bg-rose-500 block" />
-                          <span className="text-slate-500">Outstanding Dues</span>
+                          <span className="text-slate-500">Overdue (Till Now)</span>
                         </div>
-                        <span className="text-rose-600 font-black">{isCardMasked("efficiency") ? "₹••••••" : formatP(totalDues)}</span>
+                        <span className="text-rose-600 font-black">{isCardMasked("efficiency") ? "₹••••••" : formatP(currentOverdueAmount)}</span>
+                      </div>
+                      <div className="flex justify-between items-center pt-1 border-t border-slate-100/60 text-[11px]">
+                        <span className="text-slate-400">Full Year Target</span>
+                        <span className="text-slate-600 font-bold">{isCardMasked("efficiency") ? "₹••••••" : formatP(totalSales)} ({fullYearCollectionEfficiency}%)</span>
                       </div>
                     </div>
                   </div>
@@ -3339,34 +3428,147 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
-                {/* ─── Upcoming Birthdays Section ─── */}
-                <div className="bg-white rounded-3xl border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.015)] p-6">
-                  <div className="flex justify-between items-center mb-5">
-                    <div>
-                      <h4 className="text-sm font-black text-slate-800 tracking-tight">Upcoming Birthdays</h4>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Students born in {new Date().toLocaleString("default", { month: "long" })}</p>
+                {/* ─── Student Birthdays Hub (Date-Wise Rolling Window + Today's Hero Celebration) ─── */}
+                <div className="bg-white rounded-3xl border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.015)] p-6 space-y-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+                    <div className="flex items-center gap-3">
+                      <span className="p-2.5 bg-gradient-to-br from-pink-500 to-amber-500 text-white rounded-2xl shadow-sm">
+                        <Gift className="w-5 h-5 animate-bounce" />
+                      </span>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-black text-slate-900 tracking-tight">Student Birthdays Hub</h4>
+                          {todayBirthdays.length > 0 && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-pink-100 text-pink-700 border border-pink-200 animate-pulse">
+                              🎉 {todayBirthdays.length} {todayBirthdays.length === 1 ? "Birthday" : "Birthdays"} Today!
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+                          Live calendar • Today & next 30 days
+                        </p>
+                      </div>
                     </div>
-                    <span className="p-2 bg-pink-50 text-pink-500 rounded-2xl">
-                      <Gift className="w-5 h-5 animate-bounce" />
-                    </span>
+                    <div className="text-right hidden sm:block">
+                      <span className="text-[10px] font-extrabold bg-slate-100 text-slate-600 px-3 py-1 rounded-xl border border-slate-200/60">
+                        {todayBirthdays.length + upcomingBirthdays.length} upcoming celebrations
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
-                    {upcomingBirthdays.map((s) => (
-                      <div key={s.id} className="flex items-center gap-3.5 p-3 rounded-2xl border border-slate-100 bg-slate-50/50 hover:bg-white hover:border-pink-100 hover:shadow-sm transition-all group">
-                        <div className="w-10 h-10 rounded-2xl bg-white border border-slate-200/60 text-slate-800 flex flex-col items-center justify-center font-black shadow-sm group-hover:border-pink-200/50 transition-colors">
-                          <span className="text-xs">{s.day}</span>
-                          <span className="text-[8px] text-pink-500 uppercase font-black">{s.month}</span>
-                        </div>
-                        <div className="overflow-hidden">
-                          <p className="text-xs font-black text-slate-800 truncate group-hover:text-pink-600 transition-colors">{s.name}</p>
-                          <p className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">{s.classSection}</p>
-                        </div>
+                  {/* ── Today's Birthdays Highlight Section (If Any Today) ── */}
+                  {todayBirthdays.length > 0 && (
+                    <div className="space-y-2.5">
+                      <div className="flex items-center gap-1.5 text-xs font-black text-pink-600 uppercase tracking-wider">
+                        <Sparkles className="w-4 h-4 text-amber-500 animate-spin" />
+                        <span>Celebrating Today ({todayBirthdays.length})</span>
                       </div>
-                    ))}
-                    {upcomingBirthdays.length === 0 && (
-                      <p className="col-span-full py-8 text-center text-xs text-slate-400 font-semibold italic">No birthdays this month.</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                        {todayBirthdays.map((s) => (
+                          <div
+                            key={s.id}
+                            className="relative overflow-hidden rounded-2xl border-2 border-pink-200 bg-gradient-to-br from-pink-50/90 via-amber-50/50 to-white p-4 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-pink-500 to-amber-500 text-white flex flex-col items-center justify-center font-black shadow-sm shrink-0">
+                                  <span className="text-sm leading-none font-black">{s.day}</span>
+                                  <span className="text-[9px] uppercase tracking-wider font-extrabold">{s.month}</span>
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    <p className="text-sm font-black text-slate-900 truncate">{s.name}</p>
+                                    <span className="text-xs">🎂</span>
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-x-1.5 text-[11px] font-bold text-slate-500 mt-0.5">
+                                    <span>Class {s.classSection}</span>
+                                    <span>•</span>
+                                    <span className="text-slate-700 font-extrabold">{s.formattedDob}</span>
+                                    {s.turningAge && (
+                                      <>
+                                        <span>•</span>
+                                        <span className="text-pink-600 font-black">Turning {s.turningAge} today</span>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              <span className="px-2 py-0.5 bg-pink-500 text-white rounded-lg text-[9px] font-black uppercase tracking-wider shrink-0 shadow-2xs animate-pulse">
+                                Today!
+                              </span>
+                            </div>
+
+                            <div className="mt-3.5 pt-3 border-t border-pink-100/80 flex items-center justify-between gap-2">
+                              {s.phone ? (
+                                <a
+                                  href={generateBirthdayWishWhatsAppUrl({
+                                    student: {
+                                      id: s.id,
+                                      name: s.name,
+                                      class: s.class,
+                                      section: s.section,
+                                      fatherMobile: s.phone,
+                                    },
+                                    schoolInfo,
+                                  })}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title={`Send Birthday Wish on WhatsApp to ${s.name}'s parents`}
+                                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition-all shadow-xs active:scale-95 cursor-pointer"
+                                >
+                                  <WhatsAppIcon className="w-3.5 h-3.5 text-white shrink-0" />
+                                  <span>Wish on WhatsApp</span>
+                                </a>
+                              ) : (
+                                <div className="w-full flex items-center justify-center gap-1 text-[10px] text-slate-400 font-semibold italic py-1">
+                                  <span>Parent contact not registered</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Upcoming Birthdays (Next 30 Days) ── */}
+                  <div className="space-y-2.5">
+                    {todayBirthdays.length > 0 && (
+                      <p className="text-xs font-black text-slate-400 uppercase tracking-wider">
+                        Coming Up Next
+                      </p>
                     )}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                      {upcomingBirthdays.map((s) => (
+                        <div
+                          key={s.id}
+                          className="flex items-center gap-3 p-3 rounded-2xl border border-slate-100 bg-slate-50/50 hover:bg-white hover:border-indigo-100 hover:shadow-xs transition-all group"
+                        >
+                          <div className="w-10 h-10 rounded-2xl bg-white border border-slate-200/60 text-slate-800 flex flex-col items-center justify-center font-black shadow-2xs group-hover:border-indigo-300 transition-colors shrink-0">
+                            <span className="text-xs font-black leading-none">{s.day}</span>
+                            <span className="text-[8px] text-indigo-600 uppercase font-black">{s.month}</span>
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-black text-slate-800 truncate group-hover:text-indigo-600 transition-colors">{s.name}</p>
+                            <div className="flex items-center justify-between text-[9px] font-bold text-slate-400 mt-0.5">
+                              <span>Class {s.classSection} • {s.birthYear}</span>
+                              <span className={`px-1.5 py-0.5 rounded font-black ${
+                                s.diffDays === 1
+                                  ? "bg-amber-100 text-amber-800"
+                                  : "bg-slate-200/70 text-slate-600"
+                              }`}>
+                                {s.diffDays === 1 ? "Tomorrow" : `In ${s.diffDays}d`}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      {todayBirthdays.length === 0 && upcomingBirthdays.length === 0 && (
+                        <p className="col-span-full py-8 text-center text-xs text-slate-400 font-semibold italic">
+                          🎉 No upcoming birthdays in the next 30 days.
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
 
