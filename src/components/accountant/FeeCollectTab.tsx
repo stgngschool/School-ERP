@@ -38,7 +38,8 @@ interface FeeCollectTabProps {
     paymentMethod: string,
     transactionRef?: string,
     parentProfileId?: string,
-    manualReceiptNo?: string
+    manualReceiptNo?: string,
+    idempotencyKey?: string
   ) => Promise<{ success: boolean; receipt?: any; error?: string }>;
   refreshBilling: () => Promise<void>;
 }
@@ -373,31 +374,42 @@ export default function FeeCollectTab({
         return;
       }
 
-      let finalTransactionRef = transactionRef;
+      let finalTransactionRef = transactionRef ? transactionRef.trim() : "";
       if (payMethod === "CHEQUE") {
         finalTransactionRef = `Cheque No: ${chequeNo || "N/A"} | Bank: ${chequeBank || "N/A"}${
           chequeDate ? ` | Date: ${chequeDate}` : ""
         }`;
       } else if (payMethod === "BANK_TRANSFER") {
-        finalTransactionRef = `${transferMode} Ref: ${transactionRef || "N/A"}${
-          chequeBank ? ` | Bank: ${chequeBank}` : ""
-        }`;
-      } else if (payMethod === "UPI" && transactionRef) {
-        finalTransactionRef = `UPI UTR: ${transactionRef}`;
+        finalTransactionRef = transactionRef && transactionRef.trim()
+          ? `${transferMode} Ref: ${transactionRef.trim()}${chequeBank ? ` | Bank: ${chequeBank}` : ""}`
+          : `${transferMode}${chequeBank ? ` | Bank: ${chequeBank}` : ""}`;
+      } else if (payMethod === "UPI") {
+        finalTransactionRef = transactionRef && transactionRef.trim()
+          ? `UPI UTR: ${transactionRef.trim()}`
+          : "";
       }
 
       const cleanManualNo = manualReceiptNo && manualReceiptNo.trim() ? manualReceiptNo.trim() : undefined;
+      const clientKey = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : undefined;
       const payRes = await recordItemizedPayment(
         null,
         items,
         payMethod,
-        finalTransactionRef,
+        finalTransactionRef || undefined,
         undefined,
-        cleanManualNo
+        cleanManualNo,
+        clientKey
       );
       if (!payRes.success) {
         showToast("error", "Payment Failed", payRes.error || "Payment failed. Please check backend logs or try again.");
         setIsSubmittingPayment(false);
+        return;
+      }
+
+      if (payRes.receipt?.isDuplicateRetry) {
+        showToast("warning", "Payment Already Recorded", `This transaction was already recorded earlier (Receipt #${payRes.receipt.receiptNo}).`);
+        setIsSubmittingPayment(false);
+        await refreshBilling();
         return;
       }
 
@@ -1340,15 +1352,19 @@ export default function FeeCollectTab({
                         </p>
 
                         <div className="w-full space-y-1 text-left">
-                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">
-                            UPI Transaction Ref ID (UTR)
-                          </label>
+                          <div className="flex items-center justify-between">
+                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">
+                              UPI Transaction Ref ID (UTR)
+                            </label>
+                            <span className="text-[8px] font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.5 rounded tracking-wider">
+                              OPTIONAL
+                            </span>
+                          </div>
                           <input
                             type="text"
-                            required
                             value={transactionRef}
                             onChange={(e) => setTransactionRef(e.target.value)}
-                            placeholder="Enter 12-digit UPI Ref/UTR No..."
+                            placeholder="Optional UTR / Ref No (khali bhi chhod sakte hain)..."
                             className="w-full text-xs font-semibold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-650 focus:ring-1 focus:ring-indigo-100"
                           />
                         </div>
@@ -1440,13 +1456,17 @@ export default function FeeCollectTab({
                         </div>
                       </div>
                       <div>
-                        <label className="text-[8px] font-bold text-slate-500 block mb-1">
-                          UTR / Transaction Ref No. *
-                        </label>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[8px] font-bold text-slate-500 block">
+                            UTR / Transaction Ref No.
+                          </label>
+                          <span className="text-[8px] font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.5 rounded tracking-wider">
+                            OPTIONAL
+                          </span>
+                        </div>
                         <input
                           type="text"
-                          required
-                          placeholder="Enter UTR reference number..."
+                          placeholder="Optional UTR reference number (leave blank if not available)..."
                           value={transactionRef}
                           onChange={(e) => setTransactionRef(e.target.value)}
                           className="w-full text-xs font-bold p-2 bg-white border border-blue-200 rounded-lg focus:outline-none focus:border-blue-500 shadow-2xs"

@@ -44,6 +44,10 @@ const FamilyHubTab = dynamic(() => import("@/components/accountant/FamilyHubTab"
   loading: ConsoleLoadingFallback,
   ssr: false,
 });
+const StudentRegistrationForm = dynamic(() => import("@/components/StudentRegistrationForm"), {
+  loading: ConsoleLoadingFallback,
+  ssr: false,
+});
 
 import ModernDatePicker from "@/components/ModernDatePicker";
 import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
@@ -142,6 +146,7 @@ import {
   QrCode,
   Lock,
   Unlock,
+  RefreshCw,
 } from "lucide-react";
 
 import { getGroupedReceiptItems } from "@/lib/receipts";
@@ -872,6 +877,7 @@ export default function AdminDashboard() {
 
   // Receipts/Ledger sub-tab and filter states
   const [ledgerSubTab, setLedgerSubTab] = useState<"receipts" | "raw">("receipts");
+  const [isSyncingLedger, setIsSyncingLedger] = useState(false);
   const [ledgerSearch, setLedgerSearch] = useState("");
   const [ledgerDate, setLedgerDate] = useState("");
   const [ledgerStaffFilter, setLedgerStaffFilter] = useState("All");
@@ -1636,21 +1642,31 @@ export default function AdminDashboard() {
         return;
       }
 
-      let finalTransactionRef = transactionRef;
+      let finalTransactionRef = transactionRef ? transactionRef.trim() : "";
       if (payMethod === "CHEQUE") {
         finalTransactionRef = `Cheque No: ${chequeNo || "N/A"} | Bank: ${chequeBank || "N/A"}${chequeDate ? ` | Date: ${chequeDate}` : ""}`;
       } else if (payMethod === "BANK_TRANSFER") {
-        finalTransactionRef = `${transferMode} Ref: ${transactionRef || "N/A"}${chequeBank ? ` | Bank: ${chequeBank}` : ""}`;
-      } else if (payMethod === "UPI" && transactionRef) {
-        finalTransactionRef = `UPI UTR: ${transactionRef}`;
+        finalTransactionRef = transactionRef && transactionRef.trim()
+          ? `${transferMode} Ref: ${transactionRef.trim()}${chequeBank ? ` | Bank: ${chequeBank}` : ""}`
+          : `${transferMode}${chequeBank ? ` | Bank: ${chequeBank}` : ""}`;
+      } else if (payMethod === "UPI") {
+        finalTransactionRef = transactionRef && transactionRef.trim() ? `UPI UTR: ${transactionRef.trim()}` : "";
       }
 
       // Send null for studentId to trigger unified family checkout
       const cleanManualNo = manualReceiptNo && manualReceiptNo.trim() ? manualReceiptNo.trim() : undefined;
-      const payRes = await recordItemizedPayment(null, items, payMethod, finalTransactionRef, undefined, cleanManualNo);
+      const clientKey = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : undefined;
+      const payRes = await recordItemizedPayment(null, items, payMethod, finalTransactionRef || undefined, undefined, cleanManualNo, clientKey);
       if (!payRes.success) {
         showToast("error", "Payment Failed", payRes.error || "Payment failed. Please check backend logs or try again.");
         setIsSubmittingPayment(false);
+        return;
+      }
+
+      if (payRes.receipt?.isDuplicateRetry) {
+        showToast("warning", "Payment Already Recorded", `This payment was already submitted (Receipt #${payRes.receipt.receiptNo}).`);
+        setIsSubmittingPayment(false);
+        await refreshBilling();
         return;
       }
 
@@ -4368,15 +4384,19 @@ export default function AdminDashboard() {
 
                                 
                                 <div className="w-full space-y-1 text-left">
-                                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">
-                                    UPI Transaction Ref ID (UTR)
-                                  </label>
+                                  <div className="flex items-center justify-between">
+                                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">
+                                      UPI Transaction Ref ID (UTR)
+                                    </label>
+                                    <span className="text-[8px] font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.5 rounded tracking-wider">
+                                      OPTIONAL
+                                    </span>
+                                  </div>
                                   <input
                                     type="text"
-                                    required
                                     value={transactionRef}
                                     onChange={(e) => setTransactionRef(e.target.value)}
-                                    placeholder="Enter 12-digit UPI Ref/UTR No..."
+                                    placeholder="Optional UTR / Ref No (khali bhi chhod sakte hain)..."
                                     className="w-full text-xs font-semibold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-650 focus:ring-1 focus:ring-indigo-100"
                                   />
                                 </div>
@@ -4460,11 +4480,15 @@ export default function AdminDashboard() {
                                 </div>
                               </div>
                               <div>
-                                <label className="text-[8px] font-bold text-slate-500 block mb-1">UTR / Transaction Ref No. *</label>
+                                <div className="flex items-center justify-between mb-1">
+                                  <label className="text-[8px] font-bold text-slate-500 block">UTR / Transaction Ref No.</label>
+                                  <span className="text-[8px] font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.5 rounded tracking-wider">
+                                    OPTIONAL
+                                  </span>
+                                </div>
                                 <input
                                   type="text"
-                                  required
-                                  placeholder="Enter UTR reference number..."
+                                  placeholder="Optional UTR reference number (leave blank if not available)..."
                                   value={transactionRef}
                                   onChange={(e) => setTransactionRef(e.target.value)}
                                   className="w-full text-xs font-bold p-2 bg-white border border-blue-200 rounded-lg focus:outline-none focus:border-blue-500 shadow-2xs"
@@ -7152,579 +7176,7 @@ export default function AdminDashboard() {
                 </div>
               )
             ) : importMode === "single" ? (
-                <div className="max-w-3xl mx-auto space-y-5 bg-white border border-slate-200/60 p-6 sm:p-8 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] animate-scale-in">
-                    <div>
-                      <h3 className="text-xs font-black uppercase text-emerald-700 bg-emerald-50 border border-emerald-100/50 px-3 py-1 rounded-xl inline-flex items-center gap-1.5 tracking-wider">
-                        <PlusCircle className="h-3.5 w-3.5" /> Register Student Profile
-                      </h3>
-                      <p className="text-[10px] text-slate-400 font-semibold mt-1.5">
-                        Fill details accurately. Parent accounts are auto-linked or created.
-                      </p>
-                    </div>
-
-                    <form onSubmit={handleRegisterStudent} className="space-y-6">
-                      {/* Section 1: Student Info & Demographics */}
-                      <div className="space-y-4">
-                        <h4 className="text-[10px] font-black uppercase text-indigo-600 tracking-wider border-b border-indigo-50 pb-1.5">
-                          1. Personal & Demographics Information
-                        </h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                          <div className="md:col-span-2">
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Student Name *</label>
-                            <input
-                              type="text"
-                              required
-                              value={stdName}
-                              onChange={(e) => setStdName(e.target.value)}
-                              placeholder="Full Name"
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">DOB *</label>
-                            <ModernDatePicker
-                              value={stdDob}
-                              onChange={(val) => setStdDob(val)}
-                              placeholder="Select DOB"
-                              className="w-full"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          <div>
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Admission Number</label>
-                            <input
-                              type="text"
-                              value={stdAdmissionNo}
-                              onChange={(e) => setStdAdmissionNo(e.target.value)}
-                              placeholder="e.g. ADM-2026-0001 (Optional)"
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Roll Number</label>
-                            <input
-                              type="text"
-                              value={stdRollNo}
-                              onChange={(e) => setStdRollNo(e.target.value)}
-                              placeholder="e.g. 10-A-01 (Optional)"
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Gender</label>
-                            <select
-                              value={stdGender}
-                              onChange={(e) => setStdGender(e.target.value)}
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5 cursor-pointer"
-                            >
-                              <option value="">Select Gender</option>
-                              <option value="MALE">Male</option>
-                              <option value="FEMALE">Female</option>
-                              <option value="OTHER">Other</option>
-                            </select>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                          <div>
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Aadhaar Number</label>
-                            <input
-                              type="text"
-                              maxLength={12}
-                              value={stdAadhaar}
-                              onChange={(e) => setStdAadhaar(e.target.value.replace(/\D/g, ""))}
-                              placeholder="12-digit number"
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Caste Category</label>
-                            <select
-                              value={stdCategory}
-                              onChange={(e) => setStdCategory(e.target.value)}
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
-                            >
-                              <option value="General">General</option>
-                              <option value="OBC">OBC</option>
-                              <option value="SC">SC</option>
-                              <option value="ST">ST</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Religion</label>
-                            <input
-                              type="text"
-                              value={stdReligion}
-                              onChange={(e) => setStdReligion(e.target.value)}
-                              placeholder="e.g. Hinduism, Islam..."
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Disability</label>
-                            <select
-                              value={stdDisability}
-                              onChange={(e) => setStdDisability(e.target.value)}
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
-                            >
-                              <option value="No">No</option>
-                              <option value="Yes (Visual)">Yes (Visual)</option>
-                              <option value="Yes (Hearing)">Yes (Hearing)</option>
-                              <option value="Yes (Locomotor)">Yes (Locomotor)</option>
-                              <option value="Yes (Other)">Yes (Other)</option>
-                            </select>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                          <div>
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Mother Tongue</label>
-                            <input
-                              type="text"
-                              value={stdMotherTongue}
-                              onChange={(e) => setStdMotherTongue(e.target.value)}
-                              placeholder="e.g. Hindi, English..."
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Nationality</label>
-                            <input
-                              type="text"
-                              value={stdNationality}
-                              onChange={(e) => setStdNationality(e.target.value)}
-                              placeholder="e.g. Indian..."
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">RTE Student? (100% Waiver)</label>
-                            <select
-                              value={stdIsRte ? "Yes" : "No"}
-                              onChange={(e) => setStdIsRte(e.target.value === "Yes")}
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
-                            >
-                              <option value="No">No (Standard Billing)</option>
-                              <option value="Yes">Yes (RTE 100% Fee Waiver)</option>
-                            </select>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Section 2: Academic Details & Previous School */}
-                      <div className="space-y-4">
-                        <h4 className="text-[10px] font-black uppercase text-indigo-600 tracking-wider border-b border-indigo-50 pb-1.5">
-                          2. Academic History & Admissions
-                        </h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                          <div>
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Class</label>
-                            <select
-                              value={stdClass}
-                              onChange={(e) => {
-                                const selectedName = e.target.value;
-                                setStdClass(selectedName);
-                                const matched = filteredSortedClasses.find(c => c.name === selectedName);
-                                if (matched) {
-                                  setStdSection(matched.section);
-                                }
-                              }}
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
-                            >
-                              <option value="">Select Class</option>
-                              {sortClasses(Array.from(new Set(filteredSortedClasses.map(c => c.name)))).map((className) => (
-                                <option key={className} value={className}>{className}</option>
-                              ))}
-                            </select>
-                          </div>
-                          <div>
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Section</label>
-                            <select
-                              value={stdSection}
-                              onChange={(e) => setStdSection(e.target.value)}
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
-                            >
-                              <option value="">Select Section</option>
-                              {classes.filter(c => c.name === stdClass).map((cls) => (
-                                <option key={cls.id} value={cls.section}>{cls.section}</option>
-                              ))}
-                            </select>
-                          </div>
-                          <div>
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Admission Date</label>
-                            <ModernDatePicker
-                              value={stdAdmissionDate}
-                              onChange={(val) => setStdAdmissionDate(val)}
-                              placeholder="Admission Date"
-                              className="w-full"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Board Registration No.</label>
-                            <input
-                              type="text"
-                              value={stdBoardRegNo}
-                              onChange={(e) => setStdBoardRegNo(e.target.value)}
-                              placeholder="CBSE / Board ID"
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 bg-slate-50/50 p-3 rounded-xl border border-slate-100">
-                          <div>
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Previous School Name</label>
-                            <input
-                              type="text"
-                              value={stdPrevSchoolName}
-                              onChange={(e) => setStdPrevSchoolName(e.target.value)}
-                              placeholder="DPS, KV, etc."
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-white focus:border-indigo-600"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Previous Class Passed</label>
-                            <input
-                              type="text"
-                              value={stdPrevClassPassed}
-                              onChange={(e) => setStdPrevClassPassed(e.target.value)}
-                              placeholder="Class 9Passed"
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-white focus:border-indigo-600"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">TC Number</label>
-                            <input
-                              type="text"
-                              value={stdTcNumber}
-                              onChange={(e) => setStdTcNumber(e.target.value)}
-                              placeholder="Transfer Certificate No."
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-white focus:border-indigo-600"
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Section 3: Family Information & Finance */}
-                      <div className="space-y-4">
-                        <h4 className="text-[10px] font-black uppercase text-indigo-600 tracking-wider border-b border-indigo-50 pb-1.5">
-                          3. Family Details & Household Finance
-                        </h4>
-
-                        {/* Family ID Selector */}
-                        <div className="bg-slate-50 border border-slate-200/80 p-4 rounded-xl space-y-3 mb-4">
-                          <label className="text-[10px] font-black uppercase text-slate-500 tracking-wider block">
-                            Family Linkage Setup (Sibling Grouping)
-                          </label>
-                          <div className="flex gap-4">
-                            <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
-                              <input
-                                type="radio"
-                                name="stdFamilyIdMode"
-                                value="auto"
-                                checked={stdFamilyIdMode === "auto"}
-                                onChange={() => {
-                                  setStdFamilyIdMode("auto");
-                                  // Clear prefilled parent fields
-                                  setStdFatherName("");
-                                  setStdFatherMobile("");
-                                  setStdParentEmail("");
-                                  setStdAddress("");
-                                  setStdParentOccupation("");
-                                  setStdFamilyIncome("");
-                                  setStdEmergencyName("");
-                                  setStdEmergencyPhone("");
-                                  setStdMotherName("");
-                                  setStdMotherMobile("");
-                                  setStdFatherAadhaar("");
-                                  setStdMotherAadhaar("");
-                                }}
-                                className="text-indigo-600 focus:ring-indigo-500 h-4 w-4"
-                              />
-                              Auto-Generate New Family ID
-                            </label>
-                            <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
-                              <input
-                                type="radio"
-                                name="stdFamilyIdMode"
-                                value="existing"
-                                checked={stdFamilyIdMode === "existing"}
-                                onChange={() => setStdFamilyIdMode("existing")}
-                                className="text-indigo-600 focus:ring-indigo-500 h-4 w-4"
-                              />
-                              Link to Existing Family / Sibling
-                            </label>
-                          </div>
-
-                          {stdFamilyIdMode === "existing" && (
-                            <div className="space-y-1">
-                              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                                Select Sibling's Family Code *
-                              </label>
-                              <select
-                                required={stdFamilyIdMode === "existing"}
-                                value={stdSelectedFamilyCode}
-                                onChange={(e) => setStdSelectedFamilyCode(e.target.value)}
-                                className="w-full text-xs font-semibold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-white focus:border-indigo-600 cursor-pointer"
-                              >
-                                <option value="">-- Select Sibling's Family --</option>
-                                {parentFamilies.map((fam) => (
-                                  <option key={fam.familyCode} value={fam.familyCode}>
-                                    {fam.familyCode} - {fam.parentName} ({fam.parentPhone})
-                                  </option>
-                                ))}
-                              </select>
-                              <p className="text-[9px] text-amber-600 font-bold mt-1">
-                                Notice: Linking to an existing Family will automatically inherit all parent details, email, and address.
-                              </p>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div>
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Father's Name *</label>
-                            <input
-                              type="text"
-                              required
-                              disabled={stdFamilyIdMode === "existing"}
-                              value={stdFatherName}
-                              onChange={(e) => setStdFatherName(e.target.value)}
-                              placeholder="Father Name"
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5 disabled:opacity-75 disabled:bg-slate-100"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Mother's Name</label>
-                            <input
-                              type="text"
-                              disabled={stdFamilyIdMode === "existing"}
-                              value={stdMotherName}
-                              onChange={(e) => setStdMotherName(e.target.value)}
-                              placeholder="Mother Name"
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5 disabled:opacity-75 disabled:bg-slate-100"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                          <div>
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Father's Mobile *</label>
-                            <input
-                              type="text"
-                              required
-                              maxLength={10}
-                              disabled={stdFamilyIdMode === "existing"}
-                              value={stdFatherMobile}
-                              onChange={(e) => setStdFatherMobile(e.target.value.replace(/\D/g, ""))}
-                              placeholder="10-digit number"
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5 disabled:opacity-75 disabled:bg-slate-100"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Mother's Mobile</label>
-                            <input
-                              type="text"
-                              maxLength={10}
-                              disabled={stdFamilyIdMode === "existing"}
-                              value={stdMotherMobile}
-                              onChange={(e) => setStdMotherMobile(e.target.value.replace(/\D/g, ""))}
-                              placeholder="10-digit number"
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5 disabled:opacity-75 disabled:bg-slate-100"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Father's Aadhaar</label>
-                            <input
-                              type="text"
-                              maxLength={12}
-                              disabled={stdFamilyIdMode === "existing"}
-                              value={stdFatherAadhaar}
-                              onChange={(e) => setStdFatherAadhaar(e.target.value.replace(/\D/g, ""))}
-                              placeholder="12-digit number"
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5 disabled:opacity-75 disabled:bg-slate-100"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                          <div>
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Mother's Aadhaar</label>
-                            <input
-                              type="text"
-                              maxLength={12}
-                              disabled={stdFamilyIdMode === "existing"}
-                              value={stdMotherAadhaar}
-                              onChange={(e) => setStdMotherAadhaar(e.target.value.replace(/\D/g, ""))}
-                              placeholder="12-digit number"
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5 disabled:opacity-75 disabled:bg-slate-100"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Parent's Profession</label>
-                            <input
-                              type="text"
-                              disabled={stdFamilyIdMode === "existing"}
-                              value={stdParentOccupation}
-                              onChange={(e) => setStdParentOccupation(e.target.value)}
-                              placeholder="e.g. Service, Business, Farmer..."
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5 disabled:opacity-75 disabled:bg-slate-100"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Family Annual Income (Rs.)</label>
-                            <input
-                              type="number"
-                              disabled={stdFamilyIdMode === "existing"}
-                              value={stdFamilyIncome}
-                              onChange={(e) => setStdFamilyIncome(e.target.value)}
-                              placeholder="Annual salary/earnings"
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5 disabled:opacity-75 disabled:bg-slate-100"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                          <div className="md:col-span-1">
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Parent Email</label>
-                            <input
-                              type="email"
-                              disabled={stdFamilyIdMode === "existing"}
-                              value={stdParentEmail}
-                              onChange={(e) => setStdParentEmail(e.target.value)}
-                              placeholder="parent@email.com"
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5 disabled:opacity-75 disabled:bg-slate-100"
-                            />
-                          </div>
-                          <div className="md:col-span-2">
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Residential Address *</label>
-                            <input
-                              type="text"
-                              required
-                              disabled={stdFamilyIdMode === "existing"}
-                              value={stdAddress}
-                              onChange={(e) => setStdAddress(e.target.value)}
-                              placeholder="House No, Street, Landmark..."
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5 disabled:opacity-75 disabled:bg-slate-100"
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Section 4: Emergency & Transport */}
-                      <div className="space-y-4">
-                        <h4 className="text-[10px] font-black uppercase text-indigo-600 tracking-wider border-b border-indigo-50 pb-1.5">
-                          4. Safety, Emergency & Transport
-                        </h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50/30 p-3.5 rounded-2xl border border-slate-100/80">
-                          <div>
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Emergency Contact Person</label>
-                            <input
-                              type="text"
-                              disabled={stdFamilyIdMode === "existing"}
-                              value={stdEmergencyName}
-                              onChange={(e) => setStdEmergencyName(e.target.value)}
-                              placeholder="Guardian / Contact Name"
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-white focus:border-indigo-600 disabled:opacity-75 disabled:bg-slate-100"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Emergency Phone Number</label>
-                            <input
-                              type="text"
-                              maxLength={10}
-                              disabled={stdFamilyIdMode === "existing"}
-                              value={stdEmergencyPhone}
-                              onChange={(e) => setStdEmergencyPhone(e.target.value.replace(/\D/g, ""))}
-                              placeholder="10-digit mobile"
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-white focus:border-indigo-600 disabled:opacity-75 disabled:bg-slate-100"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                          <div>
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Mode of Transport</label>
-                            <select
-                              value={stdTransportMode}
-                              onChange={(e) => setStdTransportMode(e.target.value)}
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
-                            >
-                              <option value="Self">Self / Walk</option>
-                              <option value="School Bus">School Bus</option>
-                              <option value="Private Cab">Private Cab / Van</option>
-                              <option value="Parents Drop">Parents Drop</option>
-                            </select>
-                          </div>
-                          {stdTransportMode === "School Bus" && (
-                            <>
-                              <div>
-                                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Bus Route</label>
-                                <input
-                                  type="text"
-                                  value={stdBusRoute}
-                                  onChange={(e) => setStdBusRoute(e.target.value)}
-                                  placeholder="e.g. Route-B"
-                                  className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
-                                />
-                              </div>
-                              <div>
-                                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Bus Stop Name</label>
-                                <input
-                                  type="text"
-                                  value={stdBusStop}
-                                  onChange={(e) => setStdBusStop(e.target.value)}
-                                  placeholder="e.g. Sector-15 Crossing"
-                                  className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-emerald-600 shadow-2xs py-2.5 px-3.5"
-                                />
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Section 5: Initial Billing */}
-                      <div className="space-y-3">
-                        <h4 className="text-[10px] font-black uppercase text-indigo-600 tracking-wider border-b border-indigo-50 pb-1.5">
-                          5. Auto-Assigned Class Fees Preview
-                        </h4>
-                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-2.5">
-                          {feeStructures.filter(fs => fs.className === stdClass || fs.className === "All").length > 0 ? (
-                            <div className="space-y-2">
-                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                                Registering in Class {stdClass} will automatically assign these fees:
-                              </p>
-                              <div className="grid grid-cols-1 gap-1.5 max-h-[160px] overflow-y-auto">
-                                {feeStructures
-                                  .filter(fs => fs.className === stdClass || fs.className === "All")
-                                  .map((struct, index) => (
-                                    <div key={index} className="flex justify-between items-center bg-white p-2 border border-slate-100 rounded-lg text-xs font-semibold text-slate-700">
-                                      <div className="flex items-center gap-1.5">
-                                        <span className="font-bold text-slate-800">{struct.name}</span>
-                                        <span className="text-[8px] font-black uppercase bg-indigo-50 text-indigo-700 px-1 py-0.5 rounded">
-                                          {struct.frequency}
-                                        </span>
-                                      </div>
-                                      <span className="font-extrabold text-indigo-600">₹{struct.total.toLocaleString("en-IN")}</span>
-                                    </div>
-                                  ))}
-                              </div>
-                            </div>
-                          ) : (
-                            <p className="text-[10px] text-slate-400 font-semibold italic py-2 text-center">
-                              No automated fee structures configured for Class {stdClass} or 'All Classes'. Config them under "Configure Fees".
-                            </p>
-                          )}
-                        </div>
-                      </div>
-
-                      <button type="submit" className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-500/10 cursor-pointer">
-                        Register Student Account & Dues
-                      </button>
-                    </form>
-                </div>
+                <StudentRegistrationForm onSuccess={() => setImportMode("directory")} />
               ) : (
                 // Bulk import mode panel
                 <div className="space-y-6 max-w-2xl bg-white border border-slate-200/60 p-6 sm:p-8 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] animate-scale-in">
@@ -9296,6 +8748,20 @@ export default function AdminDashboard() {
 
                 <div className="flex items-center gap-2 flex-wrap">
                   <button
+                    type="button"
+                    onClick={async () => {
+                      setIsSyncingLedger(true);
+                      await refreshBilling().finally(() => setIsSyncingLedger(false));
+                    }}
+                    disabled={isSyncingLedger}
+                    className="flex items-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 active:scale-95 border border-indigo-200/80 rounded-xl py-2 px-3 text-[10px] font-bold text-indigo-800 cursor-pointer transition-all shadow-2xs disabled:opacity-50"
+                    title="Sync latest receipts and ledger from server"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 text-indigo-600 ${isSyncingLedger ? "animate-spin" : ""}`} />
+                    <span>{isSyncingLedger ? "Syncing..." : "Sync"}</span>
+                  </button>
+
+                  <button
                     onClick={() => {
                       exportMasterFeeRegisterXLS({
                         students,
@@ -9410,7 +8876,7 @@ export default function AdminDashboard() {
                         r.manualReceiptNo?.toLowerCase().includes(ledgerSearch.toLowerCase()) ||
                         r.studentName?.toLowerCase().includes(ledgerSearch.toLowerCase()) ||
                         r.details?.toLowerCase().includes(ledgerSearch.toLowerCase());
-                      const matchesDate = !ledgerDate || r.createdAt.startsWith(ledgerDate);
+                      const matchesDate = !ledgerDate || (Boolean(r.createdAt) && r.createdAt.startsWith(ledgerDate));
                       return matchesStaff && matchesSearch && matchesDate;
                     });
 
@@ -9559,7 +9025,7 @@ export default function AdminDashboard() {
                           r.manualReceiptNo?.toLowerCase().includes(ledgerSearch.toLowerCase()) ||
                           r.studentName?.toLowerCase().includes(ledgerSearch.toLowerCase()) ||
                           r.details?.toLowerCase().includes(ledgerSearch.toLowerCase());
-                        const matchesDate = !ledgerDate || r.createdAt.startsWith(ledgerDate);
+                        const matchesDate = !ledgerDate || (Boolean(r.createdAt) && r.createdAt.startsWith(ledgerDate));
                         return matchesStaff && matchesSearch && matchesDate;
                       });
 
@@ -9794,7 +9260,7 @@ export default function AdminDashboard() {
                                 </div>
                                 <div className="text-right">
                                   <span className={`text-[10px] font-black ${isCharge ? "text-rose-600" : "text-emerald-600"}`}>
-                                    {isCharge ? "+" : "-"} {formatP(log.amount)}
+                                    {isCharge ? "+" : "-"} {formatP(Math.abs(log.amount))}
                                   </span>
                                   <span
                                     className={`block text-[7px] font-black uppercase tracking-wider mt-1 px-1.5 py-0.5 rounded border self-end ${
@@ -11099,12 +10565,12 @@ export default function AdminDashboard() {
                   <div className="border-t border-slate-200/60 pt-1">
                     {activeReceipt.arrears === 0 ? (
                       <span className="text-emerald-700 font-black flex items-center gap-1">
-                        ✅ All selected invoice dues are fully settled.
+                        ✅ All dues are fully settled.
                       </span>
                     ) : (
                       <div className="space-y-0.5">
                         <span className="text-amber-700 font-bold block">
-                          ⚠️ Balance remaining on this invoice: <strong className="font-black text-slate-900">{formatP(activeReceipt.arrears)}</strong>
+                          ⚠️ Total Remaining Dues: <strong className="font-black text-slate-900">{formatP(activeReceipt.arrears)}</strong>
                         </span>
                         {activeReceipt.otherArrears > 0 && (
                           <span className="text-slate-400 font-semibold block text-[7px]">
@@ -11136,7 +10602,7 @@ export default function AdminDashboard() {
                   </div>
                   {activeReceipt.arrears > 0 && (
                     <div className="flex justify-between items-center text-amber-700 font-bold border-t border-slate-200/60 pt-1 text-[8px]">
-                      <span>Balance on Invoice:</span>
+                      <span>Total Remaining Dues:</span>
                       <span className="font-black text-rose-600">{formatP(activeReceipt.arrears)}</span>
                     </div>
                   )}

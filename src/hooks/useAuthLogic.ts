@@ -293,10 +293,12 @@ export function useAuthLogic(refreshData: (user?: MockUser | null) => Promise<vo
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleVisibilityChange);
     window.addEventListener("online", handleOnline);
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleVisibilityChange);
       window.removeEventListener("online", handleOnline);
       clearTimeout(visibilityDebounce);
     };

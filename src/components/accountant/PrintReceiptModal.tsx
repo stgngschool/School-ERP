@@ -310,12 +310,12 @@ export default function PrintReceiptModal({
               <div className="border-t border-slate-200/60 pt-1">
                 {activeReceipt.arrears === 0 ? (
                   <span className="text-emerald-700 font-black flex items-center gap-1">
-                    ✅ All selected invoice dues are fully settled.
+                    ✅ All dues are fully settled.
                   </span>
                 ) : (
                   <div className="space-y-0.5">
                     <span className="text-amber-700 font-bold block">
-                      ⚠️ Balance remaining on this invoice:{" "}
+                      ⚠️ Total Remaining Dues:{" "}
                       <strong className="font-black text-slate-900">{formatP(activeReceipt.arrears)}</strong>
                     </span>
                     {activeReceipt.otherArrears > 0 && (
@@ -352,7 +352,7 @@ export default function PrintReceiptModal({
               </div>
               {activeReceipt.arrears > 0 && (
                 <div className="flex justify-between items-center text-amber-700 font-bold border-t border-slate-200/60 pt-1 text-[8px]">
-                  <span>Balance on Invoice:</span>
+                  <span>Total Remaining Dues:</span>
                   <span className="font-black text-rose-600">{formatP(activeReceipt.arrears)}</span>
                 </div>
               )}

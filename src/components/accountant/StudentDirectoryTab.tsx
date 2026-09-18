@@ -17,12 +17,18 @@ import {
   ChevronDown,
   CreditCard,
   Users,
+  PlusCircle,
   FileSpreadsheet,
   Download,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import { sortClasses, normalizeClassName, normalizeSectionName } from "@/lib/classUtils";
 import StudentProfileModal from "@/components/StudentProfileModal";
 import EditStudentModal from "@/components/modals/EditStudentModal";
+
+const StudentRegistrationForm = dynamic(() => import("@/components/StudentRegistrationForm"), {
+  ssr: false,
+});
 import {
   exportStudentDirectoryXLS,
   exportStudentDirectoryCSV,
@@ -57,6 +63,9 @@ export default function StudentDirectoryTab({ onCollectFee }: StudentDirectoryTa
   const [dirCategoryFilter, setDirCategoryFilter] = useState("ALL");
   const [dirDuesFilter, setDirDuesFilter] = useState("ALL");
   const [showMobileFilters, setShowMobileFilters] = useState(false);
+
+  // Subtab switcher state (Directory vs Single Registration)
+  const [studentSubTab, setStudentSubTab] = useState<"directory" | "single">("directory");
 
   // Selection & menu states
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
@@ -228,13 +237,59 @@ export default function StudentDirectoryTab({ onCollectFee }: StudentDirectoryTa
 
   return (
     <div className="space-y-5 animate-fade-in font-sans text-left">
-      {/* ── HEADER / INTRO ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200/70 pb-4">
-        <div>
-          <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-            <Users className="w-5 h-5 text-indigo-600" />
-            Student Directory
-          </h2>
+      {/* ── SUB-TAB SWITCHER (Student Directory vs Single Registration) ── */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 pb-3 no-print">
+        <div className="flex flex-wrap gap-2">
+          {[
+            { id: "directory", label: "Student Directory", icon: Users, activeClass: "bg-indigo-50 border-indigo-200 text-indigo-700 shadow-2xs font-black" },
+            { id: "single", label: "Single Registration", icon: PlusCircle, activeClass: "bg-emerald-50 border-emerald-200 text-emerald-700 shadow-2xs font-black" },
+          ].map((subTab) => {
+            const Icon = subTab.icon;
+            const isActive = studentSubTab === subTab.id;
+            return (
+              <button
+                key={subTab.id}
+                type="button"
+                onClick={() => setStudentSubTab(subTab.id as any)}
+                className={`flex items-center gap-1.5 px-4 py-2 border rounded-2xl text-xs transition-all cursor-pointer ${
+                  isActive
+                    ? subTab.activeClass
+                    : "bg-white border-slate-200/70 text-slate-500 hover:text-slate-700 hover:bg-slate-50 font-bold"
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {subTab.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {studentSubTab === "directory" && (
+          <button
+            type="button"
+            onClick={() => setStudentSubTab("single")}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-2xl text-xs font-black transition-all cursor-pointer shadow-sm shadow-emerald-600/20"
+          >
+            <PlusCircle className="h-3.5 w-3.5" />
+            <span>+ New Admission</span>
+          </button>
+        )}
+      </div>
+
+      {studentSubTab === "single" ? (
+        <StudentRegistrationForm
+          onSuccess={() => setStudentSubTab("directory")}
+          onCancel={() => setStudentSubTab("directory")}
+        />
+      ) : (
+        <>
+          {/* ── HEADER / INTRO ── */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200/70 pb-4">
+            <div>
+              <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                <Users className="w-5 h-5 text-indigo-600" />
+                Student Directory
+              </h2>
           <p className="text-xs text-slate-500 font-semibold mt-0.5">
             Search, filter, view full ledgers, update student lifecycle status, or collect fees.
           </p>
@@ -1168,6 +1223,8 @@ export default function StudentDirectoryTab({ onCollectFee }: StudentDirectoryTa
           </div>
         )}
       </div>
+        </>
+      )}
 
       {/* ── MODALS ── */}
 

@@ -23,7 +23,8 @@ interface ParentFinanceTabProps {
     paymentMethod: string,
     transactionRef?: string,
     parentProfileId?: string,
-    manualReceiptNo?: string
+    manualReceiptNo?: string,
+    idempotencyKey?: string
   ) => Promise<any>;
   onOpenReceipt: (receipt: any) => void;
   billingLoaded?: boolean;

@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useState, useDeferredValue, useMemo } from "react";
-import { Printer, User, Users } from "lucide-react";
+import { Printer, User, Users, RefreshCw } from "lucide-react";
 import { formatP, numberToIndianWords } from "@/lib/currency";
 import ModernDatePicker from "@/components/ModernDatePicker";
 import { getTodayIST } from "@/lib/dateUtils";
-import { MockReceipt, MockLedgerEntry, MockStudent, MockUser } from "@/context/AuthContext";
+import { MockReceipt, MockLedgerEntry, MockStudent, MockUser, useAuth } from "@/context/AuthContext";
 
 interface LedgerReceiptsTabProps {
   receipts: MockReceipt[];
@@ -24,6 +24,8 @@ export default function LedgerReceiptsTab({
   billingLoaded,
   onOpenReceipt,
 }: LedgerReceiptsTabProps) {
+  const { refreshBilling } = useAuth();
+  const [isSyncing, setIsSyncing] = useState(false);
   const [ledgerSubTab, setLedgerSubTab] = useState<"receipts" | "raw">("receipts");
   const [ledgerSearch, setLedgerSearch] = useState("");
   const deferredLedgerSearch = useDeferredValue(ledgerSearch);
@@ -71,30 +73,46 @@ export default function LedgerReceiptsTab({
           </p>
         </div>
 
-        {/* Sub-tab toggle buttons */}
-        <div className="flex bg-slate-100 p-0.5 rounded-xl self-start sm:self-auto select-none shrink-0 border border-slate-200/40">
+        <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
           <button
             type="button"
-            onClick={() => setLedgerSubTab("receipts")}
-            className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all cursor-pointer ${
-              ledgerSubTab === "receipts"
-                ? "bg-white text-indigo-700 shadow-sm"
-                : "text-slate-500 hover:text-slate-800"
-            }`}
+            onClick={async () => {
+              setIsSyncing(true);
+              await refreshBilling().finally(() => setIsSyncing(false));
+            }}
+            disabled={isSyncing}
+            className="flex items-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 active:scale-95 border border-indigo-200/80 rounded-xl py-1.5 px-3 text-[10px] font-bold text-indigo-800 cursor-pointer transition-all shadow-2xs disabled:opacity-50"
+            title="Sync latest receipts and ledger from server"
           >
-            Receipt Vouchers
+            <RefreshCw className={`h-3.5 w-3.5 text-indigo-600 ${isSyncing ? "animate-spin" : ""}`} />
+            <span>{isSyncing ? "Syncing..." : "Sync"}</span>
           </button>
-          <button
-            type="button"
-            onClick={() => setLedgerSubTab("raw")}
-            className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all cursor-pointer ${
-              ledgerSubTab === "raw"
-                ? "bg-white text-indigo-700 shadow-sm"
-                : "text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            Double-Entry Ledger
-          </button>
+
+          {/* Sub-tab toggle buttons */}
+          <div className="flex bg-slate-100 p-0.5 rounded-xl select-none shrink-0 border border-slate-200/40">
+            <button
+              type="button"
+              onClick={() => setLedgerSubTab("receipts")}
+              className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all cursor-pointer ${
+                ledgerSubTab === "receipts"
+                  ? "bg-white text-indigo-700 shadow-sm"
+                  : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              Receipt Vouchers
+            </button>
+            <button
+              type="button"
+              onClick={() => setLedgerSubTab("raw")}
+              className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all cursor-pointer ${
+                ledgerSubTab === "raw"
+                  ? "bg-white text-indigo-700 shadow-sm"
+                  : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              Double-Entry Ledger
+            </button>
+          </div>
         </div>
       </div>
 
@@ -583,7 +601,7 @@ export default function LedgerReceiptsTab({
                           <span
                             className={`text-[10px] font-black ${isCharge ? "text-rose-600" : "text-emerald-600"}`}
                           >
-                            {isCharge ? "+" : "-"} {formatP(log.amount)}
+                            {isCharge ? "+" : "-"} {formatP(Math.abs(log.amount))}
                           </span>
                           <span
                             className={`block text-[7px] font-black uppercase tracking-wider mt-1 px-1.5 py-0.5 rounded border self-end ${

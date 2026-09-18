@@ -820,6 +820,9 @@ export async function POST(request: Request) {
         },
       });
 
+      // Invalidate server cache post-commit
+      clearServerBillingCache();
+
       return NextResponse.json({ success: true, entry });
     }
 
@@ -911,6 +914,9 @@ export async function POST(request: Request) {
         return updated;
       });
 
+      // Invalidate server cache post-commit
+      clearServerBillingCache();
+
       return NextResponse.json({ success: true, receipt: reversedReceipt });
     }
 
@@ -920,49 +926,6 @@ export async function POST(request: Request) {
 
     if (items.length > 100) {
       return NextResponse.json({ error: "Cannot process more than 100 items in a single payment transaction." }, { status: 400 });
-    }
-
-    // ── O-01: Idempotency Protection for Payment Transactions
-    const rawIdempotencyKey = request.headers.get("Idempotency-Key") || body.idempotencyKey || (paymentMethod !== "CASH" ? transactionRef : null);
-    const idempotencyKey = rawIdempotencyKey ? String(rawIdempotencyKey).trim() : null;
-
-    if (idempotencyKey) {
-      const existingReceipt = await db.receipt.findFirst({
-        where: {
-          OR: [
-            { transactionReference: idempotencyKey },
-            { remarks: { contains: `"idempotencyKey":"${idempotencyKey}"` } },
-          ],
-        },
-        include: { student: { include: { class: true } } },
-      });
-
-      if (existingReceipt) {
-        const snapshot = existingReceipt.remarks ? JSON.parse(existingReceipt.remarks) : {};
-        return NextResponse.json({
-          success: true,
-          receipt: {
-            id: existingReceipt.id,
-            studentId: existingReceipt.studentId,
-            receiptNo: existingReceipt.receiptNumber,
-            manualReceiptNo: existingReceipt.manualReceiptNo || snapshot.manualReceiptNo || null,
-            amount: existingReceipt.amountPaid,
-            subtotal: snapshot.subtotal !== undefined ? snapshot.subtotal : existingReceipt.amountPaid,
-            discount: snapshot.discount !== undefined ? snapshot.discount : 0,
-            arrears: snapshot.arrears !== undefined ? snapshot.arrears : 0,
-            amountInWords: snapshot.amountInWords || "",
-            paymentMethod: existingReceipt.paymentMethod,
-            transactionRef: existingReceipt.transactionReference || "",
-            createdAt: existingReceipt.createdAt.toISOString().split("T")[0],
-            studentName: existingReceipt.student?.name || "Multiple Siblings",
-            classSection: existingReceipt.student ? `${existingReceipt.student.class.name}-${existingReceipt.student.class.section}` : "Unified Family",
-            collectedBy: "Finance Staff",
-            collectedByRole: "ADMIN",
-            items: snapshot.items || [],
-            isDuplicateRetry: true,
-          },
-        });
-      }
     }
 
     // ── B-12: Strict input validation for all items — reject negative, NaN, Infinity,
@@ -1039,6 +1002,62 @@ export async function POST(request: Request) {
 
     if (!resolvedStudentId && !resolvedParentProfileId) {
       return NextResponse.json({ error: "Could not resolve student or family profile." }, { status: 400 });
+    }
+
+    // ── O-01: Idempotency Protection for Payment Transactions
+    // Strictly decouple human-typed reference notes (e.g. UTR, references, blank, "00")
+    // from system deduplication keys. Only check system idempotency if an explicit
+    // Idempotency-Key header or body.idempotencyKey is passed, AND strictly scope it
+    // to the matching student/family so another student's payment is NEVER hijacked.
+    const rawIdempotencyKey = request.headers.get("Idempotency-Key") || body.idempotencyKey || null;
+    const idempotencyKey = rawIdempotencyKey ? String(rawIdempotencyKey).trim() : null;
+
+    if (idempotencyKey) {
+      const studentScopeCondition = resolvedParentProfileId
+        ? { OR: [{ studentId: resolvedStudentId }, { parentProfileId: resolvedParentProfileId }] }
+        : { studentId: resolvedStudentId };
+
+      const existingReceipt = await db.receipt.findFirst({
+        where: {
+          AND: [
+            studentScopeCondition,
+            {
+              OR: [
+                { remarks: { contains: `"idempotencyKey":"${idempotencyKey}"` } },
+                { transactionReference: idempotencyKey },
+              ],
+            },
+          ],
+        },
+        include: { student: { include: { class: true } } },
+      });
+
+      if (existingReceipt) {
+        const snapshot = existingReceipt.remarks ? JSON.parse(existingReceipt.remarks) : {};
+        return NextResponse.json({
+          success: true,
+          receipt: {
+            id: existingReceipt.id,
+            studentId: existingReceipt.studentId,
+            receiptNo: existingReceipt.receiptNumber,
+            manualReceiptNo: existingReceipt.manualReceiptNo || snapshot.manualReceiptNo || null,
+            amount: existingReceipt.amountPaid,
+            subtotal: snapshot.subtotal !== undefined ? snapshot.subtotal : existingReceipt.amountPaid,
+            discount: snapshot.discount !== undefined ? snapshot.discount : 0,
+            arrears: snapshot.arrears !== undefined ? snapshot.arrears : 0,
+            amountInWords: snapshot.amountInWords || "",
+            paymentMethod: existingReceipt.paymentMethod,
+            transactionRef: existingReceipt.transactionReference || "",
+            createdAt: existingReceipt.createdAt.toISOString().split("T")[0],
+            studentName: existingReceipt.student?.name || "Multiple Siblings",
+            classSection: existingReceipt.student ? `${existingReceipt.student.class.name}-${existingReceipt.student.class.section}` : "Unified Family",
+            collectedBy: "Finance Staff",
+            collectedByRole: "ADMIN",
+            items: snapshot.items || [],
+            isDuplicateRetry: true,
+          },
+        });
+      }
     }
 
     const { receipt: result, snapshot } = await db.$transaction(async (tx) => {
@@ -1441,6 +1460,9 @@ export async function POST(request: Request) {
       where: { id: authUser.userId },
       select: { name: true, role: true },
     });
+
+    // Invalidate server cache post-commit
+    clearServerBillingCache();
 
     return NextResponse.json({
       success: true,

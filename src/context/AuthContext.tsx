@@ -380,7 +380,8 @@ interface AuthContextType {
     paymentMethod: string,
     transactionRef?: string,
     parentProfileId?: string,
-    manualReceiptNo?: string
+    manualReceiptNo?: string,
+    idempotencyKey?: string
   ) => Promise<{ success: boolean; receipt?: any; error?: string }>;
   addStudent: (
     studentData: {
@@ -416,6 +417,12 @@ interface AuthContextType {
       busStop: string;
       familyCode?: string;
       isRte?: boolean;
+      admissionNo?: string;
+      rollNo?: string;
+      gender?: string;
+      startingFeeMonth?: string;
+      concessionId?: string;
+      previousDues?: number;
     },
     initialDues?: { name: string; amount: number }[]
   ) => Promise<{ success: boolean; student?: any; error?: string }>;
@@ -491,9 +498,10 @@ export interface ToastNotification {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const refreshDataDelegateRef = useRef<((targetUser?: MockUser | null) => Promise<void>) | null>(null);
   const authLogic = useAuthLogic(async (targetUser) => {
-    if (typeof refreshData !== "undefined") {
-      await refreshData(targetUser);
+    if (refreshDataDelegateRef.current) {
+      await refreshDataDelegateRef.current(targetUser);
     }
   });
   const {
@@ -946,6 +954,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // so refreshData is defined once and never recreated when user state changes.
   }, []);
 
+  refreshDataDelegateRef.current = refreshData;
+
   const refreshFeeConfig = async () => {
     try {
       const feeRes = await fetch("/api/fee-config", { credentials: "include", cache: "no-store" });
@@ -972,23 +982,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const isRefreshingBillingRef = useRef(false);
   const refreshBilling = async () => {
-    clearApiCache("/api/billing");
-    const data = await apiFetch("/api/billing?all=true");
-    if (data) {
-      setLedgerEntries(data.ledgerEntries || []);
-      setReceipts(data.receipts || []);
-      setDueItems(data.dueItems || []);
-      if (data.summary) {
-        setBillingSummary(data.summary);
-        setLocalCache("gng_cached_billingSummary", data.summary);
+    if (isRefreshingBillingRef.current) return;
+    isRefreshingBillingRef.current = true;
+    try {
+      clearApiCache("/api/billing");
+      const data = await apiFetch("/api/billing?all=true");
+      if (data) {
+        setLedgerEntries(data.ledgerEntries || []);
+        setReceipts(data.receipts || []);
+        setDueItems(data.dueItems || []);
+        if (data.summary) {
+          setBillingSummary(data.summary);
+          setLocalCache("gng_cached_billingSummary", data.summary);
+        }
+        setBillingLoaded(true);
+        setLocalCache("gng_cached_dueItems", data.dueItems || []);
+        setLocalCache("gng_cached_receipts", data.receipts || []);
+        setLocalCache("gng_cached_ledgerEntries", data.ledgerEntries || []);
       }
-      setBillingLoaded(true);
-      setLocalCache("gng_cached_dueItems", data.dueItems || []);
-      setLocalCache("gng_cached_receipts", data.receipts || []);
-      setLocalCache("gng_cached_ledgerEntries", data.ledgerEntries || []);
+    } finally {
+      isRefreshingBillingRef.current = false;
     }
   };
+
+  // ── Multi-Device Real-Time Sync ──
+  // Automatically polls billing updates every 45s for staff when tab is visible,
+  // keeping other PCs / screens (Principal desk, Accountant counter) in sync
+  // while conserving Supabase free-tier egress and database connections.
+  useEffect(() => {
+    if (!user || (user.role !== "ADMIN" && user.role !== "ACCOUNTANT")) return;
+
+    const intervalId = setInterval(() => {
+      if (typeof document !== "undefined" && !document.hidden) {
+        refreshBilling().catch(() => {});
+      }
+    }, 45000);
+
+    return () => clearInterval(intervalId);
+  }, [user]);
 
   // ── P-02: Fetch lightweight server-side calculated financial aggregates
   const fetchBillingSummary = async () => {
@@ -1622,13 +1655,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     paymentMethod: string,
     transactionRef?: string,
     parentProfileId?: string,
-    manualReceiptNo?: string
+    manualReceiptNo?: string,
+    idempotencyKey?: string
   ): Promise<{ success: boolean; receipt?: any; error?: string }> => {
     try {
+      const clientKey = idempotencyKey || (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : undefined);
       const res = await fetch("/api/billing", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ studentId, parentProfileId, items, paymentMethod, transactionRef, manualReceiptNo }),
+        headers: {
+          "Content-Type": "application/json",
+          ...(clientKey ? { "Idempotency-Key": clientKey } : {}),
+        },
+        body: JSON.stringify({
+          studentId,
+          parentProfileId,
+          items,
+          paymentMethod,
+          transactionRef,
+          manualReceiptNo,
+          idempotencyKey: clientKey,
+        }),
       });
 
       const data = await res.json();
@@ -1677,6 +1723,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       busStop: string;
       familyCode?: string;
       isRte?: boolean;
+      admissionNo?: string;
+      rollNo?: string;
+      gender?: string;
+      startingFeeMonth?: string;
+      concessionId?: string;
+      previousDues?: number;
     },
     initialDues?: { name: string; amount: number }[]
   ): Promise<{ success: boolean; student?: any; error?: string }> => {
