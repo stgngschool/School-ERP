@@ -251,7 +251,7 @@ export default function AdmissionSection({ onSuccessEnquiry }: AdmissionSectionP
 
   return (
     <section id="admissions" className="py-16 bg-slate-50 border-b border-slate-200/80 font-sans">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+      <div className="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6">
         {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto mb-10">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-bold uppercase tracking-wider mb-2">

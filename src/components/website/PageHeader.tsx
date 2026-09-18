@@ -25,7 +25,7 @@ export default function PageHeader({
       <div className="absolute inset-0 bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:24px_24px] opacity-30 pointer-events-none" />
       <div className="absolute top-0 right-1/4 w-72 h-72 bg-indigo-100/40 rounded-full blur-3xl pointer-events-none" />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 relative z-10 text-center">
+      <div className="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6 relative z-10 text-center">
         {/* Breadcrumbs */}
         <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-slate-400 mb-3">
           <Link href="/" className="hover:text-indigo-600 transition-colors flex items-center gap-1">

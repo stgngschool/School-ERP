@@ -225,11 +225,11 @@ export default function SchoolWebsite({
 
             {/* 4 Quick Explorer Pillars */}
             <section className="py-10 bg-slate-50 border-b border-slate-200/80">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6">
+              <div className="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
                   <button
                     onClick={() => handleTabSwitch("NOTICES")}
-                    className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-xs hover:shadow-md hover:border-indigo-300 transition-all group flex flex-col justify-between text-left cursor-pointer"
+                    className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-xs hover:shadow-md hover:border-indigo-300 transition-all group flex flex-col justify-between text-left cursor-pointer min-w-0"
                   >
                     <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
                       <Bell className="w-5 h-5" />
@@ -250,7 +250,7 @@ export default function SchoolWebsite({
 
                   <button
                     onClick={() => handleTabSwitch("ACADEMICS")}
-                    className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-xs hover:shadow-md hover:border-emerald-300 transition-all group flex flex-col justify-between text-left cursor-pointer"
+                    className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-xs hover:shadow-md hover:border-emerald-300 transition-all group flex flex-col justify-between text-left cursor-pointer min-w-0"
                   >
                     <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
                       <BookOpen className="w-5 h-5" />
@@ -271,7 +271,7 @@ export default function SchoolWebsite({
 
                   <button
                     onClick={() => handleTabSwitch("ADMISSIONS")}
-                    className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-xs hover:shadow-md hover:border-amber-300 transition-all group flex flex-col justify-between text-left cursor-pointer"
+                    className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-xs hover:shadow-md hover:border-amber-300 transition-all group flex flex-col justify-between text-left cursor-pointer min-w-0"
                   >
                     <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
                       <GraduationCap className="w-5 h-5" />
@@ -292,7 +292,7 @@ export default function SchoolWebsite({
 
                   <button
                     onClick={() => handleTabSwitch("GALLERY")}
-                    className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-xs hover:shadow-md hover:border-purple-300 transition-all group flex flex-col justify-between text-left cursor-pointer"
+                    className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-xs hover:shadow-md hover:border-purple-300 transition-all group flex flex-col justify-between text-left cursor-pointer min-w-0"
                   >
                     <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
                       <Camera className="w-5 h-5" />
@@ -316,7 +316,7 @@ export default function SchoolWebsite({
 
             {/* Latest Notices Teaser */}
             <section className="py-14 bg-white border-b border-slate-200/80">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6">
+              <div className="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6">
                 <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
                   <div>
                     <span className="text-xs font-black uppercase text-indigo-600 tracking-wider">
@@ -404,7 +404,7 @@ export default function SchoolWebsite({
 
             {/* About Brief */}
             <section className="py-14 bg-slate-50 border-b border-slate-200/80">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6">
+              <div className="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6">
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
                   <div className="lg:col-span-6 space-y-4">
                     <span className="px-3 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold uppercase tracking-wider">
@@ -463,7 +463,7 @@ export default function SchoolWebsite({
 
             {/* YouTube Featured Teaser in Gallery */}
             <section className="py-14 bg-white border-b border-slate-200/80">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6">
+              <div className="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6">
                 <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
                   <div>
                     <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-red-50 text-red-600 text-xs font-black uppercase tracking-wider mb-1">
@@ -521,7 +521,7 @@ export default function SchoolWebsite({
 
             {/* Parent Support Desk */}
             <section className="py-12 bg-slate-50 border-b border-slate-200/80">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6">
+              <div className="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6">
                 <div className="p-6 sm:p-8 rounded-3xl bg-white border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100">

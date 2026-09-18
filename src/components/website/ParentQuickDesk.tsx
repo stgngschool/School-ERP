@@ -19,7 +19,7 @@ import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
 export default function ParentQuickDesk() {
   return (
     <section className="py-20 bg-slate-50 border-b border-slate-200/80">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+      <div className="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6">
         {/* Title */}
         <div className="text-center max-w-2xl mx-auto mb-14">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-bold uppercase tracking-wider mb-2">

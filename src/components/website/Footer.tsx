@@ -55,7 +55,7 @@ export default function Footer() {
 
   return (
     <footer className="bg-slate-100 text-slate-800 pt-14 pb-10 border-t border-slate-200 font-sans">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+      <div className="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-8 lg:gap-10 pb-10 border-b border-slate-200">
           {/* Column 1: School Brand & Identity (4 cols) */}
           <div className="lg:col-span-4 space-y-4">

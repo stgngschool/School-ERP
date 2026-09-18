@@ -55,49 +55,30 @@ export default function Navbar({
     opacity: 0,
   });
 
-  const navLinks: { name: string; href: string; key: ActiveTabKey }[] = [
+  const navLinks: { name: string; shortName?: string; href: string; key: ActiveTabKey }[] = [
     { name: "Home", href: "/", key: "HOME" },
-    { name: "About Us", href: "/about", key: "ABOUT" },
+    { name: "About Us", shortName: "About", href: "/about", key: "ABOUT" },
     { name: "Academics", href: "/academics", key: "ACADEMICS" },
-    { name: "Notice Board", href: "/notices", key: "NOTICES" },
+    { name: "Notice Board", shortName: "Notices", href: "/notices", key: "NOTICES" },
     { name: "Facilities", href: "/facilities", key: "FACILITIES" },
     { name: "Admissions", href: "/admissions", key: "ADMISSIONS" },
-    { name: "Gallery & Videos", href: "/gallery", key: "GALLERY" },
+    { name: "Gallery & Videos", shortName: "Gallery", href: "/gallery", key: "GALLERY" },
     { name: "Contact", href: "/contact", key: "CONTACT" },
   ];
 
   // Update Liquid Sliding Pill Position
+  // Update Liquid Sliding Pill Position on mount, tab changes, window resize, and font loading
   useEffect(() => {
     setMounted(true);
 
-    const activeIndex = navLinks.findIndex((link) => {
-      if (onTabSelect) {
-        return activeTabKey === link.key;
-      }
-      return pathname === link.href;
-    });
-
-    if (activeIndex !== -1 && itemRefs.current[activeIndex]) {
-      const activeEl = itemRefs.current[activeIndex];
-      if (activeEl) {
-        setPillStyle({
-          left: activeEl.offsetLeft,
-          width: activeEl.offsetWidth,
-          opacity: 1,
-        });
-      }
-    }
-  }, [activeTabKey, pathname, onTabSelect]);
-
-  // Recalculate on window resize
-  useEffect(() => {
-    const handleResize = () => {
+    const updatePill = () => {
       const activeIndex = navLinks.findIndex((link) => {
         if (onTabSelect) {
           return activeTabKey === link.key;
         }
         return pathname === link.href;
       });
+
       if (activeIndex !== -1 && itemRefs.current[activeIndex]) {
         const activeEl = itemRefs.current[activeIndex];
         if (activeEl) {
@@ -110,8 +91,14 @@ export default function Navbar({
       }
     };
 
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    updatePill();
+    window.addEventListener("resize", updatePill);
+
+    if (typeof document !== "undefined" && (document as any).fonts) {
+      (document as any).fonts.ready.then(updatePill);
+    }
+
+    return () => window.removeEventListener("resize", updatePill);
   }, [activeTabKey, pathname, onTabSelect]);
 
   useEffect(() => {
@@ -199,7 +186,7 @@ export default function Navbar({
     <header className="sticky top-0 z-50 w-full transition-all duration-300 font-sans shadow-xs">
       {/* ─── Top Urgent Bulletin Strip ─── */}
       <div className="bg-slate-950 text-slate-200 text-xs py-1.5 px-4 sm:px-6 border-b border-slate-800/80">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+        <div className="max-w-7xl 2xl:max-w-[1440px] mx-auto flex items-center justify-between gap-4">
           {/* Left: Ticker / Alert */}
           <div className="flex items-center gap-2.5 overflow-hidden min-w-0">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-black uppercase tracking-wider shrink-0 border border-amber-500/30">
@@ -222,7 +209,7 @@ export default function Navbar({
           </div>
 
           {/* Right: Quick Contact & Timings (Desktop) */}
-          <div suppressHydrationWarning className="hidden md:flex items-center gap-6 text-[11px] font-semibold text-slate-400 shrink-0">
+          <div suppressHydrationWarning className="hidden md:flex items-center gap-4 xl:gap-6 text-[11px] font-semibold text-slate-400 shrink-0">
             <a
               href={`tel:${livePhone}`}
               suppressHydrationWarning
@@ -250,7 +237,7 @@ export default function Navbar({
       {/* ─── Logged-In User Banner ─── */}
       {mounted && user && activeRole && (
         <div className="bg-indigo-900 text-indigo-100 py-1.5 px-4 sm:px-6 text-xs font-medium border-b border-indigo-800 shadow-inner">
-          <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+          <div className="max-w-7xl 2xl:max-w-[1440px] mx-auto flex items-center justify-between gap-4">
             <div className="flex items-center gap-2 truncate">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
               <span className="truncate text-xs">
@@ -286,7 +273,7 @@ export default function Navbar({
             : "bg-white border-b border-slate-200/80 py-2.5 sm:py-3"
         }`}
       >
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4">
+        <div className="max-w-7xl 2xl:max-w-[1440px] mx-auto px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4">
           {/* 1. Left: School Brand & Crest */}
           <Link
             href="/"
@@ -296,32 +283,32 @@ export default function Navbar({
                 onTabSelect("HOME");
               }
             }}
-            className="flex items-center gap-2.5 sm:gap-3 group shrink-0 min-w-0"
+            className="flex items-center gap-2 sm:gap-2.5 group shrink-0 min-w-0"
           >
             <img
               src="/logo.png"
               alt="St. GNG School Logo"
-              className="h-9 sm:h-12 md:h-14 w-auto object-contain transition-transform duration-300 group-hover:scale-105 shrink-0"
+              className="h-9 sm:h-11 md:h-12 w-auto object-contain transition-transform duration-300 group-hover:scale-105 shrink-0"
               onError={(e) => {
                 (e.target as HTMLElement).style.display = "none";
               }}
             />
             <div className="flex flex-col justify-center min-w-0">
-              <span className="text-sm sm:text-lg lg:text-xl font-black text-slate-900 tracking-tight leading-tight truncate">
+              <span className="text-sm sm:text-base lg:text-lg xl:text-xl font-black text-slate-900 tracking-tight leading-tight truncate">
                 St. G.N.G. School
               </span>
-              <p className="text-[9px] sm:text-[11px] font-bold text-slate-500 tracking-normal mt-0.5 truncate">
-                <span className="sm:hidden">Salarpur, Varanasi</span>
-                <span className="hidden sm:inline">Salarpur, Varanasi • Estd. 2005 (Nursery to 8th)</span>
+              <p className="text-[9px] sm:text-[10px] xl:text-[11px] font-bold text-slate-500 tracking-normal mt-0.5 truncate">
+                <span className="hidden 2xl:inline">Salarpur, Varanasi • Estd. 2005 (Nursery to 8th)</span>
+                <span className="2xl:hidden">Salarpur, Varanasi</span>
               </p>
             </div>
           </Link>
 
-          {/* 2. Center: iOS Liquid Sliding Capsule Navigation Island (Large screens >= 1280px) */}
-          <div className="hidden xl:flex items-center justify-center flex-1 mx-4">
+          {/* 2. Center: iOS Liquid Sliding Capsule Navigation Island (Screens >= 1024px) */}
+          <div className="hidden lg:flex items-center justify-center shrink-0 mx-auto px-1">
             <div
               ref={navContainerRef}
-              className="relative flex items-center p-1 rounded-2xl bg-slate-100/85 backdrop-blur-md border border-slate-200/80 shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] overflow-hidden"
+              className="relative flex items-center p-1 rounded-2xl bg-slate-100/85 backdrop-blur-md border border-slate-200/80 shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)]"
             >
               {/* 🌊 Pure Transparent Liquid Glass Bubble Capsule */}
               <div
@@ -351,24 +338,26 @@ export default function Navbar({
                     }}
                     href={link.href}
                     onClick={(e) => handleLinkClick(e, link)}
-                    className={`relative z-10 px-3 py-1.5 text-xs xl:text-[13px] font-bold rounded-xl transition-colors duration-200 whitespace-nowrap cursor-pointer select-none ${
+                    className={`relative z-10 px-2 lg:px-2.5 xl:px-3 py-1.5 text-xs lg:text-[11px] xl:text-[13px] font-bold rounded-xl transition-colors duration-200 whitespace-nowrap cursor-pointer select-none ${
                       active
                         ? "text-indigo-600 font-black"
                         : "text-slate-600 hover:text-slate-900"
                     }`}
                   >
-                    <span>{link.name}</span>
+                    <span className="hidden 2xl:inline">{link.name}</span>
+                    <span className="2xl:hidden">{link.shortName || link.name}</span>
                   </Link>
                 );
               })}
             </div>
           </div>
 
-          {/* 3. Right: Action CTAs & Navigation Controls (Never clipped, comfortable breathing margin) */}
-          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0 pr-1 sm:pr-0">
+          {/* 3. Right: Action CTAs & Navigation Controls */}
+          <div className="flex items-center gap-1.5 sm:gap-2 xl:gap-2.5 shrink-0 pr-1 sm:pr-0">
+            {/* Enquiry Button: visible on wide screens (>= 1536px), while "Admissions" tab is always in center capsule */}
             <button
               onClick={handleEnquiryClick}
-              className="hidden md:flex px-3.5 py-2 rounded-xl text-xs font-extrabold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 shadow-xs transition-all cursor-pointer whitespace-nowrap items-center gap-1.5"
+              className="hidden 2xl:flex px-2.5 xl:px-3.5 py-1.5 xl:py-2 rounded-xl text-xs font-extrabold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 shadow-xs transition-all cursor-pointer whitespace-nowrap items-center gap-1.5"
             >
               <GraduationCap className="w-3.5 h-3.5 text-indigo-600" />
               <span>Enquiry</span>
@@ -399,26 +388,26 @@ export default function Navbar({
                   onGoToPortal();
                 }
               }}
-              className="px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+              className="px-2.5 sm:px-3 xl:px-4 py-1.5 xl:py-2 rounded-xl text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
             >
               <LogIn className="w-3.5 h-3.5" />
               <span>{mounted && user && activeRole ? "Portal ERP" : "Login"}</span>
             </Link>
 
-            {/* Menu Hamburger Toggle (Visible on all screens < 1280px) */}
+            {/* Menu Hamburger Toggle (Visible on screens < 1024px) */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               aria-label="Toggle navigation"
-              className="xl:hidden p-1.5 sm:p-2 rounded-xl text-slate-700 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer flex items-center justify-center shrink-0"
+              className="lg:hidden p-1.5 sm:p-2 rounded-xl text-slate-700 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer flex items-center justify-center shrink-0"
             >
               {mobileMenuOpen ? <X className="w-4 h-4 sm:w-5 sm:h-5" /> : <Menu className="w-4 h-4 sm:w-5 sm:h-5" />}
             </button>
           </div>
         </div>
 
-        {/* ─── Slide-out Drawer (Visible on all screens < 1280px when toggled) ─── */}
+        {/* ─── Slide-out Drawer (Visible on screens < 1024px when toggled) ─── */}
         {mobileMenuOpen && (
-          <div className="xl:hidden border-t border-slate-200 bg-white px-4 pt-3 pb-6 space-y-3 animate-fade-in shadow-xl">
+          <div className="lg:hidden border-t border-slate-200 bg-white px-4 pt-3 pb-6 space-y-3 animate-fade-in shadow-xl">
             <div className="grid grid-cols-2 gap-1.5 pb-2 border-b border-slate-100">
               {navLinks.map((link) => {
                 const active = isLinkActive(link);

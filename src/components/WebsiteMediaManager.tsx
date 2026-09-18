@@ -18,9 +18,62 @@ import {
   User,
   Camera,
   X,
+  Link as LinkIcon,
+  RotateCcw,
 } from "lucide-react";
 import { uploadToCloudinary, getOptimizedImageUrl } from "@/lib/cloudinary";
 import { getTodayIST } from "@/lib/dateUtils";
+
+/**
+ * Client-side canvas image compression to ensure fast uploads
+ * and avoid Cloudinary free tier payload size limits.
+ */
+async function compressImage(file: File, maxWidth = 1600, quality = 0.85): Promise<File> {
+  if (!file.type.startsWith("image/") || file.type.includes("svg") || file.type.includes("gif")) {
+    return file;
+  }
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(file);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => {
+            if (!blob || blob.size >= file.size) {
+              resolve(file);
+            } else {
+              const compressed = new File([blob], file.name.replace(/\.[^/.]+$/, ".jpg"), {
+                type: "image/jpeg",
+                lastModified: Date.now(),
+              });
+              resolve(compressed);
+            }
+          },
+          "image/jpeg",
+          quality
+        );
+      };
+      img.onerror = () => resolve(file);
+    };
+    reader.onerror = () => resolve(file);
+  });
+}
 
 interface MediaItem {
   id: string;
@@ -61,20 +114,24 @@ export default function WebsiteMediaManager({ onClose }: { onClose?: () => void 
   const [saving, setSaving] = useState(false);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [inlineFeedback, setInlineFeedback] = useState<{ [key: string]: { type: "success" | "error"; text: string } }>({});
+  const [customUrlInput, setCustomUrlInput] = useState<{ [key: string]: string }>({});
 
   // New Gallery Item Modal state
   const [showAddGallery, setShowAddGallery] = useState(false);
+  const [newGallerySource, setNewGallerySource] = useState<"FILE" | "URL">("FILE");
   const [newGalleryTitle, setNewGalleryTitle] = useState("");
   const [newGalleryCategory, setNewGalleryCategory] = useState("EVENTS");
   const [newGalleryDesc, setNewGalleryDesc] = useState("");
   const [newGalleryFile, setNewGalleryFile] = useState<File | null>(null);
+  const [newGalleryUrl, setNewGalleryUrl] = useState("");
   const [newGalleryPreview, setNewGalleryPreview] = useState<string | null>(null);
 
-  // Fetch current media configuration
+  // Fetch current media configuration with cache busting
   const fetchMedia = async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/website-media", { cache: "no-store" });
+      const res = await fetch(`/api/website-media?t=${Date.now()}`, { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
         setMediaData(data);
@@ -110,25 +167,32 @@ export default function WebsiteMediaManager({ onClose }: { onClose?: () => void 
       }
     } catch (err: any) {
       setStatusMsg({ type: "error", text: err.message || "Failed to save changes." });
+      throw err;
     } finally {
       setSaving(false);
     }
   };
 
-  // Upload file to Cloudinary and update specific target
+  // Upload file to Cloudinary with compression and update specific target
   const handleDirectUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
     target: "HERO" | "PRINCIPAL" | { type: "FACILITY"; id: string } | { type: "GALLERY"; id: string }
   ) => {
     const file = e.target.files?.[0];
+    e.target.value = ""; // Reset input so re-selecting same file triggers change
     if (!file || !mediaData) return;
 
     const targetKey = typeof target === "string" ? target : `${target.type}-${target.id}`;
     setUploadingId(targetKey);
     setStatusMsg(null);
+    setInlineFeedback((prev) => ({ ...prev, [targetKey]: undefined! }));
 
     try {
-      const uploadRes = await uploadToCloudinary(file, "school_website");
+      // Compress phone camera / large images before upload
+      const maxWidth = target === "HERO" ? 1920 : 1200;
+      const fileToUpload = await compressImage(file, maxWidth);
+
+      const uploadRes = await uploadToCloudinary(fileToUpload, "school_website");
       if (!uploadRes.success || !uploadRes.url) {
         throw new Error(uploadRes.error || "Image upload failed");
       }
@@ -151,32 +215,143 @@ export default function WebsiteMediaManager({ onClose }: { onClose?: () => void 
       }
 
       await saveMedia(updated);
+      setInlineFeedback((prev) => ({
+        ...prev,
+        [targetKey]: { type: "success", text: "Photo uploaded & updated live!" },
+      }));
+      setTimeout(() => {
+        setInlineFeedback((prev) => {
+          const copy = { ...prev };
+          delete copy[targetKey];
+          return copy;
+        });
+      }, 4000);
     } catch (err: any) {
-      setStatusMsg({ type: "error", text: err.message || "Upload failed." });
+      const msg = err.message || "Upload failed.";
+      setStatusMsg({ type: "error", text: msg });
+      setInlineFeedback((prev) => ({ ...prev, [targetKey]: { type: "error", text: msg } }));
     } finally {
       setUploadingId(null);
+    }
+  };
+
+  // Directly apply an image URL without uploading
+  const handleApplyDirectUrl = async (
+    target: "HERO" | "PRINCIPAL" | { type: "FACILITY"; id: string },
+    url: string
+  ) => {
+    const trimmed = url.trim();
+    if (!trimmed || !mediaData) return;
+    const targetKey = typeof target === "string" ? target : `${target.type}-${target.id}`;
+
+    try {
+      const updated: WebsiteMediaConfig = JSON.parse(JSON.stringify(mediaData));
+
+      if (target === "HERO") {
+        updated.hero.bannerImage = trimmed;
+      } else if (target === "PRINCIPAL") {
+        updated.principal.photoUrl = trimmed;
+      } else if (typeof target === "object" && target.type === "FACILITY") {
+        updated.facilities = updated.facilities.map((f) =>
+          f.id === target.id ? { ...f, imageUrl: trimmed } : f
+        );
+      }
+
+      await saveMedia(updated);
+      setCustomUrlInput((prev) => ({ ...prev, [targetKey]: "" }));
+      setInlineFeedback((prev) => ({
+        ...prev,
+        [targetKey]: { type: "success", text: "Image URL updated live!" },
+      }));
+      setTimeout(() => {
+        setInlineFeedback((prev) => {
+          const copy = { ...prev };
+          delete copy[targetKey];
+          return copy;
+        });
+      }, 4000);
+    } catch (err: any) {
+      setInlineFeedback((prev) => ({
+        ...prev,
+        [targetKey]: { type: "error", text: err.message || "Failed to set image URL" },
+      }));
+    }
+  };
+
+  // Remove photo or reset to default
+  const handleRemovePhoto = async (target: "HERO" | "PRINCIPAL") => {
+    if (!mediaData) return;
+    try {
+      if (target === "PRINCIPAL") {
+        if (!confirm("Remove custom photo and use the official School Logo for Principal's Desk?")) return;
+        const updated: WebsiteMediaConfig = {
+          ...mediaData,
+          principal: {
+            ...mediaData.principal,
+            photoUrl: "",
+          },
+        };
+        await saveMedia(updated);
+        setInlineFeedback((prev) => ({
+          ...prev,
+          PRINCIPAL: { type: "success", text: "Photo removed. Official School Logo is now active!" },
+        }));
+      } else if (target === "HERO") {
+        if (!confirm("Reset to default school hero banner?")) return;
+        const updated: WebsiteMediaConfig = {
+          ...mediaData,
+          hero: {
+            ...mediaData.hero,
+            bannerImage: "https://res.cloudinary.com/ec4srd3k/image/upload/v1788449371/school_website/hmwpzxl2utdpplrtzbwe.jpg",
+          },
+        };
+        await saveMedia(updated);
+        setInlineFeedback((prev) => ({
+          ...prev,
+          HERO: { type: "success", text: "Reset to default hero banner!" },
+        }));
+      }
+    } catch (err: any) {
+      setInlineFeedback((prev) => ({
+        ...prev,
+        [target]: { type: "error", text: err.message || "Failed to reset photo" },
+      }));
     }
   };
 
   // Add new photo to gallery
   const handleAddNewGalleryPhoto = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newGalleryFile || !mediaData) return;
+    if (!mediaData) return;
 
     setSaving(true);
     setStatusMsg(null);
 
     try {
-      const uploadRes = await uploadToCloudinary(newGalleryFile, "gallery_events");
-      if (!uploadRes.success || !uploadRes.url) {
-        throw new Error(uploadRes.error || "Failed to upload photo to Cloudinary");
+      let finalImageUrl = "";
+
+      if (newGallerySource === "URL") {
+        if (!newGalleryUrl.trim()) {
+          throw new Error("Please enter a valid image URL");
+        }
+        finalImageUrl = newGalleryUrl.trim();
+      } else {
+        if (!newGalleryFile) {
+          throw new Error("Please select an image file to upload");
+        }
+        const compressed = await compressImage(newGalleryFile, 1400);
+        const uploadRes = await uploadToCloudinary(compressed, "gallery_events");
+        if (!uploadRes.success || !uploadRes.url) {
+          throw new Error(uploadRes.error || "Failed to upload photo to Cloudinary");
+        }
+        finalImageUrl = uploadRes.url;
       }
 
       const newItem: MediaItem = {
         id: `gal-${Date.now()}`,
         title: newGalleryTitle.trim(),
         category: newGalleryCategory,
-        imageUrl: uploadRes.url,
+        imageUrl: finalImageUrl,
         description: newGalleryDesc.trim(),
         date: getTodayIST(),
       };
@@ -191,9 +366,12 @@ export default function WebsiteMediaManager({ onClose }: { onClose?: () => void 
       setNewGalleryTitle("");
       setNewGalleryDesc("");
       setNewGalleryFile(null);
+      setNewGalleryUrl("");
       setNewGalleryPreview(null);
+      setNewGallerySource("FILE");
     } catch (err: any) {
       setStatusMsg({ type: "error", text: err.message || "Failed to add gallery photo." });
+    } finally {
       setSaving(false);
     }
   };
@@ -475,12 +653,40 @@ export default function WebsiteMediaManager({ onClose }: { onClose?: () => void 
       {/* ─── TAB 3: HOME HERO BANNER ─── */}
       {activeTab === "HERO" && (
         <div className="bg-white border border-slate-200 rounded-3xl p-6 space-y-6">
-          <div>
-            <h3 className="text-sm font-black text-slate-900">Homepage Main Hero School Banner</h3>
-            <p className="text-xs text-slate-500">
-              The grand background school photo shown at the top of the homepage.
-            </p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-black text-slate-900">Homepage Main Hero School Banner</h3>
+              <p className="text-xs text-slate-500">
+                The grand background school photo shown at the top of the homepage.
+              </p>
+            </div>
+
+            <button
+              onClick={() => handleRemovePhoto("HERO")}
+              className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-600 text-xs font-bold flex items-center gap-1.5 transition-colors self-start cursor-pointer"
+              title="Reset to default banner"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Reset to Default</span>
+            </button>
           </div>
+
+          {inlineFeedback["HERO"] && (
+            <div
+              className={`p-3 rounded-xl text-xs font-bold flex items-center gap-2 ${
+                inlineFeedback["HERO"].type === "success"
+                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                  : "bg-rose-50 text-rose-700 border border-rose-200"
+              }`}
+            >
+              {inlineFeedback["HERO"].type === "success" ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              )}
+              <span>{inlineFeedback["HERO"].text}</span>
+            </div>
+          )}
 
           <div className="relative aspect-21/9 rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 shadow-inner">
             <img
@@ -497,21 +703,45 @@ export default function WebsiteMediaManager({ onClose }: { onClose?: () => void 
             )}
           </div>
 
-          <div className="flex items-center justify-between pt-2">
-            <label className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black flex items-center gap-2 cursor-pointer shadow-md shadow-indigo-600/20 transition-all active:scale-95">
-              <UploadCloud className="w-4 h-4" />
-              <span>Choose & Upload Real School Banner</span>
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => handleDirectUpload(e, "HERO")}
-              />
-            </label>
+          <div className="space-y-3 pt-2">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <label className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black flex items-center gap-2 cursor-pointer shadow-md shadow-indigo-600/20 transition-all active:scale-95">
+                <UploadCloud className="w-4 h-4" />
+                <span>Choose & Upload Real School Banner</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => handleDirectUpload(e, "HERO")}
+                />
+              </label>
 
-            <span className="text-[11px] font-semibold text-slate-400">
-              Recommended ratio: 16:9 or 21:9 (Landscape)
-            </span>
+              <span className="text-[11px] font-semibold text-slate-400">
+                Recommended ratio: 16:9 or 21:9 (Landscape)
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+              <div className="relative flex-1">
+                <LinkIcon className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="url"
+                  placeholder="Or paste external banner image URL (https://...)"
+                  value={customUrlInput["HERO"] || ""}
+                  onChange={(e) =>
+                    setCustomUrlInput((prev) => ({ ...prev, HERO: e.target.value }))
+                  }
+                  className="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 font-medium focus:outline-none focus:border-indigo-600"
+                />
+              </div>
+              <button
+                onClick={() => handleApplyDirectUrl("HERO", customUrlInput["HERO"] || "")}
+                disabled={!customUrlInput["HERO"]?.trim()}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-900 disabled:opacity-40 text-white text-xs font-bold rounded-xl cursor-pointer"
+              >
+                Apply URL
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -519,20 +749,57 @@ export default function WebsiteMediaManager({ onClose }: { onClose?: () => void 
       {/* ─── TAB 4: PRINCIPAL PROFILE ─── */}
       {activeTab === "PRINCIPAL" && (
         <div className="bg-white border border-slate-200 rounded-3xl p-6 space-y-6">
-          <div>
-            <h3 className="text-sm font-black text-slate-900">Principal's Desk Photo & Message</h3>
-            <p className="text-xs text-slate-500">
-              Update Principal Sir's photograph and message on the public website.
-            </p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-black text-slate-900">Principal's Desk Photo & Message</h3>
+              <p className="text-xs text-slate-500">
+                Update Principal Sir's photograph and message on the public website.
+              </p>
+            </div>
+
+            {mediaData.principal.photoUrl && (
+              <button
+                onClick={() => handleRemovePhoto("PRINCIPAL")}
+                className="px-3 py-1.5 rounded-xl border border-rose-200 hover:bg-rose-50 text-rose-700 text-xs font-bold flex items-center gap-1.5 transition-colors self-start cursor-pointer"
+                title="Remove photo and use official school logo"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Remove Photo (Use Logo)</span>
+              </button>
+            )}
           </div>
 
+          {inlineFeedback["PRINCIPAL"] && (
+            <div
+              className={`p-3 rounded-xl text-xs font-bold flex items-center gap-2 ${
+                inlineFeedback["PRINCIPAL"].type === "success"
+                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                  : "bg-rose-50 text-rose-700 border border-rose-200"
+              }`}
+            >
+              {inlineFeedback["PRINCIPAL"].type === "success" ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              )}
+              <span>{inlineFeedback["PRINCIPAL"].text}</span>
+            </div>
+          )}
+
           <div className="flex flex-col sm:flex-row items-center gap-6">
-            <div className="relative w-36 h-36 rounded-2xl overflow-hidden bg-slate-100 border-2 border-indigo-200 shrink-0 shadow-md">
-              <img
-                src={getOptimizedImageUrl(mediaData.principal.photoUrl, 400)}
-                alt={mediaData.principal.name}
-                className="w-full h-full object-cover"
-              />
+            <div className="relative w-36 h-36 rounded-2xl overflow-hidden bg-slate-100 border-2 border-indigo-200 shrink-0 shadow-md flex items-center justify-center">
+              {mediaData.principal.photoUrl ? (
+                <img
+                  src={getOptimizedImageUrl(mediaData.principal.photoUrl, 400)}
+                  alt={mediaData.principal.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center p-3 text-center">
+                  <User className="w-10 h-10 text-slate-400 mb-1" />
+                  <span className="text-[10px] font-bold text-slate-500">Default Logo Active</span>
+                </div>
+              )}
 
               {uploadingId === "PRINCIPAL" && (
                 <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-xs flex flex-col items-center justify-center text-white">
@@ -541,7 +808,7 @@ export default function WebsiteMediaManager({ onClose }: { onClose?: () => void 
               )}
             </div>
 
-            <div className="flex-1 space-y-3">
+            <div className="flex-1 space-y-3 w-full">
               <div>
                 <label className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block mb-1">
                   Principal Name
@@ -595,26 +862,62 @@ export default function WebsiteMediaManager({ onClose }: { onClose?: () => void 
             </div>
           </div>
 
-          <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-            <label className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-black flex items-center gap-1.5 cursor-pointer transition-colors">
-              <UploadCloud className="w-4 h-4" />
-              <span>Upload Principal Photo</span>
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => handleDirectUpload(e, "PRINCIPAL")}
-              />
-            </label>
+          <div className="space-y-3 pt-3 border-t border-slate-100">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <label className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-black flex items-center gap-1.5 cursor-pointer transition-colors">
+                  <UploadCloud className="w-4 h-4" />
+                  <span>{mediaData.principal.photoUrl ? "Change Photo" : "Upload Principal Photo"}</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => handleDirectUpload(e, "PRINCIPAL")}
+                  />
+                </label>
 
-            <button
-              onClick={() => saveMedia(mediaData)}
-              disabled={saving}
-              className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black flex items-center gap-1.5 shadow-md shadow-indigo-600/20 cursor-pointer disabled:opacity-50"
-            >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-              <span>Save Details</span>
-            </button>
+                {mediaData.principal.photoUrl && (
+                  <button
+                    type="button"
+                    onClick={() => handleRemovePhoto("PRINCIPAL")}
+                    className="px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
+                  >
+                    Remove Photo
+                  </button>
+                )}
+              </div>
+
+              <button
+                onClick={() => saveMedia(mediaData)}
+                disabled={saving}
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black flex items-center gap-1.5 shadow-md shadow-indigo-600/20 cursor-pointer disabled:opacity-50"
+              >
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                <span>Save Details</span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+              <div className="relative flex-1">
+                <LinkIcon className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="url"
+                  placeholder="Or paste external photo URL (https://...)"
+                  value={customUrlInput["PRINCIPAL"] || ""}
+                  onChange={(e) =>
+                    setCustomUrlInput((prev) => ({ ...prev, PRINCIPAL: e.target.value }))
+                  }
+                  className="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 font-medium focus:outline-none focus:border-indigo-600"
+                />
+              </div>
+              <button
+                onClick={() => handleApplyDirectUrl("PRINCIPAL", customUrlInput["PRINCIPAL"] || "")}
+                disabled={!customUrlInput["PRINCIPAL"]?.trim()}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-900 disabled:opacity-40 text-white text-xs font-bold rounded-xl cursor-pointer"
+              >
+                Apply URL
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -635,6 +938,8 @@ export default function WebsiteMediaManager({ onClose }: { onClose?: () => void 
                   setShowAddGallery(false);
                   setNewGalleryPreview(null);
                   setNewGalleryFile(null);
+                  setNewGalleryUrl("");
+                  setNewGallerySource("FILE");
                 }}
                 className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
               >
@@ -657,30 +962,57 @@ export default function WebsiteMediaManager({ onClose }: { onClose?: () => void 
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">
-                    Category *
-                  </label>
-                  <select
-                    value={newGalleryCategory}
-                    onChange={(e) => setNewGalleryCategory(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-800 focus:outline-none focus:border-indigo-600"
+              <div>
+                <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">
+                  Category *
+                </label>
+                <select
+                  value={newGalleryCategory}
+                  onChange={(e) => setNewGalleryCategory(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-800 focus:outline-none focus:border-indigo-600"
+                >
+                  <option value="EVENTS">EVENTS (Celebrations / Functions)</option>
+                  <option value="ACADEMICS">ACADEMICS (Science / Projects)</option>
+                  <option value="SPORTS">SPORTS (Athletics / Games)</option>
+                  <option value="CULTURAL">CULTURAL (Dance / Drama)</option>
+                </select>
+              </div>
+
+              {/* Photo Source Selector: File vs URL */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-xl w-fit text-[11px] font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setNewGallerySource("FILE")}
+                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                      newGallerySource === "FILE"
+                        ? "bg-white text-indigo-600 shadow-xs font-black"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
                   >
-                    <option value="EVENTS">EVENTS (Celebrations / Functions)</option>
-                    <option value="ACADEMICS">ACADEMICS (Science / Projects)</option>
-                    <option value="SPORTS">SPORTS (Athletics / Games)</option>
-                    <option value="CULTURAL">CULTURAL (Dance / Drama)</option>
-                  </select>
+                    Upload Photo File
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewGallerySource("URL");
+                      setNewGalleryFile(null);
+                      setNewGalleryPreview(newGalleryUrl || null);
+                    }}
+                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                      newGallerySource === "URL"
+                        ? "bg-white text-indigo-600 shadow-xs font-black"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    Paste Image URL
+                  </button>
                 </div>
 
-                <div>
-                  <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">
-                    Select Photo File *
-                  </label>
+                {newGallerySource === "FILE" ? (
                   <input
                     type="file"
-                    required
+                    required={!newGalleryPreview}
                     accept="image/*"
                     onChange={(e) => {
                       const file = e.target.files?.[0];
@@ -691,12 +1023,29 @@ export default function WebsiteMediaManager({ onClose }: { onClose?: () => void 
                     }}
                     className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
                   />
-                </div>
+                ) : (
+                  <input
+                    type="url"
+                    required
+                    placeholder="https://images.unsplash.com/... or Cloudinary URL"
+                    value={newGalleryUrl}
+                    onChange={(e) => {
+                      setNewGalleryUrl(e.target.value);
+                      setNewGalleryPreview(e.target.value.trim() || null);
+                    }}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-800 focus:outline-none focus:border-indigo-600"
+                  />
+                )}
               </div>
 
               {newGalleryPreview && (
                 <div className="relative aspect-16/9 rounded-xl overflow-hidden bg-slate-100 border border-slate-200">
-                  <img src={newGalleryPreview} alt="Preview" className="w-full h-full object-cover" />
+                  <img
+                    src={newGalleryPreview}
+                    alt="Preview"
+                    className="w-full h-full object-cover"
+                    onError={() => setNewGalleryPreview(null)}
+                  />
                 </div>
               )}
 
@@ -716,7 +1065,13 @@ export default function WebsiteMediaManager({ onClose }: { onClose?: () => void 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setShowAddGallery(false)}
+                  onClick={() => {
+                    setShowAddGallery(false);
+                    setNewGalleryPreview(null);
+                    setNewGalleryFile(null);
+                    setNewGalleryUrl("");
+                    setNewGallerySource("FILE");
+                  }}
                   className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100"
                 >
                   Cancel
@@ -730,7 +1085,7 @@ export default function WebsiteMediaManager({ onClose }: { onClose?: () => void 
                   {saving ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Uploading to Cloudinary...</span>
+                      <span>Saving & Publishing...</span>
                     </>
                   ) : (
                     <>

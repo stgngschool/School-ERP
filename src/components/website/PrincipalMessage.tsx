@@ -19,7 +19,7 @@ export default function PrincipalMessage() {
   });
 
   useEffect(() => {
-    fetch("/api/website-media")
+    fetch(`/api/website-media?t=${Date.now()}`, { cache: "no-store" })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data?.principal) {
@@ -30,7 +30,7 @@ export default function PrincipalMessage() {
   }, []);
   return (
     <section className="py-20 bg-slate-50 border-b border-slate-200/80">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+      <div className="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6">
         <div className="bg-white rounded-3xl p-8 sm:p-12 text-slate-900 shadow-xl border border-slate-200/90 relative overflow-hidden">
           {/* Subtle Decorative Accents */}
           <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-50/80 rounded-full blur-3xl pointer-events-none" />
@@ -47,19 +47,28 @@ export default function PrincipalMessage() {
                 "Our mission is to empower every child with knowledge, character, and self-belief."
               </h2>
 
-              <p className="text-xs sm:text-sm text-slate-600 font-normal leading-relaxed">
-                Dear Parents, Students, and Well-Wishers,
-                <br /><br />
-                Since our inception in 2005 at Salarpur, Varanasi, <strong>St. G.N.G. School</strong> has remained
-                steadfast in its commitment to providing an inspiring learning atmosphere where academic
-                discipline meets traditional Indian cultural values (Sanskar).
-              </p>
-
-              <p className="text-xs sm:text-sm text-slate-600 font-normal leading-relaxed">
-                We believe that every child is blessed with infinite potential. Our teachers do not merely teach
-                from textbooks—they mentor, encourage, and guide our students to become confident, polite, and
-                responsible citizens of India. We thank our parents for their unwavering faith in St. GNG School.
-              </p>
+              <div className="text-xs sm:text-sm text-slate-600 font-normal leading-relaxed space-y-3">
+                {principalInfo.message ? (
+                  principalInfo.message.split("\n\n").map((para, i) => (
+                    <p key={i}>{para}</p>
+                  ))
+                ) : (
+                  <>
+                    <p>
+                      Dear Parents, Students, and Well-Wishers,
+                      <br /><br />
+                      Since our inception in 2005 at Salarpur, Varanasi, <strong>St. G.N.G. School</strong> has remained
+                      steadfast in its commitment to providing an inspiring learning atmosphere where academic
+                      discipline meets traditional Indian cultural values (Sanskar).
+                    </p>
+                    <p>
+                      We believe that every child is blessed with infinite potential. Our teachers do not merely teach
+                      from textbooks—they mentor, encourage, and guide our students to become confident, polite, and
+                      responsible citizens of India. We thank our parents for their unwavering faith in St. GNG School.
+                    </p>
+                  </>
+                )}
+              </div>
 
               <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-4">
                 <div>
@@ -82,17 +91,22 @@ export default function PrincipalMessage() {
                     src={getOptimizedImageUrl(principalInfo.photoUrl, 400)}
                     alt={principalInfo.name}
                     className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLElement).style.display = "none";
+                    }}
                   />
                 </div>
               ) : (
-                <img
-                  src="/logo.png"
-                  alt="School Logo"
-                  className="h-20 w-20 object-contain"
-                  onError={(e) => {
-                    (e.target as HTMLElement).style.display = "none";
-                  }}
-                />
+                <div className="w-28 h-28 rounded-2xl bg-indigo-50 border-2 border-indigo-100 flex items-center justify-center p-3 shadow-sm">
+                  <img
+                    src="/logo.png"
+                    alt="School Logo"
+                    className="h-16 w-16 object-contain"
+                    onError={(e) => {
+                      (e.target as HTMLElement).style.display = "none";
+                    }}
+                  />
+                </div>
               )}
 
               <h4 className="text-sm font-black text-slate-900">{principalInfo.name}</h4>
