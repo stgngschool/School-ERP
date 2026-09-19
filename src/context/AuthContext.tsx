@@ -187,12 +187,24 @@ export interface MockReceipt {
   classSection?: string;
   admissionNo?: string;
   fatherName?: string;
+  rollNumber?: string | null;
+  rollNo?: string | null;
   details?: string;
   method?: string;
   studentIds?: string[];
   collectedBy?: string;
   collectedByRole?: string;
   createdById?: string;
+  upiId?: string;
+  upiMerchantName?: string;
+}
+
+export interface SchoolUpiAccount {
+  id: string;
+  label: string;
+  upiId: string;
+  merchantName: string;
+  isDefault?: boolean;
 }
 
 export interface MockSchoolInfo {
@@ -214,6 +226,7 @@ export interface MockSchoolInfo {
   udiseCode?: string;
   upiId?: string;
   upiMerchantName?: string;
+  upiAccounts?: SchoolUpiAccount[];
   enableTransport?: boolean;
   enableLateFee?: boolean;
   lateFeeGraceDays?: number;
@@ -381,7 +394,8 @@ interface AuthContextType {
     transactionRef?: string,
     parentProfileId?: string,
     manualReceiptNo?: string,
-    idempotencyKey?: string
+    idempotencyKey?: string,
+    upiDetails?: { upiAccountId?: string; upiId?: string; upiMerchantName?: string }
   ) => Promise<{ success: boolean; receipt?: any; error?: string }>;
   addStudent: (
     studentData: {
@@ -1656,7 +1670,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     transactionRef?: string,
     parentProfileId?: string,
     manualReceiptNo?: string,
-    idempotencyKey?: string
+    idempotencyKey?: string,
+    upiDetails?: { upiAccountId?: string; upiId?: string; upiMerchantName?: string }
   ): Promise<{ success: boolean; receipt?: any; error?: string }> => {
     try {
       const clientKey = idempotencyKey || (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : undefined);
@@ -1674,6 +1689,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           transactionRef,
           manualReceiptNo,
           idempotencyKey: clientKey,
+          upiAccountId: upiDetails?.upiAccountId,
+          upiId: upiDetails?.upiId,
+          upiMerchantName: upiDetails?.upiMerchantName,
         }),
       });
 

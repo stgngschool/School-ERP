@@ -3,6 +3,7 @@
 import React, { useState, useDeferredValue, useMemo } from "react";
 import { Printer, User, Users, RefreshCw } from "lucide-react";
 import { formatP, numberToIndianWords } from "@/lib/currency";
+import { enrichReceiptWithStudentDetails } from "@/lib/receipts";
 import ModernDatePicker from "@/components/ModernDatePicker";
 import { getTodayIST } from "@/lib/dateUtils";
 import { MockReceipt, MockLedgerEntry, MockStudent, MockUser, useAuth } from "@/context/AuthContext";
@@ -440,16 +441,7 @@ export default function LedgerReceiptsTab({
                               <button
                                 type="button"
                                 onClick={() => {
-                                  const std = students.find((s) => s.id === rec.studentId);
-                                  onOpenReceipt({
-                                    ...rec,
-                                    admissionNo: rec.admissionNo || (std ? std.admissionNo : "Unified/Family"),
-                                    fatherName: rec.fatherName || std?.fatherName || std?.parentName || "",
-                                    subtotal: rec.subtotal || rec.amount,
-                                    discount: rec.discount || 0,
-                                    arrears: rec.arrears || 0,
-                                    amountInWords: rec.amountInWords || numberToIndianWords(rec.amount),
-                                  });
+                                  onOpenReceipt(enrichReceiptWithStudentDetails(rec, students));
                                 }}
                                 className="p-1.5 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg text-slate-400 transition-all cursor-pointer"
                                 title="View / Print Receipt"
@@ -510,16 +502,7 @@ export default function LedgerReceiptsTab({
                           <button
                             type="button"
                             onClick={() => {
-                              const std = students.find((s) => s.id === rec.studentId);
-                              onOpenReceipt({
-                                ...rec,
-                                admissionNo: rec.admissionNo || (std ? std.admissionNo : "Unified/Family"),
-                                fatherName: rec.fatherName || std?.fatherName || std?.parentName || "",
-                                subtotal: rec.subtotal || rec.amount,
-                                discount: rec.discount || 0,
-                                arrears: rec.arrears || 0,
-                                amountInWords: rec.amountInWords || numberToIndianWords(rec.amount),
-                              });
+                              onOpenReceipt(enrichReceiptWithStudentDetails(rec, students));
                             }}
                             className="flex items-center gap-1.5 text-indigo-700 font-black bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/80 px-3 py-1.5 rounded-xl transition-all cursor-pointer active:scale-95 text-xs shadow-2xs"
                           >

@@ -17,6 +17,15 @@
   "udiseCode": "09670707502",
   "upiId": "8423926608@upi",
   "upiMerchantName": "St. GNG School",
+  "upiAccounts": [
+    {
+      "id": "acc-primary",
+      "label": "Primary School A/C",
+      "upiId": "8423926608@upi",
+      "merchantName": "St. GNG School",
+      "isDefault": true
+    }
+  ],
   "enableTransport": false,
   "enableLateFee": false,
   "lateFeeGraceDays": 10,

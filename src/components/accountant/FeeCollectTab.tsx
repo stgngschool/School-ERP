@@ -18,7 +18,9 @@ import {
 import { formatP, toRupees, toPaisa, numberToIndianWords } from "@/lib/currency";
 import { getISTDateString, getTodayIST } from "@/lib/dateUtils";
 import { isDueUpToCurrentMonth } from "@/lib/whatsapp";
-import { MockStudent, MockDueItem, MockReceipt, MockSchoolInfo, useAuth } from "@/context/AuthContext";
+import { enrichReceiptWithStudentDetails } from "@/lib/receipts";
+import { MockStudent, MockDueItem, MockReceipt, MockSchoolInfo, SchoolUpiAccount, useAuth } from "@/context/AuthContext";
+import QRCode from "qrcode";
 
 interface FeeCollectTabProps {
   students: MockStudent[];
@@ -39,7 +41,8 @@ interface FeeCollectTabProps {
     transactionRef?: string,
     parentProfileId?: string,
     manualReceiptNo?: string,
-    idempotencyKey?: string
+    idempotencyKey?: string,
+    upiDetails?: { upiAccountId?: string; upiId?: string; upiMerchantName?: string }
   ) => Promise<{ success: boolean; receipt?: any; error?: string }>;
   refreshBilling: () => Promise<void>;
 }
@@ -74,6 +77,39 @@ export default function FeeCollectTab({
   const [fifoAmount, setFifoAmount] = useState("");
   const [manualReceiptNo, setManualReceiptNo] = useState("");
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
+
+  // Multi-UPI receiving accounts
+  const upiAccounts: SchoolUpiAccount[] = useMemo(() => {
+    if (schoolInfo.upiAccounts && schoolInfo.upiAccounts.length > 0) {
+      return schoolInfo.upiAccounts;
+    }
+    if (schoolInfo.upiId) {
+      return [
+        {
+          id: "acc-primary",
+          label: "Primary School A/C",
+          upiId: schoolInfo.upiId,
+          merchantName: schoolInfo.upiMerchantName || schoolInfo.name || "St. GNG School",
+          isDefault: true,
+        },
+      ];
+    }
+    return [];
+  }, [schoolInfo]);
+
+  const [selectedUpiAccountId, setSelectedUpiAccountId] = useState<string>("");
+  const [upiQrDataUrl, setUpiQrDataUrl] = useState<string>("");
+
+  useEffect(() => {
+    if (upiAccounts.length > 0 && (!selectedUpiAccountId || !upiAccounts.some((a) => a.id === selectedUpiAccountId))) {
+      const def = upiAccounts.find((a) => a.isDefault) || upiAccounts[0];
+      setSelectedUpiAccountId(def.id);
+    }
+  }, [upiAccounts, selectedUpiAccountId]);
+
+  const activeUpiAccount = useMemo(() => {
+    return upiAccounts.find((a) => a.id === selectedUpiAccountId) || upiAccounts[0] || null;
+  }, [upiAccounts, selectedUpiAccountId]);
 
   // Debounced search state (200ms) to prevent jitter and rapid filtering
   const [searchQuery, setSearchQuery] = useState("");
@@ -391,6 +427,12 @@ export default function FeeCollectTab({
 
       const cleanManualNo = manualReceiptNo && manualReceiptNo.trim() ? manualReceiptNo.trim() : undefined;
       const clientKey = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : undefined;
+      const upiDetails = payMethod === "UPI" && activeUpiAccount ? {
+        upiAccountId: activeUpiAccount.id,
+        upiId: activeUpiAccount.upiId,
+        upiMerchantName: activeUpiAccount.merchantName,
+      } : undefined;
+
       const payRes = await recordItemizedPayment(
         null,
         items,
@@ -398,7 +440,8 @@ export default function FeeCollectTab({
         finalTransactionRef || undefined,
         undefined,
         cleanManualNo,
-        clientKey
+        clientKey,
+        upiDetails
       );
       if (!payRes.success) {
         showToast("error", "Payment Failed", payRes.error || "Payment failed. Please check backend logs or try again.");
@@ -453,6 +496,8 @@ export default function FeeCollectTab({
             ? serverRec.totalFamilyDueRemaining
             : familyOtherDuesSum + totalRemainingOnSelectedInvoices,
         transactionRef: serverRec.transactionRef || finalTransactionRef || "",
+        upiId: serverRec.upiId || (payMethod === "UPI" ? activeUpiAccount?.upiId : undefined),
+        upiMerchantName: serverRec.upiMerchantName || (payMethod === "UPI" ? activeUpiAccount?.merchantName : undefined),
         amountInWords:
           serverRec.amountInWords ||
           numberToIndianWords(serverRec.amount !== undefined ? serverRec.amount : totalPaid),
@@ -1160,16 +1205,7 @@ export default function FeeCollectTab({
                       <div
                         key={rec.id}
                         onClick={() => {
-                          const std = students.find((s) => s.id === rec.studentId);
-                          onOpenReceipt({
-                            ...rec,
-                            admissionNo: rec.admissionNo || (std ? std.admissionNo : "Unified/Family"),
-                            fatherName: rec.fatherName || std?.fatherName || std?.parentName || "",
-                            subtotal: rec.subtotal || rec.amount,
-                            discount: rec.discount || 0,
-                            arrears: rec.arrears || 0,
-                            amountInWords: rec.amountInWords || numberToIndianWords(rec.amount),
-                          });
+                          onOpenReceipt(enrichReceiptWithStudentDetails(rec, students));
                         }}
                         className="p-3 border border-slate-100 bg-slate-50/40 hover:bg-slate-100/60 rounded-xl flex items-center justify-between text-xs font-semibold text-slate-700 cursor-pointer transition-all hover:scale-[1.01] duration-150"
                       >
@@ -1331,27 +1367,94 @@ export default function FeeCollectTab({
                   {/* UPI Dynamic QR Code Selector */}
                   {payMethod === "UPI" && (() => {
                     const netPayable = selectedDueIds.reduce((sum, id) => sum + (payingState[id] ?? 0), 0);
-                    const upiLink = `upi://pay?pa=${schoolInfo.upiId || "gngschool@icici"}&pn=${encodeURIComponent(
-                      schoolInfo.upiMerchantName || schoolInfo.name || "School Finance"
+                    const destUpiId = activeUpiAccount?.upiId || schoolInfo.upiId || "8423926608@upi";
+                    const destMerchant = activeUpiAccount?.merchantName || schoolInfo.upiMerchantName || schoolInfo.name || "St. GNG School";
+                    const upiLink = `upi://pay?pa=${destUpiId}&pn=${encodeURIComponent(
+                      destMerchant
                     )}&am=${(netPayable / 100).toFixed(2)}&cu=INR&tn=${encodeURIComponent("School Fees")}`;
-                    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(
+                    const fallbackQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
                       upiLink
                     )}`;
+
                     return (
-                      <div className="bg-white p-4 rounded-xl border border-slate-100 flex flex-col items-center justify-center gap-3 text-center animate-in slide-in-from-top-2 duration-200">
+                      <div className="bg-white p-4 rounded-2xl border border-slate-200/90 flex flex-col items-center justify-center gap-3 text-center animate-in slide-in-from-top-2 duration-200 shadow-2xs">
+                        {/* Account Selector if multiple accounts exist */}
+                        {upiAccounts.length > 1 ? (
+                          <div className="w-full space-y-1.5 text-left border-b border-slate-100 pb-3">
+                            <label className="text-[9px] font-black text-slate-500 uppercase tracking-wider block">
+                              Select School Receiving Account
+                            </label>
+                            <div className="grid grid-cols-1 gap-1.5">
+                              {upiAccounts.map((acc) => {
+                                const isSelected = (activeUpiAccount?.id || upiAccounts[0].id) === acc.id;
+                                return (
+                                  <button
+                                    key={acc.id}
+                                    type="button"
+                                    onClick={() => setSelectedUpiAccountId(acc.id)}
+                                    className={`w-full flex items-center justify-between p-2 rounded-xl border text-left transition-all cursor-pointer ${
+                                      isSelected
+                                        ? "bg-indigo-50/90 border-indigo-600 text-indigo-950 font-bold shadow-2xs ring-1 ring-indigo-500/20"
+                                        : "bg-slate-50/70 border-slate-200 text-slate-700 hover:bg-slate-100/70 font-medium"
+                                    }`}
+                                  >
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-xs font-black truncate">{acc.label}</span>
+                                        {acc.isDefault && (
+                                          <span className="text-[7.5px] font-extrabold uppercase bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded">
+                                            Default
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p className="text-[9.5px] text-slate-500 font-mono truncate">{acc.upiId}</p>
+                                    </div>
+                                    <div
+                                      className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${
+                                        isSelected
+                                          ? "border-indigo-600 bg-indigo-600 text-white"
+                                          : "border-slate-300 bg-white"
+                                      }`}
+                                    >
+                                      {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : upiAccounts.length === 1 ? (
+                          <div className="w-full bg-slate-50 border border-slate-200/80 p-2 rounded-xl text-left">
+                            <span className="text-[8px] font-extrabold text-slate-400 uppercase tracking-wider block">
+                              Receiving UPI Account
+                            </span>
+                            <p className="text-xs font-black text-slate-900 leading-tight">
+                              {upiAccounts[0].label} <span className="text-[10px] text-indigo-600 font-mono font-bold">({upiAccounts[0].upiId})</span>
+                            </p>
+                          </div>
+                        ) : null}
+
                         <span className="text-[9px] font-black text-indigo-700 uppercase tracking-wider block">
-                          Scan UPI QR to Pay
+                          Scan Dynamic Locked-Amount QR
                         </span>
-                        <div className="relative p-2 bg-slate-50 rounded-xl border border-slate-200/50">
-                          <img src={qrUrl} alt="UPI QR Code" className="w-36 h-36 mx-auto" />
+
+                        <div className="relative p-2 bg-slate-50 rounded-xl border border-slate-200/50 shadow-2xs">
+                          <img
+                            src={upiQrDataUrl || fallbackQrUrl}
+                            alt="UPI QR Code"
+                            className="w-36 h-36 mx-auto object-contain"
+                          />
                           <div className="absolute inset-x-2 top-2 h-0.5 bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.8)] animate-bounce" />
                         </div>
-                        <p className="text-xs font-black text-indigo-600">{formatP(netPayable)}</p>
-                        <p className="text-[8px] text-slate-400 font-semibold leading-tight max-w-[185px] mx-auto">
-                          Scan using GPay, PhonePe, Paytm, or any UPI app. Amount is pre-filled.
-                        </p>
 
-                        <div className="w-full space-y-1 text-left">
+                        <div className="space-y-0.5">
+                          <p className="text-sm font-black text-indigo-600 font-mono">{formatP(netPayable)}</p>
+                          <p className="text-[8px] text-slate-400 font-semibold leading-tight max-w-[200px] mx-auto">
+                            Scan via PhonePe, Google Pay, Paytm, or BHIM. Amount is fixed & non-editable.
+                          </p>
+                        </div>
+
+                        <div className="w-full space-y-1 text-left border-t border-slate-100 pt-2.5">
                           <div className="flex items-center justify-between">
                             <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">
                               UPI Transaction Ref ID (UTR)

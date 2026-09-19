@@ -119,7 +119,8 @@ export default function AccountantDashboard() {
       `Fee payment has been successfully recorded.\n\n` +
       `📄 *Receipt No:* ${rec.receiptNo}\n` +
       (rec.manualReceiptNo ? `📖 *Book/Offline Rec No:* ${rec.manualReceiptNo}\n` : ``) +
-      `👦 *Student / Family:* ${rec.studentName} (${rec.classSection})\n` +
+      `👦 *Student / Family:* ${rec.studentName} (${rec.classSection || "General"})\n` +
+      (rec.rollNumber || rec.rollNo ? `🔢 *Roll No:* ${rec.rollNumber || rec.rollNo}\n` : ``) +
       `💳 *Payment Method:* ${rec.method} Counter\n` +
       `📅 *Date:* ${rec.createdAt || getTodayIST()}\n\n` +
       `*Fee Breakdown:*\n${itemsText}\n\n` +

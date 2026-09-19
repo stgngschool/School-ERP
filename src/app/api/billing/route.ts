@@ -369,6 +369,7 @@ export async function GET(request: Request) {
               id: true,
               name: true,
               admissionNumber: true,
+              rollNumber: true,
               fatherName: true,
               class: {
                 select: {
@@ -395,9 +396,17 @@ export async function GET(request: Request) {
                   amount: true,
                   student: {
                     select: {
+                      id: true,
                       name: true,
                       admissionNumber: true,
+                      rollNumber: true,
                       fatherName: true,
+                      class: {
+                        select: {
+                          name: true,
+                          section: true,
+                        },
+                      },
                     },
                   },
                 },
@@ -531,10 +540,50 @@ export async function GET(request: Request) {
             .filter(Boolean)
         )
       );
+      const rollNumbers = Array.from(
+        new Set(
+          r.items
+            .map((i: any) => i.ledgerEntry?.student?.rollNumber)
+            .filter(Boolean)
+        )
+      );
+      const admissionNumbers = Array.from(
+        new Set(
+          r.items
+            .map((i: any) => i.ledgerEntry?.student?.admissionNumber)
+            .filter(Boolean)
+        )
+      );
+
+      const studentsMap = new Map<string, { id: string; name: string; classSection: string; rollNo: string; admissionNo: string }>();
+      if (r.student) {
+        studentsMap.set(r.student.id, {
+          id: r.student.id,
+          name: r.student.name,
+          classSection: r.student.class ? `${r.student.class.name}-${r.student.class.section}` : "",
+          rollNo: r.student.rollNumber || "",
+          admissionNo: r.student.admissionNumber || "",
+        });
+      }
+      for (const i of r.items) {
+        const s = i.ledgerEntry?.student;
+        if (s && !studentsMap.has(s.id)) {
+          studentsMap.set(s.id, {
+            id: s.id,
+            name: s.name,
+            classSection: s.class ? `${s.class.name}-${s.class.section}` : "",
+            rollNo: s.rollNumber || "",
+            admissionNo: s.admissionNumber || "",
+          });
+        }
+      }
+      const studentsList = Array.from(studentsMap.values());
 
       const sClass = r.student?.class
         ? `${r.student.class.name}-${r.student.class.section}`
         : classSections.join(", ");
+
+      const sRollNo = r.student?.rollNumber || rollNumbers.join(", ");
 
       let meta: any = null;
       if (r.remarks) {
@@ -567,6 +616,7 @@ export async function GET(request: Request) {
         const orig = i.amount;
         return {
           name: `${sName}${desc || "Fee Particular"}`,
+          studentPrefix: i.ledgerEntry?.student?.name || undefined,
           originalAmount: orig,
           amount: i.amount,
           discount: 0,
@@ -576,14 +626,21 @@ export async function GET(request: Request) {
 
       const items =
         meta?.items && Array.isArray(meta.items) && meta.items.length > 0
-          ? meta.items
+          ? meta.items.map((it: any, idx: number) => {
+              if (studentNames.length > 1 && !it.name?.includes(":")) {
+                const matchedStudent = r.items[idx]?.ledgerEntry?.student?.name;
+                if (matchedStudent) {
+                  return { ...it, name: `${matchedStudent}: ${it.name}`, studentPrefix: matchedStudent };
+                }
+              }
+              return it;
+            })
           : fallbackItems;
 
       const admissionNo =
         meta?.admissionNo ||
         r.student?.admissionNumber ||
-        r.items[0]?.ledgerEntry?.student?.admissionNumber ||
-        "Unified Family";
+        (admissionNumbers.length > 0 ? admissionNumbers.join(", ") : "Unified Family");
 
       const fatherName =
         meta?.fatherName ||
@@ -609,13 +666,18 @@ export async function GET(request: Request) {
         method: r.paymentMethod,
         transactionRef: r.transactionReference || "",
         createdAt: getISTDateString(r.createdAt),
-        studentName: r.student?.name || studentNames.join(", "),
+        studentName: r.student?.name || (studentNames.length > 0 ? studentNames.join(", ") : "Student"),
         classSection: sClass,
+        rollNumber: sRollNo || null,
+        rollNo: sRollNo || null,
         admissionNo,
         fatherName,
+        studentsList: meta?.studentsList && meta.studentsList.length > 0 ? meta.studentsList : studentsList,
         collectedBy: r.createdBy?.name || "System",
         collectedByRole: r.createdBy?.role || "ADMIN",
         createdById: r.createdById,
+        upiId: meta?.upiId || undefined,
+        upiMerchantName: meta?.upiMerchantName || undefined,
         details: r.items
           .map((i: any) => {
             const sName = i.ledgerEntry?.student?.name || "Student";
@@ -752,7 +814,7 @@ export async function POST(request: Request) {
     clearServerBillingCache();
 
     const body = await request.json();
-    const { action, studentId, parentProfileId, items, paymentMethod, transactionRef, manualReceiptNo, title, amount, headName } = body;
+    const { action, studentId, parentProfileId, items, paymentMethod, transactionRef, manualReceiptNo, title, amount, headName, upiId, upiMerchantName, upiAccountId } = body;
     const cleanManualReceiptNo = manualReceiptNo && typeof manualReceiptNo === "string" && manualReceiptNo.trim() ? manualReceiptNo.trim() : null;
 
     // Single student custom charge handler
@@ -1051,8 +1113,21 @@ export async function POST(request: Request) {
             createdAt: existingReceipt.createdAt.toISOString().split("T")[0],
             studentName: existingReceipt.student?.name || "Multiple Siblings",
             classSection: existingReceipt.student ? `${existingReceipt.student.class.name}-${existingReceipt.student.class.section}` : "Unified Family",
+            rollNumber: existingReceipt.student?.rollNumber || null,
+            rollNo: existingReceipt.student?.rollNumber || null,
+            admissionNo: existingReceipt.student?.admissionNumber || "Unified Family",
+            fatherName: existingReceipt.student?.fatherName || "",
+            studentsList: snapshot.studentsList || (existingReceipt.student ? [{
+              id: existingReceipt.student.id,
+              name: existingReceipt.student.name,
+              classSection: existingReceipt.student.class ? `${existingReceipt.student.class.name}-${existingReceipt.student.class.section}` : "",
+              rollNo: existingReceipt.student.rollNumber || "",
+              admissionNo: existingReceipt.student.admissionNumber || "",
+            }] : []),
             collectedBy: "Finance Staff",
             collectedByRole: "ADMIN",
+            upiId: snapshot.upiId || undefined,
+            upiMerchantName: snapshot.upiMerchantName || undefined,
             items: snapshot.items || [],
             isDuplicateRetry: true,
           },
@@ -1060,7 +1135,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const { receipt: result, snapshot } = await db.$transaction(async (tx) => {
+    const { receipt: result, snapshot, validatedItems } = await db.$transaction(async (tx) => {
       const receiptNo = await getNextReceiptNumber(tx);
       let actualTotalPayPaisa = 0;
 
@@ -1312,6 +1387,20 @@ export async function POST(request: Request) {
         familyTotalOutstandingPaisa - actualTotalPayPaisa - totalDiscountPaisa
       );
 
+      const lockedStudents = studentIdArray.length > 0
+        ? await tx.student.findMany({
+            where: { id: { in: studentIdArray } },
+            select: {
+              id: true,
+              name: true,
+              rollNumber: true,
+              admissionNumber: true,
+              class: { select: { name: true, section: true } },
+            },
+          })
+        : [];
+      const studentNameMap = new Map(lockedStudents.map((s) => [s.id, s.name]));
+
       const snapshot = {
         idempotencyKey: idempotencyKey || undefined,
         manualReceiptNo: cleanManualReceiptNo || undefined,
@@ -1323,17 +1412,36 @@ export async function POST(request: Request) {
         // ── RS-01: amountInWords computed from the immutable amountPaid at payment time
         // so historical reprints never recompute it from the current ledger.
         amountInWords: numberToIndianWords(actualTotalPayPaisa),
-        items: validatedItems.map((vi) => ({
-          name: vi.chargeName,
-          originalAmount: vi.charge.amount,          // original charge (for display)
-          amount: vi.payAmountPaisa,
-          discount: vi.discountAmountPaisa,
-          // ── B-03: balance = outstanding BEFORE this payment − what this receipt covers
-          balance: Math.max(
-            0,
-            vi.outstandingPaisa - vi.payAmountPaisa - vi.discountAmountPaisa
-          ),
+        items: validatedItems.map((vi) => {
+          const sName = studentNameMap.get(vi.itemStudentId);
+          const hasMultiStudents = studentIdArray.length > 1;
+          const displayName = (hasMultiStudents && sName && !vi.chargeName.includes(":"))
+            ? `${sName}: ${vi.chargeName}`
+            : vi.chargeName;
+          return {
+            studentId: vi.itemStudentId,
+            studentName: sName || null,
+            name: displayName,
+            originalAmount: vi.charge.amount,          // original charge (for display)
+            amount: vi.payAmountPaisa,
+            discount: vi.discountAmountPaisa,
+            // ── B-03: balance = outstanding BEFORE this payment − what this receipt covers
+            balance: Math.max(
+              0,
+              vi.outstandingPaisa - vi.payAmountPaisa - vi.discountAmountPaisa
+            ),
+          };
+        }),
+        studentsList: lockedStudents.map((s) => ({
+          id: s.id,
+          name: s.name,
+          classSection: s.class ? `${s.class.name}-${s.class.section}` : "",
+          rollNo: s.rollNumber || "",
+          admissionNo: s.admissionNumber || "",
         })),
+        upiAccountId: upiAccountId || undefined,
+        upiId: upiId || undefined,
+        upiMerchantName: upiMerchantName || undefined,
       };
 
       const receipt = await tx.receipt.create({
@@ -1445,16 +1553,42 @@ export async function POST(request: Request) {
         }
       }
 
-      return { receipt, snapshot };
+      return { receipt, snapshot, validatedItems };
     });
 
     // Return receipt formatted with details
-    const student = resolvedStudentId
-      ? await db.student.findUnique({
-          where: { id: resolvedStudentId },
+    const uniqueItemStudentIds = Array.from(
+      new Set(validatedItems.map((vi: any) => vi.itemStudentId).filter(Boolean))
+    ) as string[];
+    const relatedStudents: any[] = uniqueItemStudentIds.length > 0
+      ? await db.student.findMany({
+          where: { id: { in: uniqueItemStudentIds } },
           include: { class: true },
         })
+      : [];
+
+    const student: any = resolvedStudentId
+      ? relatedStudents.find((s) => s.id === resolvedStudentId) ||
+        (await db.student.findUnique({
+          where: { id: resolvedStudentId },
+          include: { class: true },
+        }))
       : null;
+
+    const studentNamesList = relatedStudents.map((s: any) => s.name);
+    const classSectionsList = Array.from(
+      new Set(
+        relatedStudents
+          .map((s: any) => (s.class ? `${s.class.name}-${s.class.section}` : ""))
+          .filter(Boolean)
+      )
+    );
+    const rollNumbersList = Array.from(
+      new Set(relatedStudents.map((s: any) => s.rollNumber).filter(Boolean))
+    );
+    const admissionNumbersList = Array.from(
+      new Set(relatedStudents.map((s: any) => s.admissionNumber).filter(Boolean))
+    );
 
     const collectorUser = await db.user.findUnique({
       where: { id: authUser.userId },
@@ -1482,10 +1616,29 @@ export async function POST(request: Request) {
         paymentMethod: result.paymentMethod,
         transactionRef: result.transactionReference || "",
         createdAt: result.createdAt.toISOString().split("T")[0],
-        studentName: student?.name || "Multiple Siblings",
-        classSection: student ? `${student.class.name}-${student.class.section}` : "Unified Family",
+        studentName:
+          student?.name ||
+          (studentNamesList.length > 0 ? studentNamesList.join(", ") : "Multiple Siblings"),
+        classSection: student
+          ? `${student.class.name}-${student.class.section}`
+          : (classSectionsList.join(", ") || "Unified Family"),
+        rollNumber: student?.rollNumber || (rollNumbersList.length > 0 ? rollNumbersList.join(", ") : null),
+        rollNo: student?.rollNumber || (rollNumbersList.length > 0 ? rollNumbersList.join(", ") : null),
+        admissionNo:
+          student?.admissionNumber ||
+          (admissionNumbersList.length > 0 ? admissionNumbersList.join(", ") : "Unified Family"),
+        fatherName: student?.fatherName || relatedStudents[0]?.fatherName || "",
+        studentsList: snapshot.studentsList || relatedStudents.map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          classSection: s.class ? `${s.class.name}-${s.class.section}` : "",
+          rollNo: s.rollNumber || "",
+          admissionNo: s.admissionNumber || "",
+        })),
         collectedBy: collectorUser?.name || authUser.username || "Finance Staff",
         collectedByRole: collectorUser?.role || authUser.role || "ADMIN",
+        upiId: snapshot.upiId || undefined,
+        upiMerchantName: snapshot.upiMerchantName || undefined,
         // RS-01: Return full snapshot items instead of the simplified "Payment applied" descriptions
         // so the immediate receipt modal shows the correct fee-head-level breakdown.
         items: snapshot.items,
