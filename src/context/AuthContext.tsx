@@ -1697,7 +1697,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const data = await res.json();
       if (res.ok) {
-        await refreshBilling().catch((err: any) => console.error("Billing refresh error:", err));
+        // Non-blocking refresh so receipt modal appears instantly without waiting for 7000+ records
+        refreshBilling().catch((err: any) => console.error("Billing refresh error:", err));
         return { success: true, receipt: data.receipt };
       }
       return { success: false, error: data.error || "Payment checkout failed." };

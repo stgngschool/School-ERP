@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 import db from "@/lib/db";
 export const dynamic = "force-dynamic";
 import { cookies } from "next/headers";
@@ -947,9 +948,10 @@ export async function POST(request: Request) {
           where: { referenceId: targetReceipt.id },
         });
 
-        for (const entry of linkedLedgerEntries) {
-          await tx.ledgerEntry.create({
-            data: {
+        if (linkedLedgerEntries.length > 0) {
+          await tx.ledgerEntry.createMany({
+            data: linkedLedgerEntries.map((entry) => ({
+              id: randomUUID(),
               studentId: entry.studentId,
               feeHeadId: entry.feeHeadId,
               entryType: EntryType.REVERSAL,
@@ -957,7 +959,7 @@ export async function POST(request: Request) {
               referenceId: targetReceipt.id,
               description: `Reversal for Receipt ${targetReceipt.receiptNumber}: ${entry.description}`,
               createdById: creatorUserId,
-            },
+            })),
           });
         }
 
@@ -974,7 +976,7 @@ export async function POST(request: Request) {
         });
 
         return updated;
-      });
+      }, { maxWait: 10000, timeout: 30000 });
 
       // Invalidate server cache post-commit
       clearServerBillingCache();
@@ -1135,7 +1137,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const { receipt: result, snapshot, validatedItems } = await db.$transaction(async (tx) => {
+    const { receipt: result, snapshot, validatedItems, relatedStudents } = await db.$transaction(async (tx) => {
       const receiptNo = await getNextReceiptNumber(tx);
       let actualTotalPayPaisa = 0;
 
@@ -1395,6 +1397,7 @@ export async function POST(request: Request) {
               name: true,
               rollNumber: true,
               admissionNumber: true,
+              fatherName: true,
               class: { select: { name: true, section: true } },
             },
           })
@@ -1476,96 +1479,99 @@ export async function POST(request: Request) {
         },
       });
 
-      // 3. Apply items to ledger and receipt
+      // 3. Apply items to ledger and receipt (Batched via createMany to eliminate N+1 latency & timeouts)
+      const ledgerEntriesToCreate: any[] = [];
+      const receiptItemsToCreate: any[] = [];
+
       for (const vi of validatedItems) {
         const { charge, itemStudentId, chargeName, payAmountPaisa, discountAmountPaisa, fineAmountPaisa } = vi;
 
         // C. Handle Fine if any
         if (fineAmountPaisa > 0) {
-          const fineEntry = await tx.ledgerEntry.create({
-            data: {
-              studentId: itemStudentId,
-              feeHeadId: charge.feeHeadId,
-              entryType: EntryType.FINE,
-              amount: fineAmountPaisa,
-              description: `Late Fee Fine: ${chargeName}`,
-              createdById: creatorUserId,
-            },
+          const fineEntryId = randomUUID();
+          ledgerEntriesToCreate.push({
+            id: fineEntryId,
+            studentId: itemStudentId,
+            feeHeadId: charge.feeHeadId,
+            entryType: EntryType.FINE,
+            amount: fineAmountPaisa,
+            description: `Late Fee Fine: ${chargeName}`,
+            createdById: creatorUserId,
           });
 
           // Create offsetting PAYMENT for the fine (so it doesn't show as permanently unpaid)
-          await tx.receiptItem.create({
-            data: {
-              receiptId: receipt.id,
-              ledgerEntryId: fineEntry.id,
-              amount: fineAmountPaisa,
-            },
+          receiptItemsToCreate.push({
+            id: randomUUID(),
+            receiptId: receipt.id,
+            ledgerEntryId: fineEntryId,
+            amount: fineAmountPaisa,
           });
-          await tx.ledgerEntry.create({
-            data: {
-              studentId: itemStudentId,
-              feeHeadId: charge.feeHeadId,
-              entryType: EntryType.PAYMENT,
-              amount: -fineAmountPaisa,
-              referenceId: receipt.id,
-              description: `Payment for: Late Fee Fine: ${chargeName}`,
-              createdById: creatorUserId,
-            },
+
+          ledgerEntriesToCreate.push({
+            id: randomUUID(),
+            studentId: itemStudentId,
+            feeHeadId: charge.feeHeadId,
+            entryType: EntryType.PAYMENT,
+            amount: -fineAmountPaisa,
+            referenceId: receipt.id,
+            description: `Payment for: Late Fee Fine: ${chargeName}`,
+            createdById: creatorUserId,
           });
         }
 
         // A. Handle Discount if any
         if (discountAmountPaisa > 0) {
-          await tx.ledgerEntry.create({
-            data: {
-              studentId: itemStudentId,
-              feeHeadId: charge.feeHeadId,
-              entryType: EntryType.DISCOUNT,
-              amount: -discountAmountPaisa,
-              referenceId: receipt.id,
-              description: `Discount for: ${chargeName}`,
-              createdById: creatorUserId,
-            },
+          ledgerEntriesToCreate.push({
+            id: randomUUID(),
+            studentId: itemStudentId,
+            feeHeadId: charge.feeHeadId,
+            entryType: EntryType.DISCOUNT,
+            amount: -discountAmountPaisa,
+            referenceId: receipt.id,
+            description: `Discount for: ${chargeName}`,
+            createdById: creatorUserId,
           });
         }
 
         // B. Handle Payment if any
         if (payAmountPaisa > 0) {
-          await tx.receiptItem.create({
-            data: {
-              receiptId: receipt.id,
-              ledgerEntryId: charge.id,
-              amount: payAmountPaisa,
-            },
+          receiptItemsToCreate.push({
+            id: randomUUID(),
+            receiptId: receipt.id,
+            ledgerEntryId: charge.id,
+            amount: payAmountPaisa,
           });
 
-          await tx.ledgerEntry.create({
-            data: {
-              studentId: itemStudentId,
-              feeHeadId: charge.feeHeadId,
-              entryType: EntryType.PAYMENT,
-              amount: -payAmountPaisa,
-              referenceId: receipt.id,
-              description: `Payment for: ${chargeName}`,
-              createdById: creatorUserId,
-            },
+          ledgerEntriesToCreate.push({
+            id: randomUUID(),
+            studentId: itemStudentId,
+            feeHeadId: charge.feeHeadId,
+            entryType: EntryType.PAYMENT,
+            amount: -payAmountPaisa,
+            referenceId: receipt.id,
+            description: `Payment for: ${chargeName}`,
+            createdById: creatorUserId,
           });
         }
       }
 
-      return { receipt, snapshot, validatedItems };
-    });
+      // Ledger entries must be inserted before ReceiptItems to satisfy foreign key constraints
+      if (ledgerEntriesToCreate.length > 0) {
+        await tx.ledgerEntry.createMany({
+          data: ledgerEntriesToCreate,
+        });
+      }
 
-    // Return receipt formatted with details
-    const uniqueItemStudentIds = Array.from(
-      new Set(validatedItems.map((vi: any) => vi.itemStudentId).filter(Boolean))
-    ) as string[];
-    const relatedStudents: any[] = uniqueItemStudentIds.length > 0
-      ? await db.student.findMany({
-          where: { id: { in: uniqueItemStudentIds } },
-          include: { class: true },
-        })
-      : [];
+      if (receiptItemsToCreate.length > 0) {
+        await tx.receiptItem.createMany({
+          data: receiptItemsToCreate,
+        });
+      }
+
+      return { receipt, snapshot, validatedItems, relatedStudents: lockedStudents };
+    }, { maxWait: 10000, timeout: 30000 });
+
+    // Return receipt formatted with details (reuse relatedStudents from tx to save network roundtrip)
 
     const student: any = resolvedStudentId
       ? relatedStudents.find((s) => s.id === resolvedStudentId) ||
