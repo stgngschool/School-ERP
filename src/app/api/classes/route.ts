@@ -3,11 +3,24 @@ import { db } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
 import { ClassStatus } from "@prisma/client";
 import { isGhostClassName, sortClassObjects } from "@/lib/classUtils";
+import { BoundedCache } from "@/lib/cache/BoundedCache";
 
 export const dynamic = "force-dynamic";
 
+const serverClassesCache = new BoundedCache(10, 10 * 60 * 1000);
+
 export async function GET(request: Request) {
   try {
+    const cachedClasses = serverClassesCache.get("active_classes");
+    if (cachedClasses) {
+      return NextResponse.json(cachedClasses, {
+        headers: {
+          "Cache-Control": "private, max-age=60, stale-while-revalidate=300",
+          "X-Server-Cache": "HIT",
+        },
+      });
+    }
+
     const rawClasses = await db.class.findMany({
       where: {
         status: ClassStatus.ACTIVE,
@@ -23,9 +36,11 @@ export async function GET(request: Request) {
       ]
     });
     const classes = sortClassObjects(rawClasses.filter(c => !isGhostClassName(c.name)));
+    serverClassesCache.set("active_classes", classes);
+
     return NextResponse.json(classes, {
       headers: {
-        "Cache-Control": "private, no-cache, no-store, must-revalidate",
+        "Cache-Control": "private, max-age=60, stale-while-revalidate=300",
       },
     });
   } catch (error) {
@@ -63,6 +78,7 @@ export async function POST(request: Request) {
       });
     }
 
+    serverClassesCache.clear();
     return NextResponse.json({ success: true, class: classObj });
   } catch (error) {
     console.error("Create class error:", error);
@@ -88,6 +104,7 @@ export async function DELETE(request: Request) {
       data: { status: ClassStatus.ARCHIVED },
     });
 
+    serverClassesCache.clear();
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Delete class error:", error);

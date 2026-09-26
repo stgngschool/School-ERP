@@ -13,10 +13,9 @@ import { BoundedCache } from "@/lib/cache/BoundedCache";
 import { getISTDateString } from "@/lib/dateUtils";
 import { validateCsrfOrigin } from "@/lib/security";
 
-// ── C-02 fix: Bounded LRU cache (max 50 entries, 20s TTL) replaces the
-// unbounded Map that could grow indefinitely with varied query parameters,
-// risking an Out-of-Memory server crash via trivial DoS.
-const serverBillingCache = new BoundedCache(50, 20000);
+// ── C-02 fix: Bounded LRU cache (max 50 entries, 5-minute TTL)
+// Drastically cuts Supabase egress bandwidth. Cleared immediately on any mutation.
+const serverBillingCache = new BoundedCache(50, 5 * 60 * 1000);
 
 function clearServerBillingCache() {
   serverBillingCache.clear();
@@ -336,7 +335,7 @@ export async function GET(request: Request) {
     ] = await Promise.all([
       db.ledgerEntry.findMany({
         where: ledgerWhere,
-        take: allParam ? undefined : 150,
+        take: allParam ? 2500 : 150,
         orderBy: { createdAt: "desc" },
         select: {
           id: true,
@@ -397,17 +396,7 @@ export async function GET(request: Request) {
                   amount: true,
                   student: {
                     select: {
-                      id: true,
                       name: true,
-                      admissionNumber: true,
-                      rollNumber: true,
-                      fatherName: true,
-                      class: {
-                        select: {
-                          name: true,
-                          section: true,
-                        },
-                      },
                     },
                   },
                 },

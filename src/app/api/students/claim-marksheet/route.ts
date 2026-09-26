@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
+import { clearServerStudentsCache } from "@/lib/cache/studentsCache";
 
 export async function POST(request: Request) {
   try {
@@ -24,6 +25,8 @@ export async function POST(request: Request) {
       where: { id: studentId },
       data: { isMarksheetClaimed }
     });
+
+    clearServerStudentsCache();
 
     return NextResponse.json({ success: true, student });
   } catch (error: any) {

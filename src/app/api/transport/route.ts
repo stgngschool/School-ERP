@@ -3,7 +3,11 @@ import { db } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
 import { validatePaisaAmount, getSafeErrorMessage } from "@/lib/validation";
 
+import { BoundedCache } from "@/lib/cache/BoundedCache";
+
 export const dynamic = "force-dynamic";
+
+const serverTransportCache = new BoundedCache(10, 10 * 60 * 1000);
 
 export async function GET(request: Request) {
   try {
@@ -12,12 +16,30 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
     }
 
+    const cachedStops = serverTransportCache.get("transport_stops");
+    if (cachedStops) {
+      return NextResponse.json(cachedStops, {
+        headers: {
+          "Cache-Control": "private, max-age=60, stale-while-revalidate=300",
+          "X-Server-Cache": "HIT",
+        },
+      });
+    }
+
     const stops = await db.transportStop.findMany({
+      select: {
+        id: true,
+        name: true,
+        amount: true,
+      },
       orderBy: { name: "asc" },
     });
+
+    serverTransportCache.set("transport_stops", stops);
+
     return NextResponse.json(stops, {
       headers: {
-        "Cache-Control": "private, no-cache, no-store, must-revalidate",
+        "Cache-Control": "private, max-age=60, stale-while-revalidate=300",
       },
     });
   } catch (error) {
@@ -118,6 +140,7 @@ export async function POST(request: Request) {
       },
     }).catch((err) => console.error("Audit log error on transport:", err));
 
+    serverTransportCache.clear();
     return NextResponse.json({ success: true, stop });
   } catch (error) {
     console.error("Create transport stop error:", error);
@@ -148,6 +171,7 @@ export async function DELETE(request: Request) {
       if (e?.code !== "P2025") throw e;
     }
 
+    serverTransportCache.clear();
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Delete transport stop error:", error);

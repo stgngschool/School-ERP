@@ -69,19 +69,9 @@ export function isDueUpToCurrentMonth(
     }
   }
 
-  // ── BL-04: 3. Session-start fees without explicit dueDate (Admission, Arrears, M/S, Previous Session)
-  if (
-    itemName.includes("admission") ||
-    itemName.includes("arrear") ||
-    itemName.includes("previous session") ||
-    itemName.includes("m/s") ||
-    itemName.includes("annual")
-  ) {
-    return currentAcademicIndex >= 0;
-  }
-
-  // Default: Unknown non-monthly items without dueDate do not default to overdue
-  return false;
+  // ── BL-04: 3. Session-start fees, arrears, or general dues without explicit dueDate
+  // Any general fee without a future academic month or future dueDate is overdue
+  return true;
 }
 
 export function getCurrentMonthName(date = new Date()): string {
@@ -122,8 +112,14 @@ export function generateFeeReminderText(params: FeeReminderParams): string {
   const currentMonthName = getCurrentMonthName();
 
   // Filter dues up to the current month only
-  const activeUnpaidDues = unpaidDues.filter((d) => isDueUpToCurrentMonth(d));
-  const totalDue = activeUnpaidDues.reduce((sum, item) => sum + item.amount, 0);
+  let activeUnpaidDues = unpaidDues.filter((d) => isDueUpToCurrentMonth(d));
+  // SAFETY FALLBACK: If filtering resulted in 0 dues but caller provided unpaidDues,
+  // do not wipe them out to ₹0 — use all unpaidDues passed
+  if (activeUnpaidDues.length === 0 && unpaidDues.length > 0) {
+    activeUnpaidDues = unpaidDues;
+  }
+
+  const totalDue = activeUnpaidDues.reduce((sum, item) => sum + (item.amount || 0), 0);
 
   // ── WA-02: Show all active dues (no silent truncation at 5 items)
   const itemsBreakdown = activeUnpaidDues
@@ -137,10 +133,27 @@ export function generateFeeReminderText(params: FeeReminderParams): string {
       ? "Accounts & Fee Counter"
       : "School Administration";
 
+  // Build clean student identification string without weird dashes or empty placeholders
+  const details: string[] = [];
+  if (student.class) {
+    details.push(`Class ${student.class}${student.section ? `-${student.section}` : ""}`);
+  }
+  if (student.rollNo) {
+    details.push(`Roll No: ${student.rollNo}`);
+  }
+  if (student.admissionNo) {
+    details.push(`ADM: ${student.admissionNo}`);
+  }
+  const detailsStr = details.length > 0 ? ` (${details.join(", ")})` : "";
+
+  const parentSalutation = student.fatherName
+    ? `Respected ${student.fatherName} (Parent of *${student.name}*${detailsStr})`
+    : `Respected Parent of *${student.name}*${detailsStr}`;
+
   return `*Fee Due Reminder — ${schoolName}*
 
 ${greeting} Sir/Madam,
-Respected Parent of *${student.name}* (Class ${student.class}-${student.section}${student.rollNo ? `, Roll No: ${student.rollNo}` : ""}${student.admissionNo ? `, ADM: ${student.admissionNo}` : ""}),
+${parentSalutation},
 
 This is a gentle notification from the ${roleDesignation} regarding pending school fee dues:
 

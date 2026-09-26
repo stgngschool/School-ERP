@@ -2,8 +2,11 @@ import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { generateYearlyCharges, generateYearlyChargesBulk, getAcademicYear } from "@/lib/generateYearlyCharges";
 import { getAuthUser } from "@/lib/auth";
+import { BoundedCache } from "@/lib/cache/BoundedCache";
 
 export const dynamic = "force-dynamic";
+
+const serverFeeConfigCache = new BoundedCache(10, 10 * 60 * 1000);
 
 export async function GET(request: Request) {
   try {
@@ -12,10 +15,19 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
     }
 
+    const cachedConfig = serverFeeConfigCache.get("fee_config");
+    if (cachedConfig) {
+      return NextResponse.json(cachedConfig, {
+        headers: {
+          "Cache-Control": "private, max-age=60, stale-while-revalidate=300",
+          "X-Server-Cache": "HIT",
+        },
+      });
+    }
+
     // ── F-04: GET must be a pure read operation without database side effects.
     // Return active fee heads directly without upserting defaults on read.
     const heads = await db.feeHead.findMany({ where: { status: "ACTIVE" } });
-
 
     const structures = await db.feeStructure.findMany({
       include: {
@@ -42,9 +54,16 @@ export async function GET(request: Request) {
       })),
     }));
 
-    return NextResponse.json({
+    const result = {
       feeHeads: formattedHeads,
       feeStructures: formattedStructures,
+    };
+    serverFeeConfigCache.set("fee_config", result);
+
+    return NextResponse.json(result, {
+      headers: {
+        "Cache-Control": "private, max-age=60, stale-while-revalidate=300",
+      },
     });
   } catch (error) {
     console.error("Fetch fee config error:", error);
@@ -75,6 +94,7 @@ export async function POST(request: Request) {
         create: { name: headName, frequency: frequency || "monthly", status: "ACTIVE" },
       });
 
+      serverFeeConfigCache.clear();
       return NextResponse.json({ success: true, head });
     }
 
@@ -194,6 +214,7 @@ export async function POST(request: Request) {
         })();
       }
 
+      serverFeeConfigCache.clear();
       return NextResponse.json({ success: true, structure });
 
     }
@@ -296,6 +317,7 @@ export async function POST(request: Request) {
         })();
       }
 
+      serverFeeConfigCache.clear();
       return NextResponse.json({ success: true });
 
     }
@@ -417,6 +439,7 @@ export async function DELETE(request: Request) {
         data: { status: "ARCHIVED" },
       });
 
+      serverFeeConfigCache.clear();
       return NextResponse.json({ success: true });
     }
 

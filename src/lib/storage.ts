@@ -31,6 +31,7 @@ export async function uploadFile(
       .upload(pathInsideBucket, fileBody, {
         contentType,
         upsert: true,
+        cacheControl: "2592000", // 30-day immutable CDN & browser cache
       });
 
     if (!error) {

@@ -4,12 +4,29 @@ import { getAuthUser } from "@/lib/auth";
 import { AttendanceStatus } from "@prisma/client";
 import { getAcademicYear } from "@/lib/generateYearlyCharges";
 import { getSafeErrorMessage } from "@/lib/validation";
+import { BoundedCache } from "@/lib/cache/BoundedCache";
+
+export const dynamic = "force-dynamic";
+
+const serverAttendanceCache = new BoundedCache(50, 5 * 60 * 1000);
 
 export async function GET(request: Request) {
   try {
     const authUser = await getAuthUser(request);
     if (!authUser) {
       return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
+    }
+
+    const cacheKey = `${authUser.role}_${authUser.userId}_${request.url}`;
+    const cachedData = serverAttendanceCache.get(cacheKey);
+    if (cachedData) {
+      return NextResponse.json(cachedData.formatted, {
+        headers: {
+          ...cachedData.headers,
+          "Cache-Control": "private, max-age=30, stale-while-revalidate=120",
+          "X-Server-Cache": "HIT",
+        },
+      });
     }
 
     const { searchParams } = new URL(request.url);
@@ -92,14 +109,19 @@ export async function GET(request: Request) {
     const totalPages = Math.ceil(totalCount / limit);
     const hasMore = skip + logs.length < totalCount;
 
+    const resHeaders = {
+      "X-Total-Count": String(totalCount),
+      "X-Page": String(page),
+      "X-Limit": String(limit),
+      "X-Total-Pages": String(totalPages),
+      "X-Has-More": String(hasMore),
+      "Cache-Control": "private, max-age=30, stale-while-revalidate=120",
+    };
+
+    serverAttendanceCache.set(cacheKey, { formatted, headers: resHeaders });
+
     return NextResponse.json(formatted, {
-      headers: {
-        "X-Total-Count": String(totalCount),
-        "X-Page": String(page),
-        "X-Limit": String(limit),
-        "X-Total-Pages": String(totalPages),
-        "X-Has-More": String(hasMore),
-      },
+      headers: resHeaders,
     });
   } catch (error) {
     console.error("Fetch attendance error:", error);
@@ -222,6 +244,7 @@ export async function POST(request: Request) {
         }
       });
 
+      serverAttendanceCache.clear();
       return NextResponse.json({ success: true, count: records.length });
     }
 
@@ -295,6 +318,7 @@ export async function POST(request: Request) {
       },
     });
 
+    serverAttendanceCache.clear();
     return NextResponse.json({
       success: true,
       attendance: {

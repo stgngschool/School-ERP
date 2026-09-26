@@ -17,7 +17,17 @@ export async function GET(request: Request) {
     const logs = await db.auditLog.findMany({
       take: limit,
       skip: offset,
-      include: { user: true },
+      select: {
+        id: true,
+        action: true,
+        createdAt: true,
+        user: {
+          select: {
+            name: true,
+            role: true,
+          },
+        },
+      },
       orderBy: { createdAt: "desc" },
     });
 

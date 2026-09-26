@@ -454,6 +454,8 @@ interface AuthContextType {
   updateStudentStatus: (studentId: string | string[], status: string) => Promise<void>;
   promoteStudent: (studentId: string | string[], classVal: string, section: string) => Promise<void>;
   editStudentDetails: (studentId: string, studentData: any) => Promise<{ success: boolean; error?: string; student?: any }>;
+  updateStudentPhoto: (studentId: string, photoUrl: string) => void;
+  updateStudentClaimMarksheet: (studentId: string, isClaimed: boolean) => void;
   splitStudentFamily: (studentId: string) => Promise<{ success: boolean; newFamilyCode?: string; error?: string }>;
   transferStudentFamily: (studentId: string, targetFamilyCode: string) => Promise<{ success: boolean; error?: string }>;
   mergeFamilies: (sourceFamilyCode: string, targetFamilyCode: string) => Promise<{ success: boolean; error?: string }>;
@@ -856,7 +858,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // ─── Parallel Core Data Hydration (Instant & Progressive) ───
       // 1. Metadata (Instant cached responses)
-      const schoolLoad = apiFetch("/api/school", { cache: "no-store" }, 10000, false).then((data) => {
+      const schoolLoad = apiFetch("/api/school", {}, 10000, true).then((data) => {
         if (data) {
           setSchoolInfo(data);
           setLocalCache("gng_cached_schoolInfo", data);
@@ -876,7 +878,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setLocalCache("gng_cached_feeStructures", feeData.feeStructures || []);
         }
       });
-      const noticesLoad = apiFetch("/api/notice", {}, 10000, false).then((data) => {
+      const noticesLoad = apiFetch("/api/notice", {}, 10000, true).then((data) => {
         if (Array.isArray(data)) {
           setNotices(data);
           setLocalCache("gng_cached_notices", data);
@@ -997,12 +999,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const isRefreshingBillingRef = useRef(false);
-  const refreshBilling = async () => {
+  const lastReceiptCountRef = useRef<number | null>(null);
+  const lastCollectedPaisaRef = useRef<number | null>(null);
+
+  const refreshBilling = async (force = true) => {
     if (isRefreshingBillingRef.current) return;
     isRefreshingBillingRef.current = true;
     try {
-      clearApiCache("/api/billing");
-      const data = await apiFetch("/api/billing?all=true");
+      if (force) {
+        clearApiCache("/api/billing");
+      }
+      const data = await apiFetch("/api/billing?all=true", {}, 15000, !force);
       if (data) {
         setLedgerEntries(data.ledgerEntries || []);
         setReceipts(data.receipts || []);
@@ -1010,6 +1017,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (data.summary) {
           setBillingSummary(data.summary);
           setLocalCache("gng_cached_billingSummary", data.summary);
+          lastReceiptCountRef.current = data.receipts?.length ?? null;
         }
         setBillingLoaded(true);
         setLocalCache("gng_cached_dueItems", data.dueItems || []);
@@ -1021,18 +1029,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // ── Multi-Device Real-Time Sync ──
-  // Automatically polls billing updates every 45s for staff when tab is visible,
-  // keeping other PCs / screens (Principal desk, Accountant counter) in sync
-  // while conserving Supabase free-tier egress and database connections.
+  // ── Multi-Device Real-Time Sync (Smart Probe) ──
+  // Instead of repeatedly downloading the entire multi-megabyte billing ledger every 45s,
+  // we probe the ultra-lightweight (<500B) summary.
+  // Full ledger download happens ONLY when another device actually recorded a new payment!
   useEffect(() => {
     if (!user || (user.role !== "ADMIN" && user.role !== "ACCOUNTANT")) return;
 
+    const checkAndSyncBilling = async () => {
+      try {
+        const res = await apiFetch("/api/billing/summary", {}, 8000, false);
+        if (res?.success && res.summary) {
+          const { totalReceiptsCount, totalCollectedPaisa } = res.summary;
+          if (lastReceiptCountRef.current === null) {
+            lastReceiptCountRef.current = totalReceiptsCount;
+            lastCollectedPaisaRef.current = totalCollectedPaisa;
+            return;
+          }
+          if (
+            totalReceiptsCount !== lastReceiptCountRef.current ||
+            totalCollectedPaisa !== lastCollectedPaisaRef.current
+          ) {
+            lastReceiptCountRef.current = totalReceiptsCount;
+            lastCollectedPaisaRef.current = totalCollectedPaisa;
+            await refreshBilling(true);
+          }
+        }
+      } catch (e) {}
+    };
+
     const intervalId = setInterval(() => {
       if (typeof document !== "undefined" && !document.hidden) {
-        refreshBilling().catch(() => {});
+        checkAndSyncBilling().catch(() => {});
       }
-    }, 45000);
+    }, 90000);
 
     return () => clearInterval(intervalId);
   }, [user]);
@@ -1332,15 +1362,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const markAttendance = async (studentId: string, date: string, status: AttendanceStatus) => {
     try {
-      const res = await fetch("/api/attendance", {
+      setAttendances((prev) => {
+        const next = [...prev];
+        const idx = next.findIndex((a) => a.studentId === studentId && a.date === date);
+        if (idx !== -1) {
+          next[idx] = { ...next[idx], status };
+        } else {
+          next.unshift({
+            id: "temp-" + Math.random().toString(36).substring(2, 9),
+            studentId,
+            date,
+            status,
+          });
+        }
+        setLocalCache("gng_cached_attendances", next);
+        return next;
+      });
+
+      await fetch("/api/attendance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ studentId, date, status }),
       });
-
-      if (res.ok) {
-        await refreshAttendance();
-      }
     } catch (err) {
       console.error("Mark attendance failed:", err);
     }
@@ -1364,6 +1407,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             });
           }
         }
+        setLocalCache("gng_cached_attendances", next);
         return next;
       });
 
@@ -1382,10 +1426,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           new Error(body.error || "Attendance conflict: please refresh and try again."),
           { isConflict: true, conflicts: body.conflicts ?? [] }
         );
-      }
-
-      if (res.ok) {
-        await refreshAttendance();
       }
     } catch (err) {
       console.error("Mark batch attendance failed:", err);
@@ -1932,7 +1972,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({ studentId, action: "updateStatus", data: { status } }),
       });
       if (res.ok) {
-        await refreshStudents();
+        const targetIds = new Set(Array.isArray(studentId) ? studentId : [studentId]);
+        setStudents((prev) => {
+          const updated = prev.map((s) => (targetIds.has(s.id) ? { ...s, status } : s));
+          setLocalCache("gng_cached_students", updated);
+          return updated;
+        });
       }
     } catch (err) {
       console.error("Update student status failed:", err);
@@ -1947,7 +1992,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({ studentId, action: "promote", data: { classVal, section } }),
       });
       if (res.ok) {
-        await refreshStudents();
+        const targetIds = new Set(Array.isArray(studentId) ? studentId : [studentId]);
+        setStudents((prev) => {
+          const updated = prev.map((s) =>
+            targetIds.has(s.id) ? { ...s, class: classVal, section } : s
+          );
+          setLocalCache("gng_cached_students", updated);
+          return updated;
+        });
       }
     } catch (err) {
       console.error("Promote student failed:", err);
@@ -1963,7 +2015,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       const data = await res.json();
       if (res.ok) {
-        await refreshStudents();
+        setStudents((prev) => {
+          const updated = prev.map((s) => {
+            if (s.id !== studentId) return s;
+            return {
+              ...s,
+              name: studentData.name ?? s.name,
+              admissionNo: studentData.admissionNo ?? studentData.admissionNumber ?? s.admissionNo,
+              rollNo: studentData.rollNo ?? studentData.rollNumber ?? s.rollNo,
+              gender: studentData.gender ?? s.gender,
+              dob: studentData.dob ?? s.dob,
+              aadhaar: studentData.aadhaar ?? s.aadhaar,
+              fatherName: studentData.fatherName ?? s.fatherName,
+              motherName: studentData.motherName ?? s.motherName,
+              fatherMobile: studentData.fatherMobile ?? s.fatherMobile,
+              motherMobile: studentData.motherMobile ?? s.motherMobile,
+              fatherAadhaar: studentData.fatherAadhaar ?? s.fatherAadhaar,
+              motherAadhaar: studentData.motherAadhaar ?? s.motherAadhaar,
+              category: studentData.category ?? s.category,
+              religion: studentData.religion ?? s.religion,
+              motherTongue: studentData.motherTongue ?? s.motherTongue,
+              nationality: studentData.nationality ?? s.nationality,
+              status: studentData.status ?? s.status,
+              class: studentData.classVal ?? studentData.className ?? studentData.class ?? s.class,
+              section: studentData.section ?? s.section,
+              address: studentData.address ?? s.address,
+              parentPhone: studentData.parentPhone ?? studentData.fatherMobile ?? s.parentPhone,
+              isRte: studentData.isRte !== undefined ? studentData.isRte : s.isRte,
+              concessionId: studentData.concessionId !== undefined ? studentData.concessionId : s.concessionId,
+              photoUrl: studentData.photoUrl ?? s.photoUrl,
+            };
+          });
+          setLocalCache("gng_cached_students", updated);
+          return updated;
+        });
+
+        if (studentData.isRte !== undefined || studentData.concessionId !== undefined || studentData.transportStopId !== undefined) {
+          refreshBilling(true).catch(() => {});
+        }
         return { success: true, student: data.student };
       } else {
         return { success: false, error: data.error || "Failed to update student details" };
@@ -1972,6 +2061,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error("Edit student details failed:", err);
       return { success: false, error: err.message || "Network error while saving details" };
     }
+  };
+
+  const updateStudentPhoto = (studentId: string, photoUrl: string) => {
+    setStudents((prev) => {
+      const updated = prev.map((s) => (s.id === studentId ? { ...s, photoUrl } : s));
+      setLocalCache("gng_cached_students", updated);
+      return updated;
+    });
+  };
+
+  const updateStudentClaimMarksheet = (studentId: string, isClaimed: boolean) => {
+    setStudents((prev) => {
+      const updated = prev.map((s) => (s.id === studentId ? { ...s, isMarksheetClaimed: isClaimed } : s));
+      setLocalCache("gng_cached_students", updated);
+      return updated;
+    });
   };
 
   const splitStudentFamily = async (studentId: string) => {
@@ -2134,6 +2239,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         updateStudentStatus,
         promoteStudent,
         editStudentDetails,
+        updateStudentPhoto,
+        updateStudentClaimMarksheet,
         splitStudentFamily,
         transferStudentFamily,
         mergeFamilies,

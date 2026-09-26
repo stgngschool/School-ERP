@@ -2,8 +2,11 @@ import { NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { validatePercentage, getSafeErrorMessage } from "@/lib/validation";
+import { BoundedCache } from "@/lib/cache/BoundedCache";
 
 export const dynamic = "force-dynamic";
+
+const serverConcessionsCache = new BoundedCache(10, 10 * 60 * 1000);
 
 export async function GET(request: Request) {
   try {
@@ -12,12 +15,31 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
     }
 
+    const cachedConcessions = serverConcessionsCache.get("all_concessions");
+    if (cachedConcessions) {
+      return NextResponse.json(cachedConcessions, {
+        headers: {
+          "Cache-Control": "private, max-age=60, stale-while-revalidate=300",
+          "X-Server-Cache": "HIT",
+        },
+      });
+    }
+
     const concessions = await db.concession.findMany({
+      select: {
+        id: true,
+        name: true,
+        percentage: true,
+        feeHeadName: true,
+      },
       orderBy: { name: "asc" },
     });
+
+    serverConcessionsCache.set("all_concessions", concessions);
+
     return NextResponse.json(concessions, {
       headers: {
-        "Cache-Control": "private, no-cache, no-store, must-revalidate",
+        "Cache-Control": "private, max-age=60, stale-while-revalidate=300",
       },
     });
   } catch (error) {
@@ -73,6 +95,7 @@ export async function POST(request: Request) {
       },
     }).catch((err) => console.error("Audit log error on concession:", err));
 
+    serverConcessionsCache.clear();
     return NextResponse.json({ success: true, concession });
   } catch (error) {
     console.error("Create concession error:", error);
@@ -102,6 +125,7 @@ export async function DELETE(request: Request) {
       if (e?.code !== "P2025") throw e; // P2025 = Record to delete does not exist
     }
 
+    serverConcessionsCache.clear();
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Delete concession error:", error);

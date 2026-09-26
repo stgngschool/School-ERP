@@ -35,6 +35,13 @@ const nextConfig: NextConfig = {
           { key: "Vary", value: "Cookie" },
         ],
       },
+      // Static uploaded assets (photos, documents) — 30-day immutable browser cache
+      {
+        source: "/uploads/:path*",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=2592000, immutable" },
+        ],
+      },
       // Security headers for all routes
       {
         source: "/:path*",

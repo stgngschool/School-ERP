@@ -9,16 +9,9 @@ import { boundPagination, getSafeErrorMessage } from "@/lib/validation";
 import { BoundedCache } from "@/lib/cache/BoundedCache";
 import { validateCsrfOrigin } from "@/lib/security";
 import { formatCanonicalDOB, formatCanonicalDOBIso, parseCanonicalDOB } from "@/lib/dateUtils";
+import { serverStudentsCache, clearServerStudentsCache } from "@/lib/cache/studentsCache";
 
 export const dynamic = "force-dynamic";
-
-// ── C-02 fix: Bounded LRU cache (max 30 entries, 25s TTL) replaces the
-// unbounded Map that could grow indefinitely, risking OOM.
-const serverStudentsCache = new BoundedCache(30, 25000);
-
-function clearServerStudentsCache() {
-  serverStudentsCache.clear();
-}
 
 export async function GET(request: Request) {
   const reqId = `std_${Math.random().toString(36).substring(2, 9)}`;

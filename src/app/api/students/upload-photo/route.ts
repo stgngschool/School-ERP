@@ -3,6 +3,7 @@ import db from "@/lib/db";
 import { uploadFile } from "@/lib/storage";
 import { getAuthUser } from "@/lib/auth";
 import { validateUploadedFile, getSafeErrorMessage } from "@/lib/validation";
+import { clearServerStudentsCache } from "@/lib/cache/studentsCache";
 
 export async function POST(request: Request) {
   const authUser = await getAuthUser(request);
@@ -57,6 +58,8 @@ export async function POST(request: Request) {
       where: { id: studentId },
       data: { photoUrl },
     });
+
+    clearServerStudentsCache();
 
     return NextResponse.json({ success: true, photoUrl: student.photoUrl });
   } catch (error: any) {
