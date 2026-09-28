@@ -476,15 +476,49 @@ export default function FeeCollectTab({
       }
 
       const serverRec = payRes.receipt;
+
+      // Identify the students who actually have items being paid in this receipt
+      const paidStudentIds = Array.from(
+        new Set(
+          items
+            .map((i) => unpaidItems.find((ui) => ui.id === i.ledgerEntryId)?.studentId)
+            .filter(Boolean)
+        )
+      ) as string[];
+
+      const paidStudents = students.filter((s) => paidStudentIds.includes(s.id));
+      const effectiveStudents = paidStudents.length > 0 ? paidStudents : siblingStudents;
+      const isSingleTarget = effectiveStudents.length === 1;
+      const primaryStudent = effectiveStudents[0] || student;
+
+      const fallbackStudentsList = effectiveStudents.map((s) => ({
+        id: s.id,
+        name: s.name,
+        classSection: `${s.class}-${s.section || "A"}`,
+        rollNo: s.rollNo || "",
+        admissionNo: s.admissionNo || "",
+      }));
+
       const matchedReceipt = {
+        ...serverRec,
         receiptNo: serverRec.receiptNo,
         manualReceiptNo: serverRec.manualReceiptNo || cleanManualNo || null,
-        studentName: isSingleSibling
-          ? student.name
-          : `Family (Siblings: ${siblingStudents.map((s) => s.name).join(", ")})`,
-        classSection: isSingleSibling ? `${student.class}-${student.section}` : "Unified Family",
-        admissionNo: isSingleSibling ? student.admissionNo : student.familyCode || "Multi",
-        fatherName: student.fatherName || student.parentName || "Parent",
+        studentName: isSingleTarget
+          ? primaryStudent.name
+          : effectiveStudents.map((s) => s.name).join(", "),
+        classSection: isSingleTarget
+          ? `${primaryStudent.class}-${primaryStudent.section || "A"}`
+          : effectiveStudents.map((s) => `${s.class}-${s.section || "A"}`).join(", "),
+        admissionNo: isSingleTarget
+          ? primaryStudent.admissionNo
+          : effectiveStudents.map((s) => s.admissionNo).join(", "),
+        rollNo: isSingleTarget
+          ? (primaryStudent.rollNo || "")
+          : effectiveStudents.map((s) => s.rollNo || "").join(", "),
+        rollNumber: isSingleTarget
+          ? (primaryStudent.rollNo || "")
+          : effectiveStudents.map((s) => s.rollNo || "").join(", "),
+        fatherName: primaryStudent.fatherName || primaryStudent.parentName || student.fatherName || student.parentName || "Parent",
         subtotal: serverRec.subtotal !== undefined ? serverRec.subtotal : originalDueSum,
         amount: serverRec.amount !== undefined ? serverRec.amount : totalPaid,
         method: serverRec.paymentMethod || payMethod,
@@ -501,6 +535,10 @@ export default function FeeCollectTab({
         amountInWords:
           serverRec.amountInWords ||
           numberToIndianWords(serverRec.amount !== undefined ? serverRec.amount : totalPaid),
+        studentsList:
+          serverRec.studentsList && Array.isArray(serverRec.studentsList) && serverRec.studentsList.length > 0
+            ? serverRec.studentsList
+            : fallbackStudentsList,
         details: items
           .map((i) => {
             const itemObj = unpaidItems.find((ui) => ui.id === i.ledgerEntryId);
@@ -512,26 +550,28 @@ export default function FeeCollectTab({
             })`;
           })
           .join(" + "),
-        items: items.map((i) => {
-          const itemObj = unpaidItems.find((ui) => ui.id === i.ledgerEntryId);
-          const itemDesc = itemObj?.name || "";
-          const child = students.find((s) => s.id === itemObj?.studentId);
-          const origAmt = itemObj?.amount || 0;
-          const bal = Math.max(0, origAmt - i.payAmount - i.discountAmount);
-          return {
-            name: child ? `${child.name}: ${itemDesc}` : itemDesc,
-            originalAmount: origAmt,
-            amount: i.payAmount,
-            discount: i.discountAmount,
-            balance: bal,
-          };
-        }),
+        items: (serverRec.items && Array.isArray(serverRec.items) && serverRec.items.length > 0)
+          ? serverRec.items
+          : items.map((i) => {
+              const itemObj = unpaidItems.find((ui) => ui.id === i.ledgerEntryId);
+              const itemDesc = itemObj?.name || "";
+              const child = students.find((s) => s.id === itemObj?.studentId);
+              const origAmt = itemObj?.amount || 0;
+              const bal = Math.max(0, origAmt - i.payAmount - i.discountAmount);
+              return {
+                name: child ? `${child.name}: ${itemDesc}` : itemDesc,
+                originalAmount: origAmt,
+                amount: i.payAmount,
+                discount: i.discountAmount,
+                balance: bal,
+              };
+            }),
         createdAt: serverRec.createdAt
           ? getISTDateString(serverRec.createdAt)
           : getTodayIST(),
       };
 
-      onOpenReceipt(matchedReceipt);
+      onOpenReceipt(enrichReceiptWithStudentDetails(matchedReceipt, students));
       setSelectedDueIds([]);
       setDiscountsState({});
       setPayingState({});

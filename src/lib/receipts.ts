@@ -77,16 +77,20 @@ export function getReceiptStudents(rec: any): ReceiptStudentInfo[] {
 
   // Case 2: Multi-child comma-separated studentName (e.g. "Nayra Vishwakarma, Aahan Vishwakarma")
   if (rec.studentName && rec.studentName.includes(",")) {
-    const names = rec.studentName.split(",").map((s: string) => s.trim()).filter(Boolean);
+    let rawName = rec.studentName.trim();
+    if (rawName.startsWith("Family (Siblings:") || rawName.startsWith("Family (")) {
+      rawName = rawName.replace(/^Family\s*\((?:Siblings:\s*)?/i, "").replace(/\)$/, "").trim();
+    }
+    const names = rawName.split(",").map((s: string) => s.trim()).filter(Boolean);
     const classes = (rec.classSection || "").split(",").map((s: string) => s.trim());
     const rolls = (rec.rollNumber || rec.rollNo || "").split(",").map((s: string) => s.trim());
     const admissions = (rec.admissionNo || "").split(",").map((s: string) => s.trim());
 
     return names.map((name: string, i: number) => ({
       name,
-      classSection: classes[i] || classes[0] || "—",
+      classSection: classes[i] && classes[i] !== "Unified Family" ? classes[i] : (classes[0] !== "Unified Family" ? classes[0] : "—"),
       rollNo: rolls[i] || rolls[0] || "—",
-      admissionNo: admissions[i] || admissions[0] || "—",
+      admissionNo: admissions[i] && !admissions[i].startsWith("FAM-") ? admissions[i] : "—",
     }));
   }
 
@@ -307,41 +311,81 @@ export function enrichReceiptWithStudentDetails(rec: any, students: any[]): any 
     }
   }
 
+  // Cross-enrich studentsList with the student directory to guarantee full rollNo, classSection, admissionNo
+  if (Array.isArray(studentsList) && studentsList.length > 0 && Array.isArray(students) && students.length > 0) {
+    studentsList = studentsList.map((entry: any) => {
+      const matched = students.find(
+        (s: any) =>
+          (entry.id && s.id === entry.id) ||
+          (entry.admissionNo && (s.admissionNo === entry.admissionNo || s.admissionNumber === entry.admissionNo)) ||
+          (entry.name && s.name && s.name.trim().toLowerCase() === entry.name.trim().toLowerCase())
+      );
+      if (!matched) return entry;
+      return {
+        id: entry.id || matched.id,
+        name: matched.name || entry.name,
+        classSection:
+          (entry.classSection && entry.classSection !== "Unified Family" && entry.classSection !== "—" && entry.classSection !== "-")
+            ? entry.classSection
+            : matched.classSection || (matched.class ? `${matched.class}-${matched.section || "A"}` : ""),
+        rollNo:
+          (entry.rollNo && entry.rollNo !== "—" && entry.rollNo !== "-")
+            ? entry.rollNo
+            : matched.rollNo || matched.rollNumber || "",
+        admissionNo:
+          (entry.admissionNo && entry.admissionNo !== "—" && entry.admissionNo !== "-" && !entry.admissionNo.startsWith("FAM-"))
+            ? entry.admissionNo
+            : matched.admissionNo || matched.admissionNumber || "",
+      };
+    });
+  }
+
   const resolvedAdmissionNo =
-    rec.admissionNo ||
-    (std
-      ? (std.admissionNo || std.admissionNumber)
-      : (siblingStudents.length > 0
-          ? siblingStudents.map((s: any) => s.admissionNo || s.admissionNumber).filter(Boolean).join(", ")
-          : "Unified/Family"));
+    (rec.admissionNo && !rec.admissionNo.startsWith("FAM-") && rec.admissionNo !== "Multi" && rec.admissionNo !== "Unified/Family")
+      ? rec.admissionNo
+      : (std
+          ? (std.admissionNo || std.admissionNumber)
+          : (Array.isArray(studentsList) && studentsList.length > 0
+              ? studentsList.map((s: any) => s.admissionNo).filter(Boolean).join(", ")
+              : (siblingStudents.length > 0
+                  ? siblingStudents.map((s: any) => s.admissionNo || s.admissionNumber).filter(Boolean).join(", ")
+                  : "Unified/Family")));
 
   const resolvedClassSection =
-    rec.classSection ||
-    (std
-      ? (std.classSection || (std.class ? `${std.class}-${std.section || "A"}` : ""))
-      : (siblingStudents.length > 0
-          ? Array.from(
-              new Set(
-                siblingStudents
-                  .map((s: any) => s.classSection || (s.class ? `${s.class}-${s.section || "A"}` : ""))
-                  .filter(Boolean)
-              )
-            ).join(", ")
-          : ""));
+    (rec.classSection && rec.classSection !== "Unified Family")
+      ? rec.classSection
+      : (std
+          ? (std.classSection || (std.class ? `${std.class}-${std.section || "A"}` : ""))
+          : (Array.isArray(studentsList) && studentsList.length > 0
+              ? Array.from(new Set(studentsList.map((s: any) => s.classSection).filter(Boolean))).join(", ")
+              : (siblingStudents.length > 0
+                  ? Array.from(
+                      new Set(
+                        siblingStudents
+                          .map((s: any) => s.classSection || (s.class ? `${s.class}-${s.section || "A"}` : ""))
+                          .filter(Boolean)
+                      )
+                    ).join(", ")
+                  : "")));
 
   const resolvedRollNo =
     rec.rollNumber ||
     rec.rollNo ||
     (std
       ? (std.rollNo || std.rollNumber)
-      : (siblingStudents.length > 0
-          ? siblingStudents.map((s: any) => s.rollNo || s.rollNumber).filter(Boolean).join(", ")
-          : ""));
+      : (Array.isArray(studentsList) && studentsList.length > 0
+          ? studentsList.map((s: any) => s.rollNo).filter(Boolean).join(", ")
+          : (siblingStudents.length > 0
+              ? siblingStudents.map((s: any) => s.rollNo || s.rollNumber).filter(Boolean).join(", ")
+              : "")));
 
   const resolvedFatherName =
     rec.fatherName ||
     std?.fatherName ||
     std?.parentName ||
+    (Array.isArray(studentsList) && studentsList.length > 0
+      ? students.find((s: any) => studentsList.some((sl: any) => sl.id === s.id))?.fatherName
+      : undefined) ||
     siblingStudents.find((s: any) => s.fatherName || s.parentName)?.fatherName ||
     siblingStudents[0]?.parentName ||
     "";

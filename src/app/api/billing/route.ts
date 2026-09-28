@@ -65,6 +65,12 @@ function getChargeDueDate(chargeName: string, fallbackTime: number): string {
     return `${sy}-04-10`;
   }
 
+  // Specific Exam Fallbacks if month name was not explicitly in the description
+  if (nameLower.includes("unit 1") || nameLower.includes("unit-1") || nameLower.includes("unit1")) return `${sy}-07-15`;
+  if (nameLower.includes("half yearly") || nameLower.includes("half-yearly")) return `${sy}-10-15`;
+  if (nameLower.includes("unit 2") || nameLower.includes("unit-2") || nameLower.includes("unit2")) return `${sy}-12-15`;
+  if (nameLower.includes("yearly exam") || nameLower.includes("annual exam")) return `${ey}-03-15`;
+
   return getISTDateString(fallbackTime);
 }
 

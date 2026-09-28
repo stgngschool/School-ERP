@@ -7,8 +7,28 @@ const ACADEMIC_MONTHS = [
   "October", "November", "December", "January", "February", "March",
 ];
 
-// Exam months — charge 3 times a year
-const EXAM_MONTHS = ["October", "March", "May"];
+// Scheduled months for standard exams
+export function getExamMonthsForHead(headName: string): string[] {
+  const n = headName.toLowerCase();
+  if (n.includes("unit 1") || n.includes("unit-1") || n.includes("unit1")) {
+    return ["July"];
+  }
+  if (n.includes("half yearly") || n.includes("half-yearly") || n.includes("mid term") || n.includes("term 1") || n.includes("quarterly")) {
+    return ["October"];
+  }
+  if (n.includes("unit 2") || n.includes("unit-2") || n.includes("unit2")) {
+    return ["December"];
+  }
+  if (n.includes("yearly") || n.includes("annual") || n.includes("final") || n.includes("term 2")) {
+    return ["March"];
+  }
+  for (const month of ACADEMIC_MONTHS) {
+    if (n.includes(month.toLowerCase())) {
+      return [month];
+    }
+  }
+  return ["July", "October", "December", "March"];
+}
 
 /**
  * Helper to normalize charge description keys so "Auto-Assigned: July Tuition Fee"
@@ -180,7 +200,8 @@ export async function generateYearlyCharges(
         amount,
       });
     } else if (frequency === "exam") {
-      for (const month of EXAM_MONTHS) {
+      const examMonths = getExamMonthsForHead(name);
+      for (const month of examMonths) {
         if (activeMonths.includes(month)) {
           charges.push({
             description: `Assigned: ${name} - Exam (${month} ${acYear})`,
@@ -495,7 +516,8 @@ export async function generateYearlyChargesBulk(
           amount,
         });
       } else if (frequency === "exam") {
-        for (const month of EXAM_MONTHS) {
+        const examMonths = getExamMonthsForHead(name);
+        for (const month of examMonths) {
           if (activeMonths.includes(month)) {
             charges.push({
               description: `Assigned: ${name} - Exam (${month} ${acYear})`,
