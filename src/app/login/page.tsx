@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -24,6 +24,12 @@ import {
 
 export default function LoginPage() {
   const { user, activeRole, login } = useAuth();
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
   const [activeTab, setActiveTab] = useState<"STAFF" | "PARENT">("STAFF");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -181,7 +187,7 @@ export default function LoginPage() {
         </div>
 
         {/* Active Session Notification (If already logged in) */}
-        {user && activeRole && (
+        {isClient && user && activeRole && (
           <div className="mb-5 p-4 rounded-3xl bg-indigo-50/90 border border-indigo-200/70 text-xs text-indigo-950 flex items-center justify-between gap-3 shadow-2xs backdrop-blur-sm animate-scale-in">
             <div className="space-y-0.5">
               <p className="font-extrabold flex items-center gap-1.5 text-indigo-900">

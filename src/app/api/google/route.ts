@@ -1,6 +1,15 @@
 import { NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
-import { syncStudentsToSheet, syncLedgerToSheet, backupDatabaseToDrive } from "@/lib/google";
+import { 
+  syncStudentsToSheet, 
+  syncStudentDirectoryToSheet,
+  syncStudentFeeRegisterToSheet,
+  syncLedgerToSheet, 
+  syncMarksToSheet, 
+  syncReceiptsToSheet, 
+  syncAllDataToSheet, 
+  backupDatabaseToDrive 
+} from "@/lib/google";
 import fs from "fs";
 import path from "path";
 
@@ -65,6 +74,24 @@ export async function POST(request: Request) {
       }
     }
 
+    if (action === "SYNC_DIRECTORY") {
+      const cleanSheetId = extractId(spreadsheetId);
+      if (!cleanSheetId) {
+        return NextResponse.json({ error: "Missing spreadsheetId" }, { status: 400 });
+      }
+      const result = await syncStudentDirectoryToSheet(cleanSheetId);
+      return NextResponse.json(result);
+    }
+
+    if (action === "SYNC_FEE_REGISTER") {
+      const cleanSheetId = extractId(spreadsheetId);
+      if (!cleanSheetId) {
+        return NextResponse.json({ error: "Missing spreadsheetId" }, { status: 400 });
+      }
+      const result = await syncStudentFeeRegisterToSheet(cleanSheetId);
+      return NextResponse.json(result);
+    }
+
     if (action === "SYNC_STUDENTS") {
       const cleanSheetId = extractId(spreadsheetId);
       if (!cleanSheetId) {
@@ -74,12 +101,39 @@ export async function POST(request: Request) {
       return NextResponse.json(result);
     }
 
+    if (action === "SYNC_RECEIPTS") {
+      const cleanSheetId = extractId(spreadsheetId);
+      if (!cleanSheetId) {
+        return NextResponse.json({ error: "Missing spreadsheetId" }, { status: 400 });
+      }
+      const result = await syncReceiptsToSheet(cleanSheetId);
+      return NextResponse.json(result);
+    }
+
     if (action === "SYNC_LEDGER") {
       const cleanSheetId = extractId(spreadsheetId);
       if (!cleanSheetId) {
         return NextResponse.json({ error: "Missing spreadsheetId" }, { status: 400 });
       }
       const result = await syncLedgerToSheet(cleanSheetId);
+      return NextResponse.json(result);
+    }
+
+    if (action === "SYNC_MARKS") {
+      const cleanSheetId = extractId(spreadsheetId);
+      if (!cleanSheetId) {
+        return NextResponse.json({ error: "Missing spreadsheetId" }, { status: 400 });
+      }
+      const result = await syncMarksToSheet(cleanSheetId);
+      return NextResponse.json(result);
+    }
+
+    if (action === "SYNC_ALL") {
+      const cleanSheetId = extractId(spreadsheetId);
+      if (!cleanSheetId) {
+        return NextResponse.json({ error: "Missing spreadsheetId" }, { status: 400 });
+      }
+      const result = await syncAllDataToSheet(cleanSheetId);
       return NextResponse.json(result);
     }
 

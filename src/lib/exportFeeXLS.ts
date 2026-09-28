@@ -2,6 +2,7 @@ import * as XLSX from "xlsx";
 import { MockStudent, MockDueItem, MockReceipt, MockSchoolInfo } from "@/context/AuthContext";
 import { isDueUpToCurrentMonth } from "@/lib/whatsapp";
 import { toRupees } from "@/lib/currency";
+import { getTodayIST } from "@/lib/dateUtils";
 
 const ACADEMIC_MONTHS = [
   { key: "april", label: "April" },
@@ -130,7 +131,7 @@ export async function downloadServerExport({
 
   const blob = await res.blob();
   const contentDisposition = res.headers.get("Content-Disposition");
-  let filename = `Export_${new Date().toISOString().split("T")[0]}.${format}`;
+  let filename = `Export_${getTodayIST()}.${format}`;
   if (contentDisposition) {
     const match = contentDisposition.match(/filename="?([^";]+)"?/);
     if (match && match[1]) filename = match[1];
@@ -464,7 +465,7 @@ export function exportMasterFeeRegisterXLS({
   XLSX.utils.book_append_sheet(wb, wsClassSummary, "Class-Wise Summary");
 
   // Create clean filename with school name and timestamp
-  const dateStr = new Date().toISOString().split("T")[0];
+  const dateStr = getTodayIST();
   const safeSchoolName = (schoolInfo?.name || "School").replace(/[^a-zA-Z0-9]/g, "_");
   const classTag =
     selectedClass && selectedClass !== "All"
@@ -547,7 +548,7 @@ export function exportSingleStudentStatementXLS({
   XLSX.utils.book_append_sheet(wb, wsDues, "Fee Ledger & Dues");
   XLSX.utils.book_append_sheet(wb, wsReceipts, "Payment Receipts");
 
-  const dateStr = new Date().toISOString().split("T")[0];
+  const dateStr = getTodayIST();
   const safeName = student.name.replace(/[^a-zA-Z0-9]/g, "_");
   const filename = `Fee_Statement_${safeName}_ADM_${student.admissionNo || "NA"}_${dateStr}.xlsx`;
 
@@ -599,7 +600,7 @@ export function exportFeeRegisterCSV(options: ExportFeeOptions) {
   const csvOutput = XLSX.utils.sheet_to_csv(ws);
   const blob = new Blob([csvOutput], { type: "text/csv;charset=utf-8;" });
 
-  const dateStr = new Date().toISOString().split("T")[0];
+  const dateStr = getTodayIST();
   const safeSchoolName = (schoolInfo?.name || "School").replace(/[^a-zA-Z0-9]/g, "_");
   const classTag =
     selectedClass && selectedClass !== "All"
@@ -660,7 +661,7 @@ export function exportSingleStudentStatementCSV({
   const csvOutput = XLSX.utils.sheet_to_csv(ws);
   const blob = new Blob([csvOutput], { type: "text/csv;charset=utf-8;" });
 
-  const dateStr = new Date().toISOString().split("T")[0];
+  const dateStr = getTodayIST();
   const safeName = student.name.replace(/[^a-zA-Z0-9]/g, "_");
   const filename = `Fee_Statement_${safeName}_ADM_${student.admissionNo || "NA"}_${dateStr}.csv`;
 

@@ -1,7 +1,7 @@
 import * as XLSX from "xlsx";
 import { MockStudent, MockDueItem, MockSchoolInfo } from "@/context/AuthContext";
 import { toRupees } from "@/lib/currency";
-import { formatCanonicalDOB } from "@/lib/dateUtils";
+import { formatCanonicalDOB, getTodayIST } from "@/lib/dateUtils";
 
 /**
  * Formats a calendar date strictly in Asia/Kolkata (IST) into DD-MM-YYYY format.
@@ -72,7 +72,7 @@ export async function downloadServerStudentExport({
 
   const blob = await res.blob();
   const contentDisposition = res.headers.get("Content-Disposition");
-  let filename = `Student_Directory_${new Date().toISOString().split("T")[0]}.${format}`;
+  let filename = `Student_Directory_${getTodayIST()}.${format}`;
   if (contentDisposition) {
     const match = contentDisposition.match(/filename="?([^";]+)"?/);
     if (match && match[1]) filename = match[1];
@@ -345,7 +345,7 @@ export function exportStudentDirectoryXLS({
   XLSX.utils.book_append_sheet(wb, wsFamilies, "Family Groups");
 
   // Output filename
-  const dateStr = new Date().toISOString().split("T")[0];
+  const dateStr = getTodayIST();
   const safeSchoolName = (schoolInfo?.name || "School").replace(/[^a-zA-Z0-9]/g, "_");
   const safeTag = filterDescription.replace(/[^a-zA-Z0-9]/g, "_");
   const filename = `${safeSchoolName}_Student_Directory_${safeTag}_${dateStr}.xlsx`;
@@ -413,7 +413,7 @@ export function exportStudentDirectoryCSV({
   const csvOutput = XLSX.utils.sheet_to_csv(ws);
   const blob = new Blob([csvOutput], { type: "text/csv;charset=utf-8;" });
 
-  const dateStr = new Date().toISOString().split("T")[0];
+  const dateStr = getTodayIST();
   const safeSchoolName = (schoolInfo?.name || "School").replace(/[^a-zA-Z0-9]/g, "_");
   const safeTag = filterDescription.replace(/[^a-zA-Z0-9]/g, "_");
   const filename = `${safeSchoolName}_Student_Directory_${safeTag}_${dateStr}.csv`;

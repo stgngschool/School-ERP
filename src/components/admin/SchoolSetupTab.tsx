@@ -4,7 +4,8 @@ import React, { useState, useEffect } from "react";
 import { 
   Building2, Globe, User, Database, Award, Megaphone, RotateCcw, 
   Phone, Mail, Clock, GraduationCap, CheckCircle, PlusCircle, CreditCard, 
-  Trash2, AlertTriangle, Key, Loader2, FileSpreadsheet, TrendingUp, Lock, Unlock 
+  Trash2, AlertTriangle, Key, Loader2, FileSpreadsheet, TrendingUp, Lock, Unlock,
+  Receipt, Sparkles
 } from "lucide-react";
 import { SchoolUpiAccount } from "@/context/AuthContext";
 
@@ -34,11 +35,16 @@ export default function SchoolSetupTab({
   const [googleSpreadsheetId, setGoogleSpreadsheetId] = useState("");
   const [googleFolderId, setGoogleFolderId] = useState("");
   const [syncingStudents, setSyncingStudents] = useState(false);
+  const [syncingFeeRegister, setSyncingFeeRegister] = useState(false);
+  const [syncingReceipts, setSyncingReceipts] = useState(false);
   const [syncingLedger, setSyncingLedger] = useState(false);
+  const [syncingMarks, setSyncingMarks] = useState(false);
+  const [syncingAll, setSyncingAll] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
   const [serviceJsonInput, setServiceJsonInput] = useState("");
   const [savingJsonLoading, setSavingJsonLoading] = useState(false);
   const [savedClientEmail, setSavedClientEmail] = useState<string | null>(null);
+  const [googleAutoSync, setGoogleAutoSync] = useState<boolean>(false);
   const [showJsonBox, setShowJsonBox] = useState(false);
   const [googleStatus, setGoogleStatus] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
@@ -46,6 +52,9 @@ export default function SchoolSetupTab({
   useEffect(() => {
     const dbSheetId = (schoolInfo as any)?.googleSpreadsheetId;
     const dbFolderId = (schoolInfo as any)?.googleFolderId;
+    if ((schoolInfo as any)?.googleAutoSync !== undefined) {
+      setGoogleAutoSync(!!(schoolInfo as any).googleAutoSync);
+    }
 
     if (dbSheetId) {
       setGoogleSpreadsheetId(dbSheetId);
@@ -122,13 +131,13 @@ export default function SchoolSetupTab({
       const res = await fetch("/api/google", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "SYNC_STUDENTS", spreadsheetId: googleSpreadsheetId }),
+        body: JSON.stringify({ action: "SYNC_DIRECTORY", spreadsheetId: googleSpreadsheetId }),
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setGoogleStatus({ type: "success", msg: `Successfully synced ${data.count} students to Sheet1!` });
+        setGoogleStatus({ type: "success", msg: `Successfully synced ${data.count} student master profiles to "Student Directory" tab!` });
       } else {
-        setGoogleStatus({ type: "error", msg: data.error || "Failed to sync student list." });
+        setGoogleStatus({ type: "error", msg: data.error || "Failed to sync student directory." });
       }
     } catch (err: any) {
       setGoogleStatus({ type: "error", msg: err.message || "Network error. Failed to sync." });
@@ -137,29 +146,110 @@ export default function SchoolSetupTab({
     }
   };
 
-  const triggerSyncLedger = async () => {
+  const triggerSyncFeeRegister = async () => {
     if (!googleSpreadsheetId.trim()) {
       setGoogleStatus({ type: "error", msg: "Please enter a valid Google Spreadsheet ID first." });
       return;
     }
-    setSyncingLedger(true);
+    setSyncingFeeRegister(true);
     setGoogleStatus(null);
     try {
       const res = await fetch("/api/google", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "SYNC_LEDGER", spreadsheetId: googleSpreadsheetId }),
+        body: JSON.stringify({ action: "SYNC_FEE_REGISTER", spreadsheetId: googleSpreadsheetId }),
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setGoogleStatus({ type: "success", msg: `Successfully synced ${data.count} ledger entries to Sheet1!` });
+        setGoogleStatus({ type: "success", msg: `Successfully synced ${data.count} student fee records to "Student Fee Register" tab!` });
       } else {
-        setGoogleStatus({ type: "error", msg: data.error || "Failed to sync transaction ledger." });
+        setGoogleStatus({ type: "error", msg: data.error || "Failed to sync student fee register." });
       }
     } catch (err: any) {
       setGoogleStatus({ type: "error", msg: err.message || "Network error. Failed to sync." });
     } finally {
-      setSyncingLedger(false);
+      setSyncingFeeRegister(false);
+    }
+  };
+
+  const triggerSyncReceipts = async () => {
+    if (!googleSpreadsheetId.trim()) {
+      setGoogleStatus({ type: "error", msg: "Please enter a valid Google Spreadsheet ID first." });
+      return;
+    }
+    setSyncingReceipts(true);
+    setGoogleStatus(null);
+    try {
+      const res = await fetch("/api/google", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "SYNC_RECEIPTS", spreadsheetId: googleSpreadsheetId }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setGoogleStatus({ type: "success", msg: `Successfully synced ${data.count} fee receipts to "Fee Receipts Register" tab!` });
+      } else {
+        setGoogleStatus({ type: "error", msg: data.error || "Failed to sync fee receipts." });
+      }
+    } catch (err: any) {
+      setGoogleStatus({ type: "error", msg: err.message || "Network error. Failed to sync." });
+    } finally {
+      setSyncingReceipts(false);
+    }
+  };
+
+  const triggerSyncMarks = async () => {
+    if (!googleSpreadsheetId.trim()) {
+      setGoogleStatus({ type: "error", msg: "Please enter a valid Google Spreadsheet ID first." });
+      return;
+    }
+    setSyncingMarks(true);
+    setGoogleStatus(null);
+    try {
+      const res = await fetch("/api/google", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "SYNC_MARKS", spreadsheetId: googleSpreadsheetId }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setGoogleStatus({ type: "success", msg: `Successfully synced ${data.count} student marks to "Examination Marks" tab!` });
+      } else {
+        setGoogleStatus({ type: "error", msg: data.error || "Failed to sync examination marks." });
+      }
+    } catch (err: any) {
+      setGoogleStatus({ type: "error", msg: err.message || "Network error. Failed to sync." });
+    } finally {
+      setSyncingMarks(false);
+    }
+  };
+
+  const triggerSyncAll = async () => {
+    if (!googleSpreadsheetId.trim()) {
+      setGoogleStatus({ type: "error", msg: "Please enter a valid Google Spreadsheet ID first." });
+      return;
+    }
+    setSyncingAll(true);
+    setGoogleStatus(null);
+    try {
+      const res = await fetch("/api/google", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "SYNC_ALL", spreadsheetId: googleSpreadsheetId }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setGoogleStatus({
+          type: "success",
+          msg: `Complete Sync Successful! Synchronized ${data.studentsCount} Student Profiles, ${data.feeRegisterCount || data.studentsCount} Fee Records, ${data.receiptsCount} Receipts, and ${data.marksCount} Exam Marks across 4 Google Sheets tabs.`,
+        });
+      } else {
+        setGoogleStatus({ type: "error", msg: data.error || "Failed to sync all modules." });
+      }
+    } catch (err: any) {
+      setGoogleStatus({ type: "error", msg: err.message || "Network error. Failed to sync." });
+    } finally {
+      setSyncingAll(false);
     }
   };
 
@@ -993,53 +1083,61 @@ export default function SchoolSetupTab({
 
         {activeSchoolSubTab === "sync" && (
           <div className="bg-white border border-slate-200/60 p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] space-y-5 animate-scale-in">
-            <div>
-              <h3 className="text-xs font-black uppercase text-amber-700 bg-amber-50 border border-amber-100/50 px-3 py-1 rounded-xl inline-flex items-center gap-1.5 tracking-wider">
-                <Database className="h-3.5 w-3.5" /> Google Cloud Integration Panel
-              </h3>
-              <p className="text-[10px] text-slate-400 font-semibold mt-1.5">
-                Connect Google Sheets to automatically export live student profiles and financial ledger records. Share your Google Sheet with the Service Account email.
-              </p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-xs font-black uppercase text-amber-700 bg-amber-50 border border-amber-100/50 px-3 py-1 rounded-xl inline-flex items-center gap-1.5 tracking-wider">
+                  <Database className="h-3.5 w-3.5" /> Google Cloud Integration Panel
+                </h3>
+                <p className="text-[10px] text-slate-400 font-semibold mt-1.5">
+                  Synchronize student master records, monthly fee registers, payment vouchers, and examination marks to your Google Sheet.
+                </p>
+              </div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-[10px] font-bold text-slate-600 shrink-0">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>Auto-Sync: 00:00 Midnight (Daily)</span>
+              </div>
             </div>
 
             {googleStatus && (
-              <div className={`flex items-center gap-2 p-2.5 rounded-xl border text-[10px] font-bold ${
+              <div className={`flex items-start gap-2.5 p-3 rounded-2xl border text-xs font-bold ${
                 googleStatus.type === "success" 
-                  ? "bg-green-50 text-green-700 border-green-100" 
-                  : "bg-rose-50 text-rose-700 border-rose-100"
+                  ? "bg-emerald-50 text-emerald-800 border-emerald-200" 
+                  : "bg-rose-50 text-rose-800 border-rose-200"
               }`}>
-                {googleStatus.type === "success" ? <CheckCircle className="h-4 w-4 shrink-0" /> : <AlertTriangle className="h-4 w-4 shrink-0" />}
-                <span>{googleStatus.msg}</span>
+                {googleStatus.type === "success" ? <CheckCircle className="h-4 w-4 shrink-0 text-emerald-600 mt-0.5" /> : <AlertTriangle className="h-4 w-4 shrink-0 text-rose-600 mt-0.5" />}
+                <span className="leading-relaxed">{googleStatus.msg}</span>
               </div>
             )}
 
             {/* Credentials JSON Pastbox */}
-            <div className="bg-slate-50/50 border border-slate-200/60 rounded-2xl p-4 space-y-3">
+            <div className="p-4 sm:p-5 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <h4 className="text-xs font-black uppercase text-slate-800 tracking-wider flex items-center gap-1.5">
-                    <Key className="h-3.5 w-3.5 text-amber-600" />
-                    Google Service Account Key (JSON)
+                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                    <span className="p-1.5 rounded-lg bg-amber-600 text-white shadow-xs">
+                      <Key className="w-3.5 h-3.5" />
+                    </span>
+                    <span>Google Service Account Credentials</span>
                   </h4>
-                  <p className="text-[10px] text-slate-500 font-medium mt-0.5">
+                  <p className="text-[10px] text-slate-500 font-medium mt-1">
                     {savedClientEmail ? (
-                      <span className="text-emerald-700 font-mono font-bold">✓ Active Bot: {savedClientEmail}</span>
+                      <span className="text-emerald-700 font-mono font-bold">✓ Connected: {savedClientEmail}</span>
                     ) : (
-                      "Paste downloaded credentials.json file content from Google Cloud Console."
+                      "Google Cloud Console Service Account JSON credentials required for spreadsheet sync."
                     )}
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowJsonBox(!showJsonBox)}
-                  className="text-[10px] font-black uppercase tracking-wider text-amber-700 hover:text-amber-800 bg-white border border-amber-200/60 px-3 py-1.5 rounded-xl shadow-2xs cursor-pointer shrink-0 transition-all active:scale-95"
+                  className="text-[10px] font-black uppercase tracking-wider text-slate-700 hover:text-slate-900 bg-white border border-slate-200 hover:border-slate-300 px-3 py-1.5 rounded-xl shadow-2xs cursor-pointer shrink-0 transition-all active:scale-95"
                 >
-                  {showJsonBox ? "Close" : savedClientEmail ? "🔑 Update JSON Key" : "🔑 Paste JSON Key"}
+                  {showJsonBox ? "Close" : savedClientEmail ? "Update Credentials Key" : "Paste JSON Key"}
                 </button>
               </div>
 
               {showJsonBox && (
-                <div className="space-y-2 pt-1 animate-fade-in">
+                <div className="space-y-2 pt-2 border-t border-slate-200/60 animate-fade-in">
                   <textarea
                     rows={5}
                     placeholder='Paste credentials.json text here e.g. { "type": "service_account", "private_key": "...", ... }'
@@ -1060,43 +1158,134 @@ export default function SchoolSetupTab({
               )}
             </div>
 
-            <div className="pt-1">
-              {/* Google Sheets Sync Box */}
-              <div className="border border-slate-200/60 bg-slate-50/20 rounded-2xl p-4.5 space-y-3">
-                <div>
-                  <h4 className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wide">Google Sheets Data Synchronization</h4>
-                  <p className="text-[9px] text-slate-400 font-semibold mt-0.5">Appends ledger entries and detailed student profiles directly into Google Sheets tabs.</p>
-                </div>
-                
-                <div>
-                  <label className="text-[8.5px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Google Spreadsheet ID (from URL)</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. 1aBCdEfGhIjKlMnOpQrStUvWxYz1234567890"
-                    value={googleSpreadsheetId}
-                    onChange={(e) => handleSpreadsheetIdChange(e.target.value)}
-                    className="w-full text-xs font-bold py-2.5 px-3.5 border border-slate-200 rounded-xl outline-none bg-white focus:border-amber-600 shadow-2xs"
-                  />
+            {/* Google Sheets Sync Box */}
+            <div className="p-4 sm:p-5 bg-slate-50 border border-slate-200 rounded-2xl space-y-4">
+              <div>
+                <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                  <span className="p-1.5 rounded-lg bg-emerald-600 text-white shadow-xs">
+                    <FileSpreadsheet className="w-3.5 h-3.5" />
+                  </span>
+                  <span>Google Sheets Multi-Tab Synchronization</span>
+                </h4>
+                <p className="text-[10px] text-slate-500 font-medium mt-1">
+                  Clean backup of 4 essential school registers with zero clutter. Human-readable and ready for audits.
+                </p>
+              </div>
+
+              {/* 4 Clean Tabs Overview */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-2xs space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[9px] font-black uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">Tab 1</span>
+                  </div>
+                  <p className="text-xs font-black text-slate-800">Student Directory</p>
+                  <p className="text-[10px] text-slate-400 font-medium leading-tight">Master profiles, contacts, parent phone, address & Aadhaar</p>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-2xs space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[9px] font-black uppercase tracking-wider text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">Tab 2</span>
+                  </div>
+                  <p className="text-xs font-black text-slate-800">Student Fee Register</p>
+                  <p className="text-[10px] text-slate-400 font-medium leading-tight">Monthly fees rate, Paid Up To, Baki Mahine & April-March breakdown</p>
+                </div>
+
+                <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-2xs space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[9px] font-black uppercase tracking-wider text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md">Tab 3</span>
+                  </div>
+                  <p className="text-xs font-black text-slate-800">Fee Receipts Register</p>
+                  <p className="text-[10px] text-slate-400 font-medium leading-tight">Every counter payment voucher, date, mode & cashier</p>
+                </div>
+
+                <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-2xs space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[9px] font-black uppercase tracking-wider text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md">Tab 4</span>
+                  </div>
+                  <p className="text-xs font-black text-slate-800">Examination Marks</p>
+                  <p className="text-[10px] text-slate-400 font-medium leading-tight">Exam terms, subject marks, percentages & CBSE grades</p>
+                </div>
+              </div>
+
+              {/* Google Spreadsheet ID Input */}
+              <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs space-y-1.5">
+                <label className="text-[10px] font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Google Spreadsheet ID (from URL)</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. 1PChbL59jTTj8w9kKMer7Esg4kClZrurJFiMi2jchxak"
+                  value={googleSpreadsheetId}
+                  onChange={(e) => handleSpreadsheetIdChange(e.target.value)}
+                  className="w-full text-xs font-mono font-bold py-2.5 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-emerald-600"
+                />
+                <p className="text-[9.5px] text-slate-400 font-medium">
+                  Share your Google Sheet with: <code className="text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded font-mono text-[9px] font-bold select-all">{savedClientEmail || "school-finance-connector@school-finance-os.iam.gserviceaccount.com"}</code> (Editor role).
+                </p>
+              </div>
+
+              {/* Master Sync Button */}
+              <button
+                type="button"
+                onClick={triggerSyncAll}
+                disabled={syncingAll}
+                className="w-full flex items-center justify-center gap-2 py-3 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all cursor-pointer shadow-md shadow-slate-900/10 active:scale-98"
+              >
+                {syncingAll ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin text-amber-400" />
+                    <span>Syncing All 4 Tabs to Google Sheet...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4 text-amber-400" />
+                    <span>Sync All Data to Google Sheet (4 Tabs)</span>
+                  </>
+                )}
+              </button>
+
+              {/* Individual Tab Sync Buttons */}
+              <div>
+                <div className="text-[9px] font-extrabold uppercase text-slate-400 tracking-wider mb-2">
+                  Or Sync Individual Registers:
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <button
                     type="button"
                     onClick={triggerSyncStudents}
                     disabled={syncingStudents}
-                    className="flex items-center justify-center gap-1.5 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-sm active:scale-95"
+                    className="flex items-center justify-center gap-1.5 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 disabled:opacity-50 text-slate-700 rounded-xl text-[11px] font-extrabold transition-all cursor-pointer shadow-2xs active:scale-95"
                   >
-                    {syncingStudents ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileSpreadsheet className="h-3.5 w-3.5" />}
-                    Sync Students
+                    {syncingStudents ? <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-600" /> : <GraduationCap className="h-3.5 w-3.5 text-indigo-600" />}
+                    Student Directory
                   </button>
                   <button
                     type="button"
-                    onClick={triggerSyncLedger}
-                    disabled={syncingLedger}
-                    className="flex items-center justify-center gap-1.5 py-2.5 bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-sm active:scale-95"
+                    onClick={triggerSyncFeeRegister}
+                    disabled={syncingFeeRegister}
+                    className="flex items-center justify-center gap-1.5 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 disabled:opacity-50 text-slate-700 rounded-xl text-[11px] font-extrabold transition-all cursor-pointer shadow-2xs active:scale-95"
                   >
-                    {syncingLedger ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <TrendingUp className="h-3.5 w-3.5" />}
-                    Sync Financials
+                    {syncingFeeRegister ? <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-600" /> : <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600" />}
+                    Fee Register
+                  </button>
+                  <button
+                    type="button"
+                    onClick={triggerSyncReceipts}
+                    disabled={syncingReceipts}
+                    className="flex items-center justify-center gap-1.5 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 disabled:opacity-50 text-slate-700 rounded-xl text-[11px] font-extrabold transition-all cursor-pointer shadow-2xs active:scale-95"
+                  >
+                    {syncingReceipts ? <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-600" /> : <Receipt className="h-3.5 w-3.5 text-amber-600" />}
+                    Fee Receipts
+                  </button>
+                  <button
+                    type="button"
+                    onClick={triggerSyncMarks}
+                    disabled={syncingMarks}
+                    className="flex items-center justify-center gap-1.5 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 disabled:opacity-50 text-slate-700 rounded-xl text-[11px] font-extrabold transition-all cursor-pointer shadow-2xs active:scale-95"
+                  >
+                    {syncingMarks ? <Loader2 className="h-3.5 w-3.5 animate-spin text-rose-600" /> : <Award className="h-3.5 w-3.5 text-rose-600" />}
+                    Exam Marks
                   </button>
                 </div>
               </div>

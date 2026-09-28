@@ -1059,10 +1059,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     const intervalId = setInterval(() => {
-      if (typeof document !== "undefined" && !document.hidden) {
+      if (typeof document !== "undefined" && !document.hidden && document.visibilityState === "visible") {
         checkAndSyncBilling().catch(() => {});
       }
-    }, 90000);
+    }, 120000);
 
     return () => clearInterval(intervalId);
   }, [user]);

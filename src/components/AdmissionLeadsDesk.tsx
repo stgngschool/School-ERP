@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
 import { getTodayIST } from "@/lib/dateUtils";
+import { cleanPhoneNumber } from "@/lib/whatsapp";
 
 interface EnquiryItem {
   id: string;
@@ -599,7 +600,7 @@ export default function AdmissionLeadsDesk() {
                             <span>{app.fatherMobile}</span>
                           </a>
                           <a
-                            href={`https://wa.me/91${app.fatherMobile}?text=${encodeURIComponent(
+                            href={`https://wa.me/${cleanPhoneNumber(app.fatherMobile)}?text=${encodeURIComponent(
                               `Namaste ${app.fatherName}, this is regarding your admission application ${app.applicationNo} for ${app.studentName} at St. GNG School.`
                             )}`}
                             target="_blank"
@@ -811,7 +812,7 @@ export default function AdmissionLeadsDesk() {
                           <span>{enquiry.mobile}</span>
                         </a>
                         <a
-                          href={`https://wa.me/91${enquiry.mobile}?text=${encodeURIComponent(
+                          href={`https://wa.me/${cleanPhoneNumber(enquiry.mobile)}?text=${encodeURIComponent(
                             `Hello ${enquiry.parentName}, this is regarding your admission enquiry for ${enquiry.studentName} for ${enquiry.targetClass} at St. GNG School.`
                           )}`}
                           target="_blank"

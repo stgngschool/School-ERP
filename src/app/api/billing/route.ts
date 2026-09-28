@@ -13,13 +13,7 @@ import { BoundedCache } from "@/lib/cache/BoundedCache";
 import { getISTDateString } from "@/lib/dateUtils";
 import { validateCsrfOrigin } from "@/lib/security";
 
-// ── C-02 fix: Bounded LRU cache (max 50 entries, 5-minute TTL)
-// Drastically cuts Supabase egress bandwidth. Cleared immediately on any mutation.
-const serverBillingCache = new BoundedCache(50, 5 * 60 * 1000);
-
-function clearServerBillingCache() {
-  serverBillingCache.clear();
-}
+import { serverBillingCache, clearServerBillingCache } from "@/lib/cache/billingCache";
 
 function getChargeDueDate(chargeName: string, fallbackTime: number): string {
   const nameLower = chargeName.toLowerCase();
@@ -82,23 +76,11 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
     }
 
-    // ── C-02 fix: BoundedCache.get() returns data directly (undefined if expired/missing)
-    const cacheKey = `${authUser.role}_${authUser.userId}_${request.url}`;
-    const cachedData = serverBillingCache.get(cacheKey);
-    if (cachedData) {
-      return NextResponse.json(cachedData, {
-        headers: {
-          "Cache-Control": "private, max-age=10, stale-while-revalidate=20",
-          "X-Server-Cache": "HIT",
-        },
-      });
-    }
-
     const { searchParams } = new URL(request.url);
     const receiptIdParam = searchParams.get("receiptId") || searchParams.get("id");
     const receiptNoParam = searchParams.get("receiptNo") || searchParams.get("receiptNumber");
     const studentIdParam = searchParams.get("studentId");
-    const searchParam = (searchParams.get("search") || searchParams.get("q") || "").trim();
+    const searchParam = (searchParams.get("search") || searchParams.get("q") || "").trim().toLowerCase();
     const allParam = searchParams.get("all") === "true";
 
     // ── B-11: Clamped pagination parameters with safe defaults
@@ -107,6 +89,25 @@ export async function GET(request: Request) {
     const limitParam = parseInt(searchParams.get("limit") || searchParams.get("pageSize") || "150", 10);
     const limit = isNaN(limitParam) || limitParam < 1 ? 150 : Math.min(500, limitParam);
     const skip = (page - 1) * limit;
+
+    // Cache key construction:
+    // Staff (ADMIN & ACCOUNTANT) see identical school-wide records when not scoped to a specific student/receipt.
+    // By sharing the cache across staff, we prevent redundant heavy database scans on every staff refresh!
+    const isStaff = authUser.role === "ADMIN" || authUser.role === "ACCOUNTANT";
+    const cacheScope = isStaff
+      ? (studentIdParam || receiptIdParam || receiptNoParam ? `STAFF_${studentIdParam || ""}_${receiptIdParam || ""}_${receiptNoParam || ""}` : "STAFF_GLOBAL")
+      : `${authUser.role}_${authUser.userId}`;
+
+    const cacheKey = `BILL_${cacheScope}_all:${allParam}_p:${page}_l:${limit}_q:${searchParam}`;
+    const cachedData = serverBillingCache.get(cacheKey);
+    if (cachedData) {
+      return NextResponse.json(cachedData, {
+        headers: {
+          "Cache-Control": "private, max-age=15, stale-while-revalidate=45",
+          "X-Server-Cache": "HIT",
+        },
+      });
+    }
 
     let ledgerWhere: any = {};
     let receiptWhere: any = { status: { not: "REVERSED" } };
@@ -357,7 +358,7 @@ export async function GET(request: Request) {
       db.receipt.findMany({
         where: receiptWhere,
         skip: allParam ? 0 : skip,
-        take: allParam ? undefined : limit,
+        take: allParam ? 1500 : limit,
         select: {
           id: true,
           studentId: true,
@@ -780,7 +781,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json(result, {
       headers: {
-        "Cache-Control": "private, max-age=10, stale-while-revalidate=20",
+        "Cache-Control": "private, max-age=15, stale-while-revalidate=45",
         "X-Server-Cache": "MISS",
       },
     });

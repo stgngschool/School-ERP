@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
 import * as XLSX from "xlsx";
+import { getTodayIST } from "@/lib/dateUtils";
 
 export const dynamic = "force-dynamic";
 
@@ -427,7 +428,7 @@ export async function GET(request: Request) {
       });
     });
 
-    const nowStr = new Date().toISOString().split("T")[0];
+    const nowStr = getTodayIST();
     const cleanExam = examParam.replace(/[^a-zA-Z0-9_-]/g, "_");
     const cleanClass = isSingleClass ? classParam!.replace(/[^a-zA-Z0-9_-]/g, "_") : "All_Students";
 

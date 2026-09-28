@@ -4,7 +4,7 @@ import * as XLSX from "xlsx";
 import { getAuthUser } from "@/lib/auth";
 import { toRupees } from "@/lib/currency";
 import { getSafeErrorMessage } from "@/lib/validation";
-import { formatCanonicalDOB } from "@/lib/dateUtils";
+import { formatCanonicalDOB, getTodayIST, getISTDateString } from "@/lib/dateUtils";
 import { formatExcelNumericDate } from "@/lib/exportStudentXLS";
 
 export const dynamic = "force-dynamic";
@@ -183,7 +183,7 @@ export async function GET(request: Request) {
     const schoolConfig = await db.schoolConfig.findFirst({ orderBy: { updatedAt: "desc" } });
     const configData = (schoolConfig?.data as any) || {};
     const schoolName = configData.name || "School";
-    const dateStr = new Date().toISOString().split("T")[0];
+    const dateStr = getTodayIST();
 
     // Filter by search query if provided
     const filteredStudents = students.filter((s: any) => {
@@ -363,7 +363,7 @@ export async function GET(request: Request) {
         return {
           "S.No.": idx + 1,
           "Fee Description": entry.description,
-          "Date": entry.createdAt ? new Date(entry.createdAt).toISOString().split("T")[0] : "-",
+          "Date": entry.createdAt ? getISTDateString(entry.createdAt) : "-",
           "Fee Amount (Rs)": origRs,
           "Paid Amount (Rs)": paidRs,
           "Remaining Due (Rs)": dueRs,
@@ -375,7 +375,7 @@ export async function GET(request: Request) {
         "S.No.": idx + 1,
         "Receipt No": r.receiptNumber,
         "Book / Offline Receipt No": r.manualReceiptNo || "-",
-        "Date": r.createdAt.toISOString().split("T")[0],
+        "Date": r.createdAt ? getISTDateString(r.createdAt) : "-",
         "Amount Paid (Rs)": toRupees(r.amountPaid),
         "Payment Mode": r.paymentMethod,
         "Transaction Ref": r.transactionReference || "-",

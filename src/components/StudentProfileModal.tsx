@@ -104,17 +104,20 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
     setPhotoError(null);
     setPhotoSuccess(false);
 
-    // Validate type: strictly JPG/JPEG
-    const isJpg = file.type === "image/jpeg" || file.type === "image/jpg" || file.name.toLowerCase().endsWith(".jpg") || file.name.toLowerCase().endsWith(".jpeg");
-    if (!isJpg) {
-      setPhotoError("Only JPG/JPEG format is supported.");
+    // Validate type: JPG, PNG, WEBP (matches server upload API)
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    const isAllowedExt = ext ? ["jpg", "jpeg", "png", "webp"].includes(ext) : false;
+    const isAllowedMime = allowedTypes.includes(file.type);
+    if (!isAllowedMime && !isAllowedExt) {
+      setPhotoError("Only JPG, PNG or WebP format is supported.");
       return;
     }
 
-    // Validate size: <= 50KB
-    const maxSize = 50 * 1024; // 50KB
+    // Validate size: <= 2MB (aligned with server API limit)
+    const maxSize = 2 * 1024 * 1024; // 2MB
     if (file.size > maxSize) {
-      setPhotoError("Size must be under 50KB.");
+      setPhotoError("Size must be under 2MB.");
       return;
     }
 
@@ -148,6 +151,25 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
   const handleSaveMark = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSubject || !newObtained || !newMax) return;
+
+    const obtainedNum = parseFloat(newObtained);
+    const maxNum = parseFloat(newMax);
+    if (isNaN(obtainedNum) || isNaN(maxNum)) {
+      setMarkError("Marks must be valid numbers.");
+      return;
+    }
+    if (obtainedNum < 0) {
+      setMarkError("Marks cannot be negative.");
+      return;
+    }
+    if (maxNum <= 0) {
+      setMarkError("Maximum marks must be greater than zero.");
+      return;
+    }
+    if (obtainedNum > maxNum) {
+      setMarkError(`Obtained marks (${obtainedNum}) cannot exceed maximum marks (${maxNum}).`);
+      return;
+    }
 
     setMarkError(null);
     setSavingMark(true);
@@ -272,7 +294,7 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
     
     // Percent calculated out of active school days (present + late + absent); approved leave is preserved as official exemption
     const activeDays = present + late + absent;
-    const percent = activeDays > 0 ? Math.round((present / activeDays) * 100) : 100;
+    const percent = activeDays > 0 ? Math.round(((present + late) / activeDays) * 100) : 100;
 
     return { percent, present, late, absent, leave, total };
   };
@@ -400,10 +422,10 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
                       <div className="flex-1 min-w-0">
                         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider leading-none">Photo</p>
                         <label className="text-[10px] font-black text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer mt-1 block">
-                          {uploadingPhoto ? "Saving..." : "Upload JPG"}
+                          {uploadingPhoto ? "Saving..." : "Upload Photo"}
                           <input 
                             type="file" 
-                            accept=".jpg,.jpeg,image/jpeg" 
+                            accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" 
                             className="hidden" 
                             onChange={handlePhotoUpload} 
                             disabled={uploadingPhoto}

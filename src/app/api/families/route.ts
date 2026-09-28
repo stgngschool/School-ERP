@@ -4,8 +4,42 @@ import db from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
 import { validateCsrfOrigin } from "@/lib/security";
 import { getNextFamilyCode } from "@/lib/family";
+import { BoundedCache } from "@/lib/cache/BoundedCache";
 
 export const dynamic = "force-dynamic";
+
+async function fetchAllFamilies() {
+  return await db.parentProfile.findMany({
+    where: {
+      students: {
+        some: {},
+      },
+    },
+    include: {
+      user: {
+        select: { id: true, name: true, phone: true, email: true },
+      },
+      students: {
+        select: {
+          id: true,
+          name: true,
+          admissionNumber: true,
+          rollNumber: true,
+          fatherName: true,
+          motherName: true,
+          fatherMobile: true,
+          motherMobile: true,
+          status: true,
+          class: { select: { name: true, section: true } },
+        },
+      },
+    },
+    orderBy: { familyCode: "asc" },
+  });
+}
+
+type FamiliesData = Awaited<ReturnType<typeof fetchAllFamilies>>;
+const serverFamiliesCache = new BoundedCache<FamiliesData>(5, 3 * 60 * 1000);
 
 export async function GET(request: Request) {
   try {
@@ -21,34 +55,12 @@ export async function GET(request: Request) {
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
     const pageSize = Math.min(100, Math.max(10, parseInt(searchParams.get("pageSize") || "30", 10)));
 
-    // ── 1. Audit / Conflict Scanner
-    const allMultiFamilies = await db.parentProfile.findMany({
-      where: {
-        students: {
-          some: {},
-        },
-      },
-      include: {
-        user: {
-          select: { id: true, name: true, phone: true, email: true },
-        },
-        students: {
-          select: {
-            id: true,
-            name: true,
-            admissionNumber: true,
-            rollNumber: true,
-            fatherName: true,
-            motherName: true,
-            fatherMobile: true,
-            motherMobile: true,
-            status: true,
-            class: { select: { name: true, section: true } },
-          },
-        },
-      },
-      orderBy: { familyCode: "asc" },
-    });
+    // ── 1. Audit / Conflict Scanner (Cached for 3 mins to make search & filters instantaneous)
+    let allMultiFamilies = serverFamiliesCache.get("ALL_FAMILIES");
+    if (!allMultiFamilies) {
+      allMultiFamilies = await fetchAllFamilies();
+      serverFamiliesCache.set("ALL_FAMILIES", allMultiFamilies);
+    }
 
     const flaggedFamilies: any[] = [];
     let multiCount = 0;
@@ -220,6 +232,8 @@ export async function POST(request: Request) {
     if (!authUser || (authUser.role !== "ADMIN" && authUser.role !== "ACCOUNTANT")) {
       return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
     }
+
+    serverFamiliesCache.clear();
 
     const body = await request.json();
     const { action, studentId, targetFamilyCode, targetParentProfileId, sourceFamilyCode } = body;

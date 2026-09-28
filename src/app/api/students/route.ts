@@ -23,12 +23,20 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
     }
 
-    const cacheKey = `${authUser.role}_${authUser.userId}`;
+    const { searchParams } = new URL(request.url);
+    const hasExplicitPagination = searchParams.has("limit") || searchParams.has("take") || searchParams.has("page") || searchParams.has("offset") || searchParams.has("skip");
+    const { limit, offset } = boundPagination(searchParams, { defaultLimit: 2500, maxLimit: 5000 });
+
+    const isStaff = authUser.role === "ADMIN" || authUser.role === "ACCOUNTANT" || authUser.role === "TEACHER";
+    const cacheKey = isStaff
+      ? `STAFF_STUDENTS_${hasExplicitPagination ? `${limit}_${offset}` : "ALL"}`
+      : `PARENT_${authUser.userId}`;
+
     const cachedData = serverStudentsCache.get(cacheKey);
     if (cachedData) {
       return NextResponse.json(cachedData, {
         headers: {
-          "Cache-Control": "private, max-age=15, stale-while-revalidate=30",
+          "Cache-Control": "private, max-age=30, stale-while-revalidate=60",
           "X-Server-Cache": "HIT",
         },
       });
@@ -45,10 +53,6 @@ export async function GET(request: Request) {
       whereClause = { parentProfileId: parentProfile.id };
     }
     // Teachers, Admins, and Accountants have school-wide access to all students and classes for grading, attendance, and coursework.
-
-    const { searchParams } = new URL(request.url);
-    const hasExplicitPagination = searchParams.has("limit") || searchParams.has("take") || searchParams.has("page") || searchParams.has("offset") || searchParams.has("skip");
-    const { limit, offset } = boundPagination(searchParams, { defaultLimit: 2500, maxLimit: 5000 });
 
     const dbStart = performance.now();
     const students = await db.student.findMany({
@@ -166,7 +170,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json(formatted, {
       headers: {
-        "Cache-Control": "private, max-age=15, stale-while-revalidate=30",
+        "Cache-Control": "private, max-age=30, stale-while-revalidate=60",
         "X-Server-Cache": "MISS",
       },
     });

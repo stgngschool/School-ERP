@@ -134,10 +134,9 @@ export default function AccountantOverviewTab({
     return receipts.filter(
       (r) =>
         r.createdById === user?.id ||
-        r.collectedBy === user?.name ||
-        r.collectedBy === user?.email ||
         (user?.id && (r as any).collectedById === user.id) ||
-        r.collectedBy === "Accountant"
+        (user?.name && r.collectedBy === user.name) ||
+        (user?.email && r.collectedBy === user.email)
     );
   }, [receipts, user]);
 

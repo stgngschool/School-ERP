@@ -1,7 +1,7 @@
 import cron from "node-cron";
 import fs from "fs";
 import path from "path";
-import { syncStudentsToSheet, syncLedgerToSheet } from "./google";
+import { syncAllDataToSheet, getConfiguredSpreadsheetId } from "./google";
 
 const INTEGRATIONS_FILE = path.join(process.cwd(), "src/data/integrations.json");
 
@@ -15,25 +15,27 @@ export function initDailyCronJob() {
   cron.schedule("0 0 * * *", async () => {
     console.log("[CRON] Running scheduled daily Google Sheets synchronization...");
     try {
-      try {
-        await fs.promises.access(INTEGRATIONS_FILE);
-        const data = JSON.parse(await fs.promises.readFile(INTEGRATIONS_FILE, "utf-8"));
-        const sheetConfig = data.find((i: any) => i.id === "google_sheets");
+      const spreadsheetId = await getConfiguredSpreadsheetId();
 
-        if (sheetConfig && sheetConfig.config?.spreadsheetId) {
-          const spreadsheetId = sheetConfig.config.spreadsheetId;
-          const stdRes = await syncStudentsToSheet(spreadsheetId);
-          const ledRes = await syncLedgerToSheet(spreadsheetId);
+      if (spreadsheetId) {
+        const res = await syncAllDataToSheet(spreadsheetId);
 
-          sheetConfig.lastSynced = new Date().toISOString();
-          await fs.promises.writeFile(INTEGRATIONS_FILE, JSON.stringify(data, null, 2), "utf-8");
+        try {
+          if (fs.existsSync(INTEGRATIONS_FILE)) {
+            const data = JSON.parse(await fs.promises.readFile(INTEGRATIONS_FILE, "utf-8"));
+            const sheetConfig = data.find((i: any) => i.id === "google_sheets");
+            if (sheetConfig) {
+              sheetConfig.lastSynced = new Date().toISOString();
+              await fs.promises.writeFile(INTEGRATIONS_FILE, JSON.stringify(data, null, 2), "utf-8");
+            }
+          }
+        } catch {}
 
-          console.log(`[CRON] Daily Google Sheets sync completed! (${stdRes.count} students, ${ledRes.count} transactions)`);
-        } else {
-          console.log("[CRON] Google Sheets is missing spreadsheetId. Skipping daily sync.");
-        }
-      } catch (err) {
-        // INTEGRATIONS_FILE doesn't exist or is invalid, ignore
+        console.log(
+          `[CRON] Daily Google Sheets sync completed! (${res.studentsCount} students, ${res.feeRegisterCount} fee registers, ${res.receiptsCount} receipts, ${res.marksCount} marks)`
+        );
+      } else {
+        console.log("[CRON] Google Sheets is missing spreadsheetId. Skipping daily sync.");
       }
     } catch (err: any) {
       console.error("[CRON] Scheduled Google Sheets sync failed:", err.message);

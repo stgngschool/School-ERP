@@ -5,11 +5,26 @@ import { getAuthUser } from "@/lib/auth";
 import { getSafeErrorMessage } from "@/lib/validation";
 import { getNextEmployeeId } from "@/lib/family";
 
+import { BoundedCache } from "@/lib/cache/BoundedCache";
+
+const serverUsersCache = new BoundedCache(10, 5 * 60 * 1000);
+
 export async function GET(request: Request) {
   try {
     const authUser = await getAuthUser(request);
     if (!authUser || (authUser.role !== "ADMIN" && authUser.role !== "ACCOUNTANT")) {
       return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
+    }
+
+    const cacheKey = `users_${authUser.role}`;
+    const cachedUsers = serverUsersCache.get(cacheKey);
+    if (cachedUsers) {
+      return NextResponse.json(cachedUsers, {
+        headers: {
+          "Cache-Control": "private, max-age=30, stale-while-revalidate=120",
+          "X-Server-Cache": "HIT",
+        },
+      });
     }
 
     // ── U-05: Scope the user list by caller role.
@@ -21,9 +36,16 @@ export async function GET(request: Request) {
 
     const users = await db.user.findMany({
       where: roleWhereClause,
-      include: {
+      select: {
+        id: true,
+        username: true,
+        name: true,
+        role: true,
+        status: true,
         teacherProfile: {
-          include: {
+          select: {
+            id: true,
+            employeeId: true,
             classes: {
               where: { status: "ACTIVE" },
               select: { id: true, name: true, section: true }
@@ -47,7 +69,14 @@ export async function GET(request: Request) {
       } : null
     }));
 
-    return NextResponse.json(formatted);
+    serverUsersCache.set(cacheKey, formatted);
+
+    return NextResponse.json(formatted, {
+      headers: {
+        "Cache-Control": "private, max-age=30, stale-while-revalidate=120",
+        "X-Server-Cache": "MISS",
+      },
+    });
   } catch (error) {
     console.error("Fetch users error:", error);
     return NextResponse.json({ error: "Failed to fetch user accounts" }, { status: 500 });
@@ -60,6 +89,7 @@ export async function PATCH(request: Request) {
     if (!authUser || authUser.role !== "ADMIN") {
       return NextResponse.json({ error: "Only administrators can modify user accounts." }, { status: 403 });
     }
+    serverUsersCache.clear();
 
     const body = await request.json();
     const { userId, action, newPassword, currentPassword, adminPassword, name, username, email, phone } = body;
@@ -237,6 +267,7 @@ export async function POST(request: Request) {
     if (!authUser || authUser.role !== "ADMIN") {
       return NextResponse.json({ error: "Only administrators can create staff accounts." }, { status: 403 });
     }
+    serverUsersCache.clear();
 
     const { name, username, email, password, role, phone, employeeId, classId } = await request.json();
     if (!name || !username || !email || !password || !role) {
@@ -345,6 +376,7 @@ export async function DELETE(request: Request) {
     if (!authUser || authUser.role !== "ADMIN") {
       return NextResponse.json({ error: "Only administrators can delete user accounts." }, { status: 403 });
     }
+    serverUsersCache.clear();
 
     const { userId } = await request.json();
 

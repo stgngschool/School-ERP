@@ -4,6 +4,9 @@ import { getAuthUser } from "@/lib/auth";
 import { EntryType } from "@prisma/client";
 import { getAcademicYear } from "@/lib/generateYearlyCharges";
 
+import { getTodayIST } from "@/lib/dateUtils";
+import { serverBillingSummaryCache } from "@/lib/cache/billingCache";
+
 export const dynamic = "force-dynamic";
 
 /**
@@ -21,6 +24,18 @@ export async function GET(request: Request) {
     const authUser = await getAuthUser(request);
     if (!authUser) {
       return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
+    }
+
+    const isStaff = authUser.role === "ADMIN" || authUser.role === "ACCOUNTANT";
+    const cacheKey = isStaff ? "SUMMARY_STAFF" : `SUMMARY_${authUser.role}_${authUser.userId}`;
+    const cachedSummary = serverBillingSummaryCache.get(cacheKey);
+    if (cachedSummary) {
+      return NextResponse.json(cachedSummary, {
+        headers: {
+          "Cache-Control": "private, max-age=15, stale-while-revalidate=30",
+          "X-Server-Cache": "HIT",
+        },
+      });
     }
 
     const acYear = getAcademicYear();
@@ -97,8 +112,8 @@ export async function GET(request: Request) {
       receiptWhere.studentId = { in: studentIdsScope };
     }
 
-    const now = new Date();
-    const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
+    const todayStr = getTodayIST();
+    const todayStart = new Date(`${todayStr}T00:00:00+05:30`);
 
     const [
       chargeAgg,
@@ -135,7 +150,7 @@ export async function GET(request: Request) {
     const todayCollectedPaisa = todayReceiptAgg._sum.amountPaid || 0;
     const netDuesPaisa = Math.max(0, totalChargesPaisa - totalDiscountsPaisa - totalCollectedPaisa);
 
-    return NextResponse.json({
+    const payload = {
       success: true,
       academicYear: acYear,
       summary: {
@@ -146,9 +161,14 @@ export async function GET(request: Request) {
         netDuesPaisa,
         totalReceiptsCount: receiptCount,
       },
-    }, {
+    };
+
+    serverBillingSummaryCache.set(cacheKey, payload);
+
+    return NextResponse.json(payload, {
       headers: {
-        "Cache-Control": "private, max-age=10, stale-while-revalidate=30",
+        "Cache-Control": "private, max-age=15, stale-while-revalidate=30",
+        "X-Server-Cache": "MISS",
       },
     });
   } catch (err: any) {
