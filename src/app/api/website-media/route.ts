@@ -29,13 +29,15 @@ function getJsonMediaFallback() {
   return { hero: {}, principal: {}, facilities: [], gallery: [], videos: [] };
 }
 
+import { getCachedSchoolConfig, clearSchoolConfigCache } from "@/lib/cache/schoolConfigCache";
+
 export async function GET() {
   try {
     let mediaData: any = null;
 
-    // 1. Try reading from PostgreSQL SchoolConfig table first
+    // 1. Try reading from cached SchoolConfig table first
     try {
-      const row = await db.schoolConfig.findUnique({ where: { id: SINGLETON_ID } });
+      const row = await getCachedSchoolConfig();
       if (row && row.data && typeof row.data === "object" && (row.data as any).websiteMedia) {
         mediaData = (row.data as any).websiteMedia;
       }
@@ -91,6 +93,7 @@ export async function POST(request: Request) {
       console.warn("Local websiteMedia.json write skipped (read-only FS):", fsErr);
     }
 
+    clearSchoolConfigCache();
     return NextResponse.json({ success: true, data: updatedMedia }, { headers: NO_CACHE_HEADERS });
   } catch (error: any) {
     console.error("Error updating website media:", error);

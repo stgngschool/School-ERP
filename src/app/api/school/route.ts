@@ -3,6 +3,7 @@ import db from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
 import fs from "fs";
 import path from "path";
+import { getCachedSchoolConfig, clearSchoolConfigCache } from "@/lib/cache/schoolConfigCache";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +35,7 @@ export async function GET(request: Request) {
     const authUser = await getAuthUser(request);
 
     let configData: Record<string, unknown>;
-    const row = await db.schoolConfig.findUnique({ where: { id: SINGLETON_ID } });
+    const row = await getCachedSchoolConfig();
 
     if (row && row.data && typeof row.data === "object") {
       configData = row.data as Record<string, unknown>;
@@ -143,6 +144,7 @@ export async function POST(request: Request) {
       },
     }).catch((err) => console.error("Audit log error on school config:", err));
 
+    clearSchoolConfigCache();
     return NextResponse.json({ success: true, data: mergedData });
   } catch (error) {
     console.error("Error writing school settings:", error);

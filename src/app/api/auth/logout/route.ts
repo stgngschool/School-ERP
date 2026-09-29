@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAuthUser } from "@/lib/auth";
+import { getAuthUser, invalidateUserAuthCache } from "@/lib/auth";
 import db from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +38,7 @@ export async function POST(request: Request) {
       where: { id: authUser.userId },
       data: { tokenVersion: { increment: 1 } },
     });
+    invalidateUserAuthCache(authUser.userId);
   } catch {
     // Non-critical: if DB update fails, cookie is still cleared below.
   }

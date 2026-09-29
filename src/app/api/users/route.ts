@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import bcrypt from "bcryptjs";
-import { getAuthUser } from "@/lib/auth";
+import { getAuthUser, invalidateUserAuthCache } from "@/lib/auth";
 import { getSafeErrorMessage } from "@/lib/validation";
 import { getNextEmployeeId } from "@/lib/family";
 
@@ -148,6 +148,8 @@ export async function PATCH(request: Request) {
         // ── A-02: Increment tokenVersion so any existing rogue sessions are immediately revoked
         data: { passwordHash, tokenVersion: { increment: 1 } },
       });
+      invalidateUserAuthCache(userId);
+      serverUsersCache.clear();
 
       // ── E-02: Structured Audit Logging
       await db.auditLog.create({
@@ -244,6 +246,8 @@ export async function PATCH(request: Request) {
       where: { id: userId },
       data: { status: newStatus, ...tokenVersionUpdate },
     });
+    invalidateUserAuthCache(userId);
+    serverUsersCache.clear();
 
     return NextResponse.json({
       success: true,
@@ -484,6 +488,9 @@ export async function DELETE(request: Request) {
       // Finally delete the user account
       await tx.user.delete({ where: { id: userId } });
     });
+
+    invalidateUserAuthCache(userId);
+    serverUsersCache.clear();
 
     return NextResponse.json({ success: true, message: "User account deleted cleanly while preserving financial records." });
   } catch (error: any) {

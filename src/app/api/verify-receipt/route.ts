@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { numberToIndianWords, isValidReceiptSecurityToken } from "@/lib/receipts";
+import { getCachedSchoolConfig } from "@/lib/cache/schoolConfigCache";
 
 export const dynamic = "force-dynamic";
 
@@ -100,10 +101,10 @@ export async function GET(request: Request) {
       }
     }
 
-    // Fetch school institutional identity from SchoolConfig
+    // Fetch school institutional identity from SchoolConfig cache
     let schoolData: any = {};
     try {
-      const configRow = await db.schoolConfig.findUnique({ where: { id: "singleton" } });
+      const configRow = await getCachedSchoolConfig();
       if (configRow?.data && typeof configRow.data === "object") {
         schoolData = configRow.data;
       }

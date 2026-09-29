@@ -32,7 +32,7 @@ export async function GET(request: Request) {
     if (cachedSummary) {
       return NextResponse.json(cachedSummary, {
         headers: {
-          "Cache-Control": "private, max-age=15, stale-while-revalidate=30",
+          "Cache-Control": "private, max-age=45, stale-while-revalidate=90",
           "X-Server-Cache": "HIT",
         },
       });
@@ -104,7 +104,7 @@ export async function GET(request: Request) {
       entryType: EntryType.DISCOUNT,
       createdAt: { gte: sessionStartDate },
     };
-    const receiptWhere: any = {};
+    const receiptWhere: any = { status: { not: "REVERSED" } };
 
     if (studentIdsScope) {
       chargeWhere.studentId = { in: studentIdsScope };
@@ -167,7 +167,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json(payload, {
       headers: {
-        "Cache-Control": "private, max-age=15, stale-while-revalidate=30",
+        "Cache-Control": "private, max-age=45, stale-while-revalidate=90",
         "X-Server-Cache": "MISS",
       },
     });

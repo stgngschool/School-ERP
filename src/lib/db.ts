@@ -2,7 +2,6 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import pg from "pg";
 
-let basePrisma: PrismaClient;
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -11,14 +10,14 @@ if (!connectionString) {
 }
 
 // In Prisma 7, adapter is strictly required. 
-// Safe connection pool optimized for Supabase Supavisor (Free/Nano tier):
-// - max: 5 connections per Node instance to stay well below the 200 client limit
-// - idleTimeoutMillis: 3000 (3s) so idle connections are quickly released back to Supavisor
+// Connection pool optimized for Supabase Supavisor (Port 6543 Transaction Pooler):
+// - max: 3 connections per serverless container to prevent burst connection spikes
+// - idleTimeoutMillis: 30000 (30s) keeps warm sockets alive across user clicks to reuse TLS handshake
 // - connectionTimeoutMillis: 10000
 const poolConfig = {
   connectionString,
-  max: 5,
-  idleTimeoutMillis: 3000,
+  max: 3,
+  idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
 };
 
@@ -31,12 +30,17 @@ const globalForDb = globalThis as unknown as {
 
 if (!globalForDb.pgPoolGlobal) {
   globalForDb.pgPoolGlobal = new pg.Pool(poolConfig);
+  // Catch idle client connection errors (e.g. ECONNRESET on serverless unfreeze)
+  // to prevent unhandled EventEmitter crash of the Node.js process.
+  globalForDb.pgPoolGlobal.on("error", (err) => {
+    console.warn("[DB] Idle pool client error (non-fatal):", err.message);
+  });
 }
 if (!globalForDb.prismaGlobal) {
   const adapter = new PrismaPg(globalForDb.pgPoolGlobal);
   globalForDb.prismaGlobal = new PrismaClient({ adapter });
 }
-basePrisma = globalForDb.prismaGlobal;
+const basePrisma = globalForDb.prismaGlobal;
 
 if (!globalForDb.prismaWithLoggingGlobal) {
   globalForDb.prismaWithLoggingGlobal = basePrisma.$extends({

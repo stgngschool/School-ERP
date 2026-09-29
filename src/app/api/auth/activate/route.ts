@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import db from "@/lib/db";
+import { invalidateUserAuthCache } from "@/lib/auth";
 import {
   checkActivationRateLimit,
   clearActivationRateLimit,
@@ -114,6 +115,7 @@ export async function POST(request: Request) {
         status: "ACTIVE",
       },
     });
+    invalidateUserAuthCache(parentUser.id);
 
     // 7. Clear rate limit for this pair upon successful activation
     await clearActivationRateLimit(cleanAdmission, cleanMobile);

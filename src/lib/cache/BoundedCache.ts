@@ -79,6 +79,13 @@ export class BoundedCache<T = any> {
   }
 
   /**
+   * Remove a specific entry by key.
+   */
+  delete(key: string): boolean {
+    return this.cache.delete(key);
+  }
+
+  /**
    * Clear all cached entries. Called on data mutations (POST/PATCH/DELETE)
    * to ensure stale data is never served.
    */

@@ -14,6 +14,7 @@ import { getISTDateString } from "@/lib/dateUtils";
 import { validateCsrfOrigin } from "@/lib/security";
 
 import { serverBillingCache, clearServerBillingCache } from "@/lib/cache/billingCache";
+import { getCachedSchoolConfig } from "@/lib/cache/schoolConfigCache";
 
 function getChargeDueDate(chargeName: string, fallbackTime: number): string {
   const nameLower = chargeName.toLowerCase();
@@ -342,7 +343,7 @@ export async function GET(request: Request) {
     ] = await Promise.all([
       db.ledgerEntry.findMany({
         where: ledgerWhere,
-        take: allParam ? 2500 : 150,
+        take: allParam ? 500 : 150,
         orderBy: { createdAt: "desc" },
         select: {
           id: true,
@@ -358,7 +359,7 @@ export async function GET(request: Request) {
       db.receipt.findMany({
         where: receiptWhere,
         skip: allParam ? 0 : skip,
-        take: allParam ? 1500 : limit,
+        take: allParam ? 400 : limit,
         select: {
           id: true,
           studentId: true,
@@ -441,8 +442,8 @@ export async function GET(request: Request) {
         where: receiptItemGroupWhere,
         _sum: { amount: true },
       }),
-      // SCH-01: Fetch school config from DB (replaces fs.readFileSync on school.json)
-      db.schoolConfig.findUnique({ where: { id: "singleton" } }),
+      // SCH-01: Read school config from in-memory cache instead of querying DB every time
+      getCachedSchoolConfig(),
       // Server aggregates for accurate accounting dashboards
       db.receipt.aggregate({
         where: receiptWhere,

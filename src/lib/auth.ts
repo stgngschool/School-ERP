@@ -1,6 +1,23 @@
 import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
 import db from "./db";
+import { BoundedCache } from "./cache/BoundedCache";
+
+// ── In-memory cache for user token validation (45s TTL)
+// Drastically cuts the 75,000+ repetitive `SELECT User status, tokenVersion` DB round trips.
+interface CachedUserAuth {
+  status: string;
+  tokenVersion: number | null;
+}
+const userAuthCache = new BoundedCache<CachedUserAuth>(200, 45 * 1000);
+
+export function invalidateUserAuthCache(userId?: string) {
+  if (userId) {
+    userAuthCache.delete(userId);
+  } else {
+    userAuthCache.clear();
+  }
+}
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
@@ -91,25 +108,28 @@ export async function getAuthUser(request?: Request): Promise<TokenPayload | nul
       return null;
     }
 
-    // ── A-02: Lightweight DB check — one indexed PK lookup ──────────────────
-    // Fetches only the three fields needed for revocation validation.
-    const dbUser = await db.user.findUnique({
-      where: { id: decoded.userId },
-      select: { status: true, tokenVersion: true },
-    });
-
-    if (!dbUser) return null;
+    // ── A-02: Fast In-Memory Cache Lookup with DB Fallback ──────────────────
+    let dbUser = userAuthCache.get(decoded.userId);
+    if (!dbUser) {
+      const userFromDb = await db.user.findUnique({
+        where: { id: decoded.userId },
+        select: { status: true, tokenVersion: true },
+      });
+      if (!userFromDb) return null;
+      dbUser = { status: userFromDb.status, tokenVersion: userFromDb.tokenVersion };
+      userAuthCache.set(decoded.userId, dbUser);
+    }
 
     // Blocked users are always rejected regardless of token validity
     if (dbUser.status === "BLOCKED") return null;
 
     // Reject tokens whose version is older than the current DB version.
-    if (dbUser.tokenVersion && (decoded.tokenVersion ?? 0) < dbUser.tokenVersion) {
+    if (dbUser.tokenVersion != null && (decoded.tokenVersion ?? 0) < dbUser.tokenVersion) {
       return null;
     }
 
     return decoded;
-  } catch (err: any) {
+  } catch {
     return null;
   }
 }

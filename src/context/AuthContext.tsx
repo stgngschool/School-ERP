@@ -912,6 +912,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (data.summary) {
             setBillingSummary(data.summary);
             setLocalCache("gng_cached_billingSummary", data.summary);
+            // Initialize sync refs so checkAndSyncBilling can detect real changes from the very first probe
+            lastReceiptCountRef.current = data.summary.totalReceiptsCount ?? data.receipts?.length ?? 0;
+            lastCollectedPaisaRef.current = data.summary.totalCollectedPaisa ?? 0;
           }
           setBillingLoaded(true);
           setLocalCache("gng_cached_dueItems", data.dueItems || []);
@@ -988,9 +991,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
 
-  const refreshStudents = async () => {
-    clearApiCache("/api/students");
-    const data = await apiFetch("/api/students");
+  const refreshStudents = async (force = true) => {
+    if (force) {
+      clearApiCache("/api/students");
+    }
+    const data = await apiFetch("/api/students", {}, 15000, !force);
     if (data && Array.isArray(data)) {
       setStudents(data);
       setStudentsLoaded(true);
@@ -1017,7 +1022,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (data.summary) {
           setBillingSummary(data.summary);
           setLocalCache("gng_cached_billingSummary", data.summary);
-          lastReceiptCountRef.current = data.receipts?.length ?? null;
+          lastReceiptCountRef.current = data.summary.totalReceiptsCount ?? data.receipts?.length ?? 0;
+          lastCollectedPaisaRef.current = data.summary.totalCollectedPaisa ?? 0;
         }
         setBillingLoaded(true);
         setLocalCache("gng_cached_dueItems", data.dueItems || []);
@@ -1030,8 +1036,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // ── Multi-Device Real-Time Sync (Smart Probe) ──
-  // Instead of repeatedly downloading the entire multi-megabyte billing ledger every 45s,
-  // we probe the ultra-lightweight (<500B) summary.
+  // Probes ultra-lightweight (<500B) summary aggregate.
   // Full ledger download happens ONLY when another device actually recorded a new payment!
   useEffect(() => {
     if (!user || (user.role !== "ADMIN" && user.role !== "ACCOUNTANT")) return;
@@ -1041,7 +1046,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const res = await apiFetch("/api/billing/summary", {}, 8000, false);
         if (res?.success && res.summary) {
           const { totalReceiptsCount, totalCollectedPaisa } = res.summary;
-          if (lastReceiptCountRef.current === null) {
+          if (lastReceiptCountRef.current === null || lastCollectedPaisaRef.current === null) {
             lastReceiptCountRef.current = totalReceiptsCount;
             lastCollectedPaisaRef.current = totalCollectedPaisa;
             return;
@@ -1050,6 +1055,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             totalReceiptsCount !== lastReceiptCountRef.current ||
             totalCollectedPaisa !== lastCollectedPaisaRef.current
           ) {
+            // Update refs immediately so parallel or subsequent checks do not re-trigger
             lastReceiptCountRef.current = totalReceiptsCount;
             lastCollectedPaisaRef.current = totalCollectedPaisa;
             await refreshBilling(true);
@@ -1062,7 +1068,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (typeof document !== "undefined" && !document.hidden && document.visibilityState === "visible") {
         checkAndSyncBilling().catch(() => {});
       }
-    }, 120000);
+    }, 180000); // 3 minutes interval
 
     return () => clearInterval(intervalId);
   }, [user]);
