@@ -83,10 +83,10 @@ export default function PrintReceiptModal({
   const hasDiscounts = (activeReceipt.discount || 0) > 0 || groupedItems.some((i: any) => (i.discount || 0) > 0);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 modal-backdrop-optimized animate-in fade-in duration-200">
-      <div className="bg-white rounded-3xl max-w-3xl w-full p-4 sm:p-5 shadow-2xl border border-slate-100 max-h-[92vh] overflow-y-auto space-y-3.5">
+    <div className="receipt-modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 modal-backdrop-optimized animate-in fade-in duration-200">
+      <div className="receipt-modal-dialog bg-white rounded-3xl max-w-3xl w-full p-4 sm:p-5 shadow-2xl border border-slate-100 max-h-[92vh] overflow-y-auto space-y-3.5">
         {/* Modal Header & Page Size Switcher */}
-        <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+        <div className="no-print flex items-center justify-between border-b border-slate-100 pb-2.5">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
             <div>
@@ -130,36 +130,90 @@ export default function PrintReceiptModal({
           @media print {
             @page {
               size: ${receiptPageSize === "A5" ? "A5 landscape" : "A4 portrait"};
-              margin: 6mm;
+              margin: ${receiptPageSize === "A5" ? "4mm 5mm" : "8mm 10mm"};
             }
+
+            /* Freeze and clip root document to prevent multiple ghost pages */
             html, body {
-              background: #ffffff !important;
+              width: 100% !important;
+              height: 100% !important;
+              max-height: 100% !important;
               margin: 0 !important;
               padding: 0 !important;
-              height: auto !important;
-              overflow: visible !important;
+              overflow: hidden !important;
+              background: #ffffff !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+              color-adjust: exact !important;
             }
+
+            /* Collapse background dashboard wrappers to zero overflow */
+            aside,
+            header,
+            nav,
+            div.h-screen,
+            div.flex-1,
+            main,
+            .overflow-hidden,
+            .overflow-y-auto {
+              height: 100% !important;
+              max-height: 100% !important;
+              overflow: hidden !important;
+              padding: 0 !important;
+              margin: 0 !important;
+            }
+
+            /* Hide all page content by default */
             body * {
               visibility: hidden !important;
             }
-            #receipt-print-area, #receipt-print-area * {
+
+            /* De-constrain modal overlays so receipt is placed directly at page origin */
+            .receipt-modal-backdrop,
+            .receipt-modal-dialog {
+              position: static !important;
+              padding: 0 !important;
+              margin: 0 !important;
+              overflow: visible !important;
+              max-height: none !important;
+              border: none !important;
+              box-shadow: none !important;
+              background: transparent !important;
+            }
+
+            .no-print,
+            .receipt-modal-actions {
+              display: none !important;
+            }
+
+            /* Strictly display only the receipt voucher area */
+            #receipt-print-area,
+            #receipt-print-area * {
               visibility: visible !important;
             }
+
             #receipt-print-area {
-              position: fixed !important;
+              position: absolute !important;
               left: 0 !important;
               top: 0 !important;
               width: 100% !important;
+              max-width: 100% !important;
               margin: 0 !important;
-              padding: ${receiptPageSize === "A5" ? "12px" : "20px"} !important;
+              padding: ${receiptPageSize === "A5" ? "10px 14px" : "18px 20px"} !important;
               border: 1.5px solid #0f172a !important;
               border-radius: 8px !important;
               box-shadow: none !important;
               background: #ffffff !important;
+              box-sizing: border-box !important;
+              page-break-after: avoid !important;
+              break-after: avoid !important;
+              page-break-before: avoid !important;
+              break-before: avoid !important;
               page-break-inside: avoid !important;
               break-inside: avoid !important;
               -webkit-print-color-adjust: exact !important;
               print-color-adjust: exact !important;
+              color-adjust: exact !important;
             }
           }
         `}</style>
@@ -617,7 +671,7 @@ export default function PrintReceiptModal({
         </div>
 
         {/* Modal Action Buttons */}
-        <div className="flex gap-2 pt-1">
+        <div className="receipt-modal-actions no-print flex gap-2 pt-1">
           <button
             type="button"
             onClick={() => onSendWhatsApp(activeReceipt)}

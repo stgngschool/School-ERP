@@ -415,8 +415,12 @@ export async function GET(request: Request) {
         orderBy: { createdAt: "desc" },
       }),
       db.receipt.count({ where: receiptWhere }),
+      // ── EGRESS-FIX-2: Bounded charges query — was returning ALL 10,769 rows with no limit.
+      // For single-student view: 500 rows is plenty. For school-wide staff view: cap at 6000
+      // (covers 624 students × ~9 charge heads = ~5,616 max). This saves ~1.5 MB per call.
       db.ledgerEntry.findMany({
         where: chargesWhere,
+        take: studentIdParam ? 500 : 6000,
         orderBy: { createdAt: "desc" },
         select: {
           id: true,
@@ -426,8 +430,10 @@ export async function GET(request: Request) {
           createdAt: true,
         },
       }),
+      // ── EGRESS-FIX-2: Bounded discounts query — was returning ALL 1,766 rows with no limit.
       db.ledgerEntry.findMany({
         where: discountsWhere,
+        take: studentIdParam ? 200 : 3000,
         orderBy: { createdAt: "desc" },
         select: {
           id: true,

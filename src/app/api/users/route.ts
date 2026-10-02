@@ -28,14 +28,15 @@ export async function GET(request: Request) {
     }
 
     // ── U-05: Scope the user list by caller role.
-    // ADMIN: sees all users. ACCOUNTANT: cannot see ADMIN accounts
-    // (they should only be managing teachers / parent accounts).
-    const roleWhereClause = authUser.role === "ACCOUNTANT"
+    // ADMIN: sees all users (staff + parents).
+    // ACCOUNTANT: cannot see ADMIN accounts (manages teachers / parents).
+    const roleWhereClause: any = authUser.role === "ACCOUNTANT"
       ? { role: { not: "ADMIN" as const } }
       : {};
 
     const users = await db.user.findMany({
       where: roleWhereClause,
+      take: 1000,
       select: {
         id: true,
         username: true,

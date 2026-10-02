@@ -766,7 +766,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const res = await fetch(url, {
           ...options,
           credentials: "include",
-          cache: options.cache ?? "no-store",
+          // ── EGRESS-FIX-4: Use "default" instead of "no-store" so the browser
+          // respects Cache-Control: private, max-age=30 headers already sent by API
+          // routes. "no-store" was bypassing browser caching entirely, causing repeated
+          // identical fetches with zero benefit. Callers that need bypass can pass
+          // cache: "no-store" explicitly in options.
+          cache: options.cache ?? "default",
           signal: controller.signal,
         });
         clearTimeout(tid);
@@ -904,24 +909,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       });
 
-      const billingLoad = apiFetch("/api/billing?all=true", {}, 15000, true).then((data) => {
-        if (data) {
-          setLedgerEntries(data.ledgerEntries || []);
-          setReceipts(data.receipts || []);
-          setDueItems(data.dueItems || []);
-          if (data.summary) {
-            setBillingSummary(data.summary);
-            setLocalCache("gng_cached_billingSummary", data.summary);
-            // Initialize sync refs so checkAndSyncBilling can detect real changes from the very first probe
-            lastReceiptCountRef.current = data.summary.totalReceiptsCount ?? data.receipts?.length ?? 0;
-            lastCollectedPaisaRef.current = data.summary.totalCollectedPaisa ?? 0;
-          }
-          setBillingLoaded(true);
-          setLocalCache("gng_cached_dueItems", data.dueItems || []);
-          setLocalCache("gng_cached_receipts", data.receipts || []);
-          setLocalCache("gng_cached_ledgerEntries", data.ledgerEntries || []);
-        }
-      });
+      // ── EGRESS-FIX-5: Summary-first billing load for Staff; Direct scoped load for Parents.
+      // Parents only fetch their own children's records (~2 KB, instantaneous).
+      // Staff (Admin/Accountant) load summary first (500 B) to unblock dashboard,
+      // and full school-wide billing is deferred.
+      const billingLoad = (
+        role === "PARENT"
+          ? apiFetch("/api/billing", {}, 10000, true).then((data) => {
+              if (data) {
+                setLedgerEntries(data.ledgerEntries || []);
+                setReceipts(data.receipts || []);
+                setDueItems(data.dueItems || []);
+                if (data.summary) {
+                  setBillingSummary(data.summary);
+                  setLocalCache("gng_cached_billingSummary", data.summary);
+                }
+                setLocalCache("gng_cached_dueItems", data.dueItems || []);
+                setLocalCache("gng_cached_receipts", data.receipts || []);
+                setLocalCache("gng_cached_ledgerEntries", data.ledgerEntries || []);
+                setBillingLoaded(true);
+              }
+            })
+          : apiFetch("/api/billing/summary", {}, 8000, true).then((data) => {
+              if (data?.summary) {
+                setBillingSummary(data.summary);
+                setLocalCache("gng_cached_billingSummary", data.summary);
+                lastReceiptCountRef.current = data.summary.totalReceiptsCount ?? 0;
+                lastCollectedPaisaRef.current = data.summary.totalCollectedPaisa ?? 0;
+              }
+              setBillingLoaded(true); // Dashboard can render summary cards immediately
+            })
+      );
 
       const attendanceLoad = apiFetch("/api/attendance", {}, 12000, true).then((data) => {
         if (data && Array.isArray(data)) {
@@ -954,6 +972,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             (data) => data?.applications && setAdmissionApplications(data.applications)
           );
           apiFetch("/api/events", {}, 10000, true).then((data) => data && setEventsList(data));
+
+          // ── EGRESS-FIX-5 (continued): Fetch full billing data lazily 3s after dashboard.
+          // Summary is already shown. Now load receipts, ledger, and dueItems silently.
+          setTimeout(() => {
+            apiFetch("/api/billing?all=true", {}, 15000, true).then((data) => {
+              if (data) {
+                setLedgerEntries(data.ledgerEntries || []);
+                setReceipts(data.receipts || []);
+                setDueItems(data.dueItems || []);
+                if (data.summary) {
+                  setBillingSummary(data.summary);
+                  setLocalCache("gng_cached_billingSummary", data.summary);
+                  lastReceiptCountRef.current = data.summary.totalReceiptsCount ?? data.receipts?.length ?? 0;
+                  lastCollectedPaisaRef.current = data.summary.totalCollectedPaisa ?? 0;
+                }
+                setLocalCache("gng_cached_dueItems", data.dueItems || []);
+                setLocalCache("gng_cached_receipts", data.receipts || []);
+                setLocalCache("gng_cached_ledgerEntries", data.ledgerEntries || []);
+              }
+            });
+          }, 3000);
         }
 
         if (role === "ADMIN") {

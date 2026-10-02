@@ -268,12 +268,18 @@ export function useAuthLogic(refreshData: (user?: MockUser | null) => Promise<vo
                     window.location.replace("/login");
                   }
                 } else {
-                  // ── SL-02: Re-verify authentication AND refresh stale application data
+                  // ── SL-02: Re-verify authentication on tab switch / focus.
+                  // We intentionally do NOT call refreshDataRef.current() here because
+                  // that would re-download all 14 API endpoints (~4.5 MB) on every tab
+                  // switch. The 3-minute billing probe (checkAndSyncBilling) already
+                  // handles real-time data sync across devices. Full data is refreshed
+                  // only on explicit user action or initial session load.
                   res.json().then((data) => {
                     if (data?.user) {
                       setUser(data.user);
                       setActiveRole((current) => (data.user.role === "ADMIN" && current ? current : data.user.role));
-                      refreshDataRef.current(data.user);
+                      // ── EGRESS-FIX-1: Do NOT re-hydrate all data on visibility change.
+                      // refreshDataRef.current(data.user); ← removed intentionally
                     }
                   }).catch(() => {});
                 }
