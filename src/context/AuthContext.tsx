@@ -477,6 +477,7 @@ interface AuthContextType {
   refreshData: () => Promise<void>;
   refreshStudents: () => Promise<void>;
   refreshBilling: () => Promise<void>;
+  refreshStudentBilling: (targetStudentIds: string | string[]) => Promise<void>;
   billingSummary: any | null;
   fetchBillingSummary: () => Promise<any>;
   refreshAttendance: () => Promise<void>;
@@ -1071,6 +1072,84 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } finally {
       isRefreshingBillingRef.current = false;
+    }
+  };
+
+  const isRefreshingStudentBillingRef = useRef<Set<string>>(new Set());
+
+  // ── TARGETED EGRESS OPTIMIZATION: Refreshes billing data ONLY for specific affected student(s) ──
+  // Instead of re-downloading 6,000+ charges across the entire school (~1.8 MB),
+  // this fetches ~2-3 KB per student and patches dueItems, receipts, and ledgerEntries in-place.
+  const refreshStudentBilling = async (targetStudentIds: string | string[]) => {
+    const rawIds = Array.isArray(targetStudentIds) ? targetStudentIds : [targetStudentIds];
+    const ids = Array.from(new Set(rawIds.filter(Boolean)));
+    if (ids.length === 0) return;
+
+    const uniqueToRefresh = ids.filter((id) => !isRefreshingStudentBillingRef.current.has(id));
+    if (uniqueToRefresh.length === 0) return;
+
+    uniqueToRefresh.forEach((id) => isRefreshingStudentBillingRef.current.add(id));
+
+    try {
+      // Fetch lightweight scoped billing data for each affected student (~2-3 KB each)
+      const results = await Promise.all(
+        uniqueToRefresh.map(async (sid) => {
+          clearApiCache(`/api/billing?studentId=${encodeURIComponent(sid)}`);
+          return await apiFetch(`/api/billing?studentId=${encodeURIComponent(sid)}`, {}, 10000, false);
+        })
+      );
+
+      const allFreshDues: MockDueItem[] = [];
+      const allFreshReceipts: MockReceipt[] = [];
+      const allFreshLedger: MockLedgerEntry[] = [];
+
+      for (const res of results) {
+        if (!res) continue;
+        if (Array.isArray(res.dueItems)) allFreshDues.push(...res.dueItems);
+        if (Array.isArray(res.receipts)) allFreshReceipts.push(...res.receipts);
+        if (Array.isArray(res.ledgerEntries)) allFreshLedger.push(...res.ledgerEntries);
+      }
+
+      // 1. Atomically patch dueItems for the affected students
+      setDueItems((prev) => {
+        const remaining = prev.filter((d) => !uniqueToRefresh.includes(d.studentId));
+        const next = [...remaining, ...allFreshDues];
+        setLocalCache("gng_cached_dueItems", next);
+        return next;
+      });
+
+      // 2. Atomically patch receipts (update existing or prepend new ones)
+      setReceipts((prev) => {
+        const freshMap = new Map(allFreshReceipts.map((r) => [r.id, r]));
+        const updated = prev.map((r) => freshMap.get(r.id) || r);
+        const existingIds = new Set(prev.map((r) => r.id));
+        const brandNew = allFreshReceipts.filter((r) => !existingIds.has(r.id));
+        const next = [...brandNew, ...updated];
+        setLocalCache("gng_cached_receipts", next);
+        return next;
+      });
+
+      // 3. Atomically patch ledgerEntries
+      setLedgerEntries((prev) => {
+        const remaining = prev.filter((l) => !uniqueToRefresh.includes(l.studentId));
+        const next = [...allFreshLedger, ...remaining];
+        setLocalCache("gng_cached_ledgerEntries", next);
+        return next;
+      });
+
+      // 4. Update top dashboard revenue counters via ultra-lightweight aggregate endpoint (<500B)
+      apiFetch("/api/billing/summary", {}, 8000, false).then((sumRes) => {
+        if (sumRes?.summary) {
+          setBillingSummary(sumRes.summary);
+          setLocalCache("gng_cached_billingSummary", sumRes.summary);
+          lastReceiptCountRef.current = sumRes.summary.totalReceiptsCount ?? 0;
+          lastCollectedPaisaRef.current = sumRes.summary.totalCollectedPaisa ?? 0;
+        }
+      }).catch(() => {});
+    } catch (err) {
+      console.error("Targeted student billing refresh error:", err);
+    } finally {
+      uniqueToRefresh.forEach((id) => isRefreshingStudentBillingRef.current.delete(id));
     }
   };
 
@@ -1782,8 +1861,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const data = await res.json();
       if (res.ok) {
-        // Non-blocking refresh so receipt modal appears instantly without waiting for 7000+ records
-        refreshBilling().catch((err: any) => console.error("Billing refresh error:", err));
+        // ── TARGETED EGRESS OPTIMIZATION: Refresh ONLY the paid student(s) rather than whole school
+        // Saves ~1.8 MB database pooler egress per checkout
+        const affectedStudentIds = Array.from(
+          new Set([
+            studentId,
+            ...(items.map((i: any) => i.studentId).filter(Boolean)),
+            data.receipt?.studentId,
+            ...(data.receipt?.studentIds || []),
+          ].filter(Boolean))
+        ) as string[];
+
+        refreshStudentBilling(affectedStudentIds).catch((err: any) =>
+          console.error("Targeted student billing refresh error:", err)
+        );
         return { success: true, receipt: data.receipt };
       }
       return { success: false, error: data.error || "Payment checkout failed." };
@@ -2096,7 +2187,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
 
         if (studentData.isRte !== undefined || studentData.concessionId !== undefined || studentData.transportStopId !== undefined) {
-          refreshBilling(true).catch(() => {});
+          refreshStudentBilling(studentId).catch(() => {});
         }
         return { success: true, student: data.student };
       } else {
@@ -2134,7 +2225,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await res.json();
       if (res.ok && data.success) {
         await refreshStudents();
-        await refreshBilling();
         showToast("success", "Family Separated", data.message || `New Family Code: ${data.newFamilyCode}`);
         return { success: true, newFamilyCode: data.newFamilyCode };
       } else {
@@ -2158,7 +2248,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await res.json();
       if (res.ok && data.success) {
         await refreshStudents();
-        await refreshBilling();
         showToast("success", "Family Transferred", data.message || `Linked to ${targetFamilyCode}`);
         return { success: true };
       } else {
@@ -2182,7 +2271,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await res.json();
       if (res.ok && data.success) {
         await refreshStudents();
-        await refreshBilling();
         showToast("success", "Families Merged", data.message || `Merged into ${targetFamilyCode}`);
         return { success: true };
       } else {
@@ -2307,6 +2395,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         refreshData,
         refreshStudents,
         refreshBilling,
+        refreshStudentBilling,
         billingSummary,
         fetchBillingSummary,
         refreshAttendance,

@@ -62,7 +62,7 @@ export default function FeeCollectTab({
   recordItemizedPayment,
   refreshBilling,
 }: FeeCollectTabProps) {
-  const { showToast } = useAuth();
+  const { showToast, refreshStudentBilling } = useAuth();
   const [selectedDueIds, setSelectedDueIds] = useState<string[]>([]);
   const [payMethod, setPayMethod] = useState("CASH");
   const [discountsState, setDiscountsState] = useState<Record<string, number>>({});
@@ -452,7 +452,7 @@ export default function FeeCollectTab({
       if (payRes.receipt?.isDuplicateRetry) {
         showToast("warning", "Payment Already Recorded", `This transaction was already recorded earlier (Receipt #${payRes.receipt.receiptNo}).`);
         setIsSubmittingPayment(false);
-        await refreshBilling();
+        await (refreshStudentBilling ? refreshStudentBilling(siblingStudentIds) : refreshBilling());
         return;
       }
 
@@ -471,7 +471,7 @@ export default function FeeCollectTab({
       if (!payRes.receipt?.receiptNo) {
         showToast("error", "Transaction Warning", "Payment was recorded but server did not return a valid receipt number.");
         setIsSubmittingPayment(false);
-        await refreshBilling();
+        await (refreshStudentBilling ? refreshStudentBilling(siblingStudentIds) : refreshBilling());
         return;
       }
 

@@ -84,11 +84,11 @@ export async function GET(request: Request) {
     const searchParam = (searchParams.get("search") || searchParams.get("q") || "").trim().toLowerCase();
     const allParam = searchParams.get("all") === "true";
 
-    // ── B-11: Clamped pagination parameters with safe defaults
+    // ── B-11: Clamped pagination parameters with safe defaults (default 50 to minimize pooler egress)
     const pageParam = parseInt(searchParams.get("page") || "1", 10);
     const page = isNaN(pageParam) || pageParam < 1 ? 1 : pageParam;
-    const limitParam = parseInt(searchParams.get("limit") || searchParams.get("pageSize") || "150", 10);
-    const limit = isNaN(limitParam) || limitParam < 1 ? 150 : Math.min(500, limitParam);
+    const limitParam = parseInt(searchParams.get("limit") || searchParams.get("pageSize") || "50", 10);
+    const limit = isNaN(limitParam) || limitParam < 1 ? 50 : Math.min(500, limitParam);
     const skip = (page - 1) * limit;
 
     // Cache key construction:
@@ -343,7 +343,8 @@ export async function GET(request: Request) {
     ] = await Promise.all([
       db.ledgerEntry.findMany({
         where: ledgerWhere,
-        take: allParam ? 500 : 150,
+        skip: (studentIdParam || allParam) ? 0 : skip,
+        take: (studentIdParam || allParam) ? 500 : limit,
         orderBy: { createdAt: "desc" },
         select: {
           id: true,
@@ -358,8 +359,8 @@ export async function GET(request: Request) {
       // ── B-11: Paginated receipt query
       db.receipt.findMany({
         where: receiptWhere,
-        skip: allParam ? 0 : skip,
-        take: allParam ? 400 : limit,
+        skip: (studentIdParam || allParam) ? 0 : skip,
+        take: (studentIdParam || allParam) ? 400 : limit,
         select: {
           id: true,
           studentId: true,
@@ -415,12 +416,13 @@ export async function GET(request: Request) {
         orderBy: { createdAt: "desc" },
       }),
       db.receipt.count({ where: receiptWhere }),
-      // ── EGRESS-FIX-2: Bounded charges query — was returning ALL 10,769 rows with no limit.
-      // For single-student view: 500 rows is plenty. For school-wide staff view: cap at 6000
-      // (covers 624 students × ~9 charge heads = ~5,616 max). This saves ~1.5 MB per call.
+      // ── EGRESS-FIX-2: Bounded charges query
+      // For single-student view: 500 rows. For paginated staff view: only current page (limit).
+      // For full background hydration (all=true): cap at 6000.
       db.ledgerEntry.findMany({
         where: chargesWhere,
-        take: studentIdParam ? 500 : 6000,
+        take: studentIdParam ? 500 : (allParam ? 6000 : limit),
+        skip: (studentIdParam || allParam) ? 0 : skip,
         orderBy: { createdAt: "desc" },
         select: {
           id: true,
@@ -430,10 +432,11 @@ export async function GET(request: Request) {
           createdAt: true,
         },
       }),
-      // ── EGRESS-FIX-2: Bounded discounts query — was returning ALL 1,766 rows with no limit.
+      // ── EGRESS-FIX-2: Bounded discounts query
       db.ledgerEntry.findMany({
         where: discountsWhere,
-        take: studentIdParam ? 200 : 3000,
+        take: studentIdParam ? 200 : (allParam ? 3000 : limit),
+        skip: (studentIdParam || allParam) ? 0 : skip,
         orderBy: { createdAt: "desc" },
         select: {
           id: true,
