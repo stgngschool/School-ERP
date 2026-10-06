@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import QRCode from "qrcode";
 import { Printer, X, CheckCircle2, AlertCircle, ShieldCheck } from "lucide-react";
 import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
@@ -24,9 +25,14 @@ export default function PrintReceiptModal({
   user,
   onSendWhatsApp,
 }: PrintReceiptModalProps) {
+  const [mounted, setMounted] = useState(false);
   const [receiptPageSize, setReceiptPageSize] = useState<"A4" | "A5">("A5");
   const [verifyQrUrl, setVerifyQrUrl] = useState<string>("");
   const [upiQrUrl, setUpiQrUrl] = useState<string>("");
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!activeReceipt) return;
@@ -75,148 +81,143 @@ export default function PrintReceiptModal({
     }
   }, [activeReceipt, user, schoolInfo]);
 
-  if (!show || !activeReceipt) return null;
+  if (!show || !activeReceipt || !mounted) return null;
 
   const students = getReceiptStudents(activeReceipt);
   const isMultiChild = students.length > 1;
   const groupedItems = getGroupedReceiptItems(activeReceipt.items || []);
   const hasDiscounts = (activeReceipt.discount || 0) > 0 || groupedItems.some((i: any) => (i.discount || 0) > 0);
 
-  return (
-    <div className="receipt-modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 modal-backdrop-optimized animate-in fade-in duration-200">
-      <div className="receipt-modal-dialog bg-white rounded-3xl max-w-3xl w-full p-4 sm:p-5 shadow-2xl border border-slate-100 max-h-[92vh] overflow-y-auto space-y-3.5">
-        {/* Modal Header & Page Size Switcher */}
-        <div className="no-print flex items-center justify-between border-b border-slate-100 pb-2.5">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <div>
-              <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider">
-                Official Payment Voucher
-              </h3>
-              <p className="text-[10px] text-slate-400 font-semibold">
-                Instant voucher preview & print layout
-              </p>
+  const modalContent = (
+    <div id="gng-receipt-print-portal">
+      <div className="receipt-modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 modal-backdrop-optimized animate-in fade-in duration-200">
+        <div className="receipt-modal-dialog bg-white rounded-3xl max-w-3xl w-full p-4 sm:p-5 shadow-2xl border border-slate-100 max-h-[92vh] overflow-y-auto space-y-3.5">
+          {/* Modal Header & Page Size Switcher */}
+          <div className="no-print flex items-center justify-between border-b border-slate-100 pb-2.5">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <div>
+                <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider">
+                  Official Payment Voucher
+                </h3>
+                <p className="text-[10px] text-slate-400 font-semibold">
+                  Instant voucher preview & print layout
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setReceiptPageSize("A5")}
+                className={`py-1 px-3 text-[10px] uppercase font-black tracking-wider rounded-lg border transition-all cursor-pointer ${
+                  receiptPageSize === "A5"
+                    ? "bg-indigo-600 border-indigo-600 text-white shadow-sm shadow-indigo-500/15"
+                    : "bg-white border-slate-200 hover:bg-slate-50 text-slate-600"
+                }`}
+              >
+                📄 A5 Compact (Half Page)
+              </button>
+              <button
+                type="button"
+                onClick={() => setReceiptPageSize("A4")}
+                className={`py-1 px-3 text-[10px] uppercase font-black tracking-wider rounded-lg border transition-all cursor-pointer ${
+                  receiptPageSize === "A4"
+                    ? "bg-indigo-600 border-indigo-600 text-white shadow-sm shadow-indigo-500/15"
+                    : "bg-white border-slate-200 hover:bg-slate-50 text-slate-600"
+                }`}
+              >
+                📄 A4 Standard (Full Page)
+              </button>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
-            <button
-              type="button"
-              onClick={() => setReceiptPageSize("A5")}
-              className={`py-1 px-3 text-[10px] uppercase font-black tracking-wider rounded-lg border transition-all cursor-pointer ${
-                receiptPageSize === "A5"
-                  ? "bg-indigo-600 border-indigo-600 text-white shadow-sm shadow-indigo-500/15"
-                  : "bg-white border-slate-200 hover:bg-slate-50 text-slate-600"
-              }`}
-            >
-              📄 A5 Compact (Half Page)
-            </button>
-            <button
-              type="button"
-              onClick={() => setReceiptPageSize("A4")}
-              className={`py-1 px-3 text-[10px] uppercase font-black tracking-wider rounded-lg border transition-all cursor-pointer ${
-                receiptPageSize === "A4"
-                  ? "bg-indigo-600 border-indigo-600 text-white shadow-sm shadow-indigo-500/15"
-                  : "bg-white border-slate-200 hover:bg-slate-50 text-slate-600"
-              }`}
-            >
-              📄 A4 Standard (Full Page)
-            </button>
-          </div>
-        </div>
+          {/* Single-Page Clean Print Styling Override */}
+          <style>{`
+            @media print {
+              @page {
+                size: ${receiptPageSize === "A5" ? "A5 landscape" : "A4 portrait"};
+                margin: ${receiptPageSize === "A5" ? "4mm 5mm" : "8mm 10mm"};
+              }
 
-        {/* Print Styling Override */}
-        <style>{`
-          @media print {
-            @page {
-              size: ${receiptPageSize === "A5" ? "A5 landscape" : "A4 portrait"};
-              margin: ${receiptPageSize === "A5" ? "4mm 5mm" : "8mm 10mm"};
-            }
+              /* Clean printable root document */
+              html, body {
+                width: 100% !important;
+                height: auto !important;
+                min-height: auto !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow: visible !important;
+                background: #ffffff !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                color-adjust: exact !important;
+              }
 
-            /* Freeze and clip root document to prevent multiple ghost pages */
-            html, body {
-              width: 100% !important;
-              height: 100% !important;
-              max-height: 100% !important;
-              margin: 0 !important;
-              padding: 0 !important;
-              overflow: hidden !important;
-              background: #ffffff !important;
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-              color-adjust: exact !important;
-            }
+              /* HIDE ENTIRE APP FRAME: Collapses the entire dashboard to 0px height so no extra blank pages are created */
+              body > *:not(#gng-receipt-print-portal) {
+                display: none !important;
+              }
 
-            /* Collapse background dashboard wrappers to zero overflow */
-            aside,
-            header,
-            nav,
-            div.h-screen,
-            div.flex-1,
-            main,
-            .overflow-hidden,
-            .overflow-y-auto {
-              height: 100% !important;
-              max-height: 100% !important;
-              overflow: hidden !important;
-              padding: 0 !important;
-              margin: 0 !important;
-            }
+              /* Reveal ONLY the voucher portal */
+              #gng-receipt-print-portal {
+                display: block !important;
+                position: static !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                width: 100% !important;
+                height: auto !important;
+                background: transparent !important;
+              }
 
-            /* Hide all page content by default */
-            body * {
-              visibility: hidden !important;
-            }
+              /* De-constrain modal overlays to transparent flow blocks */
+              .receipt-modal-backdrop,
+              .receipt-modal-dialog {
+                position: static !important;
+                display: block !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                overflow: visible !important;
+                max-height: none !important;
+                max-width: 100% !important;
+                width: 100% !important;
+                border: none !important;
+                box-shadow: none !important;
+                background: transparent !important;
+              }
 
-            /* De-constrain modal overlays so receipt is placed directly at page origin */
-            .receipt-modal-backdrop,
-            .receipt-modal-dialog {
-              position: static !important;
-              padding: 0 !important;
-              margin: 0 !important;
-              overflow: visible !important;
-              max-height: none !important;
-              border: none !important;
-              box-shadow: none !important;
-              background: transparent !important;
-            }
+              .no-print,
+              .receipt-modal-actions {
+                display: none !important;
+              }
 
-            .no-print,
-            .receipt-modal-actions {
-              display: none !important;
-            }
+              /* Strictly display receipt voucher canvas */
+              #receipt-print-area,
+              #receipt-print-area * {
+                visibility: visible !important;
+              }
 
-            /* Strictly display only the receipt voucher area */
-            #receipt-print-area,
-            #receipt-print-area * {
-              visibility: visible !important;
+              #receipt-print-area {
+                display: block !important;
+                position: relative !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                margin: 0 auto !important;
+                padding: ${receiptPageSize === "A5" ? "8px 12px" : "16px 20px"} !important;
+                border: 1.5px solid #0f172a !important;
+                border-radius: 8px !important;
+                box-shadow: none !important;
+                background: #ffffff !important;
+                box-sizing: border-box !important;
+                page-break-after: avoid !important;
+                break-after: avoid !important;
+                page-break-before: avoid !important;
+                break-before: avoid !important;
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+              }
             }
-
-            #receipt-print-area {
-              position: absolute !important;
-              left: 0 !important;
-              top: 0 !important;
-              width: 100% !important;
-              max-width: 100% !important;
-              margin: 0 !important;
-              padding: ${receiptPageSize === "A5" ? "10px 14px" : "18px 20px"} !important;
-              border: 1.5px solid #0f172a !important;
-              border-radius: 8px !important;
-              box-shadow: none !important;
-              background: #ffffff !important;
-              box-sizing: border-box !important;
-              page-break-after: avoid !important;
-              break-after: avoid !important;
-              page-break-before: avoid !important;
-              break-before: avoid !important;
-              page-break-inside: avoid !important;
-              break-inside: avoid !important;
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-              color-adjust: exact !important;
-            }
-          }
-        `}</style>
+          `}</style>
 
         {/* Printable Receipt Canvas */}
         <div
@@ -696,5 +697,10 @@ export default function PrintReceiptModal({
         </div>
       </div>
     </div>
-  );
+  </div>
+);
+
+return typeof document !== "undefined"
+  ? createPortal(modalContent, document.body)
+  : modalContent;
 }
