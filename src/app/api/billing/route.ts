@@ -261,7 +261,12 @@ export async function GET(request: Request) {
       const parentConditions: any[] = [
         { status: { not: "REVERSED" } },
         studentIdParam
-          ? { studentId: studentIdParam }
+          ? {
+              OR: [
+                { studentId: studentIdParam },
+                { items: { some: { ledgerEntry: { studentId: studentIdParam } } } },
+              ],
+            }
           : { OR: [{ studentId: { in: authorizedStudentIds } }, { parentProfileId: parentProfile.id }] }
       ];
       if (receiptIdParam) parentConditions.push({ id: receiptIdParam });
@@ -291,7 +296,14 @@ export async function GET(request: Request) {
       const adminConditions: any[] = [
         { status: { not: "REVERSED" } }
       ];
-      if (studentIdParam) adminConditions.push({ studentId: studentIdParam });
+      if (studentIdParam) {
+        adminConditions.push({
+          OR: [
+            { studentId: studentIdParam },
+            { items: { some: { ledgerEntry: { studentId: studentIdParam } } } },
+          ],
+        });
+      }
       if (receiptIdParam) adminConditions.push({ id: receiptIdParam });
       if (receiptNoParam) adminConditions.push({ receiptNumber: receiptNoParam });
       if (searchParam) {
@@ -314,17 +326,19 @@ export async function GET(request: Request) {
     const startYear = parseInt(acYear.split("-")[0]);
     // Fetch charges created from March 1st of the current academic year to cover early assignments
     const sessionStartDate = new Date(`${startYear}-03-01T00:00:00.000Z`);
-    chargesWhere.createdAt = { gte: sessionStartDate };
-    discountsWhere.createdAt = { gte: sessionStartDate };
+    if (!studentIdParam) {
+      chargesWhere.createdAt = { gte: sessionStartDate };
+      discountsWhere.createdAt = { gte: sessionStartDate };
+    }
 
     // Execute optimized queries concurrently with minimal join overhead
-    // ── B-05: Scope paidGroups aggregation to only the authorized students
-    let receiptItemGroupWhere: any = undefined;
+    // ── B-05: Scope paidGroups aggregation to only the authorized students and non-reversed receipts
+    let receiptItemGroupWhere: any = {
+      receipt: { status: { not: "REVERSED" } },
+    };
     if (scopedStudentIds && scopedStudentIds.length > 0) {
-      receiptItemGroupWhere = {
-        ledgerEntry: {
-          studentId: { in: scopedStudentIds }
-        }
+      receiptItemGroupWhere.ledgerEntry = {
+        studentId: { in: scopedStudentIds },
       };
     }
 
@@ -767,7 +781,7 @@ export async function GET(request: Request) {
         totalDiscount: totalDiscount,
         dueDate: chargeDueDate,
         sessionName: acYear,
-        isCurrentSession: true,
+        isCurrentSession: c.createdAt >= sessionStartDate,
         status: (outstanding <= 0 ? "PAID" : "UNPAID") as "PAID" | "UNPAID",
         fine: fineAmount,
       };

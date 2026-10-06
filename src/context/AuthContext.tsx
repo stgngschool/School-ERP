@@ -1095,7 +1095,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const results = await Promise.all(
         uniqueToRefresh.map(async (sid) => {
           clearApiCache(`/api/billing?studentId=${encodeURIComponent(sid)}`);
-          return await apiFetch(`/api/billing?studentId=${encodeURIComponent(sid)}`, {}, 10000, false);
+          return await apiFetch(`/api/billing?studentId=${encodeURIComponent(sid)}`, { cache: "no-store" }, 10000, false);
         })
       );
 
@@ -1112,7 +1112,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // 1. Atomically patch dueItems for the affected students
       setDueItems((prev) => {
-        const remaining = prev.filter((d) => !uniqueToRefresh.includes(d.studentId));
+        const safePrev = Array.isArray(prev) ? prev : [];
+        const remaining = safePrev.filter((d) => !uniqueToRefresh.includes(d.studentId));
         const next = [...remaining, ...allFreshDues];
         setLocalCache("gng_cached_dueItems", next);
         return next;
@@ -1120,9 +1121,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // 2. Atomically patch receipts (update existing or prepend new ones)
       setReceipts((prev) => {
+        const safePrev = Array.isArray(prev) ? prev : [];
         const freshMap = new Map(allFreshReceipts.map((r) => [r.id, r]));
-        const updated = prev.map((r) => freshMap.get(r.id) || r);
-        const existingIds = new Set(prev.map((r) => r.id));
+        const updated = safePrev.map((r) => freshMap.get(r.id) || r);
+        const existingIds = new Set(safePrev.map((r) => r.id));
         const brandNew = allFreshReceipts.filter((r) => !existingIds.has(r.id));
         const next = [...brandNew, ...updated];
         setLocalCache("gng_cached_receipts", next);
@@ -1131,7 +1133,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // 3. Atomically patch ledgerEntries
       setLedgerEntries((prev) => {
-        const remaining = prev.filter((l) => !uniqueToRefresh.includes(l.studentId));
+        const safePrev = Array.isArray(prev) ? prev : [];
+        const remaining = safePrev.filter((l) => !uniqueToRefresh.includes(l.studentId));
         const next = [...allFreshLedger, ...remaining];
         setLocalCache("gng_cached_ledgerEntries", next);
         return next;
