@@ -154,9 +154,10 @@ export default function PrintReceiptModal({
                 color-adjust: exact !important;
               }
 
-              /* HIDE ENTIRE APP FRAME: Collapses the entire dashboard to 0px height so no extra blank pages are created */
+              /* HIDE ENTIRE APP FRAME: Collapses background dashboard so only receipt voucher prints */
               body > *:not(#gng-receipt-print-portal) {
                 display: none !important;
+                visibility: hidden !important;
               }
 
               /* Reveal ONLY the voucher portal */
@@ -168,33 +169,44 @@ export default function PrintReceiptModal({
                 width: 100% !important;
                 height: auto !important;
                 background: transparent !important;
+                visibility: visible !important;
               }
 
-              /* De-constrain modal overlays to transparent flow blocks */
+              /* Strip ALL modal backdrop and dialog isolation constraints (fixes Chrome white preview bug) */
               .receipt-modal-backdrop,
               .receipt-modal-dialog {
-                position: static !important;
+                all: unset !important;
                 display: block !important;
-                padding: 0 !important;
-                margin: 0 !important;
+                position: static !important;
+                contain: none !important;
+                transform: none !important;
+                filter: none !important;
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+                opacity: 1 !important;
+                background: transparent !important;
                 overflow: visible !important;
                 max-height: none !important;
                 max-width: 100% !important;
                 width: 100% !important;
                 border: none !important;
                 box-shadow: none !important;
-                background: transparent !important;
+                padding: 0 !important;
+                margin: 0 !important;
               }
 
               .no-print,
               .receipt-modal-actions {
                 display: none !important;
+                visibility: hidden !important;
               }
 
-              /* Strictly display receipt voucher canvas */
+              /* Strictly display receipt voucher canvas on 1 single page */
               #receipt-print-area,
               #receipt-print-area * {
                 visibility: visible !important;
+                color-adjust: exact !important;
+                -webkit-print-color-adjust: exact !important;
               }
 
               #receipt-print-area {
@@ -203,7 +215,7 @@ export default function PrintReceiptModal({
                 width: 100% !important;
                 max-width: 100% !important;
                 margin: 0 auto !important;
-                padding: ${receiptPageSize === "A5" ? "8px 12px" : "16px 20px"} !important;
+                padding: ${receiptPageSize === "A5" ? "6px 10px" : "14px 18px"} !important;
                 border: 1.5px solid #0f172a !important;
                 border-radius: 8px !important;
                 box-shadow: none !important;
