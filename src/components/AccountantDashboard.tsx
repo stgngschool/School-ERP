@@ -22,7 +22,7 @@ import StudentDirectoryTab from "@/components/accountant/StudentDirectoryTab";
 import FamilyHubTab from "@/components/accountant/FamilyHubTab";
 
 // ── H-10 / L-09 / L-02: Stable module-level valid tabs list.
-// Excludes unrendered tabs ('idcards', 'audit') to prevent blank screens for accountants.
+// Excludes unrendered tabs (e.g. 'audit') to prevent blank screens for accountants.
 const VALID_ACCOUNTANT_TABS = [
   "dashboard",
   "collect",

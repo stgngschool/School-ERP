@@ -40,10 +40,6 @@ const StudentDirectoryTab = dynamic(() => import("@/components/admin/StudentDire
   loading: ConsoleLoadingFallback,
   ssr: false,
 });
-const IdCardsTab = dynamic(() => import("@/components/admin/IdCardsTab"), {
-  loading: ConsoleLoadingFallback,
-  ssr: false,
-});
 const SchoolSetupTab = dynamic(() => import("@/components/admin/SchoolSetupTab"), {
   loading: ConsoleLoadingFallback,
   ssr: false,
@@ -103,7 +99,6 @@ const VALID_ADMIN_TABS = [
   "students",
   "families",
   "users",
-  "idcards",
   "notices",
   "enquiries",
   "school",
@@ -158,7 +153,6 @@ export default function AdminDashboard() {
     eventsList,
     addEvent,
     concessions,
-    updateStudentPhoto,
     refreshBilling,
     refreshUsers,
     studentsLoaded,
@@ -360,15 +354,6 @@ export default function AdminDashboard() {
           bulkImportStudents={bulkImportStudents}
           showToast={showToast}
           setSelectedStudentId={setSelectedStudentId}
-        />
-      )}
-
-      {activeTab === "idcards" && (
-        <IdCardsTab
-          students={students}
-          filteredSortedClasses={filteredSortedClasses}
-          updateStudentPhoto={updateStudentPhoto}
-          showToast={showToast}
         />
       )}
 

@@ -95,7 +95,6 @@ const getNavItems = (activeRole: string): NavItem[] => {
         { category: "Student & Academics", name: "Attendance Console", shortName: "Attendance", icon: UserCheck, tab: "attendance" },
         { category: "Student & Academics", name: "Class Marks Entry", shortName: "Marks", icon: GraduationCap, tab: "marks" },
         { category: "Student & Academics", name: "Print Marksheets", shortName: "Marksheets", icon: Printer, tab: "print_marksheets", desktopOnly: true },
-        { category: "Student & Academics", name: "ID Cards & Photos", shortName: "ID Cards", icon: UserCheck, tab: "idcards", desktopOnly: true },
         { category: "Finance & Fees", name: "Fee Collection", shortName: "Collect", icon: CreditCard, tab: "collect" },
         { category: "Finance & Fees", name: "Fee Defaulters & Dues", shortName: "Dues", icon: AlertTriangle, tab: "defaulters" },
         { category: "Finance & Fees", name: "Receipts & Ledger", shortName: "Ledger", icon: ArrowRightLeft, tab: "ledger" },
@@ -145,7 +144,6 @@ const getMegaMenuData = (activeRole: string): MegaMenuCategory[] => {
             { name: "Attendance Console", tab: "attendance" },
             { name: "Class Marks Entry", tab: "marks" },
             { name: "Print Marksheets", tab: "print_marksheets" },
-            { name: "ID Cards & Photos", tab: "idcards" },
           ]
         },
         {
