@@ -354,9 +354,7 @@ export default function FeeCollectTab({
 
     if (quarter === "Q1") {
       return (
-        name.includes("april") || name.includes("apr") ||
-        name.includes("may") ||
-        name.includes("june") || name.includes("jun") ||
+        /\b(april|apr|may|june|jun)\b/i.test(name) ||
         name.includes("previous") || name.includes("past") ||
         name.includes("annual") || name.includes("m/s") || name.includes("admission") ||
         dueMonth === 4 || dueMonth === 5 || dueMonth === 6
@@ -364,25 +362,19 @@ export default function FeeCollectTab({
     }
     if (quarter === "Q2") {
       return (
-        name.includes("july") || name.includes("jul") ||
-        name.includes("august") || name.includes("aug") ||
-        name.includes("september") || name.includes("sep") ||
+        /\b(july|jul|august|aug|september|sep|sept)\b/i.test(name) ||
         dueMonth === 7 || dueMonth === 8 || dueMonth === 9
       );
     }
     if (quarter === "Q3") {
       return (
-        name.includes("october") || name.includes("oct") ||
-        name.includes("november") || name.includes("nov") ||
-        name.includes("december") || name.includes("dec") ||
+        /\b(october|oct|november|nov|december|dec)\b/i.test(name) ||
         dueMonth === 10 || dueMonth === 11 || dueMonth === 12
       );
     }
     if (quarter === "Q4") {
       return (
-        name.includes("january") || name.includes("jan") ||
-        name.includes("february") || name.includes("feb") ||
-        name.includes("march") || name.includes("mar") ||
+        /\b(january|jan|february|feb|march|mar)\b/i.test(name) ||
         dueMonth === 1 || dueMonth === 2 || dueMonth === 3
       );
     }
@@ -1312,7 +1304,7 @@ export default function FeeCollectTab({
                         className="p-3 border border-slate-100 bg-slate-50/40 hover:bg-slate-100/60 rounded-xl flex items-center justify-between text-xs font-semibold text-slate-700 cursor-pointer transition-all hover:scale-[1.01] duration-150"
                       >
                         <div>
-                          <p className="font-bold text-slate-800">{rec.studentName}</p>
+                          <p className="font-bold text-slate-800 break-words">{rec.studentName}</p>
                           <p className="text-[9px] text-slate-400 mt-0.5">
                             Receipt: {rec.receiptNo}{" "}
                             {rec.manualReceiptNo ? `(Book #: ${rec.manualReceiptNo})` : ""} | {rec.createdAt}

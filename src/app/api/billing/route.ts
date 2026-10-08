@@ -15,16 +15,43 @@ import { validateCsrfOrigin } from "@/lib/security";
 
 import { serverBillingCache, clearServerBillingCache } from "@/lib/cache/billingCache";
 import { getCachedSchoolConfig } from "@/lib/cache/schoolConfigCache";
+import { appendReceiptToSheet } from "@/lib/google";
 
 function getChargeDueDate(chargeName: string, fallbackTime: number): string {
   const nameLower = chargeName.toLowerCase();
 
-  // ── B-04: Derive the academic year dynamically rather than hardcoding 2026-27 ──
-  // getAcademicYear() returns e.g. "2026-2027"; extract both halves.
-  const acYear = getAcademicYear();
-  const [syStr, eyStr] = acYear.split("-");
-  const sy = parseInt(syStr, 10); // e.g. 2026  (April–December months)
-  const ey = parseInt(eyStr, 10); // e.g. 2027  (January–March months)
+  // 1. Check if charge description explicitly has a 4-digit academic year pattern like "2024-2025" or "2025-26"
+  let sy: number | null = null;
+  let ey: number | null = null;
+
+  const yearRangeMatch = chargeName.match(/(\d{4})\s*-\s*(\d{2,4})/);
+  if (yearRangeMatch) {
+    const rawSy = parseInt(yearRangeMatch[1], 10);
+    let rawEy = parseInt(yearRangeMatch[2], 10);
+    if (rawEy < 100) rawEy = Math.floor(rawSy / 100) * 100 + rawEy;
+    if (rawSy >= 2000 && rawSy <= 2100) {
+      sy = rawSy;
+      ey = rawEy;
+    }
+  }
+
+  // 2. If not found in text, derive from fallbackTime (createdAt timestamp)
+  if (!sy || !ey) {
+    if (fallbackTime && Number.isFinite(fallbackTime) && fallbackTime > 0) {
+      const d = new Date(fallbackTime);
+      const m = d.getMonth(); // 0 = Jan, 3 = Apr
+      sy = m >= 3 ? d.getFullYear() : d.getFullYear() - 1;
+      ey = sy + 1;
+    }
+  }
+
+  // 3. Fallback to active academic year if fallbackTime was missing/invalid
+  if (!sy || !ey) {
+    const acYear = getAcademicYear();
+    const [syStr, eyStr] = acYear.split("-");
+    sy = parseInt(syStr, 10);
+    ey = parseInt(eyStr, 10);
+  }
 
   // Months April–December fall in the START year; Jan–March in the END year.
   if (nameLower.includes("april"))     return `${sy}-04-10`;
@@ -358,7 +385,7 @@ export async function GET(request: Request) {
       db.ledgerEntry.findMany({
         where: ledgerWhere,
         skip: (studentIdParam || allParam) ? 0 : skip,
-        take: (studentIdParam || allParam) ? 500 : limit,
+        take: studentIdParam ? 500 : (allParam ? 5000 : limit),
         orderBy: { createdAt: "desc" },
         select: {
           id: true,
@@ -374,7 +401,7 @@ export async function GET(request: Request) {
       db.receipt.findMany({
         where: receiptWhere,
         skip: (studentIdParam || allParam) ? 0 : skip,
-        take: (studentIdParam || allParam) ? 400 : limit,
+        take: studentIdParam ? 500 : (allParam ? 5000 : limit),
         select: {
           id: true,
           studentId: true,
@@ -430,12 +457,10 @@ export async function GET(request: Request) {
         orderBy: { createdAt: "desc" },
       }),
       db.receipt.count({ where: receiptWhere }),
-      // ── EGRESS-FIX-2: Bounded charges query
-      // For single-student view: 500 rows. For paginated staff view: only current page (limit).
-      // For full background hydration (all=true): cap at 6000.
+      // ── Bounded charges query: covers full school academic year without truncation
       db.ledgerEntry.findMany({
         where: chargesWhere,
-        take: studentIdParam ? 500 : (allParam ? 6000 : limit),
+        take: studentIdParam ? 500 : (allParam ? 25000 : limit),
         skip: (studentIdParam || allParam) ? 0 : skip,
         orderBy: { createdAt: "desc" },
         select: {
@@ -446,10 +471,10 @@ export async function GET(request: Request) {
           createdAt: true,
         },
       }),
-      // ── EGRESS-FIX-2: Bounded discounts query
+      // ── Bounded discounts query: covers full school academic year without truncation
       db.ledgerEntry.findMany({
         where: discountsWhere,
-        take: studentIdParam ? 200 : (allParam ? 3000 : limit),
+        take: studentIdParam ? 200 : (allParam ? 10000 : limit),
         skip: (studentIdParam || allParam) ? 0 : skip,
         orderBy: { createdAt: "desc" },
         select: {
@@ -1623,6 +1648,11 @@ export async function POST(request: Request) {
 
     // Invalidate server cache post-commit
     clearServerBillingCache();
+
+    // Live Google Sheets backup: append newly issued receipt in real-time (non-blocking)
+    appendReceiptToSheet(result.id).catch((err) =>
+      console.warn("[Google Sheets live append notice]:", err?.message || err)
+    );
 
     return NextResponse.json({
       success: true,

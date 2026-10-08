@@ -1073,3 +1073,97 @@ export async function backupDatabaseToDrive(folderId: string) {
     stats: backupObject.statistics,
   };
 }
+
+/**
+ * Appends a single newly-created receipt to the "Fee Receipts Register" tab in Google Sheets.
+ * Runs asynchronously and lightweight without re-scanning the whole database.
+ */
+export async function appendReceiptToSheet(receiptId: string) {
+  try {
+    const spreadsheetId = await getConfiguredSpreadsheetId();
+    if (!spreadsheetId) return;
+
+    const r = await prisma.receipt.findUnique({
+      where: { id: receiptId },
+      include: {
+        student: { include: { class: true } },
+        createdBy: { select: { name: true, role: true } },
+        items: {
+          include: {
+            ledgerEntry: { include: { feeHead: true } },
+          },
+        },
+      },
+    });
+    if (!r) return;
+
+    const auth = getGoogleAuth(["https://www.googleapis.com/auth/spreadsheets"]);
+    const sheets = google.sheets({ version: "v4", auth });
+
+    await ensureSheetTab(sheets, spreadsheetId, "Fee Receipts Register");
+
+    let formattedDate = "-";
+    try {
+      formattedDate = `${getISTDateString(r.createdAt)} ${r.createdAt.toLocaleTimeString("en-IN", {
+        timeZone: "Asia/Kolkata",
+        hour12: false,
+      })}`;
+    } catch {
+      formattedDate = r.createdAt ? r.createdAt.toISOString() : "-";
+    }
+
+    let remarksNote = "-";
+    let snapshotItemsSummary = "";
+    if (r.remarks) {
+      try {
+        const parsed = JSON.parse(r.remarks);
+        if (parsed.items && Array.isArray(parsed.items)) {
+          snapshotItemsSummary = parsed.items
+            .map((it: any) => `${it.name || "Item"}: ₹${((it.amount || 0) / 100).toFixed(0)}`)
+            .join("; ");
+        }
+        if (parsed.arrears !== undefined) {
+          remarksNote = `Remaining Arrears: ₹${((parsed.arrears || 0) / 100).toFixed(2)}`;
+        }
+      } catch {
+        remarksNote = r.remarks;
+      }
+    }
+
+    if (!snapshotItemsSummary && r.items && r.items.length > 0) {
+      snapshotItemsSummary = r.items
+        .map((it) => {
+          const desc = it.ledgerEntry?.description?.replace("Payment for: ", "") || it.ledgerEntry?.feeHead?.name || "Fee";
+          return `${desc}: ₹${((it.amount || 0) / 100).toFixed(0)}`;
+        })
+        .join("; ");
+    }
+
+    const row = [
+      r.receiptNumber,
+      r.manualReceiptNo || "-",
+      formattedDate,
+      r.student?.name || "Family Multi-Student",
+      r.student?.admissionNumber || "-",
+      r.student?.class ? `${r.student.class.name}-${r.student.class.section}` : "-",
+      r.student?.fatherName || "-",
+      (r.amountPaid / 100).toFixed(2),
+      r.paymentMethod,
+      r.transactionReference || "-",
+      r.status,
+      r.createdBy?.name ? `${r.createdBy.name} (${r.createdBy.role})` : "System",
+      snapshotItemsSummary || "General Fee Payment",
+      remarksNote,
+    ];
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: "'Fee Receipts Register'!A1",
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: [row] },
+    });
+  } catch (err: any) {
+    console.warn("[Google Sheets] Live receipt append notice:", err?.message || err);
+  }
+}
+

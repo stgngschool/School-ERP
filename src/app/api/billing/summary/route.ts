@@ -145,7 +145,7 @@ export async function GET(request: Request) {
     ]);
 
     const totalChargesPaisa = chargeAgg._sum.amount || 0;
-    const totalDiscountsPaisa = discountAgg._sum.amount || 0;
+    const totalDiscountsPaisa = Math.abs(discountAgg._sum.amount || 0);
     const totalCollectedPaisa = receiptAgg._sum.amountPaid || 0;
     const todayCollectedPaisa = todayReceiptAgg._sum.amountPaid || 0;
     const netDuesPaisa = Math.max(0, totalChargesPaisa - totalDiscountsPaisa - totalCollectedPaisa);

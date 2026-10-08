@@ -49,7 +49,7 @@ function getNormalizedChargeKey(description: string, feeHeadName: string, fallba
     return `${headLower}_annual${yearSuffix}`;
   }
   if (descLower.includes("one-time") || descLower.includes("onetime")) {
-    return `${headLower}_onetime`;
+    return `${headLower}_onetime${yearSuffix}`;
   }
   return `${headLower}_${descLower.replace(/[^a-z0-9]/g, "")}${yearSuffix}`;
 }

@@ -4,8 +4,9 @@ import React, { useState, useDeferredValue, useMemo } from "react";
 import {
   Search, LayoutGrid, TableProperties, FileSpreadsheet, Download,
   ArrowUpDown, SlidersHorizontal, RotateCcw, X, ArrowLeft, GraduationCap,
-  Printer, Send, CreditCard, Phone, UserCheck, Users, FileText, Home
+  Printer, Send, CreditCard, Phone, UserCheck, Users, FileText, Home, Loader2
 } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 import { formatP } from "@/lib/currency";
 import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
 import { generateFeeReminderWhatsAppUrl, isDueUpToCurrentMonth, cleanPhoneNumber } from "@/lib/whatsapp";
@@ -60,6 +61,40 @@ export default function DefaultersReportTab({
   const [expandedStudentId, setExpandedStudentId] = useState<string | null>(null);
   const [defaulterPage, setDefaulterPage] = useState(1);
   const [defaulterSheetPageSize, setDefaulterSheetPageSize] = useState(25);
+
+  const { refreshStudentBilling } = useAuth();
+  const [loadingStudentStatement, setLoadingStudentStatement] = useState(false);
+  const lastFetchedStudentStatementRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    if (!expandedStudentId) {
+      lastFetchedStudentStatementRef.current = null;
+      setLoadingStudentStatement(false);
+      return;
+    }
+
+    if (lastFetchedStudentStatementRef.current === expandedStudentId) return;
+    lastFetchedStudentStatementRef.current = expandedStudentId;
+
+    let isMounted = true;
+    setLoadingStudentStatement(true);
+
+    if (refreshStudentBilling) {
+      refreshStudentBilling(expandedStudentId)
+        .catch((err) => {
+          console.error("Failed to fetch student statement billing:", err);
+        })
+        .finally(() => {
+          if (isMounted) setLoadingStudentStatement(false);
+        });
+    } else {
+      setLoadingStudentStatement(false);
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [expandedStudentId, refreshStudentBilling]);
 
   const handleSendWhatsApp = (studentName: string, parentName: string, amount: number, phone?: string) => {
     const message = `Dear ${parentName}, this is a gentle reminder that your ward ${studentName} has pending fee dues of ${formatP(
@@ -273,7 +308,10 @@ export default function DefaultersReportTab({
         .sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || ""));
       const unpaidDues = unpaidDuesMap.get(std.id) || [];
       const totalFee = allDues.reduce((s, d) => s + (d.originalAmount || d.amount), 0);
-      const totalPaid = allDues.reduce((s, d) => s + (d.totalPaid || 0), 0);
+      const totalPaid = allDues.reduce((s, d) => {
+        const isPaid = d.status === "PAID" || d.amount <= 0;
+        return s + (d.totalPaid || (isPaid ? (d.originalAmount || d.amount) : 0));
+      }, 0);
       const totalDiscount = allDues.reduce((s, d) => s + (d.totalDiscount || 0), 0);
       const fullYearRemainingDue = Math.max(0, totalFee - totalPaid - totalDiscount);
       const overdueTillNow = unpaidDues.reduce((s, d) => s + d.amount, 0);
@@ -363,10 +401,28 @@ export default function DefaultersReportTab({
 
           <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
             <div className="bg-slate-50 px-5 py-3 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
-              <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">
-                Session Fee Ledger Statement ({allDues.length} Head Entries)
-              </h4>
-              <span className="text-[11px] font-bold text-slate-500">Academic Session 2026-2027</span>
+              <div className="flex items-center gap-2">
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                  Session Fee Ledger Statement ({allDues.length} Head Entries)
+                </h4>
+                {loadingStudentStatement && (
+                  <span className="flex items-center gap-1.5 text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full animate-pulse">
+                    <Loader2 className="w-3 h-3 animate-spin" /> Syncing database ledger...
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-[11px] font-bold text-slate-500">Academic Session 2026-2027</span>
+                <button
+                  type="button"
+                  onClick={() => refreshStudentBilling && refreshStudentBilling(std.id)}
+                  disabled={loadingStudentStatement}
+                  className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
+                  title="Reload ledger from database"
+                >
+                  <RotateCcw className={`w-3 h-3 ${loadingStudentStatement ? "animate-spin" : ""}`} /> Refresh
+                </button>
+              </div>
             </div>
 
             <div className="overflow-x-auto">
@@ -423,6 +479,28 @@ export default function DefaultersReportTab({
                       </tr>
                     );
                   })}
+                  {allDues.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center text-slate-400 italic text-xs">
+                        {loadingStudentStatement ? (
+                          <div className="flex items-center justify-center gap-2 text-indigo-600 font-bold">
+                            <Loader2 className="w-4 h-4 animate-spin" /> Loading fee ledger records from database...
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <p>No fee ledger entries found for this student.</p>
+                            <button
+                              type="button"
+                              onClick={() => refreshStudentBilling && refreshStudentBilling(std.id)}
+                              className="text-xs text-indigo-600 font-bold underline hover:text-indigo-800 cursor-pointer"
+                            >
+                              Force Reload Ledger
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
                   <tr className="bg-slate-50 border-t-2 border-slate-200 text-xs font-black">
                     <td colSpan={2} className="py-3.5 px-5 text-right text-slate-500 uppercase tracking-wider">
                       Grand Total

@@ -43,8 +43,8 @@ export default function PrintReceiptModal({
     const verifyPayload = `${origin}/verify?id=${encodeURIComponent(activeReceipt.receiptNo)}&t=${token}`;
 
     QRCode.toDataURL(verifyPayload, {
-      width: 256,
-      margin: 1,
+      width: 320,
+      margin: 1.5,
       errorCorrectionLevel: "M",
       color: {
         dark: "#0f172a",
@@ -66,8 +66,8 @@ export default function PrintReceiptModal({
       )}`;
 
       QRCode.toDataURL(upiPayload, {
-        width: 256,
-        margin: 1,
+        width: 320,
+        margin: 1.5,
         errorCorrectionLevel: "M",
         color: {
           dark: "#0f172a",
@@ -85,7 +85,9 @@ export default function PrintReceiptModal({
 
   const students = getReceiptStudents(activeReceipt);
   const isMultiChild = students.length > 1;
+  const isCompactSiblings = students.length >= 3;
   const groupedItems = getGroupedReceiptItems(activeReceipt.items || []);
+  const isCompactFeeTable = groupedItems.length >= 4 || students.length >= 3;
   const hasDiscounts = (activeReceipt.discount || 0) > 0 || groupedItems.some((i: any) => (i.discount || 0) > 0);
 
   const modalContent = (
@@ -298,26 +300,26 @@ export default function PrintReceiptModal({
             </div>
 
             <div className="flex items-center gap-3 shrink-0">
-              {/* Top-Right Verification QR Code (Clean, Unboxed) */}
+              {/* Top-Right Verification QR Code (Clean, Unboxed, Optimized Size for Mobile Scanning) */}
               <div className="flex flex-col items-center">
                 {verifyQrUrl ? (
                   <img
                     src={verifyQrUrl}
                     alt="Scan to Verify Online"
                     className={`object-contain ${
-                      receiptPageSize === "A5" ? "w-12 h-12" : "w-14 h-14"
+                      receiptPageSize === "A5" ? "w-[68px] h-[68px]" : "w-[80px] h-[80px]"
                     }`}
                   />
                 ) : (
                   <div
                     className={`bg-slate-100 animate-pulse rounded ${
-                      receiptPageSize === "A5" ? "w-12 h-12" : "w-14 h-14"
+                      receiptPageSize === "A5" ? "w-[68px] h-[68px]" : "w-[80px] h-[80px]"
                     }`}
                   />
                 )}
                 <span
                   className={`font-black uppercase text-slate-500 tracking-wider block mt-0.5 ${
-                    receiptPageSize === "A5" ? "text-[6.5px]" : "text-[7.5px]"
+                    receiptPageSize === "A5" ? "text-[7px]" : "text-[8px]"
                   }`}
                 >
                   Scan to Verify Online
@@ -348,7 +350,9 @@ export default function PrintReceiptModal({
           {isMultiChild ? (
             /* Multi-Child / Sibling Table View */
             <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50/50">
-              <div className="bg-slate-100/90 px-3.5 py-1.5 border-b border-slate-200 flex items-center justify-between text-[9.5px]">
+              <div className={`bg-slate-100/90 px-3.5 border-b border-slate-200 flex items-center justify-between text-[9.5px] ${
+                isCompactSiblings ? "py-1" : "py-1.5"
+              }`}>
                 <span className="font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-indigo-600"></span>
                   Registered Wards / Siblings ({students.length})
@@ -360,26 +364,30 @@ export default function PrintReceiptModal({
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-white/90 text-slate-500 font-extrabold uppercase border-b border-slate-200/70 text-[9px]">
-                    <th className="py-1.5 px-3 w-6 text-slate-400">#</th>
-                    <th className="py-1.5 px-2.5">Student Name</th>
-                    <th className="py-1.5 px-2.5">Class & Sec</th>
-                    <th className="py-1.5 px-2.5">Roll No</th>
-                    <th className="py-1.5 px-3 text-right">Admission ID</th>
+                    <th className={`${isCompactSiblings ? "py-1 px-2.5" : "py-1.5 px-3"} w-6 text-slate-400`}>#</th>
+                    <th className={`${isCompactSiblings ? "py-1 px-2" : "py-1.5 px-2.5"}`}>Student Name</th>
+                    <th className={`${isCompactSiblings ? "py-1 px-2" : "py-1.5 px-2.5"}`}>Class & Sec</th>
+                    <th className={`${isCompactSiblings ? "py-1 px-2" : "py-1.5 px-2.5"}`}>Roll No</th>
+                    <th className={`${isCompactSiblings ? "py-1 px-2.5" : "py-1.5 px-3"} text-right`}>Admission ID</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-200/50 font-semibold text-slate-800 text-[10px]">
+                <tbody className={`divide-y divide-slate-200/50 font-semibold text-slate-800 ${
+                  isCompactSiblings ? "text-[9px]" : "text-[10px]"
+                }`}>
                   {students.map((s, idx) => (
                     <tr key={idx} className="hover:bg-slate-100/40">
-                      <td className="py-1.5 px-3 text-slate-400 font-bold w-6">{idx + 1}</td>
-                      <td className="py-1.5 px-2.5 font-black text-slate-900 break-words">{s.name}</td>
-                      <td className="py-1.5 px-2.5 font-bold text-indigo-950 break-words">{s.classSection || "—"}</td>
-                      <td className="py-1.5 px-2.5 font-bold text-slate-700">{s.rollNo || "—"}</td>
-                      <td className="py-1.5 px-3 text-right font-extrabold text-slate-800">{s.admissionNo || "—"}</td>
+                      <td className={`${isCompactSiblings ? "py-0.5 px-2.5" : "py-1.5 px-3"} text-slate-400 font-bold w-6`}>{idx + 1}</td>
+                      <td className={`${isCompactSiblings ? "py-0.5 px-2" : "py-1.5 px-2.5"} font-black text-slate-900 break-words`}>{s.name}</td>
+                      <td className={`${isCompactSiblings ? "py-0.5 px-2" : "py-1.5 px-2.5"} font-bold text-indigo-950 break-words`}>{s.classSection || "—"}</td>
+                      <td className={`${isCompactSiblings ? "py-0.5 px-2" : "py-1.5 px-2.5"} font-bold text-slate-700`}>{s.rollNo || "—"}</td>
+                      <td className={`${isCompactSiblings ? "py-0.5 px-2.5" : "py-1.5 px-3"} text-right font-extrabold text-slate-800`}>{s.admissionNo || "—"}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              <div className="bg-slate-100/70 px-3.5 py-1.5 border-t border-slate-200/70 flex flex-wrap items-center justify-between gap-2 text-[9.5px]">
+              <div className={`bg-slate-100/70 px-3.5 border-t border-slate-200/70 flex flex-wrap items-center justify-between gap-2 text-[9.5px] ${
+                isCompactSiblings ? "py-1" : "py-1.5"
+              }`}>
                 <div className="flex items-center gap-1.5">
                   <span className="text-slate-400 font-bold uppercase text-[8px]">Father / Guardian:</span>
                   <span className="font-extrabold text-slate-900">{activeReceipt.fatherName || "—"}</span>
@@ -481,8 +489,8 @@ export default function PrintReceiptModal({
 
                     return (
                       <tr key={idx} className="hover:bg-slate-50/50">
-                        <td className="py-2.5 px-3.5 text-slate-400 font-bold w-8">{idx + 1}</td>
-                        <td className="py-2.5 px-3.5 break-words">
+                        <td className={`${isCompactFeeTable ? "py-1 px-3" : "py-2 px-3.5"} text-slate-400 font-bold w-8`}>{idx + 1}</td>
+                        <td className={`${isCompactFeeTable ? "py-1 px-3" : "py-2 px-3.5"} break-words`}>
                           {item.studentPrefix ? (
                             <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap">
                               <span className="inline-block px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-100 text-indigo-700 text-[8.5px] font-black uppercase tracking-tight shrink-0">
@@ -496,15 +504,15 @@ export default function PrintReceiptModal({
                             <span className="font-bold text-slate-900">{formatCompactParticulars(item.name || item.description || "")}</span>
                           )}
                         </td>
-                        <td className="py-2.5 px-3.5 text-right text-slate-500 font-medium font-mono">
+                        <td className={`${isCompactFeeTable ? "py-1 px-3" : "py-2 px-3.5"} text-right text-slate-500 font-medium font-mono`}>
                           {formatP(item.originalAmount !== undefined ? item.originalAmount : item.amount)}
                         </td>
                         {hasDiscounts && (
-                          <td className="py-2.5 px-3.5 text-right text-indigo-600 font-bold font-mono">
+                          <td className={`${isCompactFeeTable ? "py-1 px-3" : "py-2 px-3.5"} text-right text-indigo-600 font-bold font-mono`}>
                             {(item.discount || 0) > 0 ? formatP(item.discount) : "-"}
                           </td>
                         )}
-                        <td className="py-2.5 px-3.5 text-right text-slate-900 font-black font-mono">
+                        <td className={`${isCompactFeeTable ? "py-1 px-3" : "py-2 px-3.5"} text-right text-slate-900 font-black font-mono`}>
                           {formatP(item.amount)}
                         </td>
                       </tr>
@@ -589,13 +597,13 @@ export default function PrintReceiptModal({
                         src={upiQrUrl}
                         alt="Fixed UPI QR"
                         className={`object-contain ${
-                          receiptPageSize === "A5" ? "w-16 h-16" : "w-16 h-16"
+                          receiptPageSize === "A5" ? "w-[72px] h-[72px]" : "w-[84px] h-[84px]"
                         }`}
                       />
                     ) : (
                       <div
                         className={`bg-slate-100 animate-pulse rounded ${
-                          receiptPageSize === "A5" ? "w-16 h-16" : "w-16 h-16"
+                          receiptPageSize === "A5" ? "w-[72px] h-[72px]" : "w-[84px] h-[84px]"
                         }`}
                       />
                     )}

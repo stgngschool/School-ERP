@@ -8,7 +8,8 @@ import {
   syncMarksToSheet, 
   syncReceiptsToSheet, 
   syncAllDataToSheet, 
-  backupDatabaseToDrive 
+  backupDatabaseToDrive,
+  getConfiguredSpreadsheetId
 } from "@/lib/google";
 import fs from "fs";
 import path from "path";
@@ -22,10 +23,20 @@ export async function GET(request: Request) {
   }
 
   try {
+    let clientEmail: string | undefined;
     if (fs.existsSync(credsPath)) {
       const data = fs.readFileSync(credsPath, "utf-8");
       const parsed = JSON.parse(data);
-      return NextResponse.json({ hasCredentials: true, clientEmail: parsed.client_email });
+      clientEmail = parsed.client_email;
+    } else if (process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL) {
+      clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+    } else if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+      const parsed = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+      clientEmail = parsed.client_email;
+    }
+
+    if (clientEmail) {
+      return NextResponse.json({ hasCredentials: true, clientEmail });
     }
     return NextResponse.json({ hasCredentials: false });
   } catch (err) {
@@ -74,66 +85,74 @@ export async function POST(request: Request) {
       }
     }
 
+    const cleanSheetId = extractId(spreadsheetId) || (await getConfiguredSpreadsheetId());
+
     if (action === "SYNC_DIRECTORY") {
-      const cleanSheetId = extractId(spreadsheetId);
       if (!cleanSheetId) {
-        return NextResponse.json({ error: "Missing spreadsheetId" }, { status: 400 });
+        return NextResponse.json({ error: "Missing spreadsheetId. Please configure it in School Settings." }, { status: 400 });
       }
       const result = await syncStudentDirectoryToSheet(cleanSheetId);
       return NextResponse.json(result);
     }
 
     if (action === "SYNC_FEE_REGISTER") {
-      const cleanSheetId = extractId(spreadsheetId);
       if (!cleanSheetId) {
-        return NextResponse.json({ error: "Missing spreadsheetId" }, { status: 400 });
+        return NextResponse.json({ error: "Missing spreadsheetId. Please configure it in School Settings." }, { status: 400 });
       }
       const result = await syncStudentFeeRegisterToSheet(cleanSheetId);
       return NextResponse.json(result);
     }
 
     if (action === "SYNC_STUDENTS") {
-      const cleanSheetId = extractId(spreadsheetId);
       if (!cleanSheetId) {
-        return NextResponse.json({ error: "Missing spreadsheetId" }, { status: 400 });
+        return NextResponse.json({ error: "Missing spreadsheetId. Please configure it in School Settings." }, { status: 400 });
       }
       const result = await syncStudentsToSheet(cleanSheetId);
       return NextResponse.json(result);
     }
 
     if (action === "SYNC_RECEIPTS") {
-      const cleanSheetId = extractId(spreadsheetId);
       if (!cleanSheetId) {
-        return NextResponse.json({ error: "Missing spreadsheetId" }, { status: 400 });
+        return NextResponse.json({ error: "Missing spreadsheetId. Please configure it in School Settings." }, { status: 400 });
       }
       const result = await syncReceiptsToSheet(cleanSheetId);
       return NextResponse.json(result);
     }
 
     if (action === "SYNC_LEDGER") {
-      const cleanSheetId = extractId(spreadsheetId);
       if (!cleanSheetId) {
-        return NextResponse.json({ error: "Missing spreadsheetId" }, { status: 400 });
+        return NextResponse.json({ error: "Missing spreadsheetId. Please configure it in School Settings." }, { status: 400 });
       }
       const result = await syncLedgerToSheet(cleanSheetId);
       return NextResponse.json(result);
     }
 
     if (action === "SYNC_MARKS") {
-      const cleanSheetId = extractId(spreadsheetId);
       if (!cleanSheetId) {
-        return NextResponse.json({ error: "Missing spreadsheetId" }, { status: 400 });
+        return NextResponse.json({ error: "Missing spreadsheetId. Please configure it in School Settings." }, { status: 400 });
       }
       const result = await syncMarksToSheet(cleanSheetId);
       return NextResponse.json(result);
     }
 
     if (action === "SYNC_ALL") {
-      const cleanSheetId = extractId(spreadsheetId);
       if (!cleanSheetId) {
-        return NextResponse.json({ error: "Missing spreadsheetId" }, { status: 400 });
+        return NextResponse.json({ error: "Missing spreadsheetId. Please configure it in School Settings." }, { status: 400 });
       }
       const result = await syncAllDataToSheet(cleanSheetId);
+      const nowIso = new Date().toISOString();
+      try {
+        const { db } = await import("@/lib/db");
+        const schoolConfigRow = await db.schoolConfig.findUnique({ where: { id: "singleton" } });
+        const cfgData = (schoolConfigRow?.data as any) || {};
+        await db.schoolConfig.upsert({
+          where: { id: "singleton" },
+          update: { data: { ...cfgData, googleLastSynced: nowIso } },
+          create: { id: "singleton", data: { ...cfgData, googleLastSynced: nowIso } },
+        });
+      } catch (err: any) {
+        console.warn("[GOOGLE API] Notice updating SchoolConfig lastSynced timestamp:", err.message);
+      }
       return NextResponse.json(result);
     }
 

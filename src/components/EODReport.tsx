@@ -7,10 +7,19 @@ import { formatP } from "@/lib/currency";
 interface EODReportProps {
   cashCollected: number;
   upiCollected: number;
+  bankCollected?: number;
+  chequeCollected?: number;
+  onlineCollected?: number;
 }
 
-export default function EODReport({ cashCollected, upiCollected }: EODReportProps) {
-  const totalCollections = cashCollected + upiCollected;
+export default function EODReport({
+  cashCollected,
+  upiCollected,
+  bankCollected = 0,
+  chequeCollected = 0,
+  onlineCollected = 0,
+}: EODReportProps) {
+  const totalCollections = cashCollected + upiCollected + bankCollected + chequeCollected + onlineCollected;
   const netCashInHand = cashCollected;
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
