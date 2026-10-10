@@ -17,7 +17,7 @@ import PrintReceiptModal from "@/components/accountant/PrintReceiptModal";
 import FeeStructuresTab from "@/components/accountant/FeeStructuresTab";
 import LedgerReceiptsTab from "@/components/accountant/LedgerReceiptsTab";
 import DefaultersReportTab from "@/components/accountant/DefaultersReportTab";
-import FeeCollectTab from "@/components/accountant/FeeCollectTab";
+import FeeCollectTab from "@/components/shared/FeeCollectTab";
 import StudentDirectoryTab from "@/components/accountant/StudentDirectoryTab";
 import FamilyHubTab from "@/components/accountant/FamilyHubTab";
 
@@ -177,7 +177,7 @@ export default function AccountantDashboard() {
       ) : currentTab === "families" ? (
         <FamilyHubTab />
       ) : (
-        <div className="bg-white border-y sm:border border-slate-200/60 p-4 sm:p-8 sm:rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)]">
+        <div className="bg-transparent sm:bg-white sm:border border-slate-200/60 p-0 sm:p-8 sm:rounded-3xl sm:shadow-[0_8px_30px_rgb(0,0,0,0.015)]">
           {/* TAB: Collect Fee */}
           {currentTab === "collect" && (
             <FeeCollectTab

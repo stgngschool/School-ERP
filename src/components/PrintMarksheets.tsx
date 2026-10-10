@@ -10,6 +10,7 @@ import {
   normalizeClassName,
   normalizeSectionName
 } from "@/lib/classUtils";
+import { isAbsentRemark } from "@/lib/marksAbsence";
 import {
   Printer,
   Layers,
@@ -704,8 +705,8 @@ function SingleMarksheetCard({
     grandMaxTotal += maxM;
     grandObtTotal += totalTermObt;
 
-    const isAbsent1 = (t1Match?.remarks || "").toUpperCase().includes("ABSENT") || (subMarks[0]?.remarks || "").toUpperCase().includes("ABSENT");
-    const isAbsent2 = (t2Match?.remarks || "").toUpperCase().includes("ABSENT") || (subMarks[1]?.remarks || "").toUpperCase().includes("ABSENT");
+    const isAbsent1 = isAbsentRemark(t1Match?.remarks) || isAbsentRemark(subMarks[0]?.remarks);
+    const isAbsent2 = isAbsentRemark(t2Match?.remarks) || isAbsentRemark(subMarks[1]?.remarks);
 
     return {
       subName,

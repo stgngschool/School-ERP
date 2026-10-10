@@ -2,6 +2,7 @@ import { google } from "googleapis";
 import { Readable } from "stream";
 import { db as prisma } from "./db";
 import { formatCanonicalDOB, getISTDateString } from "./dateUtils";
+import { isAbsentRemark } from "./marksAbsence";
 
 // Bulletproof Google Service Account private key sanitizer
 function formatPrivateKey(rawKey: string): string {
@@ -713,7 +714,7 @@ export async function syncMarksToSheet(spreadsheetId: string) {
   ];
 
   const rows = marks.map((m) => {
-    const isAbsent = (m.remarks || "").toUpperCase().includes("ABSENT");
+    const isAbsent = isAbsentRemark(m.remarks);
     const pct = m.maxMarks > 0 ? (m.marksObtained / m.maxMarks) * 100 : 0;
     const grade = isAbsent ? "AB (Absent)" : calculateGrade(pct);
 

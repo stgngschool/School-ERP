@@ -221,7 +221,7 @@ export default function UsersSecurityTab({
       {/* System Users Table */}
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm animate-fade-in">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs font-semibold text-slate-700">
+          <table className="w-full text-left border-collapse text-xs font-semibold text-slate-700 mobile-table-to-cards">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-400 font-bold uppercase tracking-wider text-[10px]">
                 <th className="py-3 px-4">User Details</th>
@@ -269,7 +269,7 @@ export default function UsersSecurityTab({
 
                       return (
                         <tr key={usr.id} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="py-3.5 px-4">
+                          <td className="py-3.5 px-4" data-label="User Details">
                             <div className="flex items-center gap-3">
                               <div className="h-8 w-8 rounded-full bg-slate-100 text-slate-650 font-black flex items-center justify-center border border-slate-200 shrink-0">
                                 {usr.name.slice(0, 1).toUpperCase()}
@@ -282,7 +282,7 @@ export default function UsersSecurityTab({
                               </div>
                             </div>
                           </td>
-                          <td className="py-3.5 px-4">
+                          <td className="py-3.5 px-4" data-label="System Role">
                              <div className="space-y-1">
                                <span className={`inline-block text-[8px] font-black uppercase px-2 py-0.5 rounded border ${roleColors}`}>
                                  {usr.role}
@@ -296,7 +296,7 @@ export default function UsersSecurityTab({
                                )}
                              </div>
                            </td>
-                          <td className="py-3.5 px-4">
+                          <td className="py-3.5 px-4" data-label="Account status">
                             <span
                               className={`inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
                                 !isBlocked
@@ -308,7 +308,7 @@ export default function UsersSecurityTab({
                               {usr.status}
                             </span>
                           </td>
-                          <td className="py-3.5 px-4 text-right">
+                          <td className="py-3.5 px-4 text-right" data-label="Actions">
                             <div className="inline-flex gap-2">
                               {/* 1. Lock/Unlock Button */}
                               {usr.id === user?.id ? (

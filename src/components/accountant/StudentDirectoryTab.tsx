@@ -302,14 +302,14 @@ export default function StudentDirectoryTab({ onCollectFee }: StudentDirectoryTa
       </div>
 
       {/* ── MULTI-FACTOR FILTERS TOOLBAR ── */}
-      <div className="bg-white border border-slate-200/70 p-4 sm:p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] space-y-4">
-        {/* Top Row: Search Input + Clear Button */}
-        <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
+      <div className="bg-white border-0 sm:border border-slate-200/70 p-3.5 sm:p-5 md:p-6 rounded-2xl sm:rounded-3xl shadow-sm sm:shadow-[0_8px_30px_rgb(0,0,0,0.015)] space-y-3 sm:space-y-4">
+        {/* Top Row: Search Input + Action Buttons */}
+        <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-3 items-stretch sm:items-center justify-between">
           <div className="relative w-full sm:max-w-md">
-            <Search className="absolute left-3.5 top-3 h-4 w-4 text-slate-400" />
+            <Search className="absolute left-3.5 top-2.5 sm:top-3 h-4 w-4 text-slate-400" />
             <input
               type="text"
-              placeholder="Search name, ADM No, roll, phone, family..."
+              placeholder="Search student, ADM, roll, phone..."
               value={dirSearch}
               onChange={(e) => {
                 const val = e.target.value;
@@ -318,7 +318,7 @@ export default function StudentDirectoryTab({ onCollectFee }: StudentDirectoryTa
                 if (dirSearchTimerRef.current) clearTimeout(dirSearchTimerRef.current);
                 dirSearchTimerRef.current = setTimeout(() => setDebouncedDirSearch(val), 200);
               }}
-              className="w-full text-xs font-extrabold py-2.5 pl-10 pr-9 border border-slate-200/80 rounded-2xl outline-none bg-slate-50/50 hover:bg-slate-50 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-500/5 transition-all shadow-2xs text-slate-800 placeholder-slate-400"
+              className="w-full text-xs font-bold py-2.5 sm:py-3 pl-10 pr-9 border border-slate-200/80 rounded-xl sm:rounded-2xl outline-none bg-slate-50/50 hover:bg-slate-50 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-500/5 transition-all shadow-2xs text-slate-800 placeholder-slate-400"
             />
             {dirSearch && (
               <button
@@ -328,25 +328,44 @@ export default function StudentDirectoryTab({ onCollectFee }: StudentDirectoryTa
                   setDebouncedDirSearch("");
                   setCurrentPage(1);
                 }}
-                className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 cursor-pointer"
+                className="absolute right-2.5 top-2 sm:top-2.5 text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 cursor-pointer"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
             )}
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap relative">
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+            {/* Mobile-only Filter Toggle */}
+            <button
+              type="button"
+              onClick={() => setShowMobileFilters((prev) => !prev)}
+              className={`sm:hidden flex-1 py-2 px-3 border rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                showMobileFilters
+                  ? "bg-indigo-50 border-indigo-200 text-indigo-700"
+                  : "bg-slate-50 border-slate-200/80 text-slate-700"
+              }`}
+            >
+              <Filter className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+              <span>{showMobileFilters ? "Hide Filters" : "Filters"}</span>
+              {activeFilterCount > 0 && (
+                <span className="bg-indigo-600 text-white text-[9px] font-black rounded-full h-4 w-4 flex items-center justify-center shrink-0">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+
             {/* Export to Excel Dropdown */}
-            <div className="relative">
+            <div className="relative flex-1 sm:flex-initial">
               <button
                 type="button"
                 onClick={() => setShowStudentExportMenu((prev) => !prev)}
-                className="py-2 px-3.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer border border-emerald-200/80 shadow-2xs hover:shadow-xs active:scale-95"
+                className="w-full sm:w-auto py-2 sm:py-2.5 px-3 sm:px-3.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl sm:rounded-2xl text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer border border-emerald-200/80 shadow-2xs hover:shadow-xs active:scale-95"
                 title="Download Student Directory as Excel (.xlsx)"
               >
-                <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
-                <span>Download Excel</span>
-                <ChevronDown className={`h-3.5 w-3.5 text-emerald-600 transition-transform ${showStudentExportMenu ? "rotate-180" : ""}`} />
+                <FileSpreadsheet className="h-4 w-4 text-emerald-600 shrink-0" />
+                <span className="truncate">Download Excel</span>
+                <ChevronDown className={`h-3.5 w-3.5 text-emerald-600 transition-transform shrink-0 ${showStudentExportMenu ? "rotate-180" : ""}`} />
               </button>
 
               {showStudentExportMenu && (
@@ -392,7 +411,7 @@ export default function StudentDirectoryTab({ onCollectFee }: StudentDirectoryTa
                           setShowStudentExportMenu(false);
                           const desc = dirClassFilter ? `Class_${dirClassFilter}` : "Filtered";
                           exportStudentDirectoryXLS({
-                            students: filteredStudents,
+                            students,
                             allStudents: students,
                             dueItems,
                             schoolInfo,
@@ -441,33 +460,14 @@ export default function StudentDirectoryTab({ onCollectFee }: StudentDirectoryTa
               <button
                 type="button"
                 onClick={clearAllFilters}
-                className="py-2 px-3 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer border border-rose-200/60 shadow-2xs"
+                className="py-2 sm:py-2.5 px-2.5 sm:px-3 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl sm:rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer border border-rose-200/60 shadow-2xs shrink-0"
+                title="Clear All Filters"
               >
-                <RotateCcw className="h-3.5 w-3.5" /> Clear All Filters
+                <RotateCcw className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Clear All Filters</span>
               </button>
             )}
           </div>
-        </div>
-
-        {/* Mobile: Filter Toggle */}
-        <div className="flex sm:hidden items-center gap-2 border-t border-slate-100 pt-3">
-          <button
-            type="button"
-            onClick={() => setShowMobileFilters((prev) => !prev)}
-            className={`flex items-center gap-2 px-4 py-2 border rounded-2xl text-xs font-black transition-all cursor-pointer flex-1 justify-center ${
-              showMobileFilters
-                ? "bg-indigo-50 border-indigo-200 text-indigo-700"
-                : "bg-slate-50 border-slate-200/70 text-slate-600"
-            }`}
-          >
-            <Filter className="h-3.5 w-3.5" />
-            {showMobileFilters ? "Hide Filters" : "Show Filters"}
-            {activeFilterCount > 0 && (
-              <span className="bg-indigo-600 text-white text-[9px] font-black rounded-full h-4 w-4 flex items-center justify-center shrink-0">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
         </div>
 
         {/* Filters Grid */}

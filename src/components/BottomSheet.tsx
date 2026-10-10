@@ -19,6 +19,7 @@ export default function BottomSheet({ isOpen, onClose, title, children }: Bottom
   const startYRef = useRef(0);
   const currentYRef = useRef(0);
   const sheetRef = useRef<HTMLDivElement>(null);
+  const draggingRef = useRef(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -43,6 +44,7 @@ export default function BottomSheet({ isOpen, onClose, title, children }: Bottom
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
+    draggingRef.current = false;
     const scrollTop = sheetRef.current?.scrollTop || 0;
     // Only allow swipe-to-dismiss if scrolled to the absolute top of the container
     if (scrollTop > 0) return;
@@ -50,27 +52,36 @@ export default function BottomSheet({ isOpen, onClose, title, children }: Bottom
     const touch = e.touches[0];
     startYRef.current = touch.clientY;
     currentYRef.current = touch.clientY;
+    draggingRef.current = true;
     setIsDragging(true);
   };
 
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!isDragging) return;
-    
-    const touch = e.touches[0];
-    currentYRef.current = touch.clientY;
-    const deltaY = currentYRef.current - startYRef.current;
+  // ── H-08 fix: block background page scroll / pull-to-refresh during a downward
+  // swipe using a NON-passive native touchmove listener, which lets us call
+  // preventDefault() safely. React's synthetic onTouchMove is registered as a
+  // passive listener and cannot block scrolling (hence the earlier broken swipe).
+  useEffect(() => {
+    const el = sheetRef.current;
+    if (!el || !shouldRender) return;
 
-    if (deltaY > 0) {
-      // Prevent page background scrolling during swipe
-      if (e.cancelable) {
-        // e.preventDefault(); // Removed to prevent passive listener warning
+    const onMove = (e: TouchEvent) => {
+      if (!draggingRef.current) return;
+      const touch = e.touches[0];
+      currentYRef.current = touch.clientY;
+      const deltaY = currentYRef.current - startYRef.current;
+      if (deltaY > 0) {
+        if (e.cancelable) e.preventDefault();
+        setDragY(deltaY);
       }
-      setDragY(deltaY);
-    }
-  };
+    };
+
+    el.addEventListener("touchmove", onMove, { passive: false });
+    return () => el.removeEventListener("touchmove", onMove);
+  }, [shouldRender]);
 
   const handleTouchEnd = () => {
-    if (!isDragging) return;
+    if (!draggingRef.current) return;
+    draggingRef.current = false;
     setIsDragging(false);
 
     // If swiped down past 120px, close it. Otherwise, snap back up.
@@ -112,7 +123,6 @@ export default function BottomSheet({ isOpen, onClose, title, children }: Bottom
           transition: isDragging ? "none" : "transform 0.2s cubic-bezier(0.32, 0.72, 0, 1)",
         }}
         onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
         {/* Visual Grab Handle for Swiping */}

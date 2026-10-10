@@ -3,6 +3,7 @@ import db from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
 import * as XLSX from "xlsx";
 import { getTodayIST } from "@/lib/dateUtils";
+import { isAbsentRemark } from "@/lib/marksAbsence";
 
 export const dynamic = "force-dynamic";
 
@@ -256,7 +257,7 @@ export async function GET(request: Request) {
         const record = marksForStudent[sub];
         if (record) {
           enteredCount++;
-          const isAbsent = record.remarks?.toUpperCase().includes("ABSENT") || false;
+          const isAbsent = isAbsentRemark(record.remarks);
           if (isAbsent) {
             absentCount++;
             subjectMarks[sub] = "AB";
@@ -280,7 +281,7 @@ export async function GET(request: Request) {
         if (!expectedSubjects.includes(sub) && !subjectMarks[sub]) {
           const record = marksForStudent[sub];
           enteredCount++;
-          const isAbsent = record.remarks?.toUpperCase().includes("ABSENT") || false;
+          const isAbsent = isAbsentRemark(record.remarks);
           if (isAbsent) {
             absentCount++;
             subjectMarks[sub] = "AB";

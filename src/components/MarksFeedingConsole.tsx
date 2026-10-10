@@ -10,6 +10,7 @@ import {
   normalizeClassName,
   normalizeSectionName
 } from "@/lib/classUtils";
+import { isAbsentRemark } from "@/lib/marksAbsence";
 import {
   Save,
   AlertCircle,
@@ -215,13 +216,13 @@ const StudentMobileCard = React.memo(function StudentMobileCard({
     return (
       <div
         id={`student-card-${student.id}`}
-        className={`p-4 rounded-2xl border ${
+        className={`p-3.5 rounded-2xl ${
           isAbsent
-            ? "border-rose-300 bg-rose-50/20"
+            ? "border border-rose-200 bg-rose-50/40"
             : hasAnyInvalid
-            ? "border-rose-400 bg-rose-50/40 ring-2 ring-rose-200"
-            : "border-slate-200/90 bg-white"
-        } shadow-xs space-y-3 transition-all text-left cv-auto-card`}
+            ? "border border-rose-300 bg-rose-50/60 ring-2 ring-rose-200"
+            : "border-0 sm:border border-slate-200/90 bg-white shadow-sm"
+        } space-y-3 transition-all text-left cv-auto-card`}
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
@@ -400,17 +401,17 @@ const StudentMobileCard = React.memo(function StudentMobileCard({
   const pct = isValid && maxNum > 0 ? Math.round((scoreNum / maxNum) * 100) : 0;
   const gradeInfo = getGradeBadge(scoreNum, maxNum, isAbsent);
 
-  return (
-    <div
-      id={`student-card-${student.id}`}
-      className={`p-4 rounded-2xl border ${
-        isAbsent
-          ? "border-rose-300 bg-rose-50/20"
-          : isInvalid
-          ? "border-rose-400 bg-rose-50/40 ring-2 ring-rose-200"
-          : "border-slate-200/90 bg-white"
-      } shadow-xs space-y-3 transition-all text-left cv-auto-card`}
-    >
+    return (
+      <div
+        id={`student-card-${student.id}`}
+        className={`p-3.5 rounded-2xl ${
+          isAbsent
+            ? "border border-rose-200 bg-rose-50/40"
+            : isInvalid
+            ? "border border-rose-300 bg-rose-50/60 ring-2 ring-rose-200"
+            : "border-0 sm:border border-slate-200/90 bg-white shadow-sm"
+        } space-y-3 transition-all text-left cv-auto-card`}
+      >
       {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
         <div className="flex items-center gap-2.5 min-w-0">
@@ -1314,7 +1315,7 @@ export default function MarksFeedingConsole() {
           newSavedInDbMap[student.id] = !!existingMark;
           hasDraft = true;
         } else if (existingMark) {
-          const isAbsent = existingMark.remarks?.toUpperCase().includes("ABSENT") || false;
+          const isAbsent = isAbsentRemark(existingMark.remarks);
           const initialBreakdown: Record<string, string> = {};
           if (existingMark.breakdown && typeof existingMark.breakdown === "object") {
             Object.entries(existingMark.breakdown).forEach(([k, v]) => {
@@ -1388,7 +1389,7 @@ export default function MarksFeedingConsole() {
       // so even if students list is still hydrating, server marks are never lost
       Object.entries(serverRecord).forEach(([studentId, existingMark]: [string, any]) => {
         if (!newRoster[studentId]) {
-          const isAbsent = existingMark.remarks?.toUpperCase().includes("ABSENT") || false;
+          const isAbsent = isAbsentRemark(existingMark.remarks);
           const initialBreakdown: Record<string, string> = {};
           if (existingMark.breakdown && typeof existingMark.breakdown === "object" && Object.keys(existingMark.breakdown).length > 0) {
             Object.entries(existingMark.breakdown).forEach(([k, v]) => {
@@ -1970,7 +1971,7 @@ export default function MarksFeedingConsole() {
   };
 
   return (
-    <div className="-mx-2 sm:mx-0 space-y-4 text-left pb-24 sm:pb-8">
+    <div className="space-y-3.5 sm:space-y-4 text-left pb-32 sm:pb-8 w-full max-w-full overflow-x-hidden">
       {/* ─── FLOATING SCREEN TOAST (Always in Viewport at Top Center) ─── */}
       {toast && (
         <div
@@ -2073,25 +2074,25 @@ export default function MarksFeedingConsole() {
       )}
 
       {/* ─── Header & Selection Panel ─── */}
-      <div className="bg-white border-y sm:border border-slate-200/60 sm:rounded-3xl p-4 sm:p-7 shadow-[0_8px_30px_rgb(0,0,0,0.015)] text-left">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+      <div className="bg-white border-0 sm:border border-slate-200/60 rounded-2xl sm:rounded-3xl p-3.5 sm:p-7 shadow-sm text-left">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-2 border-b border-slate-100 pb-3">
           <div>
             <h3 className="text-[10.5px] sm:text-xs font-black uppercase text-indigo-700 bg-indigo-50 border border-indigo-100/50 px-2.5 py-1 rounded-lg inline-flex items-center gap-1.5 tracking-wider">
-              <BookOpen className="h-3.5 w-3.5" /> Student Marks Entry
+              <BookOpen className="h-3.5 w-3.5 text-indigo-600" /> Student Marks Entry
             </h3>
-            <p className="text-[9.5px] sm:text-[10px] text-slate-400 font-semibold mt-1.5 leading-tight">
+            <p className="text-[10px] text-slate-400 font-semibold mt-1 leading-tight">
               Select class, exam name, and subject to enter and save student marks.
             </p>
           </div>
 
-          <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+          <div className="-mx-3.5 px-3.5 sm:mx-0 sm:px-0 flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none no-scrollbar mt-1 sm:mt-0">
             {canExport && (
               <>
                 {selectedClass && (
                   <a
                     href={`/api/marks/export?type=all&exam=${encodeURIComponent(selectedExam || "Unit-1")}&class=${encodeURIComponent(selectedClass)}`}
                     download
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-teal-200 bg-teal-50 text-[10px] font-black text-teal-700 hover:bg-teal-100 active:scale-95 transition-all cursor-pointer shadow-2xs"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-teal-200 bg-teal-50 text-[10px] font-black text-teal-700 hover:bg-teal-100 active:scale-95 transition-all cursor-pointer shadow-2xs shrink-0"
                     title={`Download CSV of marks for ${selectedClass} only`}
                   >
                     <Download className="h-3 w-3 text-teal-600" />
@@ -2101,7 +2102,7 @@ export default function MarksFeedingConsole() {
                 <a
                   href={`/api/marks/export?type=all&exam=${encodeURIComponent(selectedExam || "Unit-1")}`}
                   download
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 text-[10px] font-black text-emerald-700 hover:bg-emerald-100 active:scale-95 transition-all cursor-pointer shadow-2xs"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 text-[10px] font-black text-emerald-700 hover:bg-emerald-100 active:scale-95 transition-all cursor-pointer shadow-2xs shrink-0"
                   title="Download full CSV of all students with marks"
                 >
                   <Download className="h-3 w-3 text-emerald-600" />
@@ -2110,7 +2111,7 @@ export default function MarksFeedingConsole() {
                 <a
                   href={`/api/marks/export?type=xlsx&exam=${encodeURIComponent(selectedExam || "Unit-1")}`}
                   download
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-indigo-200 bg-indigo-50 text-[10px] font-black text-indigo-700 hover:bg-indigo-100 active:scale-95 transition-all cursor-pointer shadow-2xs"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-indigo-200 bg-indigo-50 text-[10px] font-black text-indigo-700 hover:bg-indigo-100 active:scale-95 transition-all cursor-pointer shadow-2xs shrink-0"
                   title="Download Excel Report with Summary & Pending sheets"
                 >
                   <Download className="h-3 w-3 text-indigo-600" />
@@ -2123,24 +2124,25 @@ export default function MarksFeedingConsole() {
               onClick={loadMarks}
               disabled={loadingMarks}
               title="Reload from server"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-[10px] font-extrabold text-slate-600 hover:bg-slate-50 transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-[10px] font-extrabold text-slate-600 hover:bg-slate-100 transition-all cursor-pointer shadow-2xs shrink-0"
             >
               <RotateCcw className={`h-3 w-3 ${loadingMarks ? "animate-spin text-indigo-600" : ""}`} />
               <span>{loadingMarks ? "Loading..." : "Reload Marks"}</span>
             </button>
+            <div className="w-2 shrink-0 sm:hidden" />
           </div>
         </div>
 
         {/* Filters Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3.5">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3 mt-3 sm:mt-3.5">
           <div>
-            <label className="text-[8.5px] sm:text-[9px] font-black uppercase text-slate-400 block mb-1 tracking-wider">
+            <label className="text-[8.5px] sm:text-[9px] font-black uppercase text-slate-400 block mb-1 tracking-wider truncate">
               Class & Section
             </label>
             <select
               value={selectedClass}
               onChange={(e) => setSelectedClass(e.target.value)}
-              className="w-full text-[10.5px] sm:text-[11px] font-extrabold py-2 px-2.5 sm:py-2.5 sm:px-3 border border-slate-200/60 rounded-xl sm:rounded-2xl outline-none bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300 focus:bg-white focus:border-indigo-600 text-slate-700 transition-all cursor-pointer shadow-2xs"
+              className="w-full text-[11px] font-extrabold py-2 px-2.5 sm:py-2.5 sm:px-3 border border-slate-200/80 rounded-xl sm:rounded-2xl outline-none bg-slate-50 hover:bg-slate-100/60 focus:bg-white focus:border-indigo-600 text-slate-700 transition-all cursor-pointer shadow-2xs truncate"
             >
               {availableClasses.map((cls) => (
                 <option key={cls} value={cls}>
@@ -2152,25 +2154,25 @@ export default function MarksFeedingConsole() {
 
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="text-[8.5px] sm:text-[9px] font-black uppercase text-slate-400 block tracking-wider">
+              <label className="text-[8.5px] sm:text-[9px] font-black uppercase text-slate-400 block tracking-wider truncate">
                 Exam Name
               </label>
               {isExamLocked && (
-                <span className="text-[8px] font-bold uppercase tracking-wider text-slate-600 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded flex items-center gap-0.5">
-                  <Lock className="h-2.5 w-2.5 text-slate-500" /> Locked
+                <span className="text-[7.5px] sm:text-[8px] font-bold uppercase tracking-wider text-rose-700 bg-rose-50 border border-rose-100 px-1.5 py-0.5 rounded flex items-center gap-0.5 shrink-0">
+                  <Lock className="h-2 w-2 text-rose-500" /> Locked
                 </span>
               )}
             </div>
             <select
               value={selectedExam}
               onChange={(e) => setSelectedExam(e.target.value)}
-              className="w-full text-[10.5px] sm:text-[11px] font-extrabold py-2 px-2.5 sm:py-2.5 sm:px-3 border border-slate-200/60 rounded-xl sm:rounded-2xl outline-none bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300 focus:bg-white focus:border-indigo-600 text-slate-700 transition-all cursor-pointer shadow-2xs"
+              className="w-full text-[11px] font-extrabold py-2 px-2.5 sm:py-2.5 sm:px-3 border border-slate-200/80 rounded-xl sm:rounded-2xl outline-none bg-slate-50 hover:bg-slate-100/60 focus:bg-white focus:border-indigo-600 text-slate-700 transition-all cursor-pointer shadow-2xs truncate"
             >
               {availableExams.map((ex) => {
                 const isThisLocked = (schoolInfo.lockedExams || []).includes(ex);
                 return (
                   <option key={ex} value={ex}>
-                    {ex} {isThisLocked ? "• Locked" : ""}
+                    {ex} {isThisLocked ? "🔒" : ""}
                   </option>
                 );
               })}
@@ -2178,13 +2180,13 @@ export default function MarksFeedingConsole() {
           </div>
 
           <div>
-            <label className="text-[8.5px] sm:text-[9px] font-black uppercase text-slate-400 block mb-1 tracking-wider">
+            <label className="text-[8.5px] sm:text-[9px] font-black uppercase text-slate-400 block mb-1 tracking-wider truncate">
               Subject
             </label>
             <select
               value={selectedSubject}
               onChange={(e) => setSelectedSubject(e.target.value)}
-              className="w-full text-[10.5px] sm:text-[11px] font-extrabold py-2 px-2.5 sm:py-2.5 sm:px-3 border border-slate-200/60 rounded-xl sm:rounded-2xl outline-none bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300 focus:bg-white focus:border-indigo-600 text-slate-700 transition-all cursor-pointer shadow-2xs"
+              className="w-full text-[11px] font-extrabold py-2 px-2.5 sm:py-2.5 sm:px-3 border border-slate-200/80 rounded-xl sm:rounded-2xl outline-none bg-slate-50 hover:bg-slate-100/60 focus:bg-white focus:border-indigo-600 text-slate-700 transition-all cursor-pointer shadow-2xs truncate"
             >
               {availableSubjects.map((sub) => (
                 <option key={sub} value={sub}>
@@ -2196,11 +2198,11 @@ export default function MarksFeedingConsole() {
 
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="text-[8.5px] sm:text-[9px] font-black uppercase text-slate-400 block tracking-wider">
+              <label className="text-[8.5px] sm:text-[9px] font-black uppercase text-slate-400 block tracking-wider truncate">
                 Maximum Marks
               </label>
-              <span className="text-[7.5px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100/60 px-1 py-0.5 rounded leading-none">
-                Exam Max
+              <span className="text-[7.5px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100/60 px-1 py-0.5 rounded leading-none shrink-0">
+                Max
               </span>
             </div>
             <input
@@ -2208,7 +2210,7 @@ export default function MarksFeedingConsole() {
               readOnly
               disabled
               value={maxMarks}
-              className="w-full text-[10.5px] sm:text-[11px] font-black py-2 px-2.5 sm:py-2.5 sm:px-3 border border-slate-200/60 rounded-xl sm:rounded-2xl outline-none bg-slate-100/80 text-slate-600 opacity-90 cursor-not-allowed shadow-2xs transition-all select-none"
+              className="w-full text-[11px] font-black py-2 px-2.5 sm:py-2.5 sm:px-3 border border-slate-200/80 rounded-xl sm:rounded-2xl outline-none bg-slate-100/80 text-slate-600 opacity-90 cursor-not-allowed shadow-2xs transition-all select-none"
             />
           </div>
         </div>
@@ -2216,26 +2218,26 @@ export default function MarksFeedingConsole() {
 
       {/* ─── 🔒 EXAM LOCKED STATUS NOTICE ─── */}
       {isExamLocked && (
-        <div className="bg-white border border-slate-200/70 p-4 rounded-2xl sm:rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5 text-left animate-fade-in">
-          <div className="flex items-center gap-3.5">
-            <div className="h-10 w-10 rounded-2xl bg-slate-100 border border-slate-200/80 text-slate-700 flex items-center justify-center shrink-0 shadow-2xs">
-              <Lock className="h-4.5 w-4.5 text-slate-600" />
+        <div className="bg-white border-0 sm:border border-slate-200/70 p-3.5 sm:p-4 rounded-2xl sm:rounded-3xl shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-left animate-fade-in">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl sm:rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 flex items-center justify-center shrink-0 shadow-2xs">
+              <Lock className="h-4 w-4 text-amber-600" />
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h4 className="text-xs font-black uppercase tracking-tight text-slate-800">
                   {selectedExam} • Marks Entry Locked
                 </h4>
-                <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200">
+                <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-200">
                   Read Only
                 </span>
               </div>
-              <p className="text-[11.5px] text-slate-500 font-medium mt-0.5">
+              <p className="text-[11px] text-slate-500 font-medium mt-0.5">
                 Marks entries for this examination have been finalized by School Administration. Editing is disabled.
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-wider text-slate-600 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl self-end sm:self-center shrink-0 shadow-2xs">
+          <div className="hidden sm:flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-600 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl self-end sm:self-center shrink-0 shadow-2xs">
             <Lock className="h-3 w-3 text-slate-400" />
             <span>Editing Disabled</span>
           </div>
@@ -2260,75 +2262,74 @@ export default function MarksFeedingConsole() {
       )}
 
       {/* ─── Class Performance Overview Strip ─── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-left">
-        <div className="bg-white border border-slate-200/60 p-3.5 rounded-2xl shadow-2xs flex items-center gap-3">
-          <div className="h-10 w-10 bg-indigo-50 border border-indigo-100/50 rounded-2xl flex items-center justify-center text-indigo-600 shrink-0">
-            <Users className="h-5 w-5" />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3 text-left">
+        <div className="bg-white border-0 sm:border border-slate-200/60 p-3 sm:p-3.5 rounded-2xl shadow-sm flex items-center gap-2.5 sm:gap-3">
+          <div className="h-9 w-9 sm:h-10 sm:w-10 bg-indigo-50 border border-indigo-100/50 rounded-xl sm:rounded-2xl flex items-center justify-center text-indigo-600 shrink-0">
+            <Users className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
           </div>
-          <div>
-            <p className="text-[9.5px] font-bold uppercase text-slate-400 tracking-wider">Total Students</p>
-            <h4 className="text-sm font-black text-slate-800 mt-0.5">
-              {enteredCount} / {classStudents.length} <span className="text-[10px] text-slate-400 font-semibold">Entered</span>
+          <div className="min-w-0">
+            <p className="text-[8.5px] sm:text-[9.5px] font-bold uppercase text-slate-400 tracking-wider truncate">Total Students</p>
+            <h4 className="text-xs sm:text-sm font-black text-slate-800 mt-0.5 truncate">
+              {enteredCount} / {classStudents.length} <span className="text-[9px] sm:text-[10px] text-slate-400 font-semibold">Entered</span>
             </h4>
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200/60 p-3.5 rounded-2xl shadow-2xs flex items-center gap-3">
-          <div className="h-10 w-10 bg-emerald-50 border border-emerald-100/50 rounded-2xl flex items-center justify-center text-emerald-600 shrink-0">
-            <TrendingUp className="h-5 w-5" />
+        <div className="bg-white border-0 sm:border border-slate-200/60 p-3 sm:p-3.5 rounded-2xl shadow-sm flex items-center gap-2.5 sm:gap-3">
+          <div className="h-9 w-9 sm:h-10 sm:w-10 bg-emerald-50 border border-emerald-100/50 rounded-xl sm:rounded-2xl flex items-center justify-center text-emerald-600 shrink-0">
+            <TrendingUp className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
           </div>
-          <div>
-            <p className="text-[9.5px] font-bold uppercase text-slate-400 tracking-wider">Class Average</p>
-            <h4 className="text-sm font-black text-slate-800 mt-0.5">
-              {classAvgScore} <span className="text-[10px] text-slate-400 font-semibold">/ {maxMarks}</span>
+          <div className="min-w-0">
+            <p className="text-[8.5px] sm:text-[9.5px] font-bold uppercase text-slate-400 tracking-wider truncate">Class Average</p>
+            <h4 className="text-xs sm:text-sm font-black text-slate-800 mt-0.5 truncate">
+              {classAvgScore} <span className="text-[9px] sm:text-[10px] text-slate-400 font-semibold">/ {maxMarks}</span>
             </h4>
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200/60 p-3.5 rounded-2xl shadow-2xs flex items-center gap-3">
-          <div className="h-10 w-10 bg-amber-50 border border-amber-100/50 rounded-2xl flex items-center justify-center text-amber-600 shrink-0">
-            <Award className="h-5 w-5" />
+        <div className="bg-white border-0 sm:border border-slate-200/60 p-3 sm:p-3.5 rounded-2xl shadow-sm flex items-center gap-2.5 sm:gap-3">
+          <div className="h-9 w-9 sm:h-10 sm:w-10 bg-amber-50 border border-amber-100/50 rounded-xl sm:rounded-2xl flex items-center justify-center text-amber-600 shrink-0">
+            <Award className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
           </div>
-          <div>
-            <p className="text-[9.5px] font-bold uppercase text-slate-400 tracking-wider">Top Scorer</p>
-            <h4 className="text-xs font-black text-slate-800 mt-0.5 truncate max-w-[110px]" title={topScorerName}>
+          <div className="min-w-0">
+            <p className="text-[8.5px] sm:text-[9.5px] font-bold uppercase text-slate-400 tracking-wider truncate">Top Scorer</p>
+            <h4 className="text-xs font-black text-slate-800 mt-0.5 truncate" title={topScorerName}>
               {topScorerName !== "--" ? `${highestScore} (${topScorerName.split(" ")[0]})` : "--"}
             </h4>
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200/60 p-3.5 rounded-2xl shadow-2xs flex items-center gap-3">
-          <div className="h-10 w-10 bg-teal-50 border border-teal-100/50 rounded-2xl flex items-center justify-center text-teal-600 shrink-0">
-            <CheckCircle2 className="h-5 w-5" />
+        <div className="bg-white border-0 sm:border border-slate-200/60 p-3 sm:p-3.5 rounded-2xl shadow-sm flex items-center gap-2.5 sm:gap-3">
+          <div className="h-9 w-9 sm:h-10 sm:w-10 bg-teal-50 border border-teal-100/50 rounded-xl sm:rounded-2xl flex items-center justify-center text-teal-600 shrink-0">
+            <CheckCircle2 className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
           </div>
-          <div>
-            <p className="text-[9.5px] font-bold uppercase text-slate-400 tracking-wider">Pass % (≥33%)</p>
-            <h4 className="text-sm font-black text-slate-800 mt-0.5">
-              {passPercentage}% <span className="text-[10px] text-emerald-600 font-bold">({passCount} Pass)</span>
+          <div className="min-w-0">
+            <p className="text-[8.5px] sm:text-[9.5px] font-bold uppercase text-slate-400 tracking-wider truncate">Pass % (≥33%)</p>
+            <h4 className="text-xs sm:text-sm font-black text-slate-800 mt-0.5 truncate">
+              {passPercentage}% <span className="text-[9px] sm:text-[10px] text-emerald-600 font-bold">({passCount} P)</span>
             </h4>
           </div>
         </div>
       </div>
 
       {/* ─── Search & Status Row ─── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 sm:p-3.5 sm:rounded-2xl rounded-xl border-y sm:border border-slate-200/90 shadow-2xs text-left">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 bg-white p-3 sm:p-3.5 rounded-2xl border-0 sm:border border-slate-200/90 shadow-sm text-left">
+        <div className="flex items-center justify-between sm:justify-start gap-2">
           {loadingMarks ? (
             <span className="text-[11px] font-semibold text-slate-500 inline-flex items-center gap-1.5">
               <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-600" /> Loading marks...
             </span>
           ) : (
-            <span className="text-xs font-bold text-slate-600 tracking-tight">
-              {filteredStudents.length} {filteredStudents.length === 1 ? "Student" : "Students"}
+            <span className="text-xs font-bold text-slate-700 tracking-tight">
+              {filteredStudents.length} {filteredStudents.length === 1 ? "Student" : "Students"} Total
             </span>
           )}
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+        <div className="flex items-center gap-2">
           {/* SORT / FILTER SELECTOR (Defaults to Roll No as requested) */}
-          <div className="flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100/90 border border-slate-200/80 rounded-2xl px-3 py-2 transition-all shadow-2xs">
+          <div className="flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100/90 border border-slate-200/80 rounded-xl px-2.5 py-2 transition-all shadow-2xs shrink-0">
             <ArrowUpDown className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
-            <span className="text-[9.5px] font-black uppercase tracking-wider text-slate-400 shrink-0">Order:</span>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as any)}
@@ -2341,23 +2342,22 @@ export default function MarksFeedingConsole() {
             </select>
           </div>
 
-          <div className="relative flex-1 sm:flex-none">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400/80" />
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
             <input
               type="text"
-              placeholder="Search student name or roll..."
+              placeholder="Search name or roll..."
               value={studentSearch}
               onChange={(e) => setStudentSearch(e.target.value)}
-              className="w-full sm:w-60 text-xs font-extrabold py-2.5 pl-10 pr-4 border border-slate-200/60 rounded-2xl outline-none bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300 focus:bg-white focus:border-indigo-600 transition-all shadow-2xs text-slate-800 placeholder-slate-400"
+              className="w-full sm:w-60 text-xs font-bold py-2 pl-8 pr-3 border border-slate-200/70 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 transition-all shadow-2xs text-slate-800 placeholder-slate-400"
             />
           </div>
         </div>
       </div>
 
-
       {/* ─── Student List & Save Header ─── */}
       <div className="text-left">
-        <div className="p-4 bg-white border border-slate-200/60 sm:rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.015)] mb-4 flex items-center justify-between">
+        <div className="p-3.5 sm:p-4 bg-white border-0 sm:border border-slate-200/60 rounded-2xl sm:rounded-3xl shadow-sm mb-3 sm:mb-4 flex items-center justify-between">
           <div>
             <h3 className="text-xs font-black uppercase tracking-wider text-slate-700">
               Students Marks List ({filteredStudents.length} Students)
@@ -2578,7 +2578,7 @@ export default function MarksFeedingConsole() {
       </div>
 
       {/* 📱 MOBILE FLOATING STICKY SAVE BAR (Always reachable while scrolling) */}
-      <div className="fixed bottom-14 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 px-4 py-2.5 shadow-[0_-4px_25px_rgba(0,0,0,0.08)] flex items-center justify-between sm:hidden animate-slide-up">
+      <div className="fixed bottom-[calc(var(--bottom-nav-height,64px))] left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/80 px-4 py-2.5 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] flex items-center justify-between sm:hidden animate-slide-up">
         <div className="flex items-center gap-2">
           <div className="h-8 w-8 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-700 font-black text-xs shrink-0">
             <CheckCircle2 className="h-4 w-4 text-emerald-600" />
@@ -2595,7 +2595,7 @@ export default function MarksFeedingConsole() {
           type="button"
           onClick={handleSaveAll}
           disabled={saving || classStudents.length === 0 || isExamLocked}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
             isExamLocked
               ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed shadow-none"
               : "bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white shadow-md shadow-indigo-600/20 disabled:opacity-50 cursor-pointer"

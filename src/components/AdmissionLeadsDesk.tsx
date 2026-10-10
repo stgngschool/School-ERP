@@ -337,7 +337,35 @@ export default function AdmissionLeadsDesk() {
   return (
     <div className="space-y-6 animate-fade-in text-left pb-12 font-sans">
       {/* Header Card */}
-      <div className="bg-white border border-slate-200/60 p-6 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.015)] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      {/* Header Card: Compact on mobile, rich banner on desktop */}
+      <div className="sm:hidden bg-white border-0 p-3.5 rounded-2xl shadow-sm flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="h-9 w-9 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 shrink-0">
+            <GraduationCap className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-xs font-black text-slate-900 truncate">Online Admissions Desk</h2>
+            <p className="text-[10px] text-slate-400 font-bold truncate">Review & approve forms</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="px-2 py-0.5 rounded-xl text-[10px] font-black bg-indigo-50 text-indigo-700">
+            {admissionApplications.length}
+          </span>
+          <button
+            onClick={() => {
+              refreshAdmissionApplications();
+              fetchEnquiries();
+            }}
+            className="p-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
+            title="Refresh All Records"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+
+      <div className="hidden sm:flex bg-white border border-slate-200/60 p-6 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.015)] flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <div className="h-12 w-12 bg-indigo-50 border border-indigo-100/50 rounded-2xl flex items-center justify-center text-indigo-600 shrink-0 shadow-2xs">
             <GraduationCap className="h-6 w-6" />
@@ -372,18 +400,18 @@ export default function AdmissionLeadsDesk() {
         </div>
       </div>
 
-      {/* Sub-Tab Navigation Bar */}
-      <div className="flex flex-wrap gap-2 border-b border-slate-200/60 pb-3">
+      {/* Sub-Tab Navigation Bar: Floating Full-bleed */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none no-scrollbar -mx-3 px-3 sm:mx-0 sm:px-0 sm:flex-wrap border-0 no-print">
         <button
           onClick={() => setActiveSubTab("APPLICATIONS")}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-black transition-all cursor-pointer ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl sm:rounded-2xl text-xs font-black transition-all cursor-pointer whitespace-nowrap shrink-0 border-0 ${
             activeSubTab === "APPLICATIONS"
-              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
-              : "bg-white border border-slate-200/60 text-slate-600 hover:bg-slate-50"
+              ? "bg-indigo-600 text-white shadow-sm shadow-indigo-500/25"
+              : "bg-white text-slate-600 hover:bg-slate-50 shadow-2xs"
           }`}
         >
           <FileText className="w-4 h-4" />
-          <span>Online Admission Applications ({admissionApplications.length})</span>
+          <span>Applications ({admissionApplications.length})</span>
           {pendingCount > 0 && (
             <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-400 text-amber-950 animate-pulse">
               {pendingCount} Pending
@@ -393,49 +421,50 @@ export default function AdmissionLeadsDesk() {
 
         <button
           onClick={() => setActiveSubTab("LEADS")}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-black transition-all cursor-pointer ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl sm:rounded-2xl text-xs font-black transition-all cursor-pointer whitespace-nowrap shrink-0 border-0 ${
             activeSubTab === "LEADS"
-              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
-              : "bg-white border border-slate-200/60 text-slate-600 hover:bg-slate-50"
+              ? "bg-indigo-600 text-white shadow-sm shadow-indigo-500/25"
+              : "bg-white text-slate-600 hover:bg-slate-50 shadow-2xs"
           }`}
         >
           <UserPlus className="w-4 h-4" />
-          <span>Quick WhatsApp Enquiry Leads ({enquiries.length})</span>
+          <span>WhatsApp Leads ({enquiries.length})</span>
         </button>
+        <div className="w-2 shrink-0 sm:hidden" aria-hidden="true" />
       </div>
 
       {/* ─────────────────────────────────────────────────────────────
           SUB-TAB 1: FULL ONLINE ADMISSION APPLICATIONS
       ───────────────────────────────────────────────────────────── */}
       {activeSubTab === "APPLICATIONS" && (
-        <div className="space-y-6 animate-fade-in">
+        <div className="space-y-4 sm:space-y-6 animate-fade-in">
           {/* Summary Metric Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="bg-white border border-slate-200/60 p-4 rounded-3xl shadow-xs">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-4">
+            <div className="bg-white border-0 sm:border border-slate-200/60 p-3.5 sm:p-4 rounded-2xl sm:rounded-3xl shadow-sm">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
                 Total Applications
               </span>
-              <strong className="text-2xl font-black text-slate-900 mt-1 block">
+              <strong className="text-xl sm:text-2xl font-black text-slate-900 mt-1 block">
                 {admissionApplications.length}
               </strong>
             </div>
 
-            <div className="bg-amber-50/50 border border-amber-200/60 p-4 rounded-3xl shadow-xs">
+            <div className="bg-amber-50/50 border-0 sm:border border-amber-200/60 p-3.5 sm:p-4 rounded-2xl sm:rounded-3xl shadow-sm">
               <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block flex items-center justify-between">
                 <span>Pending Review</span>
                 <Clock className="w-3.5 h-3.5 text-amber-600" />
               </span>
-              <strong className="text-2xl font-black text-amber-950 mt-1 block">
+              <strong className="text-xl sm:text-2xl font-black text-amber-950 mt-1 block">
                 {pendingCount}
               </strong>
             </div>
 
-            <div className="bg-emerald-50/50 border border-emerald-200/60 p-4 rounded-3xl shadow-xs">
+            <div className="bg-emerald-50/50 border-0 sm:border border-emerald-200/60 p-3.5 sm:p-4 rounded-2xl sm:rounded-3xl shadow-sm">
               <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block flex items-center justify-between">
                 <span>Approved & Enrolled</span>
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
               </span>
-              <strong className="text-2xl font-black text-emerald-950 mt-1 block">
+              <strong className="text-xl sm:text-2xl font-black text-emerald-950 mt-1 block">
                 {approvedCount}
               </strong>
             </div>

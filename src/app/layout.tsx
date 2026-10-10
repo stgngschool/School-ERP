@@ -81,8 +81,9 @@ export default function RootLayout({
         <meta name="msapplication-TileColor" content="#4f46e5" />
         <meta name="msapplication-tap-highlight" content="no" />
 
-        {/* Preload logo for faster LCP on mobile — logo is 628KB, preload hints reduce blocking */}
-        <link rel="preload" href="/logo.png" as="image" />
+        {/* Preload the optimized ~50KB WebP logo for a faster LCP on mobile
+            (the source PNG was ~1MB; it is now a 512px, ~50KB asset). */}
+        <link rel="preload" href="/logo.webp" as="image" type="image/webp" />
 
         {/* Icons */}
         <link rel="icon" href="/logo.png" />

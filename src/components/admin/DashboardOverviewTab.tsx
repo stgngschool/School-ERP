@@ -194,25 +194,25 @@ export default function DashboardOverviewTab({
   }, [students]);
 
   return (
-    <div className="space-y-6 font-sans mobile-edge-grid w-full max-w-full overflow-x-hidden text-left">
+    <div className="space-y-4 sm:space-y-6 font-sans mobile-edge-grid w-full max-w-full overflow-x-hidden text-left">
       {/* ─── Header shown only on Dashboard Overview ─── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5 mb-2">
-        <div>
+      <div className="flex items-center justify-between gap-2 border-b-0 sm:border-b sm:border-slate-100 pb-1 sm:pb-5 mb-0.5 sm:mb-2">
+        <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+            <h2 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight truncate">
               Welcome back, {user?.name || "Admin"} 👋
             </h2>
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-600 border border-indigo-100">
+            <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-600 border border-indigo-100">
               <Sparkles className="w-3 h-3 text-indigo-500 animate-pulse" />
               Session Active
             </span>
           </div>
-          <p className="text-xs text-slate-500 font-semibold mt-1">
-            Manage operations and finance for <span className="font-bold text-slate-700">{schoolInfo.name || "School ERP"}</span>.
+          <p className="text-[11px] sm:text-xs text-slate-500 font-semibold mt-0.5 truncate">
+            {schoolInfo.name || "School ERP"} • <span className="text-emerald-600 font-bold">System Live</span>
           </p>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           <div className="text-right hidden sm:block">
             <p className="text-xs font-bold text-slate-700">
               {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
@@ -220,7 +220,7 @@ export default function DashboardOverviewTab({
             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Operational Control</p>
           </div>
           <div className="h-10 w-px bg-slate-200 hidden sm:block"></div>
-          <div className="flex items-center gap-2">
+          <div className="hidden sm:flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-full border border-emerald-100">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
               System Live
@@ -229,7 +229,7 @@ export default function DashboardOverviewTab({
         </div>
       </div>
 
-      <div className="space-y-6 animate-fade-in font-sans">
+      <div className="space-y-4 sm:space-y-6 animate-fade-in font-sans">
         {(() => {
           const girlsFirstNames = ["diya", "anya", "ananya", "kiara", "priya", "sneha", "pooja", "neha", "riya", "simran", "kajal", "preeti", "shalini", "deepika", "kiran", "aisha", "jyoti", "meera", "geeta", "rekha", "sunita", "anita", "kavita", "mamta", "babita", "sapna", "poonam", "usha"];
           const totalStudents = students.length;
@@ -564,20 +564,23 @@ export default function DashboardOverviewTab({
           const circ = doughnutCirc;
 
           return (
-            <div className="space-y-6">
+            <div className="space-y-4 sm:space-y-6">
               
               {/* ─── Quick Actions Command Hub ─── */}
-              <div className="bg-white rounded-3xl border border-slate-200/80 p-4 shadow-[0_4px_20px_rgba(0,0,0,0.015)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-indigo-600 animate-pulse" />
-                  <span className="text-xs font-black text-slate-800 uppercase tracking-wider">
-                    Quick Command Hub:
-                  </span>
+              <div className="bg-transparent sm:bg-white rounded-2xl sm:rounded-3xl border-0 sm:border sm:border-slate-200/80 p-0 sm:p-4 sm:shadow-[0_4px_20px_rgba(0,0,0,0.015)] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
+                <div className="flex items-center justify-between px-0.5 sm:px-0">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-indigo-600 animate-pulse" />
+                    <span className="text-[11px] sm:text-xs font-black text-slate-700 sm:text-slate-800 uppercase tracking-wider">
+                      Quick Command Hub
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-semibold sm:hidden">Swipe →</span>
                 </div>
-                <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+                <div className="-mx-3 px-3 sm:mx-0 sm:px-0 flex items-center gap-2 overflow-x-auto pb-1.5 sm:pb-0 scrollbar-none no-scrollbar">
                   <button
                     onClick={() => setActiveTab("collect")}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/60 text-xs font-bold transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95"
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-white sm:bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-slate-200/80 sm:border-emerald-200/60 text-xs font-bold transition-all cursor-pointer shadow-xs sm:shadow-2xs shrink-0 active:scale-95"
                   >
                     <CreditCard className="w-3.5 h-3.5 text-emerald-600" />
                     <span>Fee Counter</span>
@@ -587,45 +590,45 @@ export default function DashboardOverviewTab({
                       localStorage.setItem("students_import_mode", "single");
                       setActiveTab("students");
                     }}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200/60 text-xs font-bold transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95"
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-white sm:bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-slate-200/80 sm:border-indigo-200/60 text-xs font-bold transition-all cursor-pointer shadow-xs sm:shadow-2xs shrink-0 active:scale-95"
                   >
                     <PlusCircle className="w-3.5 h-3.5 text-indigo-600" />
                     <span>New Admission</span>
                   </button>
                   <button
                     onClick={() => setActiveTab("attendance")}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200/60 text-xs font-bold transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95"
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-white sm:bg-blue-50 hover:bg-blue-100 text-blue-800 border border-slate-200/80 sm:border-blue-200/60 text-xs font-bold transition-all cursor-pointer shadow-xs sm:shadow-2xs shrink-0 active:scale-95"
                   >
                     <UserCheck className="w-3.5 h-3.5 text-blue-600" />
                     <span>Attendance</span>
                   </button>
                   <button
                     onClick={() => setActiveTab("notices")}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200/60 text-xs font-bold transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95"
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-white sm:bg-amber-50 hover:bg-amber-100 text-amber-800 border border-slate-200/80 sm:border-amber-200/60 text-xs font-bold transition-all cursor-pointer shadow-xs sm:shadow-2xs shrink-0 active:scale-95"
                   >
                     <Megaphone className="w-3.5 h-3.5 text-amber-600" />
                     <span>Post Circular</span>
                   </button>
                   <button
                     onClick={() => setActiveTab("defaulters")}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200/60 text-xs font-bold transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95"
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-white sm:bg-rose-50 hover:bg-rose-100 text-rose-800 border border-slate-200/80 sm:border-rose-200/60 text-xs font-bold transition-all cursor-pointer shadow-xs sm:shadow-2xs shrink-0 active:scale-95"
                   >
                     <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
                     <span>Defaulters List</span>
                   </button>
                   <button
                     onClick={() => setActiveTab("print_marksheets")}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95"
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-white sm:bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200/80 sm:border-slate-200 text-xs font-bold transition-all cursor-pointer shadow-xs sm:shadow-2xs shrink-0 active:scale-95"
                   >
                     <Printer className="w-3.5 h-3.5 text-slate-500" />
                     <span>Marksheets</span>
                   </button>
                   <button
                     onClick={toggleGlobalPrivacy}
-                    className={`flex items-center gap-1.5 px-3 py-2 rounded-2xl border text-xs font-bold transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95 ${
+                    className={`flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-xs font-bold transition-all cursor-pointer shadow-xs sm:shadow-2xs shrink-0 active:scale-95 ${
                       privacyMode
-                        ? "bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-200/80"
-                        : "bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border-emerald-200/80"
+                        ? "bg-white sm:bg-amber-50 hover:bg-amber-100 text-amber-900 border border-slate-200/80 sm:border-amber-200/80"
+                        : "bg-white sm:bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-slate-200/80 sm:border-emerald-200/80"
                     }`}
                     title={
                       privacyMode
@@ -640,54 +643,55 @@ export default function DashboardOverviewTab({
                     )}
                     <span>{privacyMode ? "Privacy: Hidden" : "Privacy: Visible"}</span>
                   </button>
+                  <div className="w-2 shrink-0 sm:hidden" />
                 </div>
               </div>
 
-              {/* ─── Metric Cards Grid ─── */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {/* ─── Metric Cards Grid (2x2 on mobile, 4-col on desktop) ─── */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-6">
                 {/* Revenue Card */}
-                <div className="bg-white rounded-3xl border border-slate-200/60 p-6 shadow-[0_8px_30px_rgb(0,0,0,0.015)] transition-all hover:shadow-[0_8px_30px_rgb(0,0,0,0.035)] flex flex-col justify-between">
+                <div className="bg-white rounded-2xl sm:rounded-3xl border-0 sm:border border-slate-200/60 p-3.5 sm:p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
                   <div>
                     <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Collected Revenue</span>
+                      <div className="flex items-center gap-1 sm:gap-1.5 min-w-0">
+                        <span className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider truncate">Revenue</span>
                         <PrivacyEyeButton cardKey="revenue" title="Collected Revenue" />
                       </div>
-                      <span className="p-2.5 bg-indigo-50 text-indigo-600 rounded-2xl">
-                        <TrendingUp className="w-5 h-5" />
+                      <span className="p-1.5 sm:p-2.5 bg-indigo-50 text-indigo-600 rounded-xl sm:rounded-2xl shrink-0">
+                        <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5" />
                       </span>
                     </div>
                     {!billingLoaded ? (
-                      <div className="mt-4 animate-pulse">
-                        <div className="h-8 w-28 bg-slate-200/70 rounded-xl" />
+                      <div className="mt-3 sm:mt-4 animate-pulse">
+                        <div className="h-6 sm:h-8 w-20 sm:w-28 bg-slate-200/70 rounded-xl" />
                       </div>
                     ) : (
-                      <h3 className="text-2xl font-black text-slate-800 tracking-tight mt-4">
+                      <h3 className="text-base sm:text-2xl font-black text-slate-800 tracking-tight mt-2 sm:mt-4 truncate">
                         {isCardMasked("revenue") ? (
-                          <span className="font-mono tracking-widest text-slate-400 select-none">₹••••••</span>
+                          <span className="font-mono tracking-widest text-slate-400 select-none">₹••••</span>
                         ) : (
                           formatP(totalEarnings)
                         )}
                       </h3>
                     )}
                   </div>
-                  <div className="mt-5 pt-4 border-t border-slate-100/80">
+                  <div className="mt-3 sm:mt-5 pt-2.5 sm:pt-4 border-t border-slate-100/80">
                     {!billingLoaded ? (
-                      <div className="space-y-2 animate-pulse">
-                        <div className="h-3 w-full bg-slate-100 rounded-full" />
-                        <div className="h-2.5 w-24 bg-slate-100 rounded-md mt-1" />
+                      <div className="space-y-1.5 sm:space-y-2 animate-pulse">
+                        <div className="h-2.5 sm:h-3 w-full bg-slate-100 rounded-full" />
+                        <div className="h-2 w-16 sm:w-24 bg-slate-100 rounded-md mt-1" />
                       </div>
                     ) : (
                       <>
-                        <div className="flex items-center justify-between text-xs mb-1.5">
-                          <span className="text-slate-400 font-semibold">Collected Ratio</span>
+                        <div className="flex items-center justify-between text-[10px] sm:text-xs mb-1 sm:mb-1.5">
+                          <span className="text-slate-400 font-semibold truncate">Collected</span>
                           <span className="text-indigo-600 font-black">{collectionEfficiency}%</span>
                         </div>
-                        <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="w-full h-1 sm:h-1.5 bg-slate-100 rounded-full overflow-hidden">
                           <div className="h-full bg-indigo-600 rounded-full" style={{ width: `${collectionEfficiency}%` }}></div>
                         </div>
-                        <div className="flex items-center justify-between mt-2.5 text-[10px] text-slate-400 font-medium">
-                          <span>This month: <strong className="text-slate-600">+{isCardMasked("revenue") ? "₹••••" : formatP(monthlyTotal)}</strong></span>
+                        <div className="flex items-center justify-between mt-1.5 sm:mt-2.5 text-[9px] sm:text-[10px] text-slate-400 font-medium">
+                          <span className="truncate">This mo: <strong className="text-slate-600">+{isCardMasked("revenue") ? "₹••" : formatP(monthlyTotal)}</strong></span>
                         </div>
                       </>
                     )}
@@ -695,40 +699,40 @@ export default function DashboardOverviewTab({
                 </div>
 
                 {/* Enrolled Card */}
-                <div className="bg-white rounded-3xl border border-slate-200/60 p-6 shadow-[0_8px_30px_rgb(0,0,0,0.015)] transition-all hover:shadow-[0_8px_30px_rgb(0,0,0,0.035)] flex flex-col justify-between">
+                <div className="bg-white rounded-2xl sm:rounded-3xl border-0 sm:border border-slate-200/60 p-3.5 sm:p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
                   <div>
                     <div className="flex justify-between items-center">
-                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Students</span>
-                      <span className="p-2.5 bg-blue-50 text-blue-600 rounded-2xl">
-                        <Users className="w-5 h-5" />
+                      <span className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider truncate">Students</span>
+                      <span className="p-1.5 sm:p-2.5 bg-blue-50 text-blue-600 rounded-xl sm:rounded-2xl shrink-0">
+                        <Users className="w-4 h-4 sm:w-5 sm:h-5" />
                       </span>
                     </div>
                     {!studentsLoaded ? (
-                      <div className="mt-4 animate-pulse">
-                        <div className="h-8 w-20 bg-slate-200/70 rounded-xl" />
+                      <div className="mt-3 sm:mt-4 animate-pulse">
+                        <div className="h-6 sm:h-8 w-16 sm:w-20 bg-slate-200/70 rounded-xl" />
                       </div>
                     ) : (
-                      <h3 className="text-2xl font-black text-slate-800 tracking-tight mt-4">{totalStudents}</h3>
+                      <h3 className="text-base sm:text-2xl font-black text-slate-800 tracking-tight mt-2 sm:mt-4">{totalStudents}</h3>
                     )}
                   </div>
-                  <div className="mt-5 pt-4 border-t border-slate-100/80">
+                  <div className="mt-3 sm:mt-5 pt-2.5 sm:pt-4 border-t border-slate-100/80">
                     {!studentsLoaded ? (
-                      <div className="space-y-2 animate-pulse">
-                        <div className="h-3 w-full bg-slate-100 rounded-full" />
-                        <div className="h-2.5 w-24 bg-slate-100 rounded-md mt-1" />
+                      <div className="space-y-1.5 sm:space-y-2 animate-pulse">
+                        <div className="h-2.5 sm:h-3 w-full bg-slate-100 rounded-full" />
+                        <div className="h-2 w-16 sm:w-24 bg-slate-100 rounded-md mt-1" />
                       </div>
                     ) : (
                       <>
-                        <div className="flex justify-between items-center text-xs mb-1.5 font-semibold">
-                          <span className="text-blue-600">{boysCount} Boys ({boysPct}%)</span>
-                          <span className="text-pink-500">{girlsCount} Girls ({girlsPct}%)</span>
+                        <div className="flex justify-between items-center text-[10px] sm:text-xs mb-1 sm:mb-1.5 font-semibold">
+                          <span className="text-blue-600 truncate">{boysCount} B ({boysPct}%)</span>
+                          <span className="text-pink-500 truncate">{girlsCount} G ({girlsPct}%)</span>
                         </div>
-                        <div className="w-full h-1.5 bg-slate-100 rounded-full flex overflow-hidden">
+                        <div className="w-full h-1 sm:h-1.5 bg-slate-100 rounded-full flex overflow-hidden">
                           <div className="h-full bg-blue-500" style={{ width: `${boysPct}%` }}></div>
                           <div className="h-full bg-pink-400" style={{ width: `${girlsPct}%` }}></div>
                         </div>
-                        <div className="flex items-center justify-between mt-2.5 text-[10px] text-slate-400 font-medium">
-                          <span>New admissions: <strong className="text-slate-600">{newAdmissionsCount}</strong></span>
+                        <div className="flex items-center justify-between mt-1.5 sm:mt-2.5 text-[9px] sm:text-[10px] text-slate-400 font-medium">
+                          <span className="truncate">New: <strong className="text-slate-600">{newAdmissionsCount}</strong></span>
                         </div>
                       </>
                     )}
@@ -736,54 +740,54 @@ export default function DashboardOverviewTab({
                 </div>
 
                 {/* Dues Card */}
-                <div className="bg-white rounded-3xl border border-slate-200/60 p-6 shadow-[0_8px_30px_rgb(0,0,0,0.015)] transition-all hover:shadow-[0_8px_30px_rgb(0,0,0,0.035)] flex flex-col justify-between">
+                <div className="bg-white rounded-2xl sm:rounded-3xl border-0 sm:border border-slate-200/60 p-3.5 sm:p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
                   <div>
                     <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pending Dues</span>
+                      <div className="flex items-center gap-1 sm:gap-1.5 min-w-0">
+                        <span className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider truncate">Pending Dues</span>
                         <PrivacyEyeButton cardKey="dues" title="Pending Dues" />
                       </div>
-                      <span className="p-2.5 bg-rose-50 text-rose-600 rounded-2xl">
-                        <AlertTriangle className="w-5 h-5" />
+                      <span className="p-1.5 sm:p-2.5 bg-rose-50 text-rose-600 rounded-xl sm:rounded-2xl shrink-0">
+                        <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5" />
                       </span>
                     </div>
                     {!billingLoaded ? (
-                      <div className="mt-4 animate-pulse">
-                        <div className="h-8 w-28 bg-slate-200/70 rounded-xl" />
+                      <div className="mt-3 sm:mt-4 animate-pulse">
+                        <div className="h-6 sm:h-8 w-20 sm:w-28 bg-slate-200/70 rounded-xl" />
                       </div>
                     ) : (
-                      <div className="mt-4">
-                        <h3 className="text-2xl font-black text-rose-600 tracking-tight">
+                      <div className="mt-2 sm:mt-4">
+                        <h3 className="text-base sm:text-2xl font-black text-rose-600 tracking-tight truncate">
                           {isCardMasked("dues") ? (
-                            <span className="font-mono tracking-widest text-slate-400 select-none">₹••••••</span>
+                            <span className="font-mono tracking-widest text-slate-400 select-none">₹••••</span>
                           ) : (
                             formatP(currentOverdueAmount)
                           )}
                         </h3>
-                        <p className="text-[10px] text-slate-400 font-bold mt-0.5">
-                          Full Year Target: <span className="text-slate-600 font-extrabold">{isCardMasked("dues") ? "₹••••••" : formatP(totalDues)}</span>
+                        <p className="text-[9px] sm:text-[10px] text-slate-400 font-bold mt-0.5 truncate">
+                          Full Year: <span className="text-slate-600 font-extrabold">{isCardMasked("dues") ? "₹••" : formatP(totalDues)}</span>
                         </p>
                       </div>
                     )}
                   </div>
-                  <div className="mt-4 pt-3 border-t border-slate-100/80">
+                  <div className="mt-3 sm:mt-4 pt-2.5 sm:pt-3 border-t border-slate-100/80">
                     {!billingLoaded ? (
-                      <div className="space-y-2 animate-pulse">
-                        <div className="h-3 w-full bg-slate-100 rounded-full" />
-                        <div className="h-2.5 w-20 bg-slate-100 rounded-md mt-1" />
+                      <div className="space-y-1.5 sm:space-y-2 animate-pulse">
+                        <div className="h-2.5 sm:h-3 w-full bg-slate-100 rounded-full" />
+                        <div className="h-2 w-16 sm:w-20 bg-slate-100 rounded-md mt-1" />
                       </div>
                     ) : (
                       <>
-                        <div className="flex items-center justify-between text-xs mb-1.5">
-                          <span className="text-slate-400 font-semibold">Overdue Ratio</span>
+                        <div className="flex items-center justify-between text-[10px] sm:text-xs mb-1 sm:mb-1.5">
+                          <span className="text-slate-400 font-semibold truncate">Overdue</span>
                           <span className="text-rose-600 font-black">{100 - collectionEfficiency}%</span>
                         </div>
-                        <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="w-full h-1 sm:h-1.5 bg-slate-100 rounded-full overflow-hidden">
                           <div className="h-full bg-rose-500 rounded-full" style={{ width: `${100 - collectionEfficiency}%` }} />
                         </div>
-                        <div className="flex items-center justify-between mt-2.5 text-[10px] text-slate-400 font-medium">
-                          <span>Invoices: <strong className="text-slate-600">{currentDueItems.length} overdue</strong> <span className="text-slate-400">({dueItems.filter(d => d.status === "UNPAID").length} total)</span></span>
-                          <button onClick={() => setActiveTab("defaulters")} className="text-indigo-600 hover:underline font-bold cursor-pointer">View List</button>
+                        <div className="flex items-center justify-between mt-1.5 sm:mt-2.5 text-[9px] sm:text-[10px] text-slate-400 font-medium">
+                          <span className="truncate">{currentDueItems.length} overdue</span>
+                          <button onClick={() => setActiveTab("defaulters")} className="text-indigo-600 hover:underline font-bold cursor-pointer shrink-0">List</button>
                         </div>
                       </>
                     )}
@@ -791,62 +795,62 @@ export default function DashboardOverviewTab({
                 </div>
 
                 {/* Attendance Card */}
-                <div className="bg-white rounded-3xl border border-slate-200/60 p-6 shadow-[0_8px_30px_rgb(0,0,0,0.015)] transition-all hover:shadow-[0_8px_30px_rgb(0,0,0,0.035)] flex flex-col justify-between">
+                <div className="bg-white rounded-2xl sm:rounded-3xl border-0 sm:border border-slate-200/60 p-3.5 sm:p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
                   <div>
                     <div className="flex justify-between items-center">
-                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Attendance Rate</span>
-                      <span className={`p-2.5 rounded-2xl ${hasTodayAttendance ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"}`}>
-                        <UserCheck className="w-5 h-5" />
+                      <span className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider truncate">Attendance</span>
+                      <span className={`p-1.5 sm:p-2.5 rounded-xl sm:rounded-2xl shrink-0 ${hasTodayAttendance ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"}`}>
+                        <UserCheck className="w-4 h-4 sm:w-5 sm:h-5" />
                       </span>
                     </div>
                     {!attendanceLoaded ? (
-                      <div className="mt-4 animate-pulse">
-                        <div className="h-8 w-20 bg-slate-200/70 rounded-xl" />
+                      <div className="mt-3 sm:mt-4 animate-pulse">
+                        <div className="h-6 sm:h-8 w-16 sm:w-20 bg-slate-200/70 rounded-xl" />
                       </div>
                     ) : (
-                      <div className="mt-4">
-                        <div className="flex items-baseline gap-2">
-                          <h3 className={`text-2xl font-black tracking-tight ${hasTodayAttendance ? "text-emerald-600" : "text-amber-600"}`}>
+                      <div className="mt-2 sm:mt-4">
+                        <div className="flex items-baseline gap-1 sm:gap-2">
+                          <h3 className={`text-base sm:text-2xl font-black tracking-tight ${hasTodayAttendance ? "text-emerald-600" : "text-amber-600"}`}>
                             {hasTodayAttendance ? `${attendanceRate}%` : "Pending"}
                           </h3>
                           {!hasTodayAttendance && latestRecordedDate && (
-                            <span className="text-[10px] font-bold text-slate-400">
-                              (Last: {attendanceRate}%)
+                            <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 truncate">
+                              ({attendanceRate}%)
                             </span>
                           )}
                         </div>
-                        <p className="text-[10px] font-bold text-slate-400 mt-0.5">
-                          {hasTodayAttendance ? "Today's Live Roll Call" : "Today not marked yet"}
+                        <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 mt-0.5 truncate">
+                          {hasTodayAttendance ? "Today Live" : "Not marked"}
                         </p>
                       </div>
                     )}
                   </div>
-                  <div className="mt-4 pt-3 border-t border-slate-100/80">
+                  <div className="mt-3 sm:mt-4 pt-2.5 sm:pt-3 border-t border-slate-100/80">
                     {!attendanceLoaded ? (
-                      <div className="h-8 w-full bg-slate-100 rounded-xl animate-pulse" />
+                      <div className="h-6 sm:h-8 w-full bg-slate-100 rounded-xl animate-pulse" />
                     ) : hasTodayAttendance ? (
-                      <div className="grid grid-cols-4 gap-1 text-center text-[10px] font-bold text-slate-500">
-                        <div className="bg-emerald-50 text-emerald-700 py-1 rounded">
-                          <p className="text-[8px] uppercase">Pres</p>
+                      <div className="grid grid-cols-4 gap-0.5 sm:gap-1 text-center text-[9px] sm:text-[10px] font-bold text-slate-500">
+                        <div className="bg-emerald-50 text-emerald-700 py-0.5 sm:py-1 rounded">
+                          <p className="text-[7px] sm:text-[8px] uppercase">P</p>
                           <p>{presentCount}</p>
                         </div>
-                        <div className="bg-rose-50 text-rose-700 py-1 rounded">
-                          <p className="text-[8px] uppercase">Abs</p>
+                        <div className="bg-rose-50 text-rose-700 py-0.5 sm:py-1 rounded">
+                          <p className="text-[7px] sm:text-[8px] uppercase">A</p>
                           <p>{absentCount}</p>
                         </div>
-                        <div className="bg-amber-50 text-amber-700 py-1 rounded">
-                          <p className="text-[8px] uppercase">Late</p>
+                        <div className="bg-amber-50 text-amber-700 py-0.5 sm:py-1 rounded">
+                          <p className="text-[7px] sm:text-[8px] uppercase">L</p>
                           <p>{lateCount}</p>
                         </div>
-                        <div className="bg-blue-50 text-blue-700 py-1 rounded">
-                          <p className="text-[8px] uppercase">Lv</p>
+                        <div className="bg-blue-50 text-blue-700 py-0.5 sm:py-1 rounded">
+                          <p className="text-[7px] sm:text-[8px] uppercase">Lv</p>
                           <p>{leaveCount}</p>
                         </div>
                       </div>
                     ) : (
-                      <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 bg-amber-50/70 px-2.5 py-1.5 rounded-xl border border-amber-100">
-                        <span className="text-amber-800 font-semibold">Roll call not taken</span>
-                        <button onClick={() => setActiveTab("attendance")} className="text-indigo-600 hover:underline font-extrabold cursor-pointer">Mark Now</button>
+                      <div className="flex items-center justify-between text-[9px] sm:text-[10px] font-bold text-slate-500 bg-amber-50/70 px-1.5 sm:px-2.5 py-1 sm:py-1.5 rounded-lg sm:rounded-xl border border-amber-100">
+                        <span className="text-amber-800 font-semibold truncate">Not taken</span>
+                        <button onClick={() => setActiveTab("attendance")} className="text-indigo-600 hover:underline font-extrabold cursor-pointer shrink-0">Mark</button>
                       </div>
                     )}
                   </div>
@@ -854,10 +858,10 @@ export default function DashboardOverviewTab({
               </div>
 
               {/* ─── Visualizations Section (SVG Charts) ─── */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-3.5 sm:gap-6">
                 {/* Revenue Curve Chart (Modern Rounded Bar Chart with Growth Analytics) */}
-                <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.015)] p-6 relative flex flex-col justify-between">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 pb-3 border-b border-slate-100">
+                <div className="lg:col-span-2 bg-white rounded-2xl sm:rounded-3xl border-0 sm:border border-slate-200/60 shadow-sm p-4 sm:p-6 relative flex flex-col justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3 sm:mb-4 pb-2.5 sm:pb-3 border-b border-slate-100">
                     <div>
                       <h4 className="text-sm font-black text-slate-800 tracking-tight">Monthly Fee Collection Analysis</h4>
                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Session 2026-27 • 12-Month Cashflow</p>
@@ -870,7 +874,7 @@ export default function DashboardOverviewTab({
                     </div>
                   </div>
 
-                  <div className="relative w-full h-[210px] flex items-end justify-between gap-1.5 sm:gap-3 pt-6 pb-2 px-1">
+                  <div className="relative w-full h-[200px] sm:h-[210px] flex items-end justify-between gap-1 sm:gap-3 pt-6 pb-2 px-0.5 sm:px-1 overflow-x-auto scrollbar-none no-scrollbar">
                     {monthsOrder.map((m) => {
                       const valPaise = monthlyRevenue[m] || 0;
                       const valRupees = Math.round(valPaise / 100);
@@ -881,7 +885,7 @@ export default function DashboardOverviewTab({
                       return (
                         <div 
                           key={m} 
-                          className="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer"
+                          className="flex-1 min-w-[20px] flex flex-col items-center h-full justify-end group relative cursor-pointer"
                         >
                           {/* Hover Tooltip Popup */}
                           <div className="absolute -top-9 opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none bg-slate-900 text-white text-[10px] font-bold py-1 px-2 rounded-lg shadow-xl whitespace-nowrap z-20">
@@ -891,8 +895,8 @@ export default function DashboardOverviewTab({
 
                           {/* Top value label for active months */}
                           {valRupees > 0 && (
-                            <span className="text-[9px] font-black text-slate-700 mb-1.5 tracking-tight group-hover:text-indigo-600">
-                              {isCardMasked("chart") ? "••••" : (valRupees >= 100000 ? `₹${(valRupees / 100000).toFixed(1)}L` : valRupees >= 1000 ? `₹${(valRupees / 1000).toFixed(valRupees % 1000 === 0 ? 0 : 1)}k` : `₹${valRupees}`)}
+                            <span className="text-[8px] sm:text-[9px] font-black text-slate-700 mb-1 tracking-tight group-hover:text-indigo-600 truncate max-w-full">
+                              {isCardMasked("chart") ? "••" : (valRupees >= 100000 ? `₹${(valRupees / 100000).toFixed(1)}L` : valRupees >= 1000 ? `₹${(valRupees / 1000).toFixed(valRupees % 1000 === 0 ? 0 : 1)}k` : `₹${valRupees}`)}
                             </span>
                           )}
 
@@ -915,7 +919,7 @@ export default function DashboardOverviewTab({
                           </div>
 
                           {/* Month Label */}
-                          <span className={`text-[10px] font-extrabold mt-2 uppercase tracking-wider ${
+                          <span className={`text-[9px] sm:text-[10px] font-extrabold mt-1.5 uppercase tracking-wider ${
                             isCurrentMonth ? "text-indigo-600 font-black" : "text-slate-400 group-hover:text-slate-700"
                           }`}>
                             {m}
@@ -927,7 +931,7 @@ export default function DashboardOverviewTab({
                 </div>
 
                 {/* Collection efficiency Doughnut */}
-                <div className="bg-white rounded-3xl border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.015)] p-6 flex flex-col justify-between">
+                <div className="bg-white rounded-2xl sm:rounded-3xl border-0 sm:border border-slate-200/60 shadow-sm p-4 sm:p-6 flex flex-col justify-between">
                   <div className="flex justify-between items-center">
                     <div>
                       <h4 className="text-sm font-black text-slate-800 tracking-tight">Collection Efficiency</h4>
@@ -936,7 +940,7 @@ export default function DashboardOverviewTab({
                     <PrivacyEyeButton cardKey="efficiency" title="Efficiency Breakdown" />
                   </div>
 
-                  <div className="flex items-center justify-center my-4 relative">
+                  <div className="flex items-center justify-center my-3 sm:my-4 relative">
                     <svg width={rSize} height={rSize} viewBox={`0 0 ${rSize} ${rSize}`} className="transform -rotate-90">
                       {/* Track circle */}
                       <circle 
@@ -962,39 +966,39 @@ export default function DashboardOverviewTab({
                     </svg>
                     {/* Percent Center Label */}
                     <div className="absolute text-center">
-                      <p className="text-2xl font-black text-slate-800 tracking-tight">{collectionEfficiency}%</p>
+                      <p className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight">{collectionEfficiency}%</p>
                       <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Recovered</p>
                     </div>
                   </div>
 
-                  <div className="space-y-2 border-t border-slate-100/80 pt-4 text-xs font-semibold">
+                  <div className="space-y-2 border-t border-slate-100/80 pt-3 sm:pt-4 text-xs font-semibold">
                     <div className="flex justify-between items-center">
                       <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 block" />
-                        <span className="text-slate-500">Collected Revenue</span>
+                        <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 block shrink-0" />
+                        <span className="text-slate-500 truncate">Collected Revenue</span>
                       </div>
-                      <span className="text-slate-800 font-black">{isCardMasked("efficiency") ? "₹••••••" : formatP(totalEarnings)}</span>
+                      <span className="text-slate-800 font-black shrink-0">{isCardMasked("efficiency") ? "₹••••••" : formatP(totalEarnings)}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-rose-500 block" />
-                        <span className="text-slate-500">Overdue (Till Now)</span>
+                        <span className="w-2.5 h-2.5 rounded-full bg-rose-500 block shrink-0" />
+                        <span className="text-slate-500 truncate">Overdue (Till Now)</span>
                       </div>
-                      <span className="text-rose-600 font-black">{isCardMasked("efficiency") ? "₹••••••" : formatP(currentOverdueAmount)}</span>
+                      <span className="text-rose-600 font-black shrink-0">{isCardMasked("efficiency") ? "₹••••••" : formatP(currentOverdueAmount)}</span>
                     </div>
                     <div className="flex justify-between items-center pt-1 border-t border-slate-100/60 text-[11px]">
-                      <span className="text-slate-400">Full Year Target</span>
-                      <span className="text-slate-600 font-bold">{isCardMasked("efficiency") ? "₹••••••" : formatP(totalSales)} ({fullYearCollectionEfficiency}%)</span>
+                      <span className="text-slate-400 truncate">Full Year Target</span>
+                      <span className="text-slate-600 font-bold shrink-0">{isCardMasked("efficiency") ? "₹••••••" : formatP(totalSales)} ({fullYearCollectionEfficiency}%)</span>
                     </div>
                   </div>
                 </div>
               </div>
 
               {/* ─── Collection & Activities Feed ─── */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-3.5 sm:gap-6">
                 {/* Recent Collections Table */}
-                <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.015)] overflow-hidden flex flex-col justify-between">
-                  <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+                <div className="lg:col-span-2 bg-white rounded-2xl sm:rounded-3xl border-0 sm:border border-slate-200/60 shadow-sm overflow-hidden flex flex-col justify-between">
+                  <div className="p-4 sm:p-6 border-b border-slate-100 flex justify-between items-center">
                     <div className="flex items-center gap-2">
                       <div>
                         <h4 className="text-sm font-black text-slate-800 tracking-tight">Recent Fee Collections</h4>
@@ -1005,7 +1009,39 @@ export default function DashboardOverviewTab({
                     <button onClick={() => setActiveTab("ledger")} className="text-xs font-bold text-indigo-600 hover:underline cursor-pointer">All Vouchers</button>
                   </div>
 
-                  <div className="overflow-x-auto flex-1">
+                  {/* Mobile View: High density card list */}
+                  <div className="block sm:hidden divide-y divide-slate-100 px-4">
+                    {recentReceipts.map((rec) => (
+                      <div key={rec.id} className="py-3 flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-extrabold text-slate-800 text-xs truncate">{rec.studentName}</span>
+                            <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded border shrink-0 ${
+                              rec.method === "CASH"
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+                                : "bg-blue-50 text-blue-700 border-blue-100"
+                            }`}>
+                              {rec.method}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 font-bold mt-0.5 truncate">
+                            {rec.receiptNo} • {rec.classSection} • {rec.createdAt}
+                          </p>
+                        </div>
+                        <span className="font-black text-slate-900 text-xs shrink-0">
+                          {isCardMasked("recent") ? "₹••••" : formatP(rec.amount)}
+                        </span>
+                      </div>
+                    ))}
+                    {recentReceipts.length === 0 && (
+                      <div className="py-6 text-center text-[10px] text-slate-400 font-semibold italic">
+                        No collection receipts found.
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Desktop View: Table (>= sm) */}
+                  <div className="hidden sm:block overflow-x-auto flex-1">
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="bg-slate-50/75 border-b border-slate-200/50 text-[9px] font-bold uppercase text-slate-400 tracking-wider">
@@ -1052,7 +1088,7 @@ export default function DashboardOverviewTab({
                 </div>
 
                 {/* Today's Collection summary */}
-                <div className="bg-white rounded-3xl border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.015)] p-6 flex flex-col justify-between">
+                <div className="bg-white rounded-2xl sm:rounded-3xl border-0 sm:border border-slate-200/60 shadow-sm p-4 sm:p-6 flex flex-col justify-between">
                   <div className="flex justify-between items-center">
                     <div>
                       <h4 className="text-sm font-black text-slate-800 tracking-tight">Today's Collections</h4>
@@ -1061,23 +1097,23 @@ export default function DashboardOverviewTab({
                     <PrivacyEyeButton cardKey="today" title="Today's Collections" />
                   </div>
 
-                  <div className="space-y-3.5 my-5">
-                    <div className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-100 bg-slate-50/50">
-                      <div className="flex items-center gap-3">
+                  <div className="space-y-2.5 sm:space-y-3.5 my-3.5 sm:my-5">
+                    <div className="flex items-center justify-between p-3 sm:p-3.5 rounded-xl sm:rounded-2xl border border-slate-100 bg-slate-50/50">
+                      <div className="flex items-center gap-2.5 sm:gap-3">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 block" />
                         <span className="text-xs font-semibold text-slate-600">Cash Counter</span>
                       </div>
                       <span className="text-sm font-black text-slate-800">{isCardMasked("today") ? "₹••••••" : formatP(todayCash)}</span>
                     </div>
-                    <div className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-100 bg-slate-50/50">
-                      <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-between p-3 sm:p-3.5 rounded-xl sm:rounded-2xl border border-slate-100 bg-slate-50/50">
+                      <div className="flex items-center gap-2.5 sm:gap-3">
                         <span className="w-1.5 h-1.5 rounded-full bg-blue-500 block" />
                         <span className="text-xs font-semibold text-slate-600">UPI Smart Pay</span>
                       </div>
                       <span className="text-sm font-black text-slate-800">{isCardMasked("today") ? "₹••••••" : formatP(todayUpi)}</span>
                     </div>
-                    <div className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-100 bg-slate-50/50">
-                      <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-between p-3 sm:p-3.5 rounded-xl sm:rounded-2xl border border-slate-100 bg-slate-50/50">
+                      <div className="flex items-center gap-2.5 sm:gap-3">
                         <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 block" />
                         <span className="text-xs font-semibold text-slate-600">Bank / Online / Cheques</span>
                       </div>
@@ -1085,18 +1121,18 @@ export default function DashboardOverviewTab({
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between p-4 rounded-2xl bg-indigo-50/75 border border-indigo-100/50">
+                  <div className="flex items-center justify-between p-3.5 sm:p-4 rounded-xl sm:rounded-2xl bg-indigo-50/75 border border-indigo-100/50">
                     <span className="text-xs font-bold text-indigo-900 uppercase tracking-wide">Total Collected Today</span>
-                    <span className="text-xl font-black text-indigo-700">{isCardMasked("today") ? "₹••••••" : formatP(todayTotal)}</span>
+                    <span className="text-lg sm:text-xl font-black text-indigo-700">{isCardMasked("today") ? "₹••••••" : formatP(todayTotal)}</span>
                   </div>
                 </div>
               </div>
 
               {/* ─── Detailed analytics (Class breakdown + Top Collectors + Notes) ─── */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-3.5 sm:gap-6">
                 
                 {/* Class breakdown */}
-                <div className="bg-white rounded-3xl border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.015)] p-6 flex flex-col justify-between">
+                <div className="bg-white rounded-2xl sm:rounded-3xl border-0 sm:border border-slate-200/60 shadow-sm p-4 sm:p-6 flex flex-col justify-between">
                   <div className="flex justify-between items-center">
                     <div>
                       <h4 className="text-sm font-black text-slate-800 tracking-tight">Class-wise Revenue</h4>
@@ -1105,7 +1141,7 @@ export default function DashboardOverviewTab({
                     <PrivacyEyeButton cardKey="classes" title="Class Revenue" />
                   </div>
 
-                  <div className="space-y-4 my-5 flex-1 justify-center flex flex-col">
+                  <div className="space-y-3 sm:space-y-4 my-3.5 sm:my-5 flex-1 justify-center flex flex-col">
                     {classCollectionsList.map((item, idx) => (
                       <div key={idx} className="space-y-1.5">
                         <div className="flex justify-between items-center text-xs font-semibold">
@@ -1123,11 +1159,11 @@ export default function DashboardOverviewTab({
                     )}
                   </div>
 
-                  <button onClick={() => setActiveTab("structures")} className="w-full text-center text-xs font-bold text-indigo-600 hover:underline border-t border-slate-100 pt-4 cursor-pointer">Fee Structures & Classes</button>
+                  <button onClick={() => setActiveTab("structures")} className="w-full text-center text-xs font-bold text-indigo-600 hover:underline border-t border-slate-100 pt-3 sm:pt-4 cursor-pointer">Fee Structures & Classes</button>
                 </div>
 
                 {/* Top collectors */}
-                <div className="bg-white rounded-3xl border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.015)] p-6 flex flex-col justify-between">
+                <div className="bg-white rounded-2xl sm:rounded-3xl border-0 sm:border border-slate-200/60 shadow-sm p-4 sm:p-6 flex flex-col justify-between">
                   <div className="flex justify-between items-center">
                     <div>
                       <h4 className="text-sm font-black text-slate-800 tracking-tight">Staff Collectors Ledger</h4>
@@ -1136,11 +1172,11 @@ export default function DashboardOverviewTab({
                     <PrivacyEyeButton cardKey="collectors" title="Staff Totals" />
                   </div>
 
-                  <div className="divide-y divide-slate-100 flex-1 overflow-y-auto max-h-[220px] pr-1 scrollbar-thin my-4 space-y-1">
+                  <div className="divide-y divide-slate-100 flex-1 overflow-y-auto max-h-[220px] pr-1 scrollbar-thin my-3 sm:my-4 space-y-1">
                     {collectorsList.map((col, idx) => (
-                      <div key={idx} className="flex items-center justify-between py-3.5 hover:bg-slate-50/50 rounded-xl px-2 transition-colors">
+                      <div key={idx} className="flex items-center justify-between py-3 hover:bg-slate-50/50 rounded-xl px-2 transition-colors">
                         <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-2xl bg-slate-100 text-slate-600 flex items-center justify-center font-black text-xs border border-slate-200/40">
+                          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl sm:rounded-2xl bg-slate-100 text-slate-600 flex items-center justify-center font-black text-xs border border-slate-200/40">
                             {col.name.charAt(0).toUpperCase()}
                           </div>
                           <div>
@@ -1161,21 +1197,21 @@ export default function DashboardOverviewTab({
                     )}
                   </div>
 
-                  <div className="border-t border-slate-100 pt-4">
+                  <div className="border-t border-slate-100 pt-3 sm:pt-4">
                     <button onClick={() => setActiveTab("users")} className="w-full text-center text-xs font-bold text-indigo-600 hover:underline cursor-pointer">Manage Staff Accounts</button>
                   </div>
                 </div>
 
                 {/* Notes Scratchpad */}
-                <div className="bg-white rounded-3xl border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.015)] p-6 flex flex-col justify-between">
+                <div className="bg-white rounded-2xl sm:rounded-3xl border-0 sm:border border-slate-200/60 shadow-sm p-4 sm:p-6 flex flex-col justify-between">
                   <div>
                     <h4 className="text-sm font-black text-slate-800 tracking-tight">Admin Scratchpad</h4>
                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Quick reminders & notes</p>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto max-h-[160px] my-4 pr-1 scrollbar-thin space-y-2">
+                  <div className="flex-1 overflow-y-auto max-h-[160px] my-3 sm:my-4 pr-1 scrollbar-thin space-y-2">
                     {notes.map((note, index) => (
-                      <div key={index} className="flex justify-between items-start gap-2 p-2.5 rounded-2xl border border-amber-100 bg-amber-50/40 text-xs font-semibold text-slate-700 shadow-[0_1px_2px_rgba(0,0,0,0.01)]">
+                      <div key={index} className="flex justify-between items-start gap-2 p-2.5 rounded-xl sm:rounded-2xl border border-amber-100 bg-amber-50/40 text-xs font-semibold text-slate-700 shadow-2xs">
                         <p className="flex-1 leading-relaxed">{note}</p>
                         <button 
                           onClick={() => deleteNote(index)}
@@ -1192,7 +1228,7 @@ export default function DashboardOverviewTab({
                     )}
                   </div>
 
-                  <div className="border-t border-slate-100 pt-4 flex gap-2">
+                  <div className="border-t border-slate-100 pt-3 sm:pt-4 flex gap-2">
                     <input 
                       type="text" 
                       placeholder="Add quick reminder..." 
@@ -1201,11 +1237,11 @@ export default function DashboardOverviewTab({
                       onKeyDown={(e) => {
                         if (e.key === "Enter") addNote();
                       }}
-                      className="flex-1 text-xs px-3.5 py-2.5 rounded-2xl border border-slate-200 focus:outline-none focus:border-indigo-500 font-semibold text-slate-700 bg-slate-50/50"
+                      className="flex-1 text-xs px-3.5 py-2.5 rounded-xl sm:rounded-2xl border border-slate-200 focus:outline-none focus:border-indigo-500 font-semibold text-slate-700 bg-slate-50/50"
                     />
                     <button 
                       onClick={addNote}
-                      className="px-3 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl transition-colors cursor-pointer text-xs font-bold shrink-0"
+                      className="px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl sm:rounded-2xl transition-colors cursor-pointer text-xs font-bold shrink-0"
                     >
                       Add
                     </button>
@@ -1214,8 +1250,8 @@ export default function DashboardOverviewTab({
               </div>
 
               {/* ─── Top Critical Defaulters Alert Widget ─── */}
-              <div className="bg-white rounded-3xl border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.015)] p-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-5">
+              <div className="bg-white rounded-2xl sm:rounded-3xl border-0 sm:border border-slate-200/60 shadow-sm p-4 sm:p-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3.5 sm:mb-5">
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="p-1.5 bg-rose-50 text-rose-600 rounded-xl">
@@ -1243,7 +1279,7 @@ export default function DashboardOverviewTab({
                 {/* ─── MOBILE VIEW: High-Density Cards (< sm) ─── */}
                 <div className="block sm:hidden divide-y divide-slate-100">
                   {topDefaulters.map((def) => (
-                    <div key={def.id} className="py-3.5 space-y-2.5">
+                    <div key={def.id} className="py-3 sm:py-3.5 space-y-2 sm:space-y-2.5">
                       <div className="flex items-start justify-between gap-2">
                         <div>
                           <p className="font-extrabold text-slate-900 text-sm">{def.name}</p>
@@ -1441,11 +1477,11 @@ export default function DashboardOverviewTab({
               </div>
 
               {/* ─── Student Birthdays Hub (Date-Wise Rolling Window + Today's Hero Celebration) ─── */}
-              <div className="bg-white rounded-3xl border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.015)] p-6 space-y-5">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+              <div className="bg-white rounded-2xl sm:rounded-3xl border-0 sm:border border-slate-200/60 shadow-sm p-4 sm:p-6 space-y-4 sm:space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 sm:pb-4 border-b border-slate-100">
                   <div className="flex items-center gap-3">
-                    <span className="p-2.5 bg-gradient-to-br from-pink-500 to-amber-500 text-white rounded-2xl shadow-sm">
-                      <Gift className="w-5 h-5 animate-bounce" />
+                    <span className="p-2 sm:p-2.5 bg-gradient-to-br from-pink-500 to-amber-500 text-white rounded-xl sm:rounded-2xl shadow-sm">
+                      <Gift className="w-4 h-4 sm:w-5 sm:h-5 animate-bounce" />
                     </span>
                     <div>
                       <div className="flex items-center gap-2">
@@ -1478,10 +1514,10 @@ export default function DashboardOverviewTab({
                       {todayBirthdays.map((s) => (
                         <div
                           key={s.id}
-                          className="flex items-center justify-between p-4 rounded-2xl border-2 border-pink-100 bg-gradient-to-r from-pink-50 to-white shadow-sm"
+                          className="flex items-center justify-between p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border-2 border-pink-100 bg-gradient-to-r from-pink-50 to-white shadow-sm"
                         >
                           <div className="flex items-center gap-3">
-                            <div className="w-12 h-12 rounded-full bg-pink-100 text-pink-600 flex items-center justify-center font-black text-lg border-2 border-pink-200">
+                            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-pink-100 text-pink-600 flex items-center justify-center font-black text-base sm:text-lg border-2 border-pink-200">
                               {s.name.charAt(0)}
                             </div>
                             <div>
@@ -1515,21 +1551,21 @@ export default function DashboardOverviewTab({
                       Coming Up Next
                     </p>
                   )}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-3">
                     {upcomingBirthdays.map((s) => (
                       <div
                         key={s.id}
-                        className="flex items-center gap-3 p-3 rounded-2xl border border-slate-100 bg-slate-50/50 hover:bg-white hover:border-indigo-100 hover:shadow-xs transition-all group"
+                        className="flex items-center gap-2.5 sm:gap-3 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border border-slate-100 bg-slate-50/50 hover:bg-white hover:border-indigo-100 hover:shadow-xs transition-all group"
                       >
-                        <div className="w-10 h-10 rounded-2xl bg-white border border-slate-200/60 text-slate-800 flex flex-col items-center justify-center font-black shadow-2xs group-hover:border-indigo-300 transition-colors shrink-0">
-                          <span className="text-xs font-black leading-none">{s.day}</span>
-                          <span className="text-[8px] text-indigo-600 uppercase font-black">{s.month}</span>
+                        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-white border border-slate-200/60 text-slate-800 flex flex-col items-center justify-center font-black shadow-2xs group-hover:border-indigo-300 transition-colors shrink-0">
+                          <span className="text-[11px] sm:text-xs font-black leading-none">{s.day}</span>
+                          <span className="text-[7px] sm:text-[8px] text-indigo-600 uppercase font-black">{s.month}</span>
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-xs font-black text-slate-800 truncate group-hover:text-indigo-600 transition-colors">{s.name}</p>
                           <div className="flex items-center justify-between text-[9px] font-bold text-slate-400 mt-0.5">
-                            <span>Class {s.classSection} • {s.birthYear}</span>
-                            <span className={`px-1.5 py-0.5 rounded font-black ${
+                            <span className="truncate">Class {s.classSection}</span>
+                            <span className={`px-1.5 py-0.5 rounded font-black shrink-0 ${
                               s.diffDays === 1
                                 ? "bg-amber-100 text-amber-800"
                                 : "bg-slate-200/70 text-slate-600"

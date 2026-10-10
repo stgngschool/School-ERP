@@ -320,9 +320,14 @@ export default function TeacherDashboard() {
                           </div>
                           <h4 className="font-bold text-slate-800 mt-1 text-sm truncate">{hw.title}</h4>
                         </div>
-                        <button onClick={() => {
-                          deleteHomework(hw.id);
-                          showToast("info", "Homework Deleted", "Assignment removed.");
+                        <button onClick={async () => {
+                          try {
+                            await deleteHomework(hw.id);
+                            showToast("success", "Homework Deleted", "Assignment removed.");
+                          } catch (err) {
+                            const msg = err instanceof Error ? err.message : "Could not remove the assignment. Please try again.";
+                            showToast("error", "Delete Failed", msg);
+                          }
                         }}
                           className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors shrink-0 press-scale cursor-pointer"
                           title="Delete Homework">

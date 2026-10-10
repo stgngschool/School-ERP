@@ -462,7 +462,7 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full text-left border-collapse mobile-table-to-cards">
               <thead>
                 <tr className="border-b border-slate-200 text-[10px] font-black uppercase text-slate-400 print:text-slate-700">
                   <th className="py-2.5 px-2">Roll</th>
@@ -488,22 +488,22 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
 
                   return (
                     <tr key={student.id} className="hover:bg-slate-50 print:hover:bg-transparent">
-                      <td className="py-2 px-2 font-bold text-slate-400 print:text-slate-600">
+                      <td data-label="Roll" className="py-2 px-2 font-bold text-slate-400 print:text-slate-600">
                         Roll {student.rollNo ? String(student.rollNo).padStart(2, "0") : String(idx + 1).padStart(2, "0")}
                       </td>
-                      <td className="py-2 px-2 font-extrabold text-slate-900 truncate max-w-[160px]">
+                      <td data-label="Student Name" className="py-2 px-2 font-extrabold text-slate-900 truncate max-w-[160px]">
                         {student.name}
                       </td>
-                      <td className="py-2 px-2 text-center font-black text-emerald-700">{pCount}</td>
-                      <td className="py-2 px-2 text-center font-black text-rose-700">{aCount}</td>
-                      <td className="py-2 px-2 text-center font-bold text-amber-700">{lCount}</td>
-                      <td className="py-2 px-2 text-center font-semibold text-slate-500">{totalLogged}</td>
-                      <td className="py-2 px-2 text-right font-black">
+                      <td data-label="Present" className="py-2 px-2 text-center font-black text-emerald-700">{pCount}</td>
+                      <td data-label="Absent" className="py-2 px-2 text-center font-black text-rose-700">{aCount}</td>
+                      <td data-label="Leave" className="py-2 px-2 text-center font-bold text-amber-700">{lCount}</td>
+                      <td data-label="Total Working" className="py-2 px-2 text-center font-semibold text-slate-500">{totalLogged}</td>
+                      <td data-label="Attendance %" className="py-2 px-2 text-right font-black">
                         <span className={pct >= 75 ? "text-slate-900" : "text-rose-600 font-extrabold"}>
                           {pct}%
                         </span>
                       </td>
-                      <td className="py-2 px-2 text-center">
+                      <td data-label="Status" className="py-2 px-2 text-center">
                         {isDefaulter ? (
                           <span className="text-[9px] font-black px-2 py-0.5 rounded bg-rose-100 text-rose-800 print:border print:border-rose-300">
                             Low

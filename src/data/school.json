@@ -15,13 +15,13 @@
   "instagramUrl": "",
   "email": "stgng2005@gmail.com",
   "udiseCode": "09670707502",
-  "upiId": "8423926608@upi",
+  "upiId": "",
   "upiMerchantName": "St. GNG School",
   "upiAccounts": [
     {
       "id": "acc-primary",
       "label": "Primary School A/C",
-      "upiId": "8423926608@upi",
+      "upiId": "",
       "merchantName": "St. GNG School",
       "isDefault": true
     }

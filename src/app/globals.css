@@ -418,9 +418,9 @@ body {
     -webkit-backdrop-filter: blur(20px);
     backdrop-filter: blur(20px);
     border-bottom: 1px solid rgba(226, 232, 240, 0.7);
-    position: sticky;
-    top: 0;
-    z-index: 20;
+    /* NOTE: this header is a non-scrolling flex sibling ABOVE the scroll
+       container (<main>), so it is always pinned at the top by layout alone.
+       `position: sticky; top: 0` was redundant here and has been removed. */
     box-shadow: 0 1px 8px rgba(0, 0, 0, 0.04);
   }
 }
@@ -557,34 +557,28 @@ body {
 }
 
 /* ─────────────────────────────────────────
-   MOBILE EDGE-TO-EDGE OVERRIDES (FACEBOOK/INSTAGRAM STYLE)
+   MOBILE CARDS — NATIVE-APP PREMIUM LOOK
+   (Replaces the old destructive edge-to-edge flattening that stripped
+    radius / shadow / side borders and made cards look broken on phones.)
 ───────────────────────────────────────── */
 @media (max-width: 767px) {
-  /* Cards stretch fully edge-to-edge on mobile */
   .stripe-card, .mobile-card {
-    border-radius: 0 !important;
-    border-left: none !important;
-    border-right: none !important;
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-    box-shadow: none !important;
-    border-bottom: 1px solid rgba(226, 232, 240, 0.8) !important;
-    border-top: 1px solid rgba(226, 232, 240, 0.4) !important;
+    border-radius: 16px;
+    border: 1px solid rgba(226, 232, 240, 0.8);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
   }
-  
-  /* Reset general gaps for grid layouts used heavily in dashboards */
+
+  /* Comfortable vertical rhythm for stacked card grids on mobile so cards
+     don't collide edge-to-edge */
   .mobile-edge-grid {
     display: flex;
     flex-direction: column;
-    gap: 0 !important;
+    gap: 12px;
   }
-  .mobile-edge-grid > * + * {
-    margin-top: 0 !important;
-  }
-  
-  /* Add subtle background separation if needed, otherwise white */
+
+  /* Light surface behind cards so they visibly "float" (premium separation) */
   body {
-    background: #ffffff !important;
+    background: #f8fafc !important;
   }
 }
 

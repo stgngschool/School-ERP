@@ -393,7 +393,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
       <aside className="hidden md:flex md:w-64 flex-col border-r border-slate-200 bg-white p-5 shrink-0 select-none no-print">
         {/* Branding */}
         <div className="flex items-center gap-2.5 pb-6 border-b border-slate-100 mb-6 shrink-0">
-          <img src="/logo.png" alt="St. G.N.G. School Logo" className="h-9 w-9 object-contain shrink-0" />
+          <img src="/logo.webp" alt="St. G.N.G. School Logo" className="h-9 w-9 object-contain shrink-0" />
           <div>
             <h1 className="font-extrabold text-xs text-slate-900 leading-tight">St. G.N.G. School</h1>
             <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Varanasi</p>
@@ -458,7 +458,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
       ════════════════════════════════════════ */}
       <header className="md:hidden mobile-page-header shrink-0 px-4 py-3 bg-white border-b border-slate-100 flex items-center justify-between">
         <div className="flex items-center gap-3 min-w-0">
-          <img src="/logo.png" alt="GNG" className="h-9 w-9 object-contain shrink-0" />
+          <img src="/logo.webp" alt="GNG" className="h-9 w-9 object-contain shrink-0" />
           <div className="min-w-0">
             <p className="font-black text-sm text-slate-800 leading-tight truncate">
               St. G.N.G. School
@@ -688,7 +688,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
         )}
 
         {/* Main Content */}
-        <main className="flex-1 px-3 pt-3 pb-28 sm:p-4 md:p-5 lg:p-6 xl:p-8 md:pb-8 overflow-y-auto overflow-x-hidden min-w-0 max-w-full touch-scroll-y  bg-white md:bg-transparent">
+        <main className="flex-1 px-3 pt-3 pb-28 sm:p-4 md:p-5 lg:p-6 xl:p-8 md:pb-8 overflow-y-auto overflow-x-hidden min-w-0 max-w-full touch-scroll-y  bg-slate-50 md:bg-transparent">
           {/* Desktop-Only Guard — shown only on mobile for restricted tabs */}
           {mounted && typeof window !== 'undefined' && isMobile && desktopOnlyTabs.includes(activeTab) ? (
             <div className="flex flex-col items-center justify-center h-full min-h-[60vh] text-center px-6 py-12">

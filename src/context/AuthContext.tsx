@@ -1598,11 +1598,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         method: "DELETE",
       });
 
-      if (res.ok) {
-        await refreshHomework();
+      if (!res.ok) {
+        let msg = "Failed to delete homework.";
+        try {
+          const body = await res.json();
+          if (body?.error) msg = body.error;
+        } catch {}
+        throw new Error(msg);
       }
+
+      await refreshHomework();
     } catch (err) {
       console.error("Delete homework failed:", err);
+      // T2: surface the failure to the caller so the UI can show an error toast
+      // instead of a false "deleted" success message.
+      throw err;
     }
   };
 

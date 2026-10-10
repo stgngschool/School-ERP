@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import QRCode from "qrcode";
-import { Printer, X, CheckCircle2, AlertCircle, ShieldCheck } from "lucide-react";
+import { Printer, X, CheckCircle2, AlertCircle, ShieldCheck, Download, Share2, Loader2 } from "lucide-react";
 import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
 import { formatP, numberToIndianWords } from "@/lib/currency";
 import { getGroupedReceiptItems, getReceiptStudents, formatCompactParticulars, generateReceiptSecurityToken } from "@/lib/receipts";
@@ -28,7 +28,7 @@ export default function PrintReceiptModal({
   const [mounted, setMounted] = useState(false);
   const [receiptPageSize, setReceiptPageSize] = useState<"A4" | "A5">("A5");
   const [verifyQrUrl, setVerifyQrUrl] = useState<string>("");
-  const [upiQrUrl, setUpiQrUrl] = useState<string>("");
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -54,31 +54,11 @@ export default function PrintReceiptModal({
       .then((url) => setVerifyQrUrl(url))
       .catch((err) => console.error("Error generating verify QR:", err));
 
-    // 2. UPI Payment QR: Encodes NPCI dynamic locked-amount UPI payload
-    const isUpiPayment = activeReceipt.method === "UPI" || activeReceipt.paymentMethod === "UPI";
-    if (isUpiPayment) {
-      const upiId = activeReceipt.upiId || schoolInfo.upiId || "8423926608@upi";
-      const merchant = activeReceipt.upiMerchantName || schoolInfo.upiMerchantName || schoolInfo.name || "St. GNG School";
-      const upiPayload = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(
-        merchant
-      )}&am=${(activeReceipt.amount / 100).toFixed(2)}&cu=INR&tn=${encodeURIComponent(
-        "Fee Payment " + activeReceipt.receiptNo
-      )}`;
-
-      QRCode.toDataURL(upiPayload, {
-        width: 320,
-        margin: 1.5,
-        errorCorrectionLevel: "M",
-        color: {
-          dark: "#0f172a",
-          light: "#ffffff",
-        },
-      })
-        .then((url) => setUpiQrUrl(url))
-        .catch((err) => console.error("Error generating UPI QR:", err));
-    } else {
-      setUpiQrUrl("");
-    }
+    // A1: A printed receipt is an ALREADY-SETTLED payment, so we must NOT build a
+    // payable NPCI `upi://pay` QR here — parents were re-scanning paid receipts and
+    // getting prompted to pay the same amount again. The only machine-readable code
+    // on a paid receipt is the (non-payable) Verification QR generated above. A
+    // payable QR would belong only on an explicit pending demand / proforma challan.
   }, [activeReceipt, user, schoolInfo]);
 
   if (!show || !activeReceipt || !mounted) return null;
@@ -90,12 +70,89 @@ export default function PrintReceiptModal({
   const isCompactFeeTable = groupedItems.length >= 4 || students.length >= 3;
   const hasDiscounts = (activeReceipt.discount || 0) > 0 || groupedItems.some((i: any) => (i.discount || 0) > 0);
 
+  const handleGeneratePdf = async (shareOnMobile: boolean = false) => {
+    const receiptElement = document.getElementById("receipt-print-area");
+    if (!receiptElement) return;
+
+    setIsGeneratingPdf(true);
+    try {
+      const { default: jsPDF } = await import("jspdf");
+      const { default: html2canvas } = await import("html2canvas-pro");
+
+      const canvas = await (html2canvas as any)(receiptElement, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: "#ffffff",
+        windowWidth: 1200,
+      });
+
+      const isA5 = receiptPageSize === "A5";
+      const pdf = new jsPDF({
+        orientation: isA5 ? "landscape" : "portrait",
+        unit: "mm",
+        format: isA5 ? "a5" : "a4",
+      });
+
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = isA5 ? 5 : 8;
+      const maxPdfWidth = pageWidth - margin * 2;
+      const maxPdfHeight = pageHeight - margin * 2;
+
+      const canvasWidth = canvas.width;
+      const canvasHeight = canvas.height;
+      const ratio = canvasWidth / canvasHeight;
+
+      let imgWidth = maxPdfWidth;
+      let imgHeight = maxPdfWidth / ratio;
+
+      if (imgHeight > maxPdfHeight) {
+        imgHeight = maxPdfHeight;
+        imgWidth = maxPdfHeight * ratio;
+      }
+
+      const xOffset = margin + (maxPdfWidth - imgWidth) / 2;
+      const yOffset = margin + (maxPdfHeight - imgHeight) / 2;
+
+      const imgData = canvas.toDataURL("image/png");
+      pdf.addImage(imgData, "PNG", xOffset, yOffset, imgWidth, imgHeight, undefined, "FAST");
+
+      const studentNameClean = (students[0]?.name || "Student").replace(/[^a-zA-Z0-9_-]/g, "_");
+      const fileName = `Receipt-${activeReceipt.receiptNo}-${studentNameClean}.pdf`;
+
+      if (shareOnMobile && typeof navigator !== "undefined" && typeof navigator.share === "function") {
+        const pdfBlob = pdf.output("blob");
+        const pdfFile = new File([pdfBlob], fileName, { type: "application/pdf" });
+
+        if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+          await navigator.share({
+            files: [pdfFile],
+            title: `Fee Receipt ${activeReceipt.receiptNo}`,
+            text: `Official Fee Receipt for ${students[0]?.name || "Student"} - ${schoolInfo.name || "St. GNG School"}`,
+          });
+          return;
+        }
+      }
+
+      // Fallback to direct download
+      pdf.save(fileName);
+    } catch (error: any) {
+      if (error?.name !== "AbortError") {
+        console.error("PDF generation error:", error);
+        alert("Unable to generate PDF. Please use Print Voucher to save as PDF.");
+      }
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
   const modalContent = (
     <div id="gng-receipt-print-portal">
-      <div className="receipt-modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 modal-backdrop-optimized animate-in fade-in duration-200">
-        <div className="receipt-modal-dialog bg-white rounded-3xl max-w-3xl w-full p-4 sm:p-5 shadow-2xl border border-slate-100 max-h-[92vh] overflow-y-auto space-y-3.5">
+      <div className="receipt-modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/80 modal-backdrop-optimized animate-in fade-in duration-200">
+        <div className="receipt-modal-dialog bg-white rounded-3xl max-w-3xl w-full p-3.5 sm:p-5 shadow-2xl border border-slate-100 max-h-[94vh] overflow-y-auto space-y-3">
           {/* Modal Header & Page Size Switcher */}
-          <div className="no-print flex items-center justify-between border-b border-slate-100 pb-2.5">
+          <div className="no-print flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
               <div>
@@ -108,28 +165,28 @@ export default function PrintReceiptModal({
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
+            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl self-start sm:self-auto">
               <button
                 type="button"
                 onClick={() => setReceiptPageSize("A5")}
-                className={`py-1 px-3 text-[10px] uppercase font-black tracking-wider rounded-lg border transition-all cursor-pointer ${
+                className={`py-1 px-2.5 sm:px-3 text-[10px] uppercase font-black tracking-wider rounded-lg border transition-all cursor-pointer ${
                   receiptPageSize === "A5"
                     ? "bg-indigo-600 border-indigo-600 text-white shadow-sm shadow-indigo-500/15"
                     : "bg-white border-slate-200 hover:bg-slate-50 text-slate-600"
                 }`}
               >
-                📄 A5 Compact (Half Page)
+                📄 A5 <span className="hidden sm:inline">Compact</span> (Half Page)
               </button>
               <button
                 type="button"
                 onClick={() => setReceiptPageSize("A4")}
-                className={`py-1 px-3 text-[10px] uppercase font-black tracking-wider rounded-lg border transition-all cursor-pointer ${
+                className={`py-1 px-2.5 sm:px-3 text-[10px] uppercase font-black tracking-wider rounded-lg border transition-all cursor-pointer ${
                   receiptPageSize === "A4"
                     ? "bg-indigo-600 border-indigo-600 text-white shadow-sm shadow-indigo-500/15"
                     : "bg-white border-slate-200 hover:bg-slate-50 text-slate-600"
                 }`}
               >
-                📄 A4 Standard (Full Page)
+                📄 A4 <span className="hidden sm:inline">Standard</span> (Full Page)
               </button>
             </div>
           </div>
@@ -252,18 +309,36 @@ export default function PrintReceiptModal({
               .receipt-fee-table-container table {
                 width: 100% !important;
               }
+
+              .receipt-scroll-container {
+                overflow: visible !important;
+                width: 100% !important;
+                padding: 0 !important;
+                border: none !important;
+                background: transparent !important;
+              }
             }
           `}</style>
 
-        {/* Printable Receipt Canvas */}
-        <div
-          id="receipt-print-area"
-          className={`border rounded-2xl bg-white text-slate-900 shadow-sm relative flex flex-col ${
-            receiptPageSize === "A5"
-              ? "border-slate-800 p-4 gap-3 text-[10.5px] min-h-[520px]"
-              : "border-slate-300 p-5 gap-3.5 text-xs"
-          }`}
-        >
+        {/* Mobile Horizontal Scroll Helper Banner */}
+        <div className="sm:hidden flex items-center justify-between px-3 py-1.5 bg-slate-100/90 rounded-xl text-[10px] text-slate-500 font-semibold border border-slate-200/60">
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
+            ↔ Swipe to view complete voucher
+          </span>
+          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Official Layout</span>
+        </div>
+
+        {/* Printable Receipt Canvas with Mobile Pan Container */}
+        <div className="receipt-scroll-container w-full overflow-x-auto touch-pan-x pb-2 pt-0.5 rounded-2xl border border-slate-200/80 sm:border-0 bg-slate-50/50 sm:bg-transparent p-1 sm:p-0">
+          <div
+            id="receipt-print-area"
+            className={`border rounded-xl sm:rounded-2xl bg-white text-slate-900 shadow-sm relative flex flex-col min-w-[550px] sm:min-w-0 ${
+              receiptPageSize === "A5"
+                ? "border-slate-800 p-4 gap-3 text-[10.5px] min-h-[520px]"
+                : "border-slate-300 p-5 gap-3.5 text-xs"
+            }`}
+          >
           {/* 1. Header: School Info & Voucher Badges */}
           <div className="flex justify-between items-start border-b-2 border-slate-900 pb-2.5">
             <div className="flex items-center gap-3">
@@ -542,7 +617,6 @@ export default function PrintReceiptModal({
             const billedTarget = (activeReceipt.subtotal || activeReceipt.amount) - (activeReceipt.discount || 0);
             const isVoucherFullyPaid = activeReceipt.amount >= billedTarget;
             const isUpiPayment = activeReceipt.method === "UPI" || activeReceipt.paymentMethod === "UPI";
-            const upiId = activeReceipt.upiId || schoolInfo.upiId || "8423926608@upi";
 
             return (
               <div className="grid grid-cols-12 gap-3 items-stretch">
@@ -580,33 +654,25 @@ export default function PrintReceiptModal({
                   </div>
                 </div>
 
-                {/* Middle (Only if UPI Payment): Dynamic Fixed-Amount UPI QR (Clean, Unboxed) */}
+                {/* Middle (Only if UPI Payment): PAID confirmation — NOT a payable QR.
+                    A1: the scannable Verification QR lives in the receipt header; a
+                    payable upi://pay QR is never shown on an already-settled receipt. */}
                 {isUpiPayment && (
-                  <div
-                    className={`col-span-3 flex flex-col items-center justify-center text-center self-center py-1 space-y-1`}
-                  >
-                    <span
-                      className={`font-black uppercase text-slate-500 tracking-wider leading-none block ${
-                        receiptPageSize === "A5" ? "text-[7.5px]" : "text-[7.5px]"
+                  <div className="col-span-3 flex flex-col items-center justify-center text-center self-center py-1 space-y-1">
+                    <span className="font-black uppercase text-emerald-600 tracking-wider leading-none block text-[7.5px]">
+                      Paid via UPI
+                    </span>
+                    <div
+                      className={`flex items-center justify-center rounded-full bg-emerald-50 border border-emerald-200 ${
+                        receiptPageSize === "A5" ? "w-[72px] h-[72px]" : "w-[84px] h-[84px]"
                       }`}
                     >
-                      Scan to Pay via UPI
-                    </span>
-                    {upiQrUrl ? (
-                      <img
-                        src={upiQrUrl}
-                        alt="Fixed UPI QR"
-                        className={`object-contain ${
-                          receiptPageSize === "A5" ? "w-[72px] h-[72px]" : "w-[84px] h-[84px]"
+                      <CheckCircle2
+                        className={`text-emerald-600 ${
+                          receiptPageSize === "A5" ? "w-9 h-9" : "w-10 h-10"
                         }`}
                       />
-                    ) : (
-                      <div
-                        className={`bg-slate-100 animate-pulse rounded ${
-                          receiptPageSize === "A5" ? "w-[72px] h-[72px]" : "w-[84px] h-[84px]"
-                        }`}
-                      />
-                    )}
+                    </div>
                     <div className="leading-tight">
                       <span
                         className={`font-mono font-black text-emerald-700 block ${
@@ -615,12 +681,8 @@ export default function PrintReceiptModal({
                       >
                         {formatP(activeReceipt.amount)}
                       </span>
-                      <p
-                        className={`text-slate-400 font-bold tracking-tight ${
-                          receiptPageSize === "A5" ? "text-[7px]" : "text-[7.5px]"
-                        }`}
-                      >
-                        PhonePe • GPay • Paytm
+                      <p className="text-emerald-600 font-black tracking-widest text-[7.5px]">
+                        PAID
                       </p>
                     </div>
                   </div>
@@ -671,7 +733,7 @@ export default function PrintReceiptModal({
           })()}
 
           {/* 5. Signatures & Electronic Verification Seal */}
-          <div className="flex justify-between items-center pt-2.5 border-t border-slate-200">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pt-2.5 border-t border-slate-200">
             {/* Left: Official Generation Notice */}
             <div
               className={`text-slate-400 leading-tight italic break-words ${
@@ -682,7 +744,7 @@ export default function PrintReceiptModal({
             </div>
 
             {/* Right: Cashier Sign & Verified Seal */}
-            <div className="flex items-center gap-3 bg-slate-50 border border-slate-200/90 rounded-xl p-2 px-3.5 shrink-0">
+            <div className="flex items-center gap-3 bg-slate-50 border border-slate-200/90 rounded-xl p-2 px-3.5 shrink-0 self-end sm:self-auto">
               <div className="flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span
@@ -693,7 +755,7 @@ export default function PrintReceiptModal({
                   SYSTEM VERIFIED
                 </span>
               </div>
-              <div className="border-l border-slate-200 pl-3 text-right min-w-[110px]">
+              <div className="border-l border-slate-200 pl-3 text-right min-w-[100px]">
                 <p
                   className={`font-black text-slate-900 leading-tight ${
                     receiptPageSize === "A5" ? "text-[9px]" : "text-[9.5px]"
@@ -712,27 +774,69 @@ export default function PrintReceiptModal({
             </div>
           </div>
         </div>
+      </div>
 
         {/* Modal Action Buttons */}
-        <div className="receipt-modal-actions no-print flex gap-2 pt-1">
-          <button
-            type="button"
-            onClick={() => onSendWhatsApp(activeReceipt)}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-md shadow-emerald-600/15"
-          >
-            <WhatsAppIcon className="w-4 h-4 text-white shrink-0" /> WhatsApp Receipt
-          </button>
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs"
-          >
-            <Printer className="h-4 w-4" /> Print Voucher
-          </button>
+        <div className="receipt-modal-actions no-print flex flex-col sm:flex-row gap-2 pt-1">
+          <div className="grid grid-cols-2 sm:flex sm:flex-1 gap-2">
+            {/* 1. WhatsApp Receipt (Text) */}
+            <button
+              type="button"
+              onClick={() => onSendWhatsApp(activeReceipt)}
+              className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-md shadow-emerald-600/15"
+            >
+              <WhatsAppIcon className="w-4 h-4 text-white shrink-0" />
+              <span>WhatsApp</span>
+            </button>
+
+            {/* 2. Direct Share PDF (Mobile native share sheet to WhatsApp/Contacts) */}
+            <button
+              type="button"
+              disabled={isGeneratingPdf}
+              onClick={() => handleGeneratePdf(true)}
+              className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-indigo-600 hover:bg-indigo-700 active:scale-95 disabled:opacity-50 text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-md shadow-indigo-600/15"
+              title="Share PDF receipt directly via WhatsApp or device apps"
+            >
+              {isGeneratingPdf ? (
+                <Loader2 className="w-4 h-4 animate-spin text-white shrink-0" />
+              ) : (
+                <Share2 className="w-4 h-4 text-white shrink-0" />
+              )}
+              <span>Share PDF</span>
+            </button>
+
+            {/* 3. Download PDF */}
+            <button
+              type="button"
+              disabled={isGeneratingPdf}
+              onClick={() => handleGeneratePdf(false)}
+              className="flex items-center justify-center gap-1.5 py-2.5 px-3 border border-indigo-200 bg-indigo-50/80 hover:bg-indigo-100 active:scale-95 disabled:opacity-50 text-indigo-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
+              title="Download official PDF receipt file"
+            >
+              {isGeneratingPdf ? (
+                <Loader2 className="w-4 h-4 animate-spin text-indigo-600 shrink-0" />
+              ) : (
+                <Download className="w-4 h-4 text-indigo-600 shrink-0" />
+              )}
+              <span>Download PDF</span>
+            </button>
+
+            {/* 4. Print Voucher */}
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="flex items-center justify-center gap-1.5 py-2.5 px-3 border border-slate-200 hover:bg-slate-50 active:scale-95 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs"
+            >
+              <Printer className="h-4 w-4 shrink-0" />
+              <span>Print</span>
+            </button>
+          </div>
+
+          {/* 5. Close Button */}
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
+            className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
           >
             Close
           </button>

@@ -20,7 +20,7 @@ const DashboardOverviewTab = dynamic(() => import("@/components/admin/DashboardO
   loading: ConsoleLoadingFallback,
   ssr: false,
 });
-const FeeCollectTab = dynamic(() => import("@/components/admin/FeeCollectTab"), {
+const FeeCollectTab = dynamic(() => import("@/components/shared/FeeCollectTab"), {
   loading: ConsoleLoadingFallback,
   ssr: false,
 });

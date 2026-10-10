@@ -965,7 +965,7 @@ export default function SchoolSetupTab({
                             <input
                               type="text"
                               required
-                              placeholder="e.g. 8423926608@upi"
+                              placeholder="e.g. yourschool@okaxis / 9876543210@ybl"
                               value={acc.upiId}
                               onChange={(e) => handleUpdateUpiAccount(acc.id, { upiId: e.target.value })}
                               className="w-full text-xs font-bold py-1.5 px-2.5 border border-slate-200 rounded-xl outline-none bg-white focus:border-indigo-600 shadow-2xs font-mono"

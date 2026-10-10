@@ -11,25 +11,32 @@ const INTEGRATIONS_FILE = path.join(process.cwd(), "src/data/integrations.json")
 
 async function handleSync(request: Request) {
   try {
-    // 1. Authorization: Allow Vercel Cron, CRON_SECRET, or Authenticated Staff
+    // 1. Authorization. H6 fix: do NOT trust the `x-vercel-cron` header or a
+    //    `vercel-cron` User-Agent on their own — any external caller can spoof them
+    //    to trigger a full (expensive) Google Sheets sync. The automated caller must
+    //    present the shared CRON_SECRET. Vercel Cron automatically sends
+    //    `Authorization: Bearer <CRON_SECRET>` when the CRON_SECRET env var is set,
+    //    so this authenticates the real scheduled job while rejecting spoofed headers.
     const cronSecret = process.env.CRON_SECRET;
     const authHeader = request.headers.get("authorization");
-    const isVercelCron =
-      request.headers.get("x-vercel-cron") === "1" ||
-      (request.headers.get("user-agent") || "").toLowerCase().includes("vercel-cron");
     const url = new URL(request.url);
     const queryKey = url.searchParams.get("key");
 
     let isAuthorized = false;
 
-    if (isVercelCron) {
-      isAuthorized = true;
-    } else if (cronSecret && cronSecret.length >= 8) {
+    if (cronSecret && cronSecret.length >= 8) {
       if (authHeader === `Bearer ${cronSecret}` || queryKey === cronSecret) {
         isAuthorized = true;
       }
+    } else {
+      // Secure default: without a configured secret, automated/anonymous callers are
+      // never authorized. Set CRON_SECRET in the environment to enable Vercel Cron.
+      console.warn(
+        "[CRON API] CRON_SECRET is not configured; automated cron is disabled. Only authenticated ADMIN/ACCOUNTANT can trigger a manual sync."
+      );
     }
 
+    // 2. Allow an authenticated staff member (ADMIN/ACCOUNTANT) to trigger a manual sync.
     if (!isAuthorized) {
       const authUser = await getAuthUser(request);
       if (authUser && (authUser.role === "ADMIN" || authUser.role === "ACCOUNTANT")) {

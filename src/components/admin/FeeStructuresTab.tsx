@@ -659,7 +659,7 @@ export default function FeeStructuresTab({
               </div>
             ) : (
               <div className="overflow-x-auto border border-slate-200/80 rounded-xl">
-                <table className="w-full text-left border-collapse">
+                <table className="w-full text-left border-collapse mobile-table-to-cards">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200/80">
                       <th className="py-3 px-4 text-[9px] font-black uppercase text-slate-400 tracking-wider">Class &amp; Section</th>
@@ -693,14 +693,14 @@ export default function FeeStructuresTab({
                   <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-700">
                     {/* Fallback Row */}
                     <tr className="hover:bg-slate-50/50 bg-indigo-50/40 border-b-2 border-indigo-200 shadow-sm relative z-10">
-                      <td className="py-4 px-4 bg-indigo-100/30">
+                      <td data-label="Class" className="py-4 px-4 bg-indigo-100/30">
                         <div className="font-black text-indigo-800 text-xs flex items-center gap-1.5">
                           <Settings className="h-3.5 w-3.5" /> Global Default
                         </div>
                         <div className="text-[9px] text-indigo-600 font-bold mt-1 leading-tight">Applied to all classes unless overridden below</div>
                       </td>
                       {cleanFeeHeads.map((head) => (
-                        <td key={head.name} className="py-2 px-4">
+                        <td key={head.name} data-label={head.name} className="py-2 px-4">
                           <div className="flex items-center gap-1">
                             <span className="text-[9px] text-slate-400 font-bold">Rs.</span>
                             <input
@@ -720,7 +720,7 @@ export default function FeeStructuresTab({
                           </div>
                         </td>
                       ))}
-                      <td className="py-2.5 px-4 text-center">
+                      <td data-label="Save" className="py-2.5 px-4 text-center">
                         <button
                           type="button"
                           onClick={() => handleSaveClassGrid("All", "All")}
@@ -744,7 +744,7 @@ export default function FeeStructuresTab({
                         }, 0);
                         return (
                           <tr key={cls.id} className="hover:bg-slate-50/50">
-                            <td className="py-3 px-4">
+                            <td data-label="Class" className="py-3 px-4">
                               <div className="font-bold text-slate-800 text-xs">Class {cls.name} &mdash; {cls.section}</div>
                               {annualTotal > 0 && (
                                 <div className="text-[9px] text-emerald-600 font-bold mt-0.5">
@@ -753,7 +753,7 @@ export default function FeeStructuresTab({
                               )}
                             </td>
                             {cleanFeeHeads.map((head) => (
-                              <td key={head.name} className="py-2.5 px-4">
+                              <td key={head.name} data-label={head.name} className="py-2.5 px-4">
                                 <div className="flex items-center gap-1">
                                   <span className="text-[9px] text-slate-400 font-bold">Rs.</span>
                                   <input
@@ -773,7 +773,7 @@ export default function FeeStructuresTab({
                                 </div>
                               </td>
                             ))}
-                            <td className="py-2.5 px-4 text-center">
+                            <td data-label="Save" className="py-2.5 px-4 text-center">
                               <button
                                 type="button"
                                 onClick={() => handleSaveClassGrid(cls.id, cls.name)}

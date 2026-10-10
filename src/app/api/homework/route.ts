@@ -152,8 +152,11 @@ export async function DELETE(request: Request) {
   const authUser = await getAuthUser(request);
   if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  if (authUser.role !== "ADMIN") {
-    return NextResponse.json({ error: "Forbidden. Admin access required." }, { status: 403 });
+  // T2: teachers manage homework for any class (same open-teacher policy as marks),
+  // so allow ADMIN or TEACHER to delete. Previously ADMIN-only, which made the
+  // teacher UI's delete button silently 403 while showing a false success toast.
+  if (authUser.role !== "ADMIN" && authUser.role !== "TEACHER") {
+    return NextResponse.json({ error: "Forbidden. Admin or teacher access required." }, { status: 403 });
   }
 
   try {

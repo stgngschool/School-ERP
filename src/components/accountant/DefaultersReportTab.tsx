@@ -19,6 +19,24 @@ import {
   sortClasses
 } from "@/lib/classUtils";
 
+/**
+ * Actual CASH collected on a charge (in paisa).
+ * H1 fix: a fully/partially waived charge (RTE / 100% discount) has totalPaid === 0
+ * even when status === "PAID". The old `d.totalPaid || (isPaid ? original : 0)`
+ * treated that 0 as falsy and counted the FULL fee as cash — inflating collections.
+ * When totalPaid is a real number we trust it (0 means ₹0 cash was received). Only
+ * for legacy records missing the field do we fall back to (original − discount),
+ * floored at 0 (a 100%-waived charge therefore contributes ₹0, not the full fee).
+ */
+function getCashCollected(d: MockDueItem): number {
+  if (typeof d.totalPaid === "number") return d.totalPaid;
+  const isPaid = d.status === "PAID" || d.amount <= 0;
+  if (!isPaid) return 0;
+  const gross = d.originalAmount ?? d.amount;
+  const disc = d.totalDiscount ?? 0;
+  return Math.max(0, gross - disc);
+}
+
 interface DefaultersReportTabProps {
   students: MockStudent[];
   dueItems: MockDueItem[];
@@ -143,7 +161,7 @@ export default function DefaultersReportTab({
       const unpaidDues = unpaidDuesMap.get(s.id) || [];
       const overdueAmt = unpaidDues.reduce((sum, d) => sum + d.amount, 0);
       const totalPaid = allDues.reduce(
-        (sum, d) => sum + (d.totalPaid || (d.status === "PAID" ? d.originalAmount || d.amount : 0)),
+        (sum, d) => sum + (getCashCollected(d)),
         0
       );
 
@@ -230,11 +248,11 @@ export default function DefaultersReportTab({
       const duesA = studentDuesMap.get(a.id) || [];
       const duesB = studentDuesMap.get(b.id) || [];
       const paidA = duesA.reduce(
-        (sum, d) => sum + (d.totalPaid || (d.status === "PAID" ? d.originalAmount || d.amount : 0)),
+        (sum, d) => sum + (getCashCollected(d)),
         0
       );
       const paidB = duesB.reduce(
-        (sum, d) => sum + (d.totalPaid || (d.status === "PAID" ? d.originalAmount || d.amount : 0)),
+        (sum, d) => sum + (getCashCollected(d)),
         0
       );
 
@@ -308,116 +326,98 @@ export default function DefaultersReportTab({
         .sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || ""));
       const unpaidDues = unpaidDuesMap.get(std.id) || [];
       const totalFee = allDues.reduce((s, d) => s + (d.originalAmount || d.amount), 0);
-      const totalPaid = allDues.reduce((s, d) => {
-        const isPaid = d.status === "PAID" || d.amount <= 0;
-        return s + (d.totalPaid || (isPaid ? (d.originalAmount || d.amount) : 0));
-      }, 0);
+      const totalPaid = allDues.reduce((s, d) => s + getCashCollected(d), 0);
       const totalDiscount = allDues.reduce((s, d) => s + (d.totalDiscount || 0), 0);
       const fullYearRemainingDue = Math.max(0, totalFee - totalPaid - totalDiscount);
       const overdueTillNow = unpaidDues.reduce((s, d) => s + d.amount, 0);
 
       return (
-        <div className="space-y-5 animate-fade-in bg-white border border-slate-200 rounded-2xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.03)] student-statement-print-area">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-4 print:hidden">
+        <div className="space-y-3.5 sm:space-y-5 animate-fade-in bg-transparent sm:bg-white border-0 sm:border border-slate-200 rounded-2xl p-0 sm:p-6 shadow-none sm:shadow-[0_4px_20px_rgba(0,0,0,0.03)] student-statement-print-area text-left">
+          <div className="flex items-center justify-between gap-2 pb-1 sm:pb-3 border-b-0 sm:border-b border-slate-100 print:hidden">
             <button
               onClick={() => setExpandedStudentId(null)}
-              className="flex items-center gap-1.5 text-xs font-black text-indigo-600 hover:text-indigo-700 transition-colors cursor-pointer group"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white sm:bg-transparent shadow-xs sm:shadow-none text-xs font-black text-indigo-700 hover:text-indigo-800 transition-all cursor-pointer group shrink-0"
             >
-              <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" /> Back to Dues Report
+              <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
+              <span>Back</span>
             </button>
 
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold text-slate-400">Class:</span>
-              <span className="text-xs font-black text-slate-800 bg-slate-100 px-2.5 py-1 rounded-lg">
-                {std.class} - {std.section}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <span className="text-[11px] font-black text-slate-700 bg-white sm:bg-slate-100 px-2.5 py-1 rounded-xl shadow-xs sm:shadow-none border border-slate-200/50 sm:border-transparent">
+                Cl {std.class}-{std.section}
               </span>
-              <span className="text-[10px] font-bold text-slate-400 ml-2">Roll No:</span>
-              <span className="text-xs font-black text-slate-800 bg-slate-100 px-2.5 py-1 rounded-lg">
-                {std.rollNo || "—"}
+              <span className="text-[11px] font-black text-slate-700 bg-white sm:bg-slate-100 px-2.5 py-1 rounded-xl shadow-xs sm:shadow-none border border-slate-200/50 sm:border-transparent">
+                Roll: {std.rollNo || "—"}
               </span>
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-gradient-to-r from-slate-900 to-indigo-950 rounded-2xl p-5 text-white shadow-md hardware-accelerated">
-            <div className="flex items-center gap-4">
+          <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 rounded-2xl p-4 sm:p-5 text-white shadow-md space-y-3 sm:space-y-0 sm:flex sm:items-center sm:justify-between sm:gap-4 hardware-accelerated">
+            <div className="flex items-start sm:items-center gap-3 sm:gap-4">
               {std.photoUrl ? (
                 <img
                   src={std.photoUrl}
                   alt={std.name}
-                  className="h-14 w-14 rounded-2xl object-cover border-2 border-white/20 shadow-md"
+                  className="h-12 w-12 sm:h-14 sm:w-14 rounded-2xl object-cover border-2 border-white/20 shadow-md shrink-0"
                 />
               ) : (
-                <div className="h-14 w-14 rounded-2xl bg-indigo-500/20 border-2 border-white/20 flex items-center justify-center font-black text-xl text-indigo-200 uppercase">
+                <div className="h-12 w-12 sm:h-14 sm:w-14 rounded-2xl bg-indigo-500/20 border-2 border-white/20 flex items-center justify-center font-black text-lg sm:text-xl text-indigo-200 uppercase shrink-0">
                   {std.name.substring(0, 2)}
                 </div>
               )}
-              <div>
+              <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="text-lg font-black tracking-tight">{std.name}</h3>
+                  <h3 className="text-base sm:text-lg font-black tracking-tight truncate">{std.name}</h3>
                   {std.isRte && (
-                    <span className="text-[9px] font-black bg-amber-400/20 border border-amber-400/40 text-amber-300 px-2 py-0.5 rounded-full">
+                    <span className="text-[9px] font-black bg-amber-400/20 border border-amber-400/40 text-amber-300 px-2 py-0.5 rounded-full shrink-0">
                       RTE
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-3 mt-1 text-xs text-indigo-200 font-semibold flex-wrap">
-                  <span>
-                    ADM: <strong className="text-white">{std.admissionNo}</strong>
-                  </span>
-                  <span>•</span>
-                  <span>
-                    Father: <strong className="text-white">{std.fatherName || std.parentName}</strong>
-                  </span>
-                  <span>•</span>
-                  <span>
-                    Phone: <strong className="text-white">{std.fatherMobile || std.parentPhone}</strong>
-                  </span>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1 mt-2 text-[11px] font-medium text-indigo-200 sm:flex sm:items-center sm:gap-3 sm:flex-wrap">
+                  <p className="truncate"><span className="text-slate-400 text-[9px] block sm:inline sm:mr-1">ADM:</span><strong className="text-white font-bold">{std.admissionNo}</strong></p>
+                  <p className="truncate"><span className="text-slate-400 text-[9px] block sm:inline sm:mr-1">Father:</span><strong className="text-white font-bold">{std.fatherName || std.parentName || "—"}</strong></p>
+                  <p className="truncate"><span className="text-slate-400 text-[9px] block sm:inline sm:mr-1">Phone:</span><strong className="text-white font-bold">{std.fatherMobile || std.motherMobile || std.parentPhone || "—"}</strong></p>
                   {std.familyCode && (
-                    <>
-                      <span>•</span>
-                      <span>
-                        Family: <strong className="text-white">{std.familyCode}</strong>
-                      </span>
-                    </>
+                    <p className="truncate"><span className="text-slate-400 text-[9px] block sm:inline sm:mr-1">Family:</span><strong className="text-white font-bold">{std.familyCode}</strong></p>
                   )}
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-3 self-stretch sm:self-auto justify-between sm:justify-end border-t sm:border-t-0 border-white/10 pt-3 sm:pt-0">
-              <div className="text-right">
+            <div className="grid grid-cols-2 gap-2.5 sm:flex sm:items-center sm:gap-3 border-t sm:border-t-0 border-white/10 pt-3 sm:pt-0">
+              <div className="bg-white/5 sm:bg-transparent rounded-xl p-2.5 sm:p-0 text-left sm:text-right border border-white/5 sm:border-0">
                 <span className="text-[9px] font-bold text-indigo-300 uppercase tracking-widest block">Total Paid</span>
-                <span className="text-base font-black text-emerald-400">{formatP(totalPaid)}</span>
+                <span className="text-sm sm:text-base font-black text-emerald-400 block mt-0.5">{formatP(totalPaid)}</span>
               </div>
-              <div className="h-8 w-px bg-white/10" />
-              <div className="text-right">
+              <div className="hidden sm:block h-8 w-px bg-white/10" />
+              <div className="bg-white/5 sm:bg-transparent rounded-xl p-2.5 sm:p-0 text-left sm:text-right border border-white/5 sm:border-0">
                 <span className="text-[9px] font-bold text-rose-300 uppercase tracking-widest block">
                   Overdue Till Now
                 </span>
-                <span className="text-base font-black text-rose-400">{formatP(overdueTillNow)}</span>
+                <span className="text-sm sm:text-base font-black text-rose-400 block mt-0.5">{formatP(overdueTillNow)}</span>
               </div>
             </div>
           </div>
 
-          <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-            <div className="bg-slate-50 px-5 py-3 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+          <div className="border-0 sm:border border-slate-200 rounded-2xl overflow-hidden shadow-none sm:shadow-sm">
+            <div className="bg-white sm:bg-slate-50 px-4 py-3 sm:px-5 sm:py-3 rounded-2xl sm:rounded-none mb-3 sm:mb-0 border-0 sm:border-b border-slate-200 flex items-center justify-between flex-wrap gap-2 shadow-xs sm:shadow-none">
               <div className="flex items-center gap-2">
                 <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">
-                  Session Fee Ledger Statement ({allDues.length} Head Entries)
+                  Fee Ledger Statement ({allDues.length})
                 </h4>
                 {loadingStudentStatement && (
-                  <span className="flex items-center gap-1.5 text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full animate-pulse">
-                    <Loader2 className="w-3 h-3 animate-spin" /> Syncing database ledger...
+                  <span className="flex items-center gap-1.5 text-[9px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full animate-pulse">
+                    <Loader2 className="w-2.5 h-2.5 animate-spin" /> Syncing...
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-3">
-                <span className="text-[11px] font-bold text-slate-500">Academic Session 2026-2027</span>
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => refreshStudentBilling && refreshStudentBilling(std.id)}
                   disabled={loadingStudentStatement}
-                  className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-50 sm:bg-transparent text-[10px] font-bold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
                   title="Reload ledger from database"
                 >
                   <RotateCcw className={`w-3 h-3 ${loadingStudentStatement ? "animate-spin" : ""}`} /> Refresh
@@ -426,16 +426,16 @@ export default function DefaultersReportTab({
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className="w-full text-left border-collapse mobile-table-to-cards">
                 <thead>
                   <tr className="bg-slate-100/80 border-b border-slate-200 text-slate-500 text-[9px] font-black uppercase tracking-wider">
-                    <th className="py-3 px-5">Due Date</th>
-                    <th className="py-3 px-5">Fee Details</th>
-                    <th className="py-3 px-5 text-right">Amount</th>
-                    <th className="py-3 px-5 text-right text-amber-600">Concession</th>
-                    <th className="py-3 px-5 text-right text-emerald-600">Paid</th>
-                    <th className="py-3 px-5 text-right text-rose-600">Due</th>
-                    <th className="py-3 px-5 text-center">Status</th>
+                    <th className="py-2.5 px-4">Due Date</th>
+                    <th className="py-2.5 px-4">Fee Head</th>
+                    <th className="py-2.5 px-4 text-right">Amount</th>
+                    <th className="py-2.5 px-4 text-right text-amber-600">Discount</th>
+                    <th className="py-2.5 px-4 text-right text-emerald-600">Paid</th>
+                    <th className="py-2.5 px-4 text-right text-rose-600">Due</th>
+                    <th className="py-2.5 px-4 text-center">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-700">
@@ -449,23 +449,23 @@ export default function DefaultersReportTab({
                           isOverdue ? "bg-rose-50/15" : isPaid ? "bg-emerald-50/5" : ""
                         } hover:bg-slate-50/40 transition-colors cv-auto-row`}
                       >
-                        <td className="py-3 px-5 text-slate-500 font-bold whitespace-nowrap">{d.dueDate || "—"}</td>
-                        <td className="py-3 px-5 font-bold text-slate-800">{d.name}</td>
-                        <td className="py-3 px-5 text-right text-slate-700">
+                        <td className="py-3 px-4 text-slate-500 font-bold whitespace-nowrap" data-label="Due Date">{d.dueDate || "—"}</td>
+                        <td className="py-3 px-4 font-bold text-slate-800" data-label="Fee Head">{d.name}</td>
+                        <td className="py-3 px-4 text-right text-slate-700" data-label="Amount">
                           {formatP(d.originalAmount || d.amount)}
                         </td>
-                        <td className="py-3 px-5 text-right text-amber-500 font-bold">
+                        <td className="py-3 px-4 text-right text-amber-500 font-bold" data-label="Discount">
                           {d.totalDiscount ? formatP(d.totalDiscount) : "—"}
                         </td>
-                        <td className="py-3 px-5 text-right text-emerald-600 font-black">
-                          {d.totalPaid ? formatP(d.totalPaid) : isPaid ? formatP(d.originalAmount || d.amount) : "—"}
+                        <td className="py-3 px-4 text-right text-emerald-600 font-black" data-label="Paid">
+                          {isPaid || getCashCollected(d) > 0 ? formatP(getCashCollected(d)) : "—"}
                         </td>
-                        <td className="py-3 px-5 text-right text-rose-600 font-black">
+                        <td className="py-3 px-4 text-right text-rose-600 font-black" data-label="Due">
                           {!isPaid ? formatP(d.amount) : "—"}
                         </td>
-                        <td className="py-3 px-5 text-center">
+                        <td className="py-3 px-4 text-center" data-label="Status">
                           <span
-                            className={`inline-block text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                            className={`inline-block text-[8px] font-black uppercase px-2 py-0.5 rounded-full border ${
                               isPaid
                                 ? "bg-emerald-50 border-emerald-200 text-emerald-700"
                                 : isOverdue
@@ -883,7 +883,7 @@ export default function DefaultersReportTab({
                   const unpaidDues = unpaidDuesMap.get(std.id) || [];
                   const totalFee = allDues.reduce((s, d) => s + (d.originalAmount || d.amount), 0);
                   const totalPaid = allDues.reduce(
-                    (s, d) => s + (d.totalPaid || (d.status === "PAID" ? d.originalAmount || d.amount : 0)),
+                    (s, d) => s + (getCashCollected(d)),
                     0
                   );
                   const totalDue = unpaidDues.reduce((s, d) => s + d.amount, 0);
@@ -1042,7 +1042,7 @@ export default function DefaultersReportTab({
             const unpaidDues = unpaidDuesMap.get(std.id) || [];
             const totalFee = allDues.reduce((s, d) => s + (d.originalAmount || d.amount), 0);
             const totalPaid = allDues.reduce(
-              (s, d) => s + (d.totalPaid || (d.status === "PAID" ? d.originalAmount || d.amount : 0)),
+              (s, d) => s + (getCashCollected(d)),
               0
             );
             const totalDue = unpaidDues.reduce((s, d) => s + d.amount, 0);

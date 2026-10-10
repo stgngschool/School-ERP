@@ -14,6 +14,7 @@ import {
   BookOpen,
   ArrowRight,
   UserX,
+  User,
 } from "lucide-react";
 import { formatP, toRupees, toPaisa, numberToIndianWords } from "@/lib/currency";
 import { getISTDateString, getTodayIST } from "@/lib/dateUtils";
@@ -78,6 +79,18 @@ export default function FeeCollectTab({
   const [manualReceiptNo, setManualReceiptNo] = useState("");
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
 
+  // ── H3: Stable idempotency key for the CURRENT fee-collection transaction.
+  // The server de-duplicates receipts by this key, so a retry after a timed-out
+  // (but actually committed) request MUST reuse the same key. We therefore keep it
+  // in a ref and only reset it — forcing a fresh key on the next submit — when the
+  // transaction's identity genuinely changes (student, selected dues, per-due
+  // amounts/discounts, or payment method), or after a payment succeeds. Generating
+  // a brand-new UUID on every click (the old behaviour) defeated the dedup entirely.
+  const idempotencyKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    idempotencyKeyRef.current = null;
+  }, [selectedStudentId, selectedDueIds, payingState, discountsState, payMethod]);
+
   // Multi-UPI receiving accounts
   const upiAccounts: SchoolUpiAccount[] = useMemo(() => {
     if (schoolInfo.upiAccounts && schoolInfo.upiAccounts.length > 0) {
@@ -110,6 +123,13 @@ export default function FeeCollectTab({
   const activeUpiAccount = useMemo(() => {
     return upiAccounts.find((a) => a.id === selectedUpiAccountId) || upiAccounts[0] || null;
   }, [upiAccounts, selectedUpiAccountId]);
+
+  // ── UPI configuration guard: treat UPI as available ONLY when a real VPA exists.
+  // No hardcoded fallback VPA — prevents parents' money going to an unknown/wrong account.
+  const hasUpiConfigured = useMemo(() => {
+    const vpa = activeUpiAccount?.upiId || schoolInfo.upiId || "";
+    return Boolean(vpa && String(vpa).trim());
+  }, [activeUpiAccount, schoolInfo]);
 
   // Debounced search state (200ms) to prevent jitter and rapid filtering
   const [searchQuery, setSearchQuery] = useState("");
@@ -457,7 +477,15 @@ export default function FeeCollectTab({
       }
 
       const cleanManualNo = manualReceiptNo && manualReceiptNo.trim() ? manualReceiptNo.trim() : undefined;
-      const clientKey = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : undefined;
+      // H3: reuse the stable key for this transaction; generate one only if absent
+      // (first attempt). Retries of the same transaction send the SAME key.
+      if (!idempotencyKeyRef.current) {
+        idempotencyKeyRef.current =
+          typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `fc-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      }
+      const clientKey = idempotencyKeyRef.current;
       const upiDetails = payMethod === "UPI" && activeUpiAccount ? {
         upiAccountId: activeUpiAccount.id,
         upiId: activeUpiAccount.upiId,
@@ -481,6 +509,7 @@ export default function FeeCollectTab({
       }
 
       if (payRes.receipt?.isDuplicateRetry) {
+        idempotencyKeyRef.current = null;
         showToast("warning", "Payment Already Recorded", `This transaction was already recorded earlier (Receipt #${payRes.receipt.receiptNo}).`);
         setIsSubmittingPayment(false);
         await (refreshStudentBilling ? refreshStudentBilling(siblingStudentIds) : refreshBilling());
@@ -603,6 +632,7 @@ export default function FeeCollectTab({
       };
 
       onOpenReceipt(enrichReceiptWithStudentDetails(matchedReceipt, students));
+      idempotencyKeyRef.current = null;
       setSelectedDueIds([]);
       setDiscountsState({});
       setPayingState({});
@@ -724,16 +754,16 @@ export default function FeeCollectTab({
                                   RTE Govt Quota
                                 </span>
                               )}
-                              {s.familyCode && (
-                                <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded border border-slate-200">
-                                  Fam: {s.familyCode}
-                                </span>
-                              )}
                             </div>
-                            <div className="text-[10px] font-semibold text-slate-400 mt-0.5">
+                            <div className="text-[10px] font-semibold text-slate-400 mt-0.5 truncate">
                               Class {s.class}-{s.section} &bull; Adm:{" "}
-                              <span className="text-slate-600 font-bold">{s.admissionNo}</span> &bull; Parent:{" "}
-                              <span className="text-slate-600">{s.parentName || s.fatherName || "N/A"}</span>
+                              <span className="text-slate-600 font-bold">{s.admissionNo}</span>
+                              {s.familyCode ? (
+                                <> &bull; Fam: <span className="text-slate-600 font-medium">{s.familyCode}</span></>
+                              ) : null}
+                              {s.parentName || s.fatherName ? (
+                                <> &bull; Parent: <span className="text-slate-600">{s.parentName || s.fatherName}</span></>
+                              ) : null}
                             </div>
                           </div>
                         </div>
@@ -768,77 +798,91 @@ export default function FeeCollectTab({
         </div>
       ) : (
         /* SELECTED STUDENT FLOW (Fees detail and Collect Fee) */
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6 pb-28 sm:pb-8">
           {/* Header Student Panel Card */}
-          <div className="bg-slate-900 sm:rounded-2xl rounded-xl p-3 sm:p-5 text-white shadow-lg relative overflow-hidden flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="bg-gradient-to-br from-slate-900 via-slate-850 to-indigo-950 sm:rounded-2xl rounded-2xl p-4 sm:p-5 text-white shadow-md relative overflow-hidden flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-0 sm:border border-slate-800">
             <div className="absolute right-0 top-0 h-40 w-40 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
 
-            <div className="space-y-2">
-              <button
-                onClick={() => {
-                  setSelectedStudentId("");
-                  setSearchQuery("");
-                  setSelectedDueIds([]);
-                  setDiscountsState({});
-                  setPayingState({});
-                }}
-                className="inline-flex items-center gap-1.5 text-[10px] font-extrabold uppercase text-slate-300 hover:text-white transition-colors cursor-pointer bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-700/50"
-              >
-                <ArrowLeft className="h-3.5 w-3.5" /> Back to Search
-              </button>
+            <div className="space-y-3 flex-1">
+              {/* Top Navigation & Profile Action Row */}
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedStudentId("");
+                    setSearchQuery("");
+                    setSelectedDueIds([]);
+                    setDiscountsState({});
+                    setPayingState({});
+                  }}
+                  className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-200 hover:text-white transition-colors cursor-pointer bg-white/10 hover:bg-white/15 active:scale-95 px-3 py-1.5 rounded-xl border border-white/10"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" /> Back to Search
+                </button>
 
-              <button
-                type="button"
-                onClick={() => selectedStudentId && onViewStudentProfile(selectedStudentId)}
-                className="inline-flex items-center gap-1.5 text-[10px] font-extrabold uppercase text-indigo-300 hover:text-white transition-colors cursor-pointer bg-slate-850/80 hover:bg-slate-800 px-2.5 py-1 rounded-lg border border-indigo-700/50 ml-2"
-              >
-                View Full Profile
-              </button>
-
-              <div className="flex flex-wrap items-center gap-2.5">
-                <h3 className="text-lg font-black tracking-tight">{selectedStudentObj?.name}</h3>
-                <span className="text-[9px] font-black uppercase bg-indigo-600/60 text-white px-2 py-0.5 rounded-full border border-indigo-500/50">
-                  Class {selectedStudentObj?.class}-{selectedStudentObj?.section}
-                </span>
-                {selectedStudentObj?.isRte && (
-                  <span className="text-[9px] font-black uppercase bg-purple-500/30 text-purple-200 px-2.5 py-0.5 rounded-full border border-purple-400/50 flex items-center gap-1">
-                    <GraduationCap className="h-3 w-3" /> RTE Free Education (Govt Quota)
-                  </span>
-                )}
-                {selectedStudentObj?.familyCode && (
-                  <span className="text-[9px] font-black uppercase bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30 flex items-center gap-1">
-                    <Users className="h-3 w-3" /> Family Code: {selectedStudentObj?.familyCode}
-                  </span>
-                )}
+                <button
+                  type="button"
+                  onClick={() => selectedStudentId && onViewStudentProfile(selectedStudentId)}
+                  className="inline-flex items-center gap-1.5 text-[11px] font-bold text-indigo-200 hover:text-white transition-colors cursor-pointer bg-indigo-500/20 hover:bg-indigo-500/30 active:scale-95 px-3 py-1.5 rounded-xl border border-indigo-400/30"
+                >
+                  <User className="h-3.5 w-3.5" /> View Full Profile
+                </button>
               </div>
 
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-1 text-slate-300 text-[10px] font-semibold">
-                <p>
-                  Admission No: <span className="font-bold text-white">{selectedStudentObj?.admissionNo}</span>
-                </p>
-                <p>
-                  Parent Name: <span className="font-bold text-white">{selectedStudentObj?.parentName}</span>
-                </p>
-                <p>
-                  Parent Phone: <span className="font-bold text-white">{selectedStudentObj?.parentPhone}</span>
-                </p>
-                {siblingStudents.length > 1 && (
-                  <p className="text-amber-400">
-                    Siblings: <span className="font-bold">{siblingStudents.length} Children Linked</span>
+              {/* Student Name & Core Badges */}
+              <div className="space-y-1.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-xl sm:text-2xl font-black tracking-tight text-white">{selectedStudentObj?.name}</h3>
+                  <span className="text-[10px] font-black uppercase bg-indigo-500/30 text-indigo-200 px-2.5 py-0.5 rounded-full border border-indigo-400/30">
+                    Class {selectedStudentObj?.class}-{selectedStudentObj?.section}
+                  </span>
+                  {selectedStudentObj?.isRte && (
+                    <span className="text-[10px] font-black uppercase bg-purple-500/30 text-purple-200 px-2.5 py-0.5 rounded-full border border-purple-400/40 flex items-center gap-1">
+                      <GraduationCap className="h-3 w-3" /> RTE Free Quota
+                    </span>
+                  )}
+                  {selectedStudentObj?.familyCode && (
+                    <span className="text-[10px] font-bold uppercase bg-amber-400/15 text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-400/30 flex items-center gap-1">
+                      <Users className="h-3 w-3" /> Family Code: {selectedStudentObj?.familyCode}
+                    </span>
+                  )}
+                </div>
+
+                {/* Symmetrical 2/4-Col Info Strip */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-1.5 text-slate-300 text-[11px] font-medium pt-0.5">
+                  <p>
+                    Adm No: <span className="font-bold text-white">{selectedStudentObj?.admissionNo}</span>
                   </p>
-                )}
+                  <p className="truncate">
+                    Parent: <span className="font-bold text-white">{selectedStudentObj?.parentName || selectedStudentObj?.fatherName || "N/A"}</span>
+                  </p>
+                  <p>
+                    Phone: <span className="font-bold text-white">{selectedStudentObj?.parentPhone || "N/A"}</span>
+                  </p>
+                  {siblingStudents.length > 1 && (
+                    <p className="text-amber-300 font-semibold">
+                      Siblings: <span className="font-bold text-amber-200">{siblingStudents.length} Children Linked</span>
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
 
-            <div className="text-left lg:text-right space-y-1 shrink-0 bg-slate-800/40 p-3.5 rounded-xl border border-slate-700/30">
-              <span className="text-[8px] font-black uppercase text-slate-400 block tracking-wider">
-                Total Outstanding Dues
-              </span>
-              <h3
-                className={`text-xl font-black tracking-tight ${
-                  selectedStudentObj?.isRte ? "text-purple-300" : "text-rose-400"
-                }`}
-              >
+            {/* Total Outstanding Dues Card */}
+            <div className="shrink-0 bg-white/5 border border-white/10 p-3.5 sm:p-4 rounded-2xl flex items-center justify-between lg:flex-col lg:items-end lg:text-right gap-2">
+              <div>
+                <span className="text-[9px] font-black uppercase text-slate-400 block tracking-wider">
+                  Total Outstanding Dues
+                </span>
+                <p className={`text-[10px] font-bold ${selectedStudentObj?.isRte ? "text-purple-300" : "text-slate-300"}`}>
+                  {loadingStudentDues
+                    ? "Checking verified ledger..."
+                    : selectedStudentObj?.isRte
+                    ? "100% Free Education (Govt RTE)"
+                    : `${selectedStudentDues.length} Unpaid Invoices`}
+                </p>
+              </div>
+              <h3 className={`text-2xl sm:text-xl font-black tracking-tight ${selectedStudentObj?.isRte ? "text-purple-300" : "text-rose-400"}`}>
                 {loadingStudentDues ? (
                   <span className="text-slate-300 text-sm flex items-center gap-1.5 font-bold">
                     <Loader2 className="h-4 w-4 animate-spin inline text-indigo-400" /> Verifying...
@@ -847,92 +891,69 @@ export default function FeeCollectTab({
                   formatP(selectedStudentDues.reduce((sum, item) => sum + item.amount, 0))
                 )}
               </h3>
-              <p
-                className={`text-[9px] font-bold ${
-                  selectedStudentObj?.isRte ? "text-purple-300" : "text-slate-300"
-                }`}
-              >
-                {loadingStudentDues
-                  ? "Checking verified ledger..."
-                  : selectedStudentObj?.isRte
-                  ? "100% Free Education (Govt RTE)"
-                  : `${selectedStudentDues.length} Unpaid Invoices`}
-              </p>
             </div>
           </div>
-          {/* Main Ledger & Checkout Panel Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-            {/* Left Col: Invoice List grouped by Child */}
-            <div className="lg:col-span-3 space-y-4">
-              {/* Sibling Tabs */}
-              {siblingStudents.length > 1 && (
-                <div className="space-y-1.5">
-                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">
-                    Select Family Member
-                  </label>
-                  <div className="flex flex-wrap gap-2 pb-1.5 border-b border-slate-100">
-                    {siblingStudents.map((child) => {
-                      const childDues = selectedStudentDues.filter((d) => d.studentId === child.id);
-                      const childDueSum = childDues.reduce((sum, d) => sum + d.amount, 0);
-                      const childSelectedCount = childDues.filter((d) => selectedDueIds.includes(d.id)).length;
-                      const isActive = (activeSiblingTabId || selectedStudentId) === child.id;
 
-                      return (
-                        <button
-                          key={child.id}
-                          type="button"
-                          onClick={() => setActiveSiblingTabId(child.id)}
-                          className={`flex items-center gap-3 px-3 py-2 rounded-xl border transition-all duration-150 cursor-pointer text-left shrink-0 ${
-                            isActive
-                              ? "bg-indigo-600 border-indigo-600 shadow-md shadow-indigo-600/10 text-white"
-                              : "bg-white border-slate-200/80 text-slate-600 hover:border-slate-350"
-                          }`}
-                        >
-                          <span
-                            className={`w-2 h-2 rounded-full shrink-0 ${
-                              isActive ? "bg-white animate-pulse" : "bg-indigo-500"
-                            }`}
-                          />
-                          <div>
-                            <span className="block text-xs font-black tracking-tight leading-tight">{child.name}</span>
-                            <span
-                              className={`block text-[8px] mt-0.5 font-bold ${
-                                isActive ? "text-indigo-200" : "text-slate-400"
-                              }`}
-                            >
-                              Class {child.class}-{child.section} &bull;{" "}
-                              {loadingStudentDues ? "verifying..." : `${childDues.length} dues (${formatP(childDueSum)})`}
-                            </span>
-                          </div>
-                          {childSelectedCount > 0 && (
-                            <span
-                              className={`text-[8px] font-black px-1.5 py-0.5 rounded-full shrink-0 ${
-                                isActive
-                                  ? "bg-white text-indigo-700 font-extrabold"
-                                  : "bg-indigo-50 text-indigo-700 border border-indigo-100"
-                              }`}
-                            >
-                              {childSelectedCount} selected
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
+          {/* Main Ledger & Checkout Panel Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 sm:gap-6 min-w-0 max-w-full overflow-hidden">
+            {/* Left Col: Invoice List grouped by Child */}
+            <div className="lg:col-span-3 space-y-3 sm:space-y-4 min-w-0 max-w-full">
+              {/* Sibling Tabs - Clean Minimal Pill Strip */}
+              {siblingStudents.length > 1 && (
+                <div className="-mx-3 px-3 sm:mx-0 sm:px-0 overflow-x-auto no-scrollbar flex items-center gap-2 py-0.5">
+                  {siblingStudents.map((child) => {
+                    const childDues = selectedStudentDues.filter((d) => d.studentId === child.id);
+                    const childDueSum = childDues.reduce((sum, d) => sum + d.amount, 0);
+                    const childSelectedCount = childDues.filter((d) => selectedDueIds.includes(d.id)).length;
+                    const isActive = (activeSiblingTabId || selectedStudentId) === child.id;
+
+                    return (
+                      <button
+                        key={child.id}
+                        type="button"
+                        onClick={() => setActiveSiblingTabId(child.id)}
+                        className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer active:scale-95 shadow-2xs ${
+                          isActive
+                            ? "bg-slate-900 text-white shadow-sm ring-1 ring-slate-900"
+                            : "bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/90"
+                        }`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? "bg-emerald-400" : "bg-indigo-500"}`} />
+                        <span>{child.name}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-black ${
+                          isActive ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"
+                        }`}>
+                          {child.class}-{child.section}
+                        </span>
+                        {childSelectedCount > 0 ? (
+                          <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full shrink-0 ${
+                            isActive ? "bg-white text-slate-900" : "bg-indigo-50 text-indigo-700"
+                          }`}>
+                            {childSelectedCount} sel
+                          </span>
+                        ) : childDueSum > 0 ? (
+                          <span className={`text-[10px] font-extrabold ${isActive ? "text-rose-300" : "text-rose-600"}`}>
+                            {formatP(childDueSum)}
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                  <div className="w-2 shrink-0 sm:hidden" />
                 </div>
               )}
 
               {/* Header with Quick Presets */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 border border-slate-100 p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border-0 sm:border border-slate-200/70 p-3.5 sm:p-4 rounded-2xl shadow-sm">
                 <div>
                   <h4 className="text-xs font-black uppercase text-slate-800 tracking-wider">Outstanding Invoices</h4>
-                  <p className="text-[9px] text-slate-400 font-semibold mt-0.5">
+                  <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
                     Select and configure the dues to collect now.
                   </p>
                 </div>
 
                 {selectedStudentDues.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-1.5">
+                  <div className="grid grid-cols-3 gap-1.5 sm:flex sm:items-center sm:gap-2 w-full sm:w-auto">
                     <button
                       type="button"
                       onClick={() => {
@@ -948,9 +969,11 @@ export default function FeeCollectTab({
                         setDiscountsState(newD);
                         setPayingState(newP);
                       }}
-                      className="text-[9px] font-black uppercase text-indigo-700 hover:text-indigo-850 bg-indigo-50 border border-indigo-100 px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors"
+                      className="text-[10px] font-black uppercase text-indigo-700 hover:text-indigo-850 bg-indigo-50/90 hover:bg-indigo-100 border border-indigo-200/80 px-2 sm:px-3 py-2 rounded-xl cursor-pointer transition-colors text-center truncate active:scale-95"
+                      title="Select All Invoices (All Children)"
                     >
-                      Select All (All Children)
+                      <span className="sm:hidden">All Items</span>
+                      <span className="hidden sm:inline">Select All (All Children)</span>
                     </button>
                     <button
                       type="button"
@@ -984,9 +1007,11 @@ export default function FeeCollectTab({
                           return next;
                         });
                       }}
-                      className="text-[9px] font-black uppercase text-slate-700 hover:text-slate-850 bg-slate-100 border border-slate-200 px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors"
+                      className="text-[10px] font-black uppercase text-slate-700 hover:text-slate-850 bg-slate-100 hover:bg-slate-200/80 border border-slate-200 px-2 sm:px-3 py-2 rounded-xl cursor-pointer transition-colors text-center truncate active:scale-95"
+                      title="Select Active Child Only"
                     >
-                      Select Active Child
+                      <span className="sm:hidden">Active Child</span>
+                      <span className="hidden sm:inline">Select Active Child</span>
                     </button>
                     <button
                       type="button"
@@ -995,7 +1020,7 @@ export default function FeeCollectTab({
                         setDiscountsState({});
                         setPayingState({});
                       }}
-                      className="text-[9px] font-black uppercase text-rose-700 bg-rose-50 border border-rose-100 px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors"
+                      className="text-[10px] font-black uppercase text-rose-700 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 border border-rose-200/80 px-2 sm:px-3 py-2 rounded-xl cursor-pointer transition-colors text-center truncate active:scale-95"
                     >
                       Clear
                     </button>
@@ -1003,54 +1028,55 @@ export default function FeeCollectTab({
                 )}
               </div>
 
-              {/* Quick Select Term & Quarter Filters */}
+              {/* Quick Select Term & Quarter Filters - Full Bleed on Mobile */}
               {selectedStudentDues.length > 0 && (
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[9px] font-black uppercase tracking-wider touch-scroll-x bg-slate-50/80 p-2 rounded-xl border border-slate-200/60">
-                  <span className="text-slate-400 flex items-center gap-1 shrink-0 mr-1 font-bold">
+                <div className="-mx-3 px-3 sm:mx-0 sm:px-0 overflow-x-auto no-scrollbar flex items-center gap-1.5 py-1 text-[10px] font-bold tracking-wide">
+                  <span className="text-slate-500 flex items-center gap-1 shrink-0 font-extrabold text-[10px] uppercase tracking-wider mr-0.5">
                     <Sparkles className="h-3 w-3 text-amber-500" /> Fast Select:
                   </span>
                   <button
                     type="button"
                     onClick={() => handleSelectQuickFilter("Q1")}
-                    className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 active:scale-95 text-indigo-700 border border-indigo-200/80 rounded-lg transition-all cursor-pointer shrink-0 shadow-2xs"
+                    className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 active:scale-95 text-indigo-700 border border-indigo-200/80 rounded-xl transition-all cursor-pointer shrink-0 shadow-2xs font-bold"
                   >
                     Q1 (Apr-Jun)
                   </button>
                   <button
                     type="button"
                     onClick={() => handleSelectQuickFilter("Q2")}
-                    className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 active:scale-95 text-indigo-700 border border-indigo-200/80 rounded-lg transition-all cursor-pointer shrink-0 shadow-2xs"
+                    className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 active:scale-95 text-indigo-700 border border-indigo-200/80 rounded-xl transition-all cursor-pointer shrink-0 shadow-2xs font-bold"
                   >
                     Q2 (Jul-Sep)
                   </button>
                   <button
                     type="button"
                     onClick={() => handleSelectQuickFilter("Q3")}
-                    className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 active:scale-95 text-indigo-700 border border-indigo-200/80 rounded-lg transition-all cursor-pointer shrink-0 shadow-2xs"
+                    className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 active:scale-95 text-indigo-700 border border-indigo-200/80 rounded-xl transition-all cursor-pointer shrink-0 shadow-2xs font-bold"
                   >
                     Q3 (Oct-Dec)
                   </button>
                   <button
                     type="button"
                     onClick={() => handleSelectQuickFilter("Q4")}
-                    className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 active:scale-95 text-indigo-700 border border-indigo-200/80 rounded-lg transition-all cursor-pointer shrink-0 shadow-2xs"
+                    className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 active:scale-95 text-indigo-700 border border-indigo-200/80 rounded-xl transition-all cursor-pointer shrink-0 shadow-2xs font-bold"
                   >
                     Q4 (Jan-Mar)
                   </button>
                   <button
                     type="button"
                     onClick={() => handleSelectQuickFilter("TUITION")}
-                    className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 active:scale-95 text-purple-700 border border-purple-200/80 rounded-lg transition-all cursor-pointer shrink-0 shadow-2xs"
+                    className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 active:scale-95 text-purple-700 border border-purple-200/80 rounded-xl transition-all cursor-pointer shrink-0 shadow-2xs font-bold"
                   >
                     Tuition Only
                   </button>
                   <button
                     type="button"
                     onClick={() => handleSelectQuickFilter("FULL_YEAR")}
-                    className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 active:scale-95 text-emerald-700 border border-emerald-200/80 rounded-lg transition-all cursor-pointer shrink-0 shadow-2xs"
+                    className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 active:scale-95 text-emerald-700 border border-emerald-200/80 rounded-xl transition-all cursor-pointer shrink-0 shadow-2xs font-bold"
                   >
                     Full Year
                   </button>
+                  <div className="w-2 shrink-0 sm:hidden" />
                 </div>
               )}
 
@@ -1112,8 +1138,8 @@ export default function FeeCollectTab({
                   }
 
                   return (
-                    <div className="border border-slate-100 rounded-2xl bg-white overflow-hidden shadow-sm">
-                      <div className="bg-slate-50/50 px-4 py-3 border-b border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-700">
+                    <div className="border-0 sm:border border-slate-200/70 rounded-2xl bg-white overflow-hidden shadow-sm">
+                      <div className="bg-slate-50/80 px-4 py-3 border-b border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-700">
                         <div className="flex items-center gap-1.5">
                           <span className="font-extrabold text-slate-800">{child.name}</span>
                           <span className="text-[9px] font-black uppercase bg-indigo-50 border border-indigo-100 text-indigo-700 px-2 py-0.5 rounded">
@@ -1125,7 +1151,7 @@ export default function FeeCollectTab({
                         </span>
                       </div>
 
-                      <div className="divide-y divide-slate-100 p-2 space-y-2 max-h-[480px] overflow-y-auto">
+                      <div className="divide-y divide-slate-100 p-2 sm:p-2.5 space-y-2 sm:max-h-[520px] sm:overflow-y-auto">
                         {childDues.map((due) => {
                           const isChecked = selectedDueIds.includes(due.id);
                           const isPast = due.isCurrentSession === false;
@@ -1264,9 +1290,9 @@ export default function FeeCollectTab({
                                       </div>
                                     </div>
                                   </div>
-                                  <div className="flex flex-col justify-end text-right">
-                                    <span className="block text-slate-500 mb-1">Arrears Remaining</span>
-                                    <span className="text-xs font-black text-rose-600 py-2">
+                                  <div className="flex sm:flex-col justify-between sm:justify-end items-center sm:items-end text-right bg-slate-50 sm:bg-transparent px-3 py-1.5 sm:p-0 rounded-xl">
+                                    <span className="block text-slate-500 sm:mb-1">Arrears Remaining</span>
+                                    <span className="text-xs font-black text-rose-600 sm:py-2">
                                       {formatP(
                                         due.amount -
                                           (discountsState[due.id] ?? 0) -
@@ -1286,7 +1312,7 @@ export default function FeeCollectTab({
               </div>
 
               {/* Family Payment History */}
-              <div className="pt-4 border-t border-slate-100 space-y-3">
+              <div className="bg-white border-0 sm:border border-slate-200/70 rounded-2xl shadow-sm p-3.5 sm:p-4 space-y-3 min-w-0 max-w-full overflow-hidden">
                 <h4 className="text-xs font-black uppercase text-slate-800 tracking-wider">Family Payment History</h4>
                 <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
                   {receipts
@@ -1301,20 +1327,19 @@ export default function FeeCollectTab({
                         onClick={() => {
                           onOpenReceipt(enrichReceiptWithStudentDetails(rec, students));
                         }}
-                        className="p-3 border border-slate-100 bg-slate-50/40 hover:bg-slate-100/60 rounded-xl flex items-center justify-between text-xs font-semibold text-slate-700 cursor-pointer transition-all hover:scale-[1.01] duration-150"
+                        className="p-3 border border-slate-100 bg-slate-50/60 hover:bg-slate-100/80 rounded-xl flex items-center justify-between gap-3 text-xs font-semibold text-slate-700 cursor-pointer transition-all duration-150 min-w-0 w-full overflow-hidden"
                       >
-                        <div>
-                          <p className="font-bold text-slate-800 break-words">{rec.studentName}</p>
-                          <p className="text-[9px] text-slate-400 mt-0.5">
-                            Receipt: {rec.receiptNo}{" "}
-                            {rec.manualReceiptNo ? `(Book #: ${rec.manualReceiptNo})` : ""} | {rec.createdAt}
+                        <div className="min-w-0 flex-1">
+                          <p className="font-bold text-slate-800 text-xs truncate">{rec.studentName}</p>
+                          <p className="text-[10px] text-slate-400 mt-0.5 truncate font-mono">
+                            Receipt: {rec.receiptNo}{rec.manualReceiptNo ? ` (Book: ${rec.manualReceiptNo})` : ""}
                           </p>
-                          <p className="text-[8px] text-indigo-600 font-bold max-w-sm truncate mt-0.5">
+                          <p className="text-[9px] text-indigo-600 font-medium truncate mt-0.5">
                             {rec.details}
                           </p>
                         </div>
                         <div className="text-right flex flex-col items-end gap-1 shrink-0">
-                          <p className="font-extrabold text-slate-800">{formatP(rec.amount)}</p>
+                          <p className="font-extrabold text-slate-800 text-sm">{formatP(rec.amount)}</p>
                           <span className="text-[8px] font-black uppercase bg-green-50 text-green-700 border border-green-100 px-1.5 py-0.5 rounded">
                             {rec.method} Verified
                           </span>
@@ -1335,11 +1360,11 @@ export default function FeeCollectTab({
               </div>
             </div>
             {/* Right Col: Checkout & Calculators Panel */}
-            <div className="lg:col-span-2 space-y-4">
-              <div className="bg-slate-50 border border-slate-200/60 sm:rounded-2xl rounded-xl p-3 sm:p-4.5 space-y-4 shadow-[0_2px_4px_rgba(0,0,0,0.01)]">
+            <div className="lg:col-span-2 space-y-4 min-w-0 max-w-full">
+              <div className="bg-white border-0 sm:border border-slate-200/70 sm:rounded-2xl rounded-2xl p-3.5 sm:p-5 space-y-4 shadow-sm">
                 <div>
                   <h4 className="text-xs font-black uppercase text-slate-800 tracking-wider">Payment Summary</h4>
-                  <p className="text-[9px] text-slate-400 font-semibold mt-0.5">Review totals and payment mode details.</p>
+                  <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Review totals and payment mode details.</p>
                 </div>
 
                 {/* Quick FIFO Allocation Tool */}
@@ -1351,19 +1376,19 @@ export default function FeeCollectTab({
                     <p className="text-[9px] text-slate-400 font-semibold leading-tight">
                       Type an amount to automatically select and pay the oldest outstanding dues first.
                     </p>
-                    <div className="flex gap-2 mt-1">
+                    <div className="flex items-center gap-2 mt-1">
                       <input
                         type="number"
                         min="0"
                         placeholder="Enter amount (e.g. 5000)..."
                         value={fifoAmount}
                         onChange={(e) => setFifoAmount(e.target.value)}
-                        className="flex-1 text-xs font-bold py-1.5 px-3 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-650"
+                        className="min-w-0 flex-1 text-xs font-bold py-2 px-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-600 shadow-2xs"
                       />
                       <button
                         type="button"
                         onClick={() => handleFIFOAllocate(fifoAmount)}
-                        className="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer shadow-sm shrink-0"
+                        className="bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm shrink-0 whitespace-nowrap"
                       >
                         Allocate
                       </button>
@@ -1461,7 +1486,27 @@ export default function FeeCollectTab({
                   {/* UPI Dynamic QR Code Selector */}
                   {payMethod === "UPI" && (() => {
                     const netPayable = selectedDueIds.reduce((sum, id) => sum + (payingState[id] ?? 0), 0);
-                    const destUpiId = activeUpiAccount?.upiId || schoolInfo.upiId || "8423926608@upi";
+                    const destUpiId = activeUpiAccount?.upiId || schoolInfo.upiId || "";
+
+                    // ── No hardcoded fallback VPA. If UPI is not configured, never render a
+                    // payable QR pointing to a random/unknown account — show a clear setup alert.
+                    if (!destUpiId || !String(destUpiId).trim()) {
+                      return (
+                        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 text-center animate-in slide-in-from-top-2 duration-200">
+                          <div className="h-10 w-10 rounded-full bg-amber-100 border border-amber-200 flex items-center justify-center">
+                            <UserX className="h-5 w-5 text-amber-600" />
+                          </div>
+                          <p className="text-xs font-black text-amber-900 leading-snug">
+                            School UPI not configured.
+                          </p>
+                          <p className="text-[10px] font-semibold text-amber-700 leading-relaxed max-w-[240px]">
+                            Please add school UPI in settings to accept digital payments. You can still
+                            collect via Cash, Cheque or Bank Transfer.
+                          </p>
+                        </div>
+                      );
+                    }
+
                     const destMerchant = activeUpiAccount?.merchantName || schoolInfo.upiMerchantName || schoolInfo.name || "St. GNG School";
                     const upiLink = `upi://pay?pa=${destUpiId}&pn=${encodeURIComponent(
                       destMerchant
@@ -1762,14 +1807,16 @@ export default function FeeCollectTab({
 
                   <button
                     type="submit"
-                    disabled={selectedDueIds.length === 0 || isSubmittingPayment}
-                    className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-indigo-600/10 cursor-pointer flex items-center justify-center gap-2"
+                    disabled={selectedDueIds.length === 0 || isSubmittingPayment || (payMethod === "UPI" && !hasUpiConfigured)}
+                    className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] text-white rounded-2xl text-sm font-extrabold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-indigo-600/15 cursor-pointer flex items-center justify-center gap-2"
                   >
                     {isSubmittingPayment ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin text-white" />
                         <span>Generating Official Receipt...</span>
                       </>
+                    ) : payMethod === "UPI" && !hasUpiConfigured ? (
+                      <span>UPI Not Configured — Choose Another Method</span>
                     ) : (
                       <span>
                         Generate Receipt & Record (

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { isAbsentRemark } from "@/lib/marksAbsence";
 import {
   Search,
   Calendar,
@@ -501,7 +502,7 @@ export default function PublicResultSection() {
                                 </td>
                               )}
                               <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                                {s.remarks?.toUpperCase().includes("ABSENT") ? (
+                                {isAbsentRemark(s.remarks) ? (
                                   <span className="inline-flex items-center justify-center font-black text-rose-700 bg-rose-50 px-2.5 py-0.5 rounded-md border border-rose-200 whitespace-nowrap text-xs min-w-[64px]">
                                     AB (Absent)
                                   </span>
