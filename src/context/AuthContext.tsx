@@ -974,25 +974,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           );
           apiFetch("/api/events", {}, 10000, true).then((data) => data && setEventsList(data));
 
-          // ── EGRESS-FIX-5 (continued): Fetch full billing data lazily 3s after dashboard.
-          // Summary is already shown. Now load receipts, ledger, and dueItems silently.
+          // ── EGRESS P1: The dashboard renders from the lightweight /api/billing/summary.
+          // The detailed receipts/ledger/dues that the Overview, Defaulters, and
+          // Ledger views read are hydrated ONCE here via a freshness-guarded, in-flight-
+          // locked full load — instead of the old blast that fired on every hydration
+          // and was re-fired across every device every 3 minutes by the sync probe.
           setTimeout(() => {
-            apiFetch("/api/billing?all=true", {}, 15000, true).then((data) => {
-              if (data) {
-                setLedgerEntries(data.ledgerEntries || []);
-                setReceipts(data.receipts || []);
-                setDueItems(data.dueItems || []);
-                if (data.summary) {
-                  setBillingSummary(data.summary);
-                  setLocalCache("gng_cached_billingSummary", data.summary);
-                  lastReceiptCountRef.current = data.summary.totalReceiptsCount ?? data.receipts?.length ?? 0;
-                  lastCollectedPaisaRef.current = data.summary.totalCollectedPaisa ?? 0;
-                }
-                setLocalCache("gng_cached_dueItems", data.dueItems || []);
-                setLocalCache("gng_cached_receipts", data.receipts || []);
-                setLocalCache("gng_cached_ledgerEntries", data.ledgerEntries || []);
-              }
-            });
+            loadFullBillingRef.current?.(false);
           }, 3000);
         }
 
@@ -1046,9 +1034,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isRefreshingBillingRef = useRef(false);
   const lastReceiptCountRef = useRef<number | null>(null);
   const lastCollectedPaisaRef = useRef<number | null>(null);
+  // ── EGRESS P1: timestamp of the last successful FULL billing load + a ref handle
+  // so refreshData (defined earlier with a stable [] closure) can trigger it.
+  const lastFullBillingLoadRef = useRef<number>(0);
+  const loadFullBillingRef = useRef<((force?: boolean) => Promise<void>) | null>(null);
 
-  const refreshBilling = async (force = true) => {
+  // ── EGRESS P1: Single source of truth for the FULL school-wide billing dataset
+  // (receipts + ledger + dues) consumed by the Overview, Defaulters, and Ledger views.
+  // Guarded by (a) an in-flight lock and (b) a 3-minute freshness window, so repeated
+  // view mounts / tab switches / background probes do NOT each trigger a ~4 MB pull.
+  // Pass force=true (e.g. right after a mutation) to bypass the freshness window.
+  const FULL_BILLING_FRESH_MS = 3 * 60 * 1000;
+  const loadFullBilling = async (force = false) => {
     if (isRefreshingBillingRef.current) return;
+    if (!force && Date.now() - lastFullBillingLoadRef.current < FULL_BILLING_FRESH_MS) return;
     isRefreshingBillingRef.current = true;
     try {
       if (force) {
@@ -1069,10 +1068,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLocalCache("gng_cached_dueItems", data.dueItems || []);
         setLocalCache("gng_cached_receipts", data.receipts || []);
         setLocalCache("gng_cached_ledgerEntries", data.ledgerEntries || []);
+        lastFullBillingLoadRef.current = Date.now();
       }
     } finally {
       isRefreshingBillingRef.current = false;
     }
+  };
+  loadFullBillingRef.current = loadFullBilling;
+
+  // Public refresh — defaults to a FORCED full refresh. Used after mutations that
+  // change many charges/receipts across students (bill generation, admissions,
+  // fee-structure clones, the manual Ledger "Sync" button, etc.) so those views
+  // reflect the change immediately. Routine reads should rely on the guarded
+  // loadFullBilling() freshness window instead.
+  const refreshBilling = async (force = true) => {
+    await loadFullBilling(force);
   };
 
   const isRefreshingStudentBillingRef = useRef<Set<string>>(new Set());
@@ -1179,7 +1189,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Update refs immediately so parallel or subsequent checks do not re-trigger
             lastReceiptCountRef.current = totalReceiptsCount;
             lastCollectedPaisaRef.current = totalCollectedPaisa;
-            await refreshBilling(true);
+
+            // ── EGRESS P1: A payment happened on another device. The old code pulled
+            // the ENTIRE school ledger (~4 MB) here on every open device every 3 min.
+            // Instead we (a) merge the authoritative lightweight totals into the summary
+            // cards, and (b) pull only the FIRST PAGE of recent receipts and merge new
+            // vouchers in-place. The full dataset already in memory is left intact and is
+            // reconciled by the next guarded full load / explicit refresh.
+            setBillingSummary((prev: any) => {
+              const merged = { ...(prev || {}), ...res.summary };
+              setLocalCache("gng_cached_billingSummary", merged);
+              return merged;
+            });
+
+            const page = await apiFetch("/api/billing?page=1&limit=50", {}, 10000, false);
+            if (page && Array.isArray(page.receipts) && page.receipts.length > 0) {
+              setReceipts((prev) => {
+                const safePrev = Array.isArray(prev) ? prev : [];
+                const freshMap = new Map<string, MockReceipt>(
+                  page.receipts.map((r: MockReceipt) => [r.id, r])
+                );
+                const existingIds = new Set(safePrev.map((r) => r.id));
+                const updated = safePrev.map((r) => freshMap.get(r.id) || r);
+                const brandNew = page.receipts.filter((r: MockReceipt) => !existingIds.has(r.id));
+                const next = [...brandNew, ...updated];
+                setLocalCache("gng_cached_receipts", next);
+                return next;
+              });
+            }
           }
         }
       } catch (e) {}

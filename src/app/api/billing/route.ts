@@ -385,7 +385,8 @@ export async function GET(request: Request) {
       db.ledgerEntry.findMany({
         where: ledgerWhere,
         skip: (studentIdParam || allParam) ? 0 : skip,
-        take: studentIdParam ? 500 : (allParam ? 5000 : limit),
+        // ── EGRESS P1: clamp the full-ledger (raw audit view) ceiling 5000 -> 2500
+        take: studentIdParam ? 500 : (allParam ? 2500 : limit),
         orderBy: { createdAt: "desc" },
         select: {
           id: true,
@@ -401,7 +402,8 @@ export async function GET(request: Request) {
       db.receipt.findMany({
         where: receiptWhere,
         skip: (studentIdParam || allParam) ? 0 : skip,
-        take: studentIdParam ? 500 : (allParam ? 5000 : limit),
+        // ── EGRESS P1: clamp receipts ceiling 5000 -> 2000 (safe; <2k receipts today)
+        take: studentIdParam ? 500 : (allParam ? 2000 : limit),
         select: {
           id: true,
           studentId: true,
@@ -460,7 +462,10 @@ export async function GET(request: Request) {
       // ── Bounded charges query: covers full school academic year without truncation
       db.ledgerEntry.findMany({
         where: chargesWhere,
-        take: studentIdParam ? 500 : (allParam ? 25000 : limit),
+        // ── EGRESS P1: safety clamp 25000 -> 15000. Dues/defaulters need every current
+        // charge; 15000 covers the full current session without truncation while
+        // bounding worst-case growth.
+        take: studentIdParam ? 500 : (allParam ? 15000 : limit),
         skip: (studentIdParam || allParam) ? 0 : skip,
         orderBy: { createdAt: "desc" },
         select: {
@@ -474,7 +479,8 @@ export async function GET(request: Request) {
       // ── Bounded discounts query: covers full school academic year without truncation
       db.ledgerEntry.findMany({
         where: discountsWhere,
-        take: studentIdParam ? 200 : (allParam ? 10000 : limit),
+        // ── EGRESS P1: safety clamp 10000 -> 6000 (well above current discount volume)
+        take: studentIdParam ? 200 : (allParam ? 6000 : limit),
         skip: (studentIdParam || allParam) ? 0 : skip,
         orderBy: { createdAt: "desc" },
         select: {
@@ -812,10 +818,18 @@ export async function GET(request: Request) {
       };
     });
 
+    // ── EGRESS P1: On the lightweight default (non-"all", non-student) listing path,
+    // return only ACTIVE UNPAID dues instead of streaming fully-paid historical charges.
+    // The full paid+unpaid set is still returned for scoped (studentId) and all=true
+    // report loads that the Overview / Defaulters / Ledger views depend on.
+    const dueItemsOut = (!allParam && !studentIdParam)
+      ? formattedDues.filter((d) => d.status === "UNPAID")
+      : formattedDues;
+
     const result = {
       ledgerEntries: formattedLedger,
       receipts: formattedReceipts,
-      dueItems: formattedDues,
+      dueItems: dueItemsOut,
       summary,
       pagination: {
         page,

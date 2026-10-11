@@ -139,6 +139,23 @@ export async function POST(request: Request) {
       if (!cleanSheetId) {
         return NextResponse.json({ error: "Missing spreadsheetId. Please configure it in School Settings." }, { status: 400 });
       }
+      // ── EGRESS P1: Debounce accidental repeated manual full syncs (double-clicks).
+      try {
+        const { db } = await import("@/lib/db");
+        const cfgRow = await db.schoolConfig.findUnique({ where: { id: "singleton" } });
+        const lastSyncedStr = (cfgRow?.data as any)?.googleLastSynced;
+        if (lastSyncedStr) {
+          const elapsed = Date.now() - new Date(lastSyncedStr).getTime();
+          if (elapsed >= 0 && elapsed < 2 * 60 * 1000) {
+            return NextResponse.json({
+              success: true,
+              skipped: true,
+              lastSynced: lastSyncedStr,
+              message: `A full Google Sheets sync ran ${Math.round(elapsed / 1000)}s ago. Skipped to conserve bandwidth — please retry in a couple of minutes.`,
+            });
+          }
+        }
+      } catch (e) {}
       const result = await syncAllDataToSheet(cleanSheetId);
       const nowIso = new Date().toISOString();
       try {

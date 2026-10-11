@@ -23,10 +23,12 @@ async function handleSync(request: Request) {
     const queryKey = url.searchParams.get("key");
 
     let isAuthorized = false;
+    let isCron = false;
 
     if (cronSecret && cronSecret.length >= 8) {
       if (authHeader === `Bearer ${cronSecret}` || queryKey === cronSecret) {
         isAuthorized = true;
+        isCron = true;
       }
     } else {
       // Secure default: without a configured secret, automated/anonymous callers are
@@ -56,6 +58,30 @@ async function handleSync(request: Request) {
         { error: "No Google Spreadsheet ID configured. Please set it in School Settings." },
         { status: 400 }
       );
+    }
+
+    // ── EGRESS P1: Debounce accidental repeated MANUAL syncs so double/triple clicks
+    // don't each trigger a full multi-MB database dump. The scheduled cron (authorized
+    // via CRON_SECRET) is never rate-limited and always runs.
+    if (!isCron) {
+      const MANUAL_SYNC_COOLDOWN_MS = 2 * 60 * 1000;
+      try {
+        const cfgRow = await db.schoolConfig.findUnique({ where: { id: "singleton" } });
+        const lastSyncedStr = (cfgRow?.data as any)?.googleLastSynced;
+        if (lastSyncedStr) {
+          const elapsed = Date.now() - new Date(lastSyncedStr).getTime();
+          if (elapsed >= 0 && elapsed < MANUAL_SYNC_COOLDOWN_MS) {
+            return NextResponse.json({
+              success: true,
+              skipped: true,
+              lastSynced: lastSyncedStr,
+              message: `A Google Sheets sync ran ${Math.round(elapsed / 1000)}s ago. Skipped to conserve bandwidth — please retry in a couple of minutes.`,
+            });
+          }
+        }
+      } catch {
+        // Non-fatal: if the cooldown check fails, allow the sync to proceed.
+      }
     }
 
     // 3. Synchronize All 4 Google Sheets Modules

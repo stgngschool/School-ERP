@@ -230,18 +230,15 @@ function analyzeStudentMonthlyFees(std: any) {
 }
 
 /**
- * Synchronize the entire detailed Student Master Directory to Google Sheets (Tab: "Student Directory")
- * @param spreadsheetId Google Spreadsheet ID (from URL)
+ * ── EGRESS P1: Shared student fetch for the Directory + Fee Register tabs.
+ * Both tabs previously ran their OWN prisma.student.findMany, and each one pulled
+ * the ENTIRE ledger (~14k rows) via the ledgerEntries include — i.e. the whole
+ * ledger was transferred TWICE per sync. This single superset fetch is reused by
+ * both, eliminating the duplicate pull. The shape is the richer Fee Register
+ * projection; the Directory only reads entryType + amount, which are included here.
  */
-export async function syncStudentDirectoryToSheet(spreadsheetId: string) {
-  const auth = getGoogleAuth(["https://www.googleapis.com/auth/spreadsheets"]);
-  const sheets = google.sheets({ version: "v4", auth });
-
-  // 1. Ensure "Student Directory" tab exists
-  await ensureSheetTab(sheets, spreadsheetId, "Student Directory");
-
-  // 2. Fetch students with full master relations
-  const students = await prisma.student.findMany({
+async function fetchStudentsForSync() {
+  return prisma.student.findMany({
     include: {
       class: true,
       parentProfile: {
@@ -252,8 +249,15 @@ export async function syncStudentDirectoryToSheet(spreadsheetId: string) {
       concession: true,
       ledgerEntries: {
         select: {
+          id: true,
           entryType: true,
           amount: true,
+          description: true,
+          receiptItems: {
+            select: {
+              amount: true,
+            },
+          },
         },
       },
     },
@@ -263,6 +267,22 @@ export async function syncStudentDirectoryToSheet(spreadsheetId: string) {
       { admissionNumber: "asc" },
     ],
   });
+}
+
+/**
+ * Synchronize the entire detailed Student Master Directory to Google Sheets (Tab: "Student Directory")
+ * @param spreadsheetId Google Spreadsheet ID (from URL)
+ * @param preloadedStudents Optional pre-fetched students (shared with Fee Register to avoid a duplicate full-ledger pull)
+ */
+export async function syncStudentDirectoryToSheet(spreadsheetId: string, preloadedStudents?: any[]) {
+  const auth = getGoogleAuth(["https://www.googleapis.com/auth/spreadsheets"]);
+  const sheets = google.sheets({ version: "v4", auth });
+
+  // 1. Ensure "Student Directory" tab exists
+  await ensureSheetTab(sheets, spreadsheetId, "Student Directory");
+
+  // 2. Reuse the shared fetch when provided; otherwise fetch standalone
+  const students = preloadedStudents ?? await fetchStudentsForSync();
 
   const headers = [
     "Admission Number",
@@ -364,43 +384,15 @@ export async function syncStudentDirectoryToSheet(spreadsheetId: string) {
  * Synchronize the Month-by-Month Student Fee Register to Google Sheets (Tab: "Student Fee Register")
  * @param spreadsheetId Google Spreadsheet ID (from URL)
  */
-export async function syncStudentFeeRegisterToSheet(spreadsheetId: string) {
+export async function syncStudentFeeRegisterToSheet(spreadsheetId: string, preloadedStudents?: any[]) {
   const auth = getGoogleAuth(["https://www.googleapis.com/auth/spreadsheets"]);
   const sheets = google.sheets({ version: "v4", auth });
 
   // 1. Ensure "Student Fee Register" tab exists
   await ensureSheetTab(sheets, spreadsheetId, "Student Fee Register");
 
-  // 2. Fetch students with relations, concessions, and ledger entries with receipt item links
-  const students = await prisma.student.findMany({
-    include: {
-      class: true,
-      parentProfile: {
-        include: {
-          user: true,
-        },
-      },
-      concession: true,
-      ledgerEntries: {
-        select: {
-          id: true,
-          entryType: true,
-          amount: true,
-          description: true,
-          receiptItems: {
-            select: {
-              amount: true,
-            },
-          },
-        },
-      },
-    },
-    orderBy: [
-      { class: { name: "asc" } },
-      { class: { section: "asc" } },
-      { admissionNumber: "asc" },
-    ],
-  });
+  // 2. Reuse the shared fetch when provided; otherwise fetch standalone
+  const students = preloadedStudents ?? await fetchStudentsForSync();
 
   // 3. Define human-friendly headers
   const headers = [
@@ -515,8 +507,10 @@ export async function syncStudentFeeRegisterToSheet(spreadsheetId: string) {
  * Convenience wrapper to synchronize both Student Directory and Student Fee Register
  */
 export async function syncStudentsToSheet(spreadsheetId: string) {
-  const dirRes = await syncStudentDirectoryToSheet(spreadsheetId);
-  const feeRes = await syncStudentFeeRegisterToSheet(spreadsheetId);
+  // ── EGRESS P1: fetch students ONCE and share between both tabs
+  const students = await fetchStudentsForSync();
+  const dirRes = await syncStudentDirectoryToSheet(spreadsheetId, students);
+  const feeRes = await syncStudentFeeRegisterToSheet(spreadsheetId, students);
   return { success: true, count: dirRes.count, feeRegisterCount: feeRes.count };
 }
 
@@ -932,8 +926,11 @@ export async function syncReceiptsToSheet(spreadsheetId: string) {
  * @param spreadsheetId Google Spreadsheet ID
  */
 export async function syncAllDataToSheet(spreadsheetId: string) {
-  const dirRes = await syncStudentDirectoryToSheet(spreadsheetId);
-  const feeRes = await syncStudentFeeRegisterToSheet(spreadsheetId);
+  // ── EGRESS P1: fetch students ONCE and share between Directory + Fee Register
+  // (previously each tab pulled the entire ledger independently — a doubled dump).
+  const students = await fetchStudentsForSync();
+  const dirRes = await syncStudentDirectoryToSheet(spreadsheetId, students);
+  const feeRes = await syncStudentFeeRegisterToSheet(spreadsheetId, students);
   const recRes = await syncReceiptsToSheet(spreadsheetId);
   const mrkRes = await syncMarksToSheet(spreadsheetId);
 
