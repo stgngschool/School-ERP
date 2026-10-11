@@ -350,7 +350,7 @@ export default function LedgerReceiptsTab({
           })()}
 
           {/* Receipts Vouchers Container */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.015)]">
+          <div className="bg-white border-0 sm:border border-slate-200/80 rounded-2xl overflow-hidden shadow-sm">
             {(() => {
               const filtered = receipts.filter((r) => {
                 const matchesStaff =

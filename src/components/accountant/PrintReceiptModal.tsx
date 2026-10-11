@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import QRCode from "qrcode";
-import { Printer, X, CheckCircle2, AlertCircle, ShieldCheck, Download, Share2, Loader2 } from "lucide-react";
+import { Printer, X, CheckCircle2, AlertCircle, ShieldCheck } from "lucide-react";
 import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
 import { formatP, numberToIndianWords } from "@/lib/currency";
 import { getGroupedReceiptItems, getReceiptStudents, formatCompactParticulars, generateReceiptSecurityToken } from "@/lib/receipts";
@@ -28,7 +28,6 @@ export default function PrintReceiptModal({
   const [mounted, setMounted] = useState(false);
   const [receiptPageSize, setReceiptPageSize] = useState<"A4" | "A5">("A5");
   const [verifyQrUrl, setVerifyQrUrl] = useState<string>("");
-  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -69,83 +68,6 @@ export default function PrintReceiptModal({
   const groupedItems = getGroupedReceiptItems(activeReceipt.items || []);
   const isCompactFeeTable = groupedItems.length >= 4 || students.length >= 3;
   const hasDiscounts = (activeReceipt.discount || 0) > 0 || groupedItems.some((i: any) => (i.discount || 0) > 0);
-
-  const handleGeneratePdf = async (shareOnMobile: boolean = false) => {
-    const receiptElement = document.getElementById("receipt-print-area");
-    if (!receiptElement) return;
-
-    setIsGeneratingPdf(true);
-    try {
-      const { default: jsPDF } = await import("jspdf");
-      const { default: html2canvas } = await import("html2canvas-pro");
-
-      const canvas = await (html2canvas as any)(receiptElement, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: "#ffffff",
-        windowWidth: 1200,
-      });
-
-      const isA5 = receiptPageSize === "A5";
-      const pdf = new jsPDF({
-        orientation: isA5 ? "landscape" : "portrait",
-        unit: "mm",
-        format: isA5 ? "a5" : "a4",
-      });
-
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const margin = isA5 ? 5 : 8;
-      const maxPdfWidth = pageWidth - margin * 2;
-      const maxPdfHeight = pageHeight - margin * 2;
-
-      const canvasWidth = canvas.width;
-      const canvasHeight = canvas.height;
-      const ratio = canvasWidth / canvasHeight;
-
-      let imgWidth = maxPdfWidth;
-      let imgHeight = maxPdfWidth / ratio;
-
-      if (imgHeight > maxPdfHeight) {
-        imgHeight = maxPdfHeight;
-        imgWidth = maxPdfHeight * ratio;
-      }
-
-      const xOffset = margin + (maxPdfWidth - imgWidth) / 2;
-      const yOffset = margin + (maxPdfHeight - imgHeight) / 2;
-
-      const imgData = canvas.toDataURL("image/png");
-      pdf.addImage(imgData, "PNG", xOffset, yOffset, imgWidth, imgHeight, undefined, "FAST");
-
-      const studentNameClean = (students[0]?.name || "Student").replace(/[^a-zA-Z0-9_-]/g, "_");
-      const fileName = `Receipt-${activeReceipt.receiptNo}-${studentNameClean}.pdf`;
-
-      if (shareOnMobile && typeof navigator !== "undefined" && typeof navigator.share === "function") {
-        const pdfBlob = pdf.output("blob");
-        const pdfFile = new File([pdfBlob], fileName, { type: "application/pdf" });
-
-        if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
-          await navigator.share({
-            files: [pdfFile],
-            title: `Fee Receipt ${activeReceipt.receiptNo}`,
-            text: `Official Fee Receipt for ${students[0]?.name || "Student"} - ${schoolInfo.name || "St. GNG School"}`,
-          });
-          return;
-        }
-      }
-
-      // Fallback to direct download
-      pdf.save(fileName);
-    } catch (error: any) {
-      if (error?.name !== "AbortError") {
-        console.error("PDF generation error:", error);
-        alert("Unable to generate PDF. Please use Print Voucher to save as PDF.");
-      }
-    } finally {
-      setIsGeneratingPdf(false);
-    }
-  };
 
   const modalContent = (
     <div id="gng-receipt-print-portal">
@@ -330,7 +252,7 @@ export default function PrintReceiptModal({
         </div>
 
         {/* Printable Receipt Canvas with Mobile Pan Container */}
-        <div className="receipt-scroll-container w-full overflow-x-auto touch-pan-x pb-2 pt-0.5 rounded-2xl border border-slate-200/80 sm:border-0 bg-slate-50/50 sm:bg-transparent p-1 sm:p-0">
+        <div className="receipt-scroll-container w-full overflow-x-auto pb-2 pt-0.5 rounded-2xl border border-slate-200/80 sm:border-0 bg-slate-50/50 sm:bg-transparent p-1 sm:p-0">
           <div
             id="receipt-print-area"
             className={`border rounded-xl sm:rounded-2xl bg-white text-slate-900 shadow-sm relative flex flex-col min-w-[550px] sm:min-w-0 ${
@@ -776,67 +698,35 @@ export default function PrintReceiptModal({
         </div>
       </div>
 
-        {/* Modal Action Buttons */}
-        <div className="receipt-modal-actions no-print flex flex-col sm:flex-row gap-2 pt-1">
-          <div className="grid grid-cols-2 sm:flex sm:flex-1 gap-2">
-            {/* 1. WhatsApp Receipt (Text) */}
+        {/* Modal Action Buttons — sticky bottom bar for easy reach on mobile */}
+        <div className="receipt-modal-actions no-print sticky bottom-0 bg-white/95 backdrop-blur-md pt-2 pb-1 border-t border-slate-100 z-30 flex flex-col sm:flex-row gap-2">
+          <div className="grid grid-cols-1 sm:flex sm:flex-1 gap-2">
+            {/* 1. WhatsApp Share — primary direct redirect to parent's phone */}
             <button
               type="button"
               onClick={() => onSendWhatsApp(activeReceipt)}
-              className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-md shadow-emerald-600/15"
+              className="flex items-center justify-center gap-2 py-3 px-4 sm:flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-black transition-colors cursor-pointer shadow-md shadow-emerald-600/20"
             >
-              <WhatsAppIcon className="w-4 h-4 text-white shrink-0" />
-              <span>WhatsApp</span>
+              <WhatsAppIcon className="w-5 h-5 text-white shrink-0" />
+              <span>WhatsApp Share</span>
             </button>
 
-            {/* 2. Direct Share PDF (Mobile native share sheet to WhatsApp/Contacts) */}
-            <button
-              type="button"
-              disabled={isGeneratingPdf}
-              onClick={() => handleGeneratePdf(true)}
-              className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-indigo-600 hover:bg-indigo-700 active:scale-95 disabled:opacity-50 text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-md shadow-indigo-600/15"
-              title="Share PDF receipt directly via WhatsApp or device apps"
-            >
-              {isGeneratingPdf ? (
-                <Loader2 className="w-4 h-4 animate-spin text-white shrink-0" />
-              ) : (
-                <Share2 className="w-4 h-4 text-white shrink-0" />
-              )}
-              <span>Share PDF</span>
-            </button>
-
-            {/* 3. Download PDF */}
-            <button
-              type="button"
-              disabled={isGeneratingPdf}
-              onClick={() => handleGeneratePdf(false)}
-              className="flex items-center justify-center gap-1.5 py-2.5 px-3 border border-indigo-200 bg-indigo-50/80 hover:bg-indigo-100 active:scale-95 disabled:opacity-50 text-indigo-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
-              title="Download official PDF receipt file"
-            >
-              {isGeneratingPdf ? (
-                <Loader2 className="w-4 h-4 animate-spin text-indigo-600 shrink-0" />
-              ) : (
-                <Download className="w-4 h-4 text-indigo-600 shrink-0" />
-              )}
-              <span>Download PDF</span>
-            </button>
-
-            {/* 4. Print Voucher */}
+            {/* 2. Print Voucher */}
             <button
               type="button"
               onClick={() => window.print()}
-              className="flex items-center justify-center gap-1.5 py-2.5 px-3 border border-slate-200 hover:bg-slate-50 active:scale-95 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs"
+              className="flex items-center justify-center gap-1.5 py-3 px-4 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-2xs"
             >
               <Printer className="h-4 w-4 shrink-0" />
               <span>Print</span>
             </button>
           </div>
 
-          {/* 5. Close Button */}
+          {/* 3. Close Button */}
           <button
             type="button"
             onClick={onClose}
-            className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
+            className="py-3 px-5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
           >
             Close
           </button>
