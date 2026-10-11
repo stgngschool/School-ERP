@@ -86,6 +86,38 @@ export async function GET(request: Request) {
       }
     }
 
+    // ── P3: Scope TEACHER attendance to the students in their assigned classes.
+    // Previously a teacher fetched the WHOLE school's attendance (date-windowed) even
+    // though they only mark their own classes — wasted pooler egress and over-broad access.
+    // This mirrors the teacher scoping already used by /api/billing and /api/billing/summary.
+    // ADMIN/ACCOUNTANT remain school-wide; PARENT stays scoped above.
+    if (authUser.role === "TEACHER") {
+      const teacherProfile = await db.teacherProfile.findUnique({
+        where: { userId: authUser.userId },
+        include: { classes: { select: { id: true } } },
+      });
+      const classIds = teacherProfile?.classes.map((c) => c.id) || [];
+      if (classIds.length === 0) {
+        return NextResponse.json([]);
+      }
+      const classStudents = await db.student.findMany({
+        where: { classId: { in: classIds } },
+        select: { id: true },
+      });
+      const classStudentIds = classStudents.map((s) => s.id);
+      if (studentIdParam) {
+        if (!classStudentIds.includes(studentIdParam)) {
+          return NextResponse.json(
+            { error: "Forbidden. This student is not in your assigned classes." },
+            { status: 403 }
+          );
+        }
+        // studentId already applied to whereClause above.
+      } else {
+        whereClause.studentId = { in: classStudentIds };
+      }
+    }
+
     // ── AT-02: Bounded pagination retrieving total count and paged logs without hard truncation
     const [totalCount, logs] = await Promise.all([
       db.attendance.count({ where: whereClause }),

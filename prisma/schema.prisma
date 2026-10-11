@@ -135,6 +135,8 @@ model Class {
   // ── DB-05: Changed from plain String to ClassStatus enum ─────────────────
   status         ClassStatus    @default(ACTIVE)
 
+  // ── P3 / advisor 0001: cover the class-teacher foreign key
+  @@index([classTeacherId])
   @@unique([name, section])
 }
 
@@ -195,6 +197,10 @@ model Student {
   @@index([classId])
   @@index([name])
   @@index([status])
+  // ── P3 / advisor 0001: cover the concession & transport-stop foreign keys so
+  // joins, cascades, and SetNull deletes don't trigger sequential scans as Student grows.
+  @@index([concessionId])
+  @@index([transportStopId])
 }
 
 model Attendance {
