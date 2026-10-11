@@ -13,6 +13,45 @@ import { serverStudentsCache, clearServerStudentsCache } from "@/lib/cache/stude
 
 export const dynamic = "force-dynamic";
 
+// ── EGRESS P2: Lightweight roster/directory projection.
+// Drops the heavy PII/detail columns (aadhaar x3, dob, address, prev-school, emergency
+// contacts, tc/board numbers, income/occupation, religion/category/nationality, transport
+// detail, etc.) that ONLY the Edit Student modal prefill and the master-data Excel/CSV
+// export consume. Keeps everything the roster lists, student search, defaulter lists, and
+// the teacher dashboard actually render. The full record stays available via
+// GET /api/students/[id] and GET /api/students?full=true.
+async function loadSlimStudents(
+  where: Record<string, any>,
+  pagination: Record<string, number>
+): Promise<Record<string, any>[]> {
+  const rows = await db.student.findMany({
+    where,
+    ...pagination,
+    orderBy: { name: "asc" },
+    select: {
+      id: true, name: true, admissionNumber: true, rollNumber: true, gender: true,
+      status: true, isRte: true, isMarksheetClaimed: true, photoUrl: true, concessionId: true,
+      fatherName: true, fatherMobile: true, motherMobile: true, admissionDate: true,
+      class: { select: { name: true, section: true } },
+      parentProfile: { select: { familyCode: true, user: { select: { name: true, phone: true } } } },
+      concession: { select: { id: true, name: true, percentage: true, feeHeadName: true } },
+    },
+  });
+  return rows.map((s) => ({
+    id: s.id, name: s.name, admissionNo: s.admissionNumber, rollNo: s.rollNumber || "",
+    gender: s.gender || "", status: s.status || "ACTIVE", isRte: s.isRte,
+    isMarksheetClaimed: s.isMarksheetClaimed, photoUrl: s.photoUrl || "", concessionId: s.concessionId || "",
+    admissionDate: formatCanonicalDOBIso(s.admissionDate), admissionDateDisplay: formatCanonicalDOB(s.admissionDate),
+    fatherName: s.fatherName || "", fatherMobile: s.fatherMobile || "", motherMobile: s.motherMobile || "",
+    class: s.class.name, section: s.class.section,
+    parentName: s.parentProfile?.user?.name || "", parentPhone: s.parentProfile?.user?.phone || "",
+    familyCode: s.parentProfile?.familyCode || "",
+    concession: s.concession
+      ? { id: s.concession.id, name: s.concession.name, percentage: s.concession.percentage, feeHeadName: s.concession.feeHeadName }
+      : null,
+  }));
+}
+
 export async function GET(request: Request) {
   const reqId = `std_${Math.random().toString(36).substring(2, 9)}`;
   const startTime = performance.now();
@@ -27,9 +66,19 @@ export async function GET(request: Request) {
     const hasExplicitPagination = searchParams.has("limit") || searchParams.has("take") || searchParams.has("page") || searchParams.has("offset") || searchParams.has("skip");
     const { limit, offset } = boundPagination(searchParams, { defaultLimit: 2500, maxLimit: 5000 });
 
+    // ── EGRESS P2: Projection selection.
+    // ADMIN/ACCOUNTANT receive the FULL record by default — the Edit Student modal prefills
+    // its form directly from this payload, and the directory Excel/CSV export writes every
+    // column, so slimming it would silently blank/wipe those fields. TEACHERS only ever browse
+    // the roster (attendance/marks) and cannot edit or export students, so they safely get the
+    // lightweight projection. Explicit ?full=true / ?slim=true override the default either way.
+    const slimParam = searchParams.get("slim") === "true";
+    const fullParam = searchParams.get("full") === "true";
+    const useSlim = fullParam ? false : (slimParam || authUser.role === "TEACHER");
+
     const isStaff = authUser.role === "ADMIN" || authUser.role === "ACCOUNTANT" || authUser.role === "TEACHER";
     const cacheKey = isStaff
-      ? `STAFF_STUDENTS_${hasExplicitPagination ? `${limit}_${offset}` : "ALL"}`
+      ? `STAFF_STUDENTS_${useSlim ? "SLIM" : "FULL"}_${hasExplicitPagination ? `${limit}_${offset}` : "ALL"}`
       : `PARENT_${authUser.userId}`;
 
     const cachedData = serverStudentsCache.get(cacheKey);
@@ -55,6 +104,15 @@ export async function GET(request: Request) {
     // Teachers, Admins, and Accountants have school-wide access to all students and classes for grading, attendance, and coursework.
 
     const dbStart = performance.now();
+    let formatted: Record<string, any>[];
+
+    if (useSlim) {
+      formatted = await loadSlimStudents(
+        whereClause,
+        hasExplicitPagination ? { take: limit, skip: offset } : {}
+      );
+      console.log(`[DIAGNOSTIC][DB][${reqId}] db.student.findMany(slim) | rows: ${formatted.length}`);
+    } else {
     const students = await db.student.findMany({
       where: whereClause,
       ...(hasExplicitPagination ? { take: limit, skip: offset } : {}),
@@ -113,7 +171,7 @@ export async function GET(request: Request) {
     const dbDuration = (performance.now() - dbStart).toFixed(2);
     console.log(`[DIAGNOSTIC][DB][${reqId}] db.student.findMany | duration: ${dbDuration}ms | rows: ${students.length}`);
 
-    const formatted = students.map((s) => ({
+    formatted = students.map((s) => ({
       id: s.id,
       name: s.name,
       admissionNo: s.admissionNumber,
@@ -165,6 +223,7 @@ export async function GET(request: Request) {
         feeHeadName: s.concession.feeHeadName,
       } : null,
     }));
+    }
 
     serverStudentsCache.set(cacheKey, formatted);
 

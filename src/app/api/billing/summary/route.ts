@@ -5,9 +5,48 @@ import { EntryType } from "@prisma/client";
 import { getAcademicYear } from "@/lib/generateYearlyCharges";
 
 import { getTodayIST } from "@/lib/dateUtils";
-import { serverBillingSummaryCache } from "@/lib/cache/billingCache";
+import { unstable_cache } from "next/cache";
+import { serverBillingSummaryCache, BILLING_SUMMARY_TAG } from "@/lib/cache/billingCache";
 
 export const dynamic = "force-dynamic";
+
+// ── EGRESS P2: Durable, fleet-wide cache for the STAFF (school-global) billing summary.
+// The totals are identical for every ADMIN/ACCOUNTANT, so we compute the 5 aggregate
+// queries at most once per 60s across ALL serverless instances/devices (instead of the
+// old per-container in-memory cache that re-ran them on every cold start and on every
+// device's 3-minute probe). Purged immediately on any payment/charge via BILLING_SUMMARY_TAG.
+// IMPORTANT: no cookies/headers are read inside this scope (unsupported in unstable_cache);
+// the result is school-global and never role/user-specific.
+const getStaffBillingSummary = unstable_cache(
+  async () => {
+    const acYear = getAcademicYear();
+    const startYear = parseInt(acYear.split("-")[0], 10);
+    const sessionStartDate = new Date(`${startYear}-03-01T00:00:00.000Z`);
+    const todayStr = getTodayIST();
+    const todayStart = new Date(`${todayStr}T00:00:00+05:30`);
+
+    const [chargeAgg, discountAgg, receiptAgg, todayReceiptAgg, receiptCount] = await Promise.all([
+      db.ledgerEntry.aggregate({ where: { entryType: EntryType.CHARGE, createdAt: { gte: sessionStartDate } }, _sum: { amount: true } }),
+      db.ledgerEntry.aggregate({ where: { entryType: EntryType.DISCOUNT, createdAt: { gte: sessionStartDate } }, _sum: { amount: true } }),
+      db.receipt.aggregate({ where: { status: { not: "REVERSED" } }, _sum: { amountPaid: true } }),
+      db.receipt.aggregate({ where: { status: { not: "REVERSED" }, createdAt: { gte: todayStart } }, _sum: { amountPaid: true } }),
+      db.receipt.count({ where: { status: { not: "REVERSED" } } }),
+    ]);
+
+    const totalChargesPaisa = chargeAgg._sum.amount || 0;
+    const totalDiscountsPaisa = Math.abs(discountAgg._sum.amount || 0);
+    const totalCollectedPaisa = receiptAgg._sum.amountPaid || 0;
+    const todayCollectedPaisa = todayReceiptAgg._sum.amountPaid || 0;
+    const netDuesPaisa = Math.max(0, totalChargesPaisa - totalDiscountsPaisa - totalCollectedPaisa);
+
+    return {
+      academicYear: acYear,
+      summary: { totalChargesPaisa, totalDiscountsPaisa, totalCollectedPaisa, todayCollectedPaisa, netDuesPaisa, totalReceiptsCount: receiptCount },
+    };
+  },
+  ["billing-summary-staff"],
+  { tags: [BILLING_SUMMARY_TAG], revalidate: 60 }
+);
 
 /**
  * ── P-02: GET /api/billing/summary
@@ -27,6 +66,21 @@ export async function GET(request: Request) {
     }
 
     const isStaff = authUser.role === "ADMIN" || authUser.role === "ACCOUNTANT";
+
+    // ── EGRESS P2: Staff totals are school-global and identical for every ADMIN/ACCOUNTANT,
+    // so serve them from the durable fleet-wide cache above. The response stays `private`
+    // (NOT a public CDN cache): this same URL returns role-scoped data for teachers/parents,
+    // and a shared public cache keyed only by URL would leak financial totals across roles.
+    if (isStaff) {
+      const staff = await getStaffBillingSummary();
+      return NextResponse.json({ success: true, ...staff }, {
+        headers: {
+          "Cache-Control": "private, max-age=45, stale-while-revalidate=90",
+          "X-Server-Cache": "DURABLE",
+        },
+      });
+    }
+
     const cacheKey = isStaff ? "SUMMARY_STAFF" : `SUMMARY_${authUser.role}_${authUser.userId}`;
     const cachedSummary = serverBillingSummaryCache.get(cacheKey);
     if (cachedSummary) {
