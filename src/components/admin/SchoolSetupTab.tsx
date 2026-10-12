@@ -285,6 +285,13 @@ export default function SchoolSetupTab({
   // School Customizer Settings Form State
   const [activeSchoolSubTab, setActiveSchoolSubTab] = useState<"profile" | "website" | "admin" | "sync" | "exams">("profile");
 
+  // Fallback to profile on mobile if sync was active
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 768 && activeSchoolSubTab === "sync") {
+      setActiveSchoolSubTab("profile");
+    }
+  }, [activeSchoolSubTab]);
+
   // School Customizer Settings Form State
   const [schoolName, setSchoolName] = useState(schoolInfo?.name || "");
   const [schoolAddress, setSchoolAddress] = useState(schoolInfo?.address || "");
@@ -328,6 +335,9 @@ export default function SchoolSetupTab({
   const [schoolEnablePublicResults, setSchoolEnablePublicResults] = useState(true);
   const [schoolAllowedPublicExams, setSchoolAllowedPublicExams] = useState<string[]>(["Unit-1"]);
   const [schoolLockedExams, setSchoolLockedExams] = useState<string[]>([]);
+  const [examToDelete, setExamToDelete] = useState<string | null>(null);
+  const [confirmDeleteInput, setConfirmDeleteInput] = useState("");
+  const [compToDelete, setCompToDelete] = useState<{ exam: string; idx: number; name: string } | null>(null);
 
   // Admin Profile States
   const [adminFormName, setAdminFormName] = useState(user?.name || "");
@@ -499,14 +509,14 @@ export default function SchoolSetupTab({
 
   return (
     <div className="space-y-6 animate-fade-in text-left">
-      {/* Settings Category Selector */}
-      <div className="flex flex-wrap gap-2 border-b border-slate-200/60 pb-3 no-print">
+      {/* Settings Category Selector - Scrollable on mobile, hides Google Cloud Sync on small screens */}
+      <div className="flex overflow-x-auto no-scrollbar gap-2 border-b border-slate-200/60 pb-3 no-print sm:flex-wrap">
         {[
-          { id: "profile", label: "School Profile", icon: Building2, activeClass: "bg-indigo-50 border-indigo-150 text-indigo-700 shadow-2xs" },
-          { id: "website", label: "Website & Admissions Info", icon: Globe, activeClass: "bg-sky-50 border-sky-150 text-sky-700 shadow-2xs" },
-          { id: "admin", label: "Admin Credentials", icon: User, activeClass: "bg-emerald-50 border-emerald-150 text-emerald-700 shadow-2xs" },
-          { id: "sync", label: "Google Cloud Sync", icon: Database, activeClass: "bg-amber-50 border-amber-150 text-amber-700 shadow-2xs" },
-          { id: "exams", label: "Exams & Grading", icon: Award, activeClass: "bg-rose-50 border-rose-150 text-rose-700 shadow-2xs" },
+          { id: "profile", label: "School Profile", icon: Building2, activeClass: "bg-indigo-50 border-indigo-200 text-indigo-700 shadow-2xs" },
+          { id: "website", label: "Website & Admissions Info", icon: Globe, activeClass: "bg-sky-50 border-sky-200 text-sky-700 shadow-2xs" },
+          { id: "admin", label: "Admin Credentials", icon: User, activeClass: "bg-emerald-50 border-emerald-200 text-emerald-700 shadow-2xs" },
+          { id: "sync", label: "Google Cloud Sync", icon: Database, activeClass: "bg-amber-50 border-amber-200 text-amber-700 shadow-2xs", desktopOnly: true },
+          { id: "exams", label: "Exams & Grading", icon: Award, activeClass: "bg-rose-50 border-rose-200 text-rose-700 shadow-2xs" },
         ].map((subTab) => {
           const Icon = subTab.icon;
           const isActive = activeSchoolSubTab === subTab.id;
@@ -515,12 +525,14 @@ export default function SchoolSetupTab({
               key={subTab.id}
               type="button"
               onClick={() => setActiveSchoolSubTab(subTab.id as any)}
-              className={`flex items-center gap-1.5 px-4 py-2 border rounded-2xl text-xs font-black transition-all cursor-pointer ${
+              className={`items-center gap-1.5 px-3.5 sm:px-4 py-2 border rounded-2xl text-xs font-black transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                subTab.desktopOnly ? "hidden md:inline-flex" : "inline-flex"
+              } ${
                 isActive ? subTab.activeClass : "bg-white border-slate-200/60 text-slate-500 hover:text-slate-700 hover:bg-slate-50/50"
               }`}
             >
               <Icon className="h-3.5 w-3.5" />
-              {subTab.label}
+              <span>{subTab.label}</span>
             </button>
           );
         })}
@@ -529,7 +541,7 @@ export default function SchoolSetupTab({
       {/* Sub-tab Panels */}
       <div className={`w-full transition-all duration-300 ${activeSchoolSubTab === "exams" ? "max-w-6xl" : "max-w-2xl"}`}>
         {activeSchoolSubTab === "website" && (
-          <div className="bg-white border border-slate-200/60 p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] space-y-5 animate-scale-in">
+          <div className="bg-white border border-slate-200/60 p-4 sm:p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] space-y-5 animate-scale-in">
             <div>
               <h3 className="text-xs font-black uppercase text-sky-700 bg-sky-50 border border-sky-100/50 px-3 py-1 rounded-xl inline-flex items-center gap-1.5 tracking-wider">
                 <Globe className="h-3.5 w-3.5" /> Website Content & Admissions Desk
@@ -808,7 +820,7 @@ export default function SchoolSetupTab({
           </div>
         )}
         {activeSchoolSubTab === "profile" && (
-          <div className="bg-white border border-slate-200/60 p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] space-y-5 animate-scale-in">
+          <div className="bg-white border border-slate-200/60 p-4 sm:p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] space-y-5 animate-scale-in">
             <div>
               <h3 className="text-xs font-black uppercase text-indigo-700 bg-indigo-50 border border-indigo-100/50 px-3 py-1 rounded-xl inline-flex items-center gap-1.5 tracking-wider">
                 <Building2 className="h-3.5 w-3.5" /> School Institutional Profile
@@ -998,7 +1010,7 @@ export default function SchoolSetupTab({
         )}
 
         {activeSchoolSubTab === "admin" && (
-          <div className="bg-white border border-slate-200/60 p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] space-y-5 animate-scale-in">
+          <div className="bg-white border border-slate-200/60 p-4 sm:p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] space-y-5 animate-scale-in">
             <div>
               <h3 className="text-xs font-black uppercase text-emerald-700 bg-emerald-50 border border-emerald-100/50 px-3 py-1 rounded-xl inline-flex items-center gap-1.5 tracking-wider">
                 <User className="h-3.5 w-3.5" /> Administrator Profile Settings
@@ -1294,97 +1306,105 @@ export default function SchoolSetupTab({
         )}
 
         {activeSchoolSubTab === "exams" && (
-          <div className="bg-white border border-slate-200/60 p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] space-y-5 animate-scale-in">
-            <div>
-              <h3 className="text-xs font-black uppercase text-rose-700 bg-rose-50 border border-rose-100/50 px-3 py-1 rounded-xl inline-flex items-center gap-1.5 tracking-wider">
-                <Award className="h-3.5 w-3.5" /> Academic Examination Customizer
-              </h3>
-              <p className="text-[10px] text-slate-400 font-semibold mt-1.5">
-                Configure custom exam terms (e.g. Unit-1, Half Yearly, Annual) used for student grading.
-              </p>
+          <div className="bg-white border border-slate-200/60 p-4 sm:p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] space-y-5 animate-scale-in">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-xs font-black uppercase text-rose-700 bg-rose-50 border border-rose-100/50 px-3 py-1 rounded-xl inline-flex items-center gap-1.5 tracking-wider">
+                  <Award className="h-3.5 w-3.5" /> Academic Examination Customizer
+                </h3>
+                <p className="text-[11px] text-slate-400 font-semibold mt-1.5">
+                  Configure custom exam terms (e.g. Unit-1, Half Yearly, Annual) used for student grading.
+                </p>
+              </div>
             </div>
 
             <div className="space-y-4">
-              {/* Add New Exam Inline Form */}
-              <div className="flex gap-2 items-end">
-                <div className="flex-1">
-                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                    New Exam Title
-                  </label>
+              {/* Add New Exam Inline Form - Fully Mobile Responsive */}
+              <div className="bg-slate-50/70 border border-slate-200/80 rounded-2xl p-3.5 sm:p-4 space-y-2">
+                <label className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider block">
+                  Create New Examination Term
+                </label>
+                <div className="flex flex-col sm:flex-row gap-2.5 sm:items-center">
                   <input
                     type="text"
-                    placeholder="e.g. Unit-3, Weekly Test 1"
+                    placeholder="e.g. Unit-3, Weekly Test 1, Term-2..."
                     value={newExamInput}
                     onChange={(e) => setNewExamInput(e.target.value)}
-                    className="w-full text-xs font-bold py-2.5 px-3.5 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-rose-600 shadow-2xs"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        const trimmed = newExamInput.trim();
+                        if (trimmed && !schoolExams.includes(trimmed)) {
+                          setSchoolExams((prev) => [...prev, trimmed]);
+                          setSchoolExamConfig((prev: any) => ({
+                            ...prev,
+                            [trimmed]: { isSplit: false, maxMarks: 100, components: [] }
+                          }));
+                          setSelectedConfigExam(trimmed);
+                          setNewExamInput("");
+                          showToast("success", "Exam Added", `Exam "${trimmed}" added. You can now configure it below.`);
+                        }
+                      }
+                    }}
+                    className="flex-1 text-xs font-bold py-2.5 px-3.5 border border-slate-200 rounded-xl outline-none bg-white focus:border-rose-600 focus:ring-2 focus:ring-rose-500/10 shadow-2xs placeholder:text-slate-400 placeholder:font-normal"
                   />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const trimmed = newExamInput.trim();
+                      if (trimmed && !schoolExams.includes(trimmed)) {
+                        setSchoolExams((prev) => [...prev, trimmed]);
+                        setSchoolExamConfig((prev: any) => ({
+                          ...prev,
+                          [trimmed]: { isSplit: false, maxMarks: 100, components: [] }
+                        }));
+                        setSelectedConfigExam(trimmed);
+                        setNewExamInput("");
+                        showToast("success", "Exam Added", `Exam "${trimmed}" added. You can now configure it below.`);
+                      }
+                    }}
+                    className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer active:scale-95 shadow-sm shadow-rose-600/20 flex items-center justify-center gap-1.5 shrink-0"
+                  >
+                    <PlusCircle className="h-3.5 w-3.5" />
+                    <span>Add Exam</span>
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const trimmed = newExamInput.trim();
-                    if (trimmed && !schoolExams.includes(trimmed)) {
-                      setSchoolExams((prev) => [...prev, trimmed]);
-                      setSchoolExamConfig((prev: any) => ({
-                        ...prev,
-                        [trimmed]: { isSplit: false, maxMarks: 100, components: [] }
-                      }));
-                      setSelectedConfigExam(trimmed);
-                      setNewExamInput("");
-                    }
-                  }}
-                  className="px-4 py-2.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-95"
-                >
-                  Add Exam
-                </button>
               </div>
 
-              {/* List of current Exams */}
+              {/* List of current Exams (Clean touch-friendly pills with NO direct delete button to prevent mis-taps) */}
               <div className="space-y-2 pt-1">
-                <label className="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
-                  Configured Exams (Select an exam to configure its parameters)
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
+                    Configured Exams (Select an exam to customize parameters)
+                  </label>
+                  <span className="text-[10px] font-bold text-slate-400">
+                    {schoolExams.length} Total
+                  </span>
+                </div>
                 {schoolExams.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
-                    {schoolExams.map((exam, idx) => {
+                    {schoolExams.map((exam) => {
                       const isActive = selectedConfigExam === exam;
                       return (
-                        <div key={exam} className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedConfigExam(exam)}
-                            className={`px-3 py-1.5 rounded-xl text-[10px] font-black border uppercase tracking-wider transition-all cursor-pointer ${
-                              isActive 
-                                ? "bg-rose-600 border-rose-600 text-white shadow-sm" 
-                                : "bg-white border-slate-200 hover:bg-slate-50 text-slate-600"
-                            }`}
-                          >
-                            {exam}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSchoolExams((prev) => prev.filter((e) => e !== exam));
-                              setSchoolExamConfig((prev: any) => {
-                                const next = { ...prev };
-                                delete next[exam];
-                                return next;
-                              });
-                              if (selectedConfigExam === exam) {
-                                setSelectedConfigExam("");
-                              }
-                            }}
-                            className="p-1.5 bg-rose-50 text-rose-600 border border-rose-150 rounded-xl hover:bg-rose-100 transition-all cursor-pointer"
-                            title="Delete Exam"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </button>
-                        </div>
+                        <button
+                          key={exam}
+                          type="button"
+                          onClick={() => setSelectedConfigExam(exam)}
+                          className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer select-none active:scale-95 ${
+                            isActive
+                              ? "bg-rose-600 text-white shadow-md shadow-rose-600/25 ring-2 ring-rose-600/20"
+                              : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 shadow-2xs"
+                          }`}
+                        >
+                          {exam}
+                        </button>
                       );
                     })}
                   </div>
                 ) : (
-                  <p className="text-[10px] font-bold text-slate-400 italic">No exams configured yet.</p>
+                  <div className="p-4 rounded-2xl border border-dashed border-slate-200 text-center text-xs text-slate-400 font-bold bg-slate-50/50">
+                    No exams configured yet. Add your first exam above.
+                  </div>
                 )}
               </div>
 
@@ -1392,28 +1412,41 @@ export default function SchoolSetupTab({
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
                 {/* LEFT COLUMN: Exam Breakdown / Split Config */}
                 <div className="space-y-4">
-                  {selectedConfigExam && (() => {
+                  {selectedConfigExam ? (() => {
                     const config = schoolExamConfig[selectedConfigExam] || { isSplit: false, maxMarks: 100, components: [] };
                     return (
-                      <div className="border border-slate-200/70 rounded-2xl p-4.5 bg-slate-50/40 space-y-4 shadow-2xs">
-                        <div className="flex items-center justify-between border-b border-slate-200/60 pb-2.5">
+                      <div className="border border-slate-200/80 rounded-2xl p-4 sm:p-5 bg-slate-50/50 space-y-4 shadow-2xs">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-slate-200/60 pb-3">
                           <div>
-                            <h4 className="text-xs font-black uppercase text-slate-800 tracking-tight">
-                              Configuration for {selectedConfigExam}
-                            </h4>
-                            <p className="text-[9.5px] text-slate-400 font-semibold mt-0.5">
+                            <div className="flex items-center gap-2">
+                              <h4 className="text-xs sm:text-sm font-black uppercase text-slate-900 tracking-tight">
+                                {selectedConfigExam}
+                              </h4>
+                              <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-lg bg-rose-50 text-rose-700 border border-rose-200/80">
+                                Total: {config.maxMarks} Marks
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
                               Set max marks or split breakdown components
                             </p>
                           </div>
-                          <div className="flex items-center gap-1.5 bg-rose-50 border border-rose-200/80 px-2.5 py-1 rounded-xl">
-                            <span className="text-[9px] text-rose-600 font-black uppercase">Total Marks:</span>
-                            <span className="text-xs font-black text-rose-700">
-                              {config.maxMarks}
-                            </span>
-                          </div>
+
+                          {/* Safe Delete Button with strict confirmation prompt */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setExamToDelete(selectedConfigExam);
+                              setConfirmDeleteInput("");
+                            }}
+                            className="self-start sm:self-auto px-3 py-1.5 text-xs font-bold text-rose-600 hover:text-white bg-rose-50 hover:bg-rose-600 border border-rose-200 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 active:scale-95 shadow-2xs"
+                            title={`Delete ${selectedConfigExam}`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            <span>Delete Exam</span>
+                          </button>
                         </div>
 
-                        <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-200/70">
+                        <div className="flex items-center gap-3 bg-white p-3.5 rounded-2xl border border-slate-200/70 shadow-2xs">
                           <input
                             type="checkbox"
                             id="isSplitCheckbox"
@@ -1428,16 +1461,18 @@ export default function SchoolSetupTab({
                                 }
                               }));
                             }}
-                            className="h-4 w-4 accent-rose-600 rounded cursor-pointer"
+                            className="h-4 w-4 accent-rose-600 rounded cursor-pointer shrink-0"
                           />
-                          <label htmlFor="isSplitCheckbox" className="text-xs font-extrabold text-slate-700 cursor-pointer">
-                            Enable Marks Breakdown/Split (e.g. Written, Practical, Notebook)
+                          <label htmlFor="isSplitCheckbox" className="text-xs font-extrabold text-slate-700 cursor-pointer select-none">
+                            Enable Marks Breakdown / Split (e.g. Written, Practical, Notebook)
                           </label>
                         </div>
 
                         {!config.isSplit ? (
-                          <div className="space-y-1 bg-white p-3 rounded-xl border border-slate-200/70">
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Max Examination Marks</label>
+                          <div className="space-y-1 bg-white p-3.5 rounded-2xl border border-slate-200/70 shadow-2xs">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                              Max Examination Marks
+                            </label>
                             <input
                               type="number"
                               placeholder="100"
@@ -1449,36 +1484,33 @@ export default function SchoolSetupTab({
                                   [selectedConfigExam]: { ...config, maxMarks: val }
                                 }));
                               }}
-                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-white focus:border-rose-500 shadow-2xs"
+                              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-rose-600 shadow-2xs"
                             />
                           </div>
                         ) : (
                           <div className="space-y-3">
                             {/* Component List */}
                             <div className="space-y-1.5">
-                              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Configured Components</label>
+                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                                Configured Components
+                              </label>
                               {config.components && config.components.length > 0 ? (
-                                <div className="divide-y divide-slate-100 bg-white border border-slate-200/60 rounded-xl overflow-hidden shadow-2xs">
+                                <div className="divide-y divide-slate-100 bg-white border border-slate-200/70 rounded-2xl overflow-hidden shadow-2xs">
                                   {config.components.map((comp: any, idx: number) => (
-                                    <div key={idx} className="flex items-center justify-between p-2.5 hover:bg-slate-50">
+                                    <div key={idx} className="flex items-center justify-between p-3 hover:bg-slate-50/80 transition-colors">
                                       <div>
-                                        <span className="text-xs font-extrabold text-slate-800">{comp.name}</span>
-                                        <span className="text-[10px] text-slate-400 font-bold ml-1.5">(Weight: {comp.max} marks)</span>
+                                        <span className="text-xs font-black text-slate-800">{comp.name}</span>
+                                        <span className="text-[11px] text-rose-600 font-extrabold ml-2 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-100">
+                                          {comp.max} marks
+                                        </span>
                                       </div>
                                       <button
                                         type="button"
                                         onClick={() => {
-                                          setSchoolExamConfig((prev: any) => {
-                                            const comps = (config.components || []).filter((_: any, i: number) => i !== idx);
-                                            const total = comps.reduce((sum: number, c: any) => sum + (c.max || 0), 0);
-                                            return {
-                                              ...prev,
-                                              [selectedConfigExam]: { ...config, components: comps, maxMarks: total }
-                                            };
-                                          });
+                                          setCompToDelete({ exam: selectedConfigExam, idx, name: comp.name });
                                         }}
-                                        className="p-1 text-rose-600 hover:bg-rose-50 rounded-lg transition-all cursor-pointer"
-                                        title="Delete Component"
+                                        className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-all cursor-pointer"
+                                        title={`Remove ${comp.name}`}
                                       >
                                         <Trash2 className="h-3.5 w-3.5" />
                                       </button>
@@ -1486,76 +1518,91 @@ export default function SchoolSetupTab({
                                   ))}
                                 </div>
                               ) : (
-                                <p className="text-[10px] font-bold text-slate-400 italic">No breakdown components added yet.</p>
+                                <p className="text-[10px] font-bold text-slate-400 italic bg-white p-3 rounded-2xl border border-slate-200/70 text-center">
+                                  No breakdown components added yet.
+                                </p>
                               )}
                             </div>
 
-                            {/* Add Component inline */}
-                            <div className="flex gap-2 items-end pt-1 bg-white p-3 rounded-xl border border-slate-200/60">
-                              <div className="flex-1">
-                                <label className="text-[8.5px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
-                                  Component Name
-                                </label>
-                                <input
-                                  type="text"
-                                  placeholder="e.g. Notebook, Practical"
-                                  value={newCompName}
-                                  onChange={(e) => setNewCompName(e.target.value)}
-                                  className="w-full text-xs font-semibold py-1.5 px-2 border border-slate-200 rounded-lg outline-none focus:border-rose-500"
-                                />
+                            {/* Add Component Responsive Card */}
+                            <div className="bg-white p-3.5 rounded-2xl border border-slate-200/70 space-y-2.5 shadow-2xs">
+                              <label className="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider block">
+                                Add New Component
+                              </label>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                <div>
+                                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                                    Component Name
+                                  </label>
+                                  <input
+                                    type="text"
+                                    placeholder="e.g. Notebook, Practical"
+                                    value={newCompName}
+                                    onChange={(e) => setNewCompName(e.target.value)}
+                                    className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none focus:border-rose-600 bg-slate-50 focus:bg-white"
+                                  />
+                                </div>
+                                <div className="flex gap-2 items-end">
+                                  <div className="flex-1">
+                                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                                      Max Marks
+                                    </label>
+                                    <input
+                                      type="number"
+                                      placeholder="10"
+                                      value={newCompMax}
+                                      onChange={(e) => setNewCompMax(e.target.value)}
+                                      className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none focus:border-rose-600 bg-slate-50 focus:bg-white"
+                                    />
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const name = newCompName.trim();
+                                      const maxVal = parseFloat(newCompMax) || 0;
+                                      if (name && maxVal > 0) {
+                                        setSchoolExamConfig((prev: any) => {
+                                          const current = prev[selectedConfigExam] || { components: [] };
+                                          const comps = [...(current.components || []), { name, max: maxVal }];
+                                          const total = comps.reduce((sum: number, c: any) => sum + (c.max || 0), 0);
+                                          return {
+                                            ...prev,
+                                            [selectedConfigExam]: {
+                                              ...current,
+                                              components: comps,
+                                              maxMarks: total
+                                            }
+                                          };
+                                        });
+                                        setNewCompName("");
+                                        setNewCompMax("");
+                                        showToast("success", "Component Added", `Added "${name}" (${maxVal} marks).`);
+                                      }
+                                    }}
+                                    className="h-[38px] px-4 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shrink-0 flex items-center justify-center gap-1 active:scale-95 cursor-pointer shadow-sm"
+                                  >
+                                    <PlusCircle className="w-3.5 h-3.5" />
+                                    <span>Add</span>
+                                  </button>
+                                </div>
                               </div>
-                              <div className="w-24">
-                                <label className="text-[8.5px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
-                                  Max Marks
-                                </label>
-                                <input
-                                  type="number"
-                                  placeholder="10"
-                                  value={newCompMax}
-                                  onChange={(e) => setNewCompMax(e.target.value)}
-                                  className="w-full text-xs font-semibold py-1.5 px-2 border border-slate-200 rounded-lg outline-none focus:border-rose-500"
-                                />
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const name = newCompName.trim();
-                                  const maxVal = parseFloat(newCompMax) || 0;
-                                  if (name && maxVal > 0) {
-                                    setSchoolExamConfig((prev: any) => {
-                                      const current = prev[selectedConfigExam] || { components: [] };
-                                      const comps = [...(current.components || []), { name, max: maxVal }];
-                                      const total = comps.reduce((sum: number, c: any) => sum + (c.max || 0), 0);
-                                      return {
-                                        ...prev,
-                                        [selectedConfigExam]: {
-                                          ...current,
-                                          components: comps,
-                                          maxMarks: total
-                                        }
-                                      };
-                                    });
-                                    setNewCompName("");
-                                    setNewCompMax("");
-                                  }
-                                }}
-                                className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-bold transition-all cursor-pointer"
-                              >
-                                Add
-                              </button>
                             </div>
                           </div>
                         )}
                       </div>
                     );
-                  })()}
+                  })() : (
+                    <div className="p-6 rounded-2xl border border-dashed border-slate-200 text-center text-xs text-slate-400 font-bold bg-slate-50/50">
+                      Please select or add an examination to customize its parameters.
+                    </div>
+                  )}
                 </div>
 
                 {/* RIGHT COLUMN: Marks Entry Lock Management Controls */}
                 <div className="space-y-4">
                   {/* 🔒 1. MARKS ENTRY LOCK MANAGEMENT CONTROLS */}
-                  <div className="border border-slate-200/70 rounded-2xl p-4.5 bg-slate-50/40 space-y-4 shadow-2xs">
-                    <div className="flex items-center justify-between border-b border-slate-200/60 pb-2.5">
+                  <div className="border border-slate-200/70 rounded-2xl p-4 sm:p-5 bg-slate-50/40 space-y-4 shadow-2xs">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-slate-200/60 pb-3">
                       <div>
                         <h4 className="text-xs font-black uppercase text-slate-800 tracking-tight flex items-center gap-1.5">
                           <Lock className="h-3.5 w-3.5 text-rose-600" />
@@ -1565,7 +1612,7 @@ export default function SchoolSetupTab({
                           Freeze exams to prevent teachers from editing marks
                         </p>
                       </div>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 self-start sm:self-auto">
                         <button
                           type="button"
                           onClick={async () => {
@@ -1578,7 +1625,7 @@ export default function SchoolSetupTab({
                               showToast("error", "Action Failed", "Could not lock all exams. Please retry.");
                             }
                           }}
-                          className="text-[9.5px] font-bold px-2.5 py-1 bg-white hover:bg-rose-50 text-rose-600 rounded-lg border border-slate-200 hover:border-rose-200 transition-all cursor-pointer shadow-2xs active:scale-95"
+                          className="text-[9.5px] font-bold px-2.5 py-1.5 bg-white hover:bg-rose-50 text-rose-600 rounded-xl border border-slate-200 hover:border-rose-200 transition-all cursor-pointer shadow-2xs active:scale-95"
                           title="Lock all exams from editing"
                         >
                           Lock All
@@ -1595,7 +1642,7 @@ export default function SchoolSetupTab({
                               showToast("error", "Action Failed", "Could not unlock exams. Please retry.");
                             }
                           }}
-                          className="text-[9.5px] font-bold px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-600 rounded-lg border border-slate-200 transition-all cursor-pointer shadow-2xs active:scale-95"
+                          className="text-[9.5px] font-bold px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-600 rounded-xl border border-slate-200 transition-all cursor-pointer shadow-2xs active:scale-95"
                           title="Unlock all exams"
                         >
                           Unlock All
@@ -1613,7 +1660,7 @@ export default function SchoolSetupTab({
                           return (
                             <div
                               key={exam}
-                              className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
+                              className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${
                                 isLocked
                                   ? "bg-rose-50/40 border-rose-200 shadow-2xs"
                                   : "bg-white border-slate-200/70 hover:border-slate-300 shadow-2xs"
@@ -1692,7 +1739,7 @@ export default function SchoolSetupTab({
                   </div>
 
                   {/* 🌐 2. ONLINE EXAMINATION RESULTS PORTAL CONTROLS */}
-                  <div className="border border-slate-200/70 rounded-2xl p-4.5 bg-slate-50/40 space-y-4 shadow-2xs">
+                  <div className="border border-slate-200/70 rounded-2xl p-4 sm:p-5 bg-slate-50/40 space-y-4 shadow-2xs">
                     <div className="flex items-center justify-between border-b border-slate-200/60 pb-2.5">
                       <div>
                         <h4 className="text-xs font-black uppercase text-slate-800 tracking-tight flex items-center gap-1.5">
@@ -1736,7 +1783,7 @@ export default function SchoolSetupTab({
                         </span>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {schoolExams.map((exam) => {
                           const isPublished = schoolAllowedPublicExams.includes(exam);
                           return (
@@ -1779,9 +1826,9 @@ export default function SchoolSetupTab({
                 </div>
               </div>
 
-              {/* Save button */}
-              <div className="border-t border-slate-100 pt-4 flex items-center justify-between">
-                <p className="text-[11px] text-slate-400 font-semibold hidden sm:block">
+              {/* Save button - Mobile-friendly full width */}
+              <div className="border-t border-slate-100 pt-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                <p className="text-[11px] text-slate-400 font-semibold text-center sm:text-left">
                   Exam configurations and lock permissions are synchronized live across all teacher consoles
                 </p>
                 <button
@@ -1814,7 +1861,7 @@ export default function SchoolSetupTab({
                     }
                   }}
                   disabled={savingExams}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-rose-500/20 cursor-pointer disabled:opacity-55 active:scale-95"
+                  className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-rose-500/20 cursor-pointer disabled:opacity-55 active:scale-95 w-full sm:w-auto"
                 >
                   {savingExams ? (
                     <>
@@ -1830,6 +1877,142 @@ export default function SchoolSetupTab({
                 </button>
               </div>
             </div>
+
+            {/* 🛡️ Strict Exam Deletion Confirmation Modal */}
+            {examToDelete && (
+              <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+                <div className="bg-white border border-slate-200 rounded-3xl max-w-sm sm:max-w-md w-full p-5 sm:p-6 shadow-2xl relative space-y-4 text-left animate-scale-in">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                      <AlertTriangle className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-sm sm:text-base font-black text-slate-900 leading-tight">
+                        Delete Examination?
+                      </h4>
+                      <p className="text-xs text-slate-500 font-semibold mt-1">
+                        Are you sure you want to delete <span className="text-rose-600 font-black">"{examToDelete}"</span>?
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-rose-50/80 border border-rose-200/80 rounded-2xl p-3 text-rose-800 text-[11px] font-semibold space-y-1">
+                    <p className="font-black flex items-center gap-1.5 text-rose-900">
+                      ⚠️ Irreversible Action
+                    </p>
+                    <p>
+                      Deleting this exam will permanently erase its marks structure, components, and lock rules from the system.
+                    </p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">
+                      To confirm, type <span className="text-rose-600 font-black">CONFIRM</span> below:
+                    </label>
+                    <input
+                      type="text"
+                      autoFocus
+                      placeholder="Type CONFIRM here"
+                      value={confirmDeleteInput}
+                      onChange={(e) => setConfirmDeleteInput(e.target.value)}
+                      className="w-full text-center tracking-widest font-black uppercase text-xs sm:text-sm py-2.5 px-3 border-2 border-slate-200 rounded-xl outline-none focus:border-rose-600 focus:bg-white bg-slate-50 transition-all placeholder:normal-case placeholder:tracking-normal placeholder:font-normal placeholder:text-slate-400"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExamToDelete(null);
+                        setConfirmDeleteInput("");
+                      }}
+                      className="flex-1 py-2.5 px-4 text-xs font-bold text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-xl transition cursor-pointer active:scale-95 text-center"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={confirmDeleteInput.trim().toUpperCase() !== "CONFIRM"}
+                      onClick={() => {
+                        if (confirmDeleteInput.trim().toUpperCase() !== "CONFIRM" || !examToDelete) return;
+                        const toDelete = examToDelete;
+                        setSchoolExams((prev) => prev.filter((e) => e !== toDelete));
+                        setSchoolExamConfig((prev: any) => {
+                          const next = { ...prev };
+                          delete next[toDelete];
+                          return next;
+                        });
+                        setSchoolLockedExams((prev) => prev.filter((e) => e.trim().toLowerCase() !== toDelete.trim().toLowerCase()));
+                        setSchoolAllowedPublicExams((prev) => prev.filter((e) => e !== toDelete));
+                        if (selectedConfigExam === toDelete) {
+                          const remaining = schoolExams.filter((e) => e !== toDelete);
+                          setSelectedConfigExam(remaining.length > 0 ? remaining[0] : "");
+                        }
+                        setExamToDelete(null);
+                        setConfirmDeleteInput("");
+                        showToast("info", "Exam Removed", `Exam "${toDelete}" removed. Remember to click "Save Exam & Lock Settings" to persist.`);
+                      }}
+                      className="flex-1 py-2.5 px-4 text-xs font-black uppercase tracking-wider text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl transition cursor-pointer shadow-md shadow-rose-600/20 active:scale-95 flex items-center justify-center gap-1.5"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 🛡️ Safe Component Deletion Confirmation Modal */}
+            {compToDelete && (
+              <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+                <div className="bg-white border border-slate-200 rounded-3xl max-w-sm w-full p-5 shadow-2xl relative space-y-4 text-left animate-scale-in">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                      <Trash2 className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-sm font-black text-slate-900 leading-tight">
+                        Remove Component?
+                      </h4>
+                      <p className="text-xs text-slate-500 font-semibold mt-1">
+                        Are you sure you want to remove <span className="text-rose-600 font-black">"{compToDelete.name}"</span> from {compToDelete.exam}?
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setCompToDelete(null)}
+                      className="flex-1 py-2.5 px-4 text-xs font-bold text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-xl transition cursor-pointer active:scale-95 text-center"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const { exam, idx } = compToDelete;
+                        setSchoolExamConfig((prev: any) => {
+                          const current = prev[exam] || { components: [] };
+                          const comps = (current.components || []).filter((_: any, i: number) => i !== idx);
+                          const total = comps.reduce((sum: number, c: any) => sum + (c.max || 0), 0);
+                          return {
+                            ...prev,
+                            [exam]: { ...current, components: comps, maxMarks: total }
+                          };
+                        });
+                        setCompToDelete(null);
+                        showToast("info", "Component Removed", `Component "${compToDelete.name}" removed.`);
+                      }}
+                      className="flex-1 py-2.5 px-4 text-xs font-black uppercase tracking-wider text-white bg-rose-600 hover:bg-rose-700 rounded-xl transition cursor-pointer shadow-md shadow-rose-600/20 active:scale-95 flex items-center justify-center gap-1.5"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Remove</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

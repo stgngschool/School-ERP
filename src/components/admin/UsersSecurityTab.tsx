@@ -93,13 +93,13 @@ export default function UsersSecurityTab({
       </div>
 
       {/* Staff vs Parents Directory Switcher */}
-      <div className="flex border-b border-slate-200 gap-2">
+      <div className="flex border-b border-slate-200 gap-2 overflow-x-auto no-scrollbar">
         <button
           onClick={() => {
             setSecurityTabMode("staff");
             setUserRoleFilter(""); // Clear role filter
           }}
-          className={`py-2 px-4 text-xs font-black uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
+          className={`py-2 px-3 sm:px-4 text-xs font-black uppercase tracking-wider border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
             securityTabMode === "staff"
               ? "border-indigo-600 text-indigo-600"
               : "border-transparent text-slate-400 hover:text-slate-600"
@@ -112,7 +112,7 @@ export default function UsersSecurityTab({
             setSecurityTabMode("parents");
             setUserRoleFilter("PARENT"); // Force PARENT filter
           }}
-          className={`py-2 px-4 text-xs font-black uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
+          className={`py-2 px-3 sm:px-4 text-xs font-black uppercase tracking-wider border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
             securityTabMode === "parents"
               ? "border-indigo-600 text-indigo-600"
               : "border-transparent text-slate-400 hover:text-slate-600"
@@ -309,7 +309,7 @@ export default function UsersSecurityTab({
                             </span>
                           </td>
                           <td className="py-3.5 px-4 text-right" data-label="Actions">
-                            <div className="inline-flex gap-2">
+                            <div className="flex flex-wrap sm:flex-nowrap gap-1.5 sm:gap-2 justify-end">
                               {/* 1. Lock/Unlock Button */}
                               {usr.id === user?.id ? (
                                 <span
@@ -526,8 +526,8 @@ export default function UsersSecurityTab({
         const isSelfReset = resetUserId === user?.id;
 
         return (
-          <div className="fixed inset-0 z-45 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-6 shadow-2xl relative space-y-5 text-left animate-fade-in">
+          <div className="fixed inset-0 z-45 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+            <div className="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-4 sm:p-6 max-h-[92vh] overflow-y-auto shadow-2xl relative space-y-4 sm:space-y-5 text-left animate-fade-in">
               <div className="flex justify-between items-start border-b border-slate-100 pb-4">
                 <div className="flex items-center gap-3">
                   <div className={`p-2.5 rounded-2xl ${isSelfReset ? "bg-emerald-50 text-emerald-600 border border-emerald-100" : "bg-indigo-50 text-indigo-600 border border-indigo-100"}`}>
@@ -780,8 +780,8 @@ export default function UsersSecurityTab({
 
       {/* Register New Staff Account Modal */}
       {showAddStaffModal && (
-        <div className="fixed inset-0 z-45 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-sm w-full p-6 shadow-2xl relative space-y-4 text-left animate-fade-in">
+        <div className="fixed inset-0 z-45 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-sm w-full p-4 sm:p-6 max-h-[92vh] overflow-y-auto shadow-2xl relative space-y-4 text-left animate-fade-in">
             <div className="flex justify-between items-start border-b border-slate-100 pb-3">
               <div>
                 <h4 className="font-extrabold text-slate-800 text-base">Register Staff Account</h4>
@@ -1000,8 +1000,8 @@ export default function UsersSecurityTab({
 
       {/* Assign Class Teacher Modal */}
       {showAssignClassModal && (
-        <div className="fixed inset-0 z-45 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-sm w-full p-6 shadow-2xl relative space-y-4 text-left animate-fade-in animate-duration-200">
+        <div className="fixed inset-0 z-45 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-sm w-full p-4 sm:p-6 max-h-[92vh] overflow-y-auto shadow-2xl relative space-y-4 text-left animate-fade-in animate-duration-200">
             <div className="flex justify-between items-start border-b border-slate-100 pb-3">
               <div>
                 <h4 className="font-extrabold text-slate-800 text-base">Assign Class Teacher</h4>
