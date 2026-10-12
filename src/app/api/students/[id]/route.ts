@@ -19,6 +19,24 @@ export async function GET(
       return NextResponse.json({ error: "Student ID is required" }, { status: 400 });
     }
 
+    if (authUser.role === "TEACHER") {
+      const teacherProfile = await db.teacherProfile.findUnique({
+        where: { userId: authUser.userId },
+        include: { classes: { where: { status: "ACTIVE" }, select: { id: true } } },
+      });
+      const studentScope = await db.student.findUnique({
+        where: { id },
+        select: { classId: true },
+      });
+      const allowedClassIds = new Set(teacherProfile?.classes.map((classRecord) => classRecord.id) ?? []);
+      if (!studentScope || !studentScope.classId || !allowedClassIds.has(studentScope.classId)) {
+        return NextResponse.json(
+          { error: "Forbidden. You are only authorized to view students in your assigned class." },
+          { status: 403 }
+        );
+      }
+    }
+
     // Fetch student with optimized scoped relationships
     const student = await db.student.findUnique({
       where: { id },

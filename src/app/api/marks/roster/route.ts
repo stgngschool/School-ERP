@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
+import { getCachedSchoolConfig } from "@/lib/cache/schoolConfigCache";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,8 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const className = searchParams.get("class");
-    const section = searchParams.get("section") || "";
+    const sectionParam = searchParams.get("section");
+    const section = sectionParam?.trim() || "";
     const examName = searchParams.get("exam");
     const subject = searchParams.get("subject");
     const sessionId = searchParams.get("sessionId");
@@ -29,10 +31,11 @@ export async function GET(request: Request) {
     const cleanClassName = className.replace(/^class\s*/i, "").trim();
 
     // ── Security Guard: Restrict TEACHER role strictly to their assigned class(es) ──
+    let teacherClassIds: string[] | null = null;
     if (authUser.role === "TEACHER") {
       const teacherProfile = await db.teacherProfile.findUnique({
         where: { userId: authUser.userId },
-        include: { classes: { where: { status: "ACTIVE" } } },
+        include: { classes: { where: { status: "ACTIVE" }, select: { id: true, name: true, section: true } } },
       });
 
       if (!teacherProfile || !teacherProfile.classes || teacherProfile.classes.length === 0) {
@@ -42,23 +45,30 @@ export async function GET(request: Request) {
         );
       }
 
-      const isAssigned = teacherProfile.classes.some((c) => {
+      const namedClasses = teacherProfile.classes.filter((c) => {
         const cNorm = c.name.replace(/^class\s*/i, "").trim().toLowerCase();
         const reqNorm = cleanClassName.toLowerCase();
-        const nameMatch = cNorm === reqNorm || c.name.toLowerCase() === className.toLowerCase();
-        if (!nameMatch) return false;
-        if (section && c.section) {
-          return c.section.trim().toLowerCase() === section.trim().toLowerCase();
-        }
-        return true;
+        return cNorm === reqNorm || c.name.toLowerCase() === className.toLowerCase();
       });
 
-      if (!isAssigned) {
+      if (!sectionParam && namedClasses.some((c) => !!c.section)) {
+        return NextResponse.json(
+          { error: "Forbidden. A section is required to view marks for your assigned class." },
+          { status: 403 }
+        );
+      }
+
+      const matchingClasses = namedClasses.filter(
+        (c) => (c.section ?? "").trim().toLowerCase() === section.toLowerCase()
+      );
+
+      if (matchingClasses.length === 0) {
         return NextResponse.json(
           { error: "Forbidden. You are only authorized to view marks for your assigned class." },
           { status: 403 }
         );
       }
+      teacherClassIds = matchingClasses.map((c) => c.id);
     }
 
     const classOrConditions: any[] = [
@@ -97,10 +107,10 @@ export async function GET(request: Request) {
       examName: { equals: examName, mode: "insensitive" },
       OR: subjectAliases.map((sub) => ({ subject: { equals: sub, mode: "insensitive" } })),
       student: {
-        class: {
-          OR: classOrConditions,
-        }
-      }
+        class: teacherClassIds
+          ? { id: { in: teacherClassIds } }
+          : { OR: classOrConditions },
+      },
     };
     if (targetSessionId) {
       whereClause.sessionId = targetSessionId;
@@ -126,16 +136,18 @@ export async function GET(request: Request) {
       marksRecord[m.studentId] = m;
     });
 
-    // ── Check if Exam is Locked in SchoolConfig (Fresh real-time DB check)
+    // ── Check if Exam is Locked in SchoolConfig (Cached DB singleton)
     let isExamLocked = false;
     let lockedExams: string[] = [];
     try {
-      const schoolConfigRow = await db.schoolConfig.findUnique({ where: { id: "singleton" } });
+      const schoolConfigRow = await getCachedSchoolConfig();
+      if (!schoolConfigRow) throw new Error("School configuration unavailable");
       const cfgData = (schoolConfigRow?.data as any) || {};
       lockedExams = Array.isArray(cfgData.lockedExams) ? cfgData.lockedExams : [];
       isExamLocked = lockedExams.some((e: string) => e.trim().toLowerCase() === examName.trim().toLowerCase());
     } catch (cfgErr) {
       console.warn("Could not check lockedExams in marks roster:", cfgErr);
+      return NextResponse.json({ error: "Unable to verify exam lock status. Please try again." }, { status: 503 });
     }
 
     return NextResponse.json({

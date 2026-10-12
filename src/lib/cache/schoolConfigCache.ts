@@ -14,13 +14,8 @@ const SCHOOL_CONFIG_TAG = "school-config";
 
 const getSchoolConfigCached = unstable_cache(
   async () => {
-    try {
-      const row = await db.schoolConfig.findUnique({ where: { id: "singleton" } });
-      return row ?? null;
-    } catch (err) {
-      console.error("[SchoolConfigCache] Error fetching schoolConfig:", err);
-      return null;
-    }
+    const row = await db.schoolConfig.findUnique({ where: { id: "singleton" } });
+    return row ?? null;
   },
   ["school-config-singleton"],
   { tags: [SCHOOL_CONFIG_TAG], revalidate: 60 }

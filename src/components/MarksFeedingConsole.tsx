@@ -1055,10 +1055,6 @@ export default function MarksFeedingConsole() {
     setServerIsExamLocked(null);
   }, [selectedExam]);
 
-  // Keep school info fresh on mount and when exam changes
-  useEffect(() => {
-    refreshSchool?.();
-  }, [refreshSchool, selectedExam]);
 
   // 🔒 Check if current selected exam is locked by Admin (Authoritative & Case-insensitive)
   const isExamLocked = useMemo(() => {

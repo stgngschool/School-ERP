@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
 import { getSafeErrorMessage } from "@/lib/validation";
+import { getCachedSchoolConfig } from "@/lib/cache/schoolConfigCache";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,21 @@ export async function GET(
     }
 
     const { id: studentId } = await params;
+
+    if (authUser.role === "TEACHER") {
+      const teacherProfile = await db.teacherProfile.findUnique({
+        where: { userId: authUser.userId },
+        include: { classes: { where: { status: "ACTIVE" }, select: { id: true } } },
+      });
+      const student = await db.student.findUnique({
+        where: { id: studentId },
+        select: { classId: true },
+      });
+      const allowedClassIds = new Set(teacherProfile?.classes.map((classRecord) => classRecord.id) ?? []);
+      if (!student || !student.classId || !allowedClassIds.has(student.classId)) {
+        return NextResponse.json({ error: "Forbidden. You are only authorized to view marks for students in your assigned classes." }, { status: 403 });
+      }
+    }
 
     if (authUser.role === "PARENT") {
       const parentProfile = await db.parentProfile.findUnique({
@@ -62,8 +78,8 @@ export async function POST(
   const authUser = await getAuthUser(request);
   if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  if (authUser.role !== "ADMIN" && authUser.role !== "TEACHER" && authUser.role !== "ACCOUNTANT") {
-    return NextResponse.json({ error: "Unauthorized. Only administrators, accountants, and teachers can record marks." }, { status: 403 });
+  if (authUser.role !== "ADMIN" && authUser.role !== "TEACHER") {
+    return NextResponse.json({ error: "Forbidden. Only administrators and teachers can record marks." }, { status: 403 });
   }
 
   try {
@@ -78,6 +94,40 @@ export async function POST(
 
     if (!subject || !examName || marksObtained === undefined || maxMarks === undefined) {
       return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
+    }
+
+    if (authUser.role === "TEACHER") {
+      const teacherProfile = await db.teacherProfile.findUnique({
+        where: { userId: authUser.userId },
+        include: { classes: { where: { status: "ACTIVE" }, select: { id: true } } },
+      });
+      const student = await db.student.findUnique({
+        where: { id },
+        select: { classId: true },
+      });
+      const allowedClassIds = new Set(teacherProfile?.classes.map((classRecord) => classRecord.id) ?? []);
+      if (!student || !student.classId || !allowedClassIds.has(student.classId)) {
+        return NextResponse.json({ error: "Forbidden. You can only record marks for students in your assigned classes." }, { status: 403 });
+      }
+    }
+
+    if (authUser.role !== "ADMIN") {
+      try {
+        const schoolConfigRow = await getCachedSchoolConfig();
+        if (!schoolConfigRow) throw new Error("School configuration unavailable");
+        const cfgData = (schoolConfigRow.data as Record<string, unknown>) || {};
+        const lockedExams = Array.isArray(cfgData.lockedExams) ? cfgData.lockedExams : [];
+        const isLocked = lockedExams.some(
+          (lockedExam): lockedExam is string =>
+            typeof lockedExam === "string" && lockedExam.trim().toLowerCase() === String(examName).trim().toLowerCase()
+        );
+        if (isLocked) {
+          return NextResponse.json({ error: `Examination '${examName}' is confirmed and locked by Admin. Marks cannot be entered or edited.` }, { status: 403 });
+        }
+      } catch (configError) {
+        console.error("Could not verify lockedExams in single-student marks:", configError);
+        return NextResponse.json({ error: "Unable to verify exam lock status. Please try again." }, { status: 503 });
+      }
     }
 
     const writtenVal = writtenExam !== undefined && writtenExam !== null && writtenExam !== "" ? parseFloat(writtenExam) : null;

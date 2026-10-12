@@ -71,7 +71,7 @@ export async function GET(request: Request) {
     if (authUser.role === "PARENT") {
       const parentProfile = await db.parentProfile.findUnique({
         where: { userId: authUser.userId },
-        include: { students: true }
+        include: { students: { select: { id: true } } }
       });
       if (!parentProfile) {
         return NextResponse.json([]);

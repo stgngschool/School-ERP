@@ -61,7 +61,7 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
   // Save feedback state
   const [isSaving, setIsSaving] = useState<boolean>(false);
 
-  const isTeacher = (user?.role === "TEACHER") && user?.role !== "ADMIN" && user?.role !== "ACCOUNTANT";
+  const isTeacher = user?.role === "TEACHER";
 
   // Get available classes from classes & students list with natural order
   const availableClasses = useMemo(() => {

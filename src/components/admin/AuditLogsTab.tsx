@@ -90,7 +90,7 @@ export default function AuditLogsTab({ auditLogs: initialLogs = [] }: AuditLogsT
         if (deferredSearch.trim()) params.set("search", deferredSearch.trim());
 
         const res = await fetch(`/api/audits?${params.toString()}`, {
-          cache: "no-store",
+          cache: forceRefresh ? "no-store" : "default",
         });
 
         if (res.ok) {

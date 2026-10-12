@@ -3,8 +3,19 @@ import db from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
 import { getSafeErrorMessage } from "@/lib/validation";
 import { getTodayIST } from "@/lib/dateUtils";
+import { BoundedCache } from "@/lib/cache/BoundedCache";
 
 export const dynamic = "force-dynamic";
+
+interface AuditSummaryData {
+  totalAll: number;
+  todayTotal: number;
+  todayLookups: number;
+  todayPayments: number;
+  staffUsers: { id: string; name: string; role: string }[];
+}
+
+const auditSummaryCache = new BoundedCache<AuditSummaryData>(10, 3 * 60 * 1000); // 3 min TTL
 
 export async function GET(request: Request) {
   try {
@@ -93,55 +104,78 @@ export async function GET(request: Request) {
     const todayIST = getTodayIST();
     const todayStart = new Date(`${todayIST}T00:00:00+05:30`);
 
-    // Concurrent batch: fetch items, count, summary metrics, and active staff
-    const [logs, totalCount, totalAll, todayTotal, todayLookups, todayPayments, staffUsers] =
-      await Promise.all([
-        db.auditLog.findMany({
-          where,
-          take: limit,
-          skip,
-          select: {
-            id: true,
-            action: true,
-            createdAt: true,
-            userId: true,
-            user: {
-              select: {
-                id: true,
-                name: true,
-                role: true,
-              },
+    // ── Egress protection: fetch summary counts & staff list from 3-min cache ──
+    const summaryCacheKey = `audits_summary_${todayIST}`;
+    let cachedSummary = auditSummaryCache.get(summaryCacheKey);
+
+    // Concurrent batch: fetch items & filtered count
+    const [logs, totalCount] = await Promise.all([
+      db.auditLog.findMany({
+        where,
+        take: limit,
+        skip,
+        select: {
+          id: true,
+          action: true,
+          createdAt: true,
+          userId: true,
+          user: {
+            select: {
+              id: true,
+              name: true,
+              role: true,
             },
           },
-          orderBy: { createdAt: "desc" },
-        }),
-        db.auditLog.count({ where }),
-        db.auditLog.count(),
-        db.auditLog.count({ where: { createdAt: { gte: todayStart } } }),
-        db.auditLog.count({
-          where: {
-            action: { contains: "LOOKUP" },
-            createdAt: { gte: todayStart },
-          },
-        }),
-        db.auditLog.count({
-          where: {
-            OR: [
-              { action: { contains: "PAYMENT" } },
-              { action: { contains: "FEE" } },
-              { action: { contains: "CHARGE" } },
-              { action: { contains: "BILLING" } },
-              { action: { contains: "CONCESSION" } },
-            ],
-            createdAt: { gte: todayStart },
-          },
-        }),
-        db.user.findMany({
-          where: { role: { in: ["ADMIN", "ACCOUNTANT", "TEACHER"] } },
-          select: { id: true, name: true, role: true },
-          orderBy: { name: "asc" },
-        }),
-      ]);
+        },
+        orderBy: { createdAt: "desc" },
+      }),
+      db.auditLog.count({ where }),
+    ]);
+
+    // Only fetch expensive summary metrics if client is paginated and cache is cold
+    if (!cachedSummary && (isPaginated || searchParams.has("limit") || searchParams.has("category"))) {
+      try {
+        const [totalAll, todayTotal, todayLookups, todayPayments, staffUsers] = await Promise.all([
+          db.auditLog.count(),
+          db.auditLog.count({ where: { createdAt: { gte: todayStart } } }),
+          db.auditLog.count({
+            where: {
+              action: { contains: "LOOKUP" },
+              createdAt: { gte: todayStart },
+            },
+          }),
+          db.auditLog.count({
+            where: {
+              OR: [
+                { action: { contains: "PAYMENT" } },
+                { action: { contains: "FEE" } },
+                { action: { contains: "CHARGE" } },
+                { action: { contains: "BILLING" } },
+                { action: { contains: "CONCESSION" } },
+              ],
+              createdAt: { gte: todayStart },
+            },
+          }),
+          db.user.findMany({
+            where: { role: { in: ["ADMIN", "ACCOUNTANT", "TEACHER"] } },
+            select: { id: true, name: true, role: true },
+            orderBy: { name: "asc" },
+          }),
+        ]);
+        cachedSummary = { totalAll, todayTotal, todayLookups, todayPayments, staffUsers };
+        auditSummaryCache.set(summaryCacheKey, cachedSummary);
+      } catch (sumErr) {
+        console.warn("Could not calculate audit summary:", sumErr);
+      }
+    }
+
+    const {
+      totalAll = totalCount,
+      todayTotal = 0,
+      todayLookups = 0,
+      todayPayments = 0,
+      staffUsers = [],
+    } = cachedSummary || {};
 
     const formatted = logs.map((log) => {
       const d = log.createdAt;
@@ -183,6 +217,10 @@ export async function GET(request: Request) {
           todayPayments,
         },
         staffList: staffUsers,
+      }, {
+        headers: {
+          "Cache-Control": "private, max-age=15, stale-while-revalidate=45",
+        },
       });
     }
 
@@ -192,6 +230,7 @@ export async function GET(request: Request) {
         "X-Total-Count": String(totalCount),
         "X-Page": String(page),
         "X-Total-Pages": String(Math.max(1, Math.ceil(totalCount / limit))),
+        "Cache-Control": "private, max-age=15, stale-while-revalidate=45",
       },
     });
   } catch (error) {

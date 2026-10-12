@@ -26,6 +26,22 @@ export async function GET(request: Request) {
 
     const cleanClassName = className.replace(/^class\s*/i, "").trim();
 
+    if (authUser.role === "TEACHER") {
+      const teacherProfile = await db.teacherProfile.findUnique({
+        where: { userId: authUser.userId },
+        include: { classes: { where: { status: "ACTIVE" }, select: { name: true, section: true } } },
+      });
+      const normalizeClassName = (value: string) => value.replace(/^class\s*/i, "").trim().toLowerCase();
+      const isAssigned = teacherProfile?.classes.some((assignedClass) =>
+        normalizeClassName(assignedClass.name) === normalizeClassName(cleanClassName) &&
+        (assignedClass.section ?? "").trim().toLowerCase() === section.trim().toLowerCase()
+      ) ?? false;
+
+      if (!isAssigned) {
+        return NextResponse.json({ error: "Forbidden. You are only authorized to view marks for your assigned class and section." }, { status: 403 });
+      }
+    }
+
     const classOrConditions: any[] = [
       { name: { equals: cleanClassName, mode: "insensitive" } },
       { name: { equals: `Class ${cleanClassName}`, mode: "insensitive" } },

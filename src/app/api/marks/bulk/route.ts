@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import db from "@/lib/db";
+import { getCachedSchoolConfig } from "@/lib/cache/schoolConfigCache";
 
 export const dynamic = "force-dynamic";
 
@@ -8,13 +9,14 @@ export async function POST(request: Request) {
   const authUser = await getAuthUser(request);
   if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  if (authUser.role !== "ADMIN" && authUser.role !== "TEACHER" && authUser.role !== "ACCOUNTANT") {
-    return NextResponse.json({ error: "Forbidden. Admin, Accountant, or Teacher access required." }, { status: 403 });
+  if (authUser.role !== "ADMIN" && authUser.role !== "TEACHER") {
+    return NextResponse.json({ error: "Forbidden. Admin or Teacher access required." }, { status: 403 });
   }
 
   try {
     const body = await request.json();
-    const { examName, subject, maxMarks, marksList, deletedStudentIds } = body;
+    const { examName, subject, maxMarks, deletedStudentIds } = body;
+    const safeMarksList = Array.isArray(body.marksList) ? body.marksList : [];
 
     if (!examName || !subject) {
       return NextResponse.json({ error: "Missing examName or subject." }, { status: 400 });
@@ -23,21 +25,25 @@ export async function POST(request: Request) {
     // ── Check if Exam is Locked by Admin
     const cleanExamName = examName.trim();
     const cleanSubject = subject.trim().toUpperCase();
-    try {
-      const schoolConfigRow = await db.schoolConfig.findUnique({ where: { id: "singleton" } });
-      const cfgData = (schoolConfigRow?.data as any) || {};
-      const lockedExams: string[] = Array.isArray(cfgData.lockedExams) ? cfgData.lockedExams : [];
-      const isLocked = lockedExams.some((e: string) => e.trim().toLowerCase() === cleanExamName.toLowerCase());
-      if (isLocked && authUser.role !== "ADMIN") {
-        return NextResponse.json({
-          error: `Examination '${cleanExamName}' is confirmed and locked by Admin. Marks cannot be entered or edited.`,
-        }, { status: 403 });
+    if (authUser.role !== "ADMIN") {
+      try {
+        const schoolConfigRow = await getCachedSchoolConfig();
+        if (!schoolConfigRow) throw new Error("School configuration unavailable");
+        const cfgData = (schoolConfigRow.data as any) || {};
+        const lockedExams: string[] = Array.isArray(cfgData.lockedExams) ? cfgData.lockedExams : [];
+        const isLocked = lockedExams.some((e: string) => e.trim().toLowerCase() === cleanExamName.toLowerCase());
+        if (isLocked) {
+          return NextResponse.json({
+            error: `Examination '${cleanExamName}' is confirmed and locked by Admin. Marks cannot be entered or edited.`,
+          }, { status: 403 });
+        }
+      } catch (cfgErr) {
+        console.error("Could not verify lockedExams in bulk marks:", cfgErr);
+        return NextResponse.json({ error: "Unable to verify exam lock status. Please try again." }, { status: 503 });
       }
-    } catch (cfgErr) {
-      console.warn("Could not check lockedExams in bulk marks:", cfgErr);
     }
 
-    const hasMarksList = Array.isArray(marksList) && marksList.length > 0;
+    const hasMarksList = safeMarksList.length > 0;
     const hasDeletions = Array.isArray(deletedStudentIds) && deletedStudentIds.length > 0;
 
     if (!hasMarksList && !hasDeletions) {
@@ -75,18 +81,23 @@ export async function POST(request: Request) {
 
       const allowedClassIds = teacherProfile.classes.map((c) => c.id);
 
-      const candidateStudentIds: string[] = [
-        ...(Array.isArray(marksList) ? marksList.map((m: any) => m.studentId) : []),
+      const candidateStudentIds: string[] = Array.from(new Set([
+        ...safeMarksList.map((m: any) => m?.studentId),
         ...(Array.isArray(deletedStudentIds) ? deletedStudentIds : []),
-      ].filter(Boolean);
+      ].filter((id): id is string => typeof id === "string" && id.length > 0)));
 
       if (candidateStudentIds.length > 0) {
-        const unauthorizedStudentsCount = await db.student.count({
-          where: {
-            id: { in: candidateStudentIds },
-            classId: { notIn: allowedClassIds },
-          },
+        const candidateStudents = await db.student.findMany({
+          where: { id: { in: candidateStudentIds } },
+          select: { id: true, classId: true },
         });
+        const allowedClassIdSet = new Set(allowedClassIds);
+        const authorizedIds = new Set(
+          candidateStudents
+            .filter((student) => student.classId !== null && allowedClassIdSet.has(student.classId))
+            .map((student) => student.id)
+        );
+        const unauthorizedStudentsCount = candidateStudentIds.filter((id) => !authorizedIds.has(id)).length;
 
         if (unauthorizedStudentsCount > 0) {
           return NextResponse.json(
@@ -108,7 +119,7 @@ export async function POST(request: Request) {
     const validEntries: any[] = [];
     const validationErrors: string[] = [];
 
-    for (const m of marksList) {
+    for (const m of safeMarksList) {
       if (!m.studentId) continue;
 
       const breakdown = m.breakdown || null;
@@ -271,7 +282,7 @@ export async function POST(request: Request) {
       success: true,
       count: savedCount,
       deletedCount,
-      totalSubmitted: (marksList?.length || 0) + (deletedStudentIds?.length || 0),
+      totalSubmitted: safeMarksList.length + (Array.isArray(deletedStudentIds) ? deletedStudentIds.length : 0),
       failedStudentIds,
       warnings: validationErrors,
     });
@@ -289,8 +300,8 @@ export async function DELETE(request: Request) {
   const authUser = await getAuthUser(request);
   if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  if (authUser.role !== "ADMIN" && authUser.role !== "TEACHER" && authUser.role !== "ACCOUNTANT") {
-    return NextResponse.json({ error: "Forbidden. Admin, Accountant, or Teacher access required." }, { status: 403 });
+  if (authUser.role !== "ADMIN" && authUser.role !== "TEACHER") {
+    return NextResponse.json({ error: "Forbidden. Admin or Teacher access required." }, { status: 403 });
   }
 
   try {
@@ -315,18 +326,53 @@ export async function DELETE(request: Request) {
     const cleanExamName = examName.trim();
 
     // ── Check if Exam is Locked by Admin
-    try {
-      const schoolConfigRow = await db.schoolConfig.findUnique({ where: { id: "singleton" } });
-      const cfgData = (schoolConfigRow?.data as any) || {};
-      const lockedExams: string[] = Array.isArray(cfgData.lockedExams) ? cfgData.lockedExams : [];
-      const isLocked = lockedExams.some((e: string) => e.trim().toLowerCase() === cleanExamName.toLowerCase());
-      if (isLocked && authUser.role !== "ADMIN") {
-        return NextResponse.json({
-          error: `Examination '${cleanExamName}' is confirmed and locked by Admin. Marks cannot be deleted or reset.`,
-        }, { status: 403 });
+    if (authUser.role !== "ADMIN") {
+      try {
+        const schoolConfigRow = await getCachedSchoolConfig();
+        if (!schoolConfigRow) throw new Error("School configuration unavailable");
+        const cfgData = (schoolConfigRow.data as any) || {};
+        const lockedExams: string[] = Array.isArray(cfgData.lockedExams) ? cfgData.lockedExams : [];
+        const isLocked = lockedExams.some((e: string) => e.trim().toLowerCase() === cleanExamName.toLowerCase());
+        if (isLocked) {
+          return NextResponse.json({
+            error: `Examination '${cleanExamName}' is confirmed and locked by Admin. Marks cannot be deleted or reset.`,
+          }, { status: 403 });
+        }
+      } catch (cfgErr) {
+        console.error("Could not verify lockedExams in delete marks:", cfgErr);
+        return NextResponse.json({ error: "Unable to verify exam lock status. Please try again." }, { status: 503 });
       }
-    } catch (cfgErr) {
-      console.warn("Could not check lockedExams in delete marks:", cfgErr);
+    }
+
+    if (authUser.role === "TEACHER") {
+      const teacherProfile = await db.teacherProfile.findUnique({
+        where: { userId: authUser.userId },
+        include: { classes: { where: { status: "ACTIVE" }, select: { id: true } } },
+      });
+
+      const allowedClassIds = teacherProfile?.classes.map((assignedClass) => assignedClass.id) ?? [];
+      if (allowedClassIds.length === 0) {
+        return NextResponse.json(
+          { error: "Forbidden. No active class has been assigned to your teacher account." },
+          { status: 403 }
+        );
+      }
+
+      const studentsToDelete = await db.student.findMany({
+        where: { id: { in: idsToDelete } },
+        select: { id: true, classId: true },
+      });
+      const allowedClassIdSet = new Set(allowedClassIds);
+      const allStudentsAreAssigned =
+        studentsToDelete.length === idsToDelete.length &&
+        studentsToDelete.every((student) => student.classId !== null && allowedClassIdSet.has(student.classId));
+
+      if (!allStudentsAreAssigned) {
+        return NextResponse.json(
+          { error: "Forbidden. You can only delete marks for students in your assigned classes." },
+          { status: 403 }
+        );
+      }
     }
 
     const delResult = await db.mark.deleteMany({

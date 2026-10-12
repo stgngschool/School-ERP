@@ -475,12 +475,12 @@ interface AuthContextType {
   login: (username: string, password: string, portal?: "STAFF" | "PARENT") => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   refreshData: () => Promise<void>;
-  refreshStudents: () => Promise<void>;
-  refreshBilling: () => Promise<void>;
+  refreshStudents: (force?: boolean) => Promise<void>;
+  refreshBilling: (force?: boolean) => Promise<void>;
   refreshStudentBilling: (targetStudentIds: string | string[]) => Promise<void>;
   billingSummary: any | null;
   fetchBillingSummary: () => Promise<any>;
-  refreshAttendance: () => Promise<void>;
+  refreshAttendance: (force?: boolean) => Promise<void>;
   refreshHomework: () => Promise<void>;
   refreshLeave: () => Promise<void>;
   refreshEvents: () => Promise<void>;
@@ -767,12 +767,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const res = await fetch(url, {
           ...options,
           credentials: "include",
-          // ── EGRESS-FIX-4: Use "default" instead of "no-store" so the browser
-          // respects Cache-Control: private, max-age=30 headers already sent by API
-          // routes. "no-store" was bypassing browser caching entirely, causing repeated
-          // identical fetches with zero benefit. Callers that need bypass can pass
-          // cache: "no-store" explicitly in options.
-          cache: options.cache ?? "default",
+          // Use the browser cache only when this request is eligible for the
+          // helper's session cache. Forced/fresh reads bypass both cache layers.
+          cache: options.cache ?? (useCache ? "default" : "no-store"),
           signal: controller.signal,
         });
         clearTimeout(tid);
@@ -978,7 +975,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (role === "ADMIN") {
           apiFetch("/api/users", {}, 10000, true).then((data) => data && setUsersList(data));
-          apiFetch("/api/audits?limit=25", {}, 10000, false).then((data) => {
+          apiFetch("/api/audits?limit=25", {}, 10000, true).then((data) => {
             if (data) setAuditLogs(Array.isArray(data) ? data : (data.logs || []));
           });
         }
@@ -1035,10 +1032,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // ── EGRESS P1: Single source of truth for the FULL school-wide billing dataset
   // (receipts + ledger + dues) consumed by the Overview, Defaulters, and Ledger views.
-  // Guarded by (a) an in-flight lock and (b) a 3-minute freshness window, so repeated
+  // Guarded by (a) an in-flight lock and (b) a 10-minute freshness window, so repeated
   // view mounts / tab switches / background probes do NOT each trigger a ~4 MB pull.
   // Pass force=true (e.g. right after a mutation) to bypass the freshness window.
-  const FULL_BILLING_FRESH_MS = 3 * 60 * 1000;
+  const FULL_BILLING_FRESH_MS = 10 * 60 * 1000;
   const loadFullBilling = async (force = false) => {
     if (isRefreshingBillingRef.current) return;
     if (!force && Date.now() - lastFullBillingLoadRef.current < FULL_BILLING_FRESH_MS) return;
@@ -1271,7 +1268,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (data && data.applications) setAdmissionApplications(data.applications);
   };
 
-  const refreshSchool = async () => {
+  const refreshSchool = useCallback(async () => {
     clearApiCache("/api/school");
     try {
       const res = await fetch("/api/school", { credentials: "include", cache: "no-store" });
@@ -1283,17 +1280,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (err) {
       console.error("Refresh school failed:", err);
     }
-  };
+  }, []);
 
-  const refreshUsers = async () => {
+  const refreshUsers = useCallback(async () => {
     const data = await apiFetch("/api/users");
     if (data) setUsersList(data);
-  };
+  }, []);
 
-  const refreshAudits = async () => {
-    const data = await apiFetch("/api/audits?limit=25", {}, 10000, false);
+  const refreshAudits = useCallback(async () => {
+    const data = await apiFetch("/api/audits?limit=25", {}, 10000, true);
     if (data) setAuditLogs(Array.isArray(data) ? data : (data.logs || []));
-  };
+  }, []);
 
   // Targeted refresh — only classes list (fast, avoids full reload)
   const refreshClasses = async () => {

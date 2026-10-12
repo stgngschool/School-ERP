@@ -10,6 +10,7 @@ import { BoundedCache } from "@/lib/cache/BoundedCache";
 import { validateCsrfOrigin } from "@/lib/security";
 import { formatCanonicalDOB, formatCanonicalDOBIso, parseCanonicalDOB } from "@/lib/dateUtils";
 import { serverStudentsCache, clearServerStudentsCache } from "@/lib/cache/studentsCache";
+import { clearServerBillingCache } from "@/lib/cache/billingCache";
 
 export const dynamic = "force-dynamic";
 
@@ -74,12 +75,13 @@ export async function GET(request: Request) {
     // lightweight projection. Explicit ?full=true / ?slim=true override the default either way.
     const slimParam = searchParams.get("slim") === "true";
     const fullParam = searchParams.get("full") === "true";
-    const useSlim = fullParam ? false : (slimParam || authUser.role === "TEACHER");
+    const useSlim = authUser.role === "TEACHER" ? true : (fullParam ? false : slimParam);
 
-    const isStaff = authUser.role === "ADMIN" || authUser.role === "ACCOUNTANT" || authUser.role === "TEACHER";
-    const cacheKey = isStaff
-      ? `STAFF_STUDENTS_${useSlim ? "SLIM" : "FULL"}_${hasExplicitPagination ? `${limit}_${offset}` : "ALL"}`
-      : `PARENT_${authUser.userId}`;
+    const cacheKey = authUser.role === "TEACHER"
+      ? `TEACHER_${authUser.userId}_${useSlim ? "SLIM" : "FULL"}_${hasExplicitPagination ? `${limit}_${offset}` : "ALL"}`
+      : (authUser.role === "PARENT"
+        ? `PARENT_${authUser.userId}`
+        : `STAFF_STUDENTS_${useSlim ? "SLIM" : "FULL"}_${hasExplicitPagination ? `${limit}_${offset}` : "ALL"}`);
 
     const cachedData = serverStudentsCache.get(cacheKey);
     if (cachedData) {
@@ -101,7 +103,15 @@ export async function GET(request: Request) {
       }
       whereClause = { parentProfileId: parentProfile.id };
     }
-    // Teachers, Admins, and Accountants have school-wide access to all students and classes for grading, attendance, and coursework.
+    if (authUser.role === "TEACHER") {
+      const teacherProfile = await db.teacherProfile.findUnique({
+        where: { userId: authUser.userId },
+        include: { classes: { where: { status: "ACTIVE" }, select: { id: true } } },
+      });
+      const allowedClassIds = teacherProfile?.classes.map((c) => c.id) || [];
+      whereClause = { classId: { in: allowedClassIds } };
+    }
+    // Admins and Accountants have school-wide access to students and classes.
 
     const dbStart = performance.now();
     let formatted: Record<string, any>[];
@@ -518,6 +528,11 @@ export async function POST(request: Request) {
         });
       }
     }
+
+    // Invalidate after the student and any admission charges have been written so
+    // a concurrent cache miss cannot repopulate billing data before those writes.
+    clearServerStudentsCache();
+    clearServerBillingCache();
 
     // ── E-02: Structured Audit Logging
     await db.auditLog.create({
