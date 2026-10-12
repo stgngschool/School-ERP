@@ -557,7 +557,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (activeRole === "PARENT") setActiveTab("dashboard");
-    if (activeRole === "TEACHER") setActiveTab("attendance");
+    if (activeRole === "TEACHER") setActiveTab("marks");
     if (activeRole === "ACCOUNTANT") setActiveTab("dashboard");
     if (activeRole === "ADMIN") setActiveTab("dashboard");
   }, [activeRole]);
@@ -942,15 +942,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             })
       );
 
-      const attendanceLoad = apiFetch("/api/attendance", {}, 12000, true).then((data) => {
-        if (data && Array.isArray(data)) {
-          setAttendances(data);
-          setAttendanceLoaded(true);
-          setLocalCache("gng_cached_attendances", data);
-        }
-      });
-
       // ── AC-03: Await ALL required core data loads before declaring DASHBOARD READY ──
+      // Attendance is deliberately lazy-loaded on demand to preserve Supabase egress bandwidth.
       const allCoreLoads = [
         schoolLoad,
         classesLoad,
@@ -960,7 +953,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         concessionsLoad,
         studentsLoad,
         billingLoad,
-        attendanceLoad,
       ];
 
       await Promise.allSettled(allCoreLoads);
@@ -986,7 +978,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (role === "ADMIN") {
           apiFetch("/api/users", {}, 10000, true).then((data) => data && setUsersList(data));
-          apiFetch("/api/audits", {}, 10000, false).then((data) => data && setAuditLogs(data));
+          apiFetch("/api/audits?limit=25", {}, 10000, false).then((data) => {
+            if (data) setAuditLogs(Array.isArray(data) ? data : (data.logs || []));
+          });
         }
 
         if (role === "TEACHER" || role === "PARENT") {
@@ -1236,11 +1230,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return await apiFetch("/api/billing/summary", {}, 10000, true);
   };
 
-  const refreshAttendance = async () => {
-    const data = await apiFetch("/api/attendance");
-    if (data) {
+  const refreshAttendance = async (force = false) => {
+    if (force) {
+      clearApiCache("/api/attendance");
+    }
+    const data = await apiFetch("/api/attendance", {}, 12000, !force);
+    if (data && Array.isArray(data)) {
       setAttendances(data);
       setAttendanceLoaded(true);
+      setLocalCache("gng_cached_attendances", data);
     }
   };
 
@@ -1293,8 +1291,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const refreshAudits = async () => {
-    const data = await apiFetch("/api/audits");
-    if (data) setAuditLogs(data);
+    const data = await apiFetch("/api/audits?limit=25", {}, 10000, false);
+    if (data) setAuditLogs(Array.isArray(data) ? data : (data.logs || []));
   };
 
   // Targeted refresh — only classes list (fast, avoids full reload)

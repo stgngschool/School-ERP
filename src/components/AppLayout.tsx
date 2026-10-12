@@ -67,8 +67,8 @@ const getNavItems = (activeRole: string): NavItem[] => {
       ];
     case "TEACHER":
       return [
-        { category: "Daily Academics", name: "Mark Attendance", shortName: "Attendance", icon: UserCheck, tab: "attendance" },
         { category: "Daily Academics", name: "Class Marks Entry", shortName: "Marks", icon: GraduationCap, tab: "marks" },
+        { category: "Daily Academics", name: "Mark Attendance", shortName: "Attendance", icon: UserCheck, tab: "attendance" },
         { category: "Daily Academics", name: "Upload Homework", shortName: "Homework", icon: BookOpen, tab: "homework" },
         { category: "Daily Academics", name: "Fee Status & Dues", shortName: "Fee Dues", icon: AlertTriangle, tab: "defaulters" },
         { category: "Daily Academics", name: "Leave Requests", shortName: "Leaves", icon: FileText, tab: "leaves" },
@@ -239,8 +239,8 @@ const getMegaMenuData = (activeRole: string): MegaMenuCategory[] => {
           borderColor: "border-indigo-100",
           icon: Award,
           items: [
-            { name: "Mark Daily Attendance", tab: "attendance" },
             { name: "Exams & Marks Entry", tab: "marks" },
+            { name: "Mark Daily Attendance", tab: "attendance" },
             { name: "Upload Homework Files", tab: "homework" },
             { name: "Class Fee Status & Dues", tab: "defaulters" },
             { name: "My Leave Requests", tab: "leaves" },

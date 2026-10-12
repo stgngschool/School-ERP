@@ -28,6 +28,39 @@ export async function GET(request: Request) {
 
     const cleanClassName = className.replace(/^class\s*/i, "").trim();
 
+    // ── Security Guard: Restrict TEACHER role strictly to their assigned class(es) ──
+    if (authUser.role === "TEACHER") {
+      const teacherProfile = await db.teacherProfile.findUnique({
+        where: { userId: authUser.userId },
+        include: { classes: { where: { status: "ACTIVE" } } },
+      });
+
+      if (!teacherProfile || !teacherProfile.classes || teacherProfile.classes.length === 0) {
+        return NextResponse.json(
+          { error: "Forbidden. No class has been assigned to your teacher account." },
+          { status: 403 }
+        );
+      }
+
+      const isAssigned = teacherProfile.classes.some((c) => {
+        const cNorm = c.name.replace(/^class\s*/i, "").trim().toLowerCase();
+        const reqNorm = cleanClassName.toLowerCase();
+        const nameMatch = cNorm === reqNorm || c.name.toLowerCase() === className.toLowerCase();
+        if (!nameMatch) return false;
+        if (section && c.section) {
+          return c.section.trim().toLowerCase() === section.trim().toLowerCase();
+        }
+        return true;
+      });
+
+      if (!isAssigned) {
+        return NextResponse.json(
+          { error: "Forbidden. You are only authorized to view marks for your assigned class." },
+          { status: 403 }
+        );
+      }
+    }
+
     const classOrConditions: any[] = [
       { name: { equals: cleanClassName, mode: "insensitive" } },
       { name: { equals: `Class ${cleanClassName}`, mode: "insensitive" } },

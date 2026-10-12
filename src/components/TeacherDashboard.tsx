@@ -47,8 +47,8 @@ import {
 import { formatP } from "@/lib/currency";
 import { getTodayIST } from "@/lib/dateUtils";
 
-// ── H-10 / L-09: Stable module-level tabs array
-const VALID_TEACHER_TABS = ["attendance", "homework", "leaves", "marks", "notices", "defaulters"] as const;
+// ── H-10 / L-09: Stable module-level tabs array (Marks first for exam season & zero eager egress)
+const VALID_TEACHER_TABS = ["marks", "attendance", "homework", "leaves", "notices", "defaulters"] as const;
 
 export default function TeacherDashboard() {
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -72,11 +72,11 @@ export default function TeacherDashboard() {
     showToast,
   } = useAuth();
 
-  const currentTab = VALID_TEACHER_TABS.includes(activeTab as any) ? activeTab : "attendance";
+  const currentTab = VALID_TEACHER_TABS.includes(activeTab as any) ? activeTab : "marks";
 
   React.useEffect(() => {
     if (!VALID_TEACHER_TABS.includes(activeTab as any)) {
-      setActiveTab("attendance");
+      setActiveTab("marks");
     }
   }, [activeTab, setActiveTab]);
 
@@ -87,16 +87,7 @@ export default function TeacherDashboard() {
   const [feeSearch, setFeeSearch] = useState("");
   const deferredFeeSearch = React.useDeferredValue(feeSearch);
 
-  // Auto-set teacher's default class when user profile loads
-  React.useEffect(() => {
-    if (user?.teacherProfile?.classes && user.teacherProfile.classes.length > 0) {
-      const tClass = user.teacherProfile.classes[0];
-      setSelectedClass(getCleanClassKey(tClass.name, tClass.section));
-    }
-  }, [user]);
-
-  // ── M-05 fix: Available classes computed for this teacher specifically.
-  // Teachers only see their assigned classes; fallback to all classes only if unassigned.
+  // ── Available classes computed for this teacher specifically (Strictly scoped) ──
   const availableClasses = React.useMemo(() => {
     const classSet = new Set<string>();
     if (user?.teacherProfile?.classes && user.teacherProfile.classes.length > 0) {
@@ -104,24 +95,20 @@ export default function TeacherDashboard() {
         const key = getCleanClassKey(c.name, c.section);
         if (key) classSet.add(key);
       });
-    } else if (students.length > 0) {
-      students.forEach((s) => {
-        const key = getCleanClassKey(s.class, s.section);
-        if (key) classSet.add(key);
-      });
     }
     return sortClasses(Array.from(classSet));
-  }, [students, user]);
+  }, [user]);
 
-  // Auto-select first available class if current class has no students
+  // Auto-set teacher's default class strictly from assigned classes
   React.useEffect(() => {
     if (availableClasses.length > 0) {
-      const hasCurrent = students.some((s) => matchStudentToClass(s, selectedClass));
-      if (!hasCurrent && !user?.teacherProfile?.classes?.length) {
+      if (!selectedClass || !availableClasses.includes(selectedClass)) {
         setSelectedClass(availableClasses[0]);
       }
+    } else {
+      setSelectedClass("");
     }
-  }, [students, availableClasses, selectedClass, user]);
+  }, [availableClasses, selectedClass]);
 
   // Homework Form State
   const [hwSubject, setHwSubject] = useState("Mathematics");
@@ -149,8 +136,14 @@ export default function TeacherDashboard() {
     );
   }, [classStudents, deferredStudentSearch]);
 
-  // Filter leaves that belong to class 10-A
-  const pendingLeaves = leaveRequests.filter((l) => l.status === "PENDING");
+  // Filter leaves that belong strictly to teacher's assigned class(es)
+  const pendingLeaves = React.useMemo(() => {
+    return leaveRequests.filter((l) => {
+      if (l.status !== "PENDING") return false;
+      if (availableClasses.length === 0) return false;
+      return availableClasses.some((c) => matchStudentToClass({ class: l.classSection, section: "" }, c));
+    });
+  }, [leaveRequests, availableClasses]);
 
   // Helper to check today's attendance status
   const todayDateStr = getTodayIST();
@@ -216,6 +209,21 @@ export default function TeacherDashboard() {
           </p>
         </div>
       </div>
+
+      {/* ─── Unassigned Teacher Notice Banner ─── */}
+      {availableClasses.length === 0 && (
+        <div className="p-4 bg-amber-50 border border-amber-200/80 rounded-2xl sm:rounded-3xl flex items-start gap-3 shadow-2xs">
+          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <h4 className="text-xs font-black text-amber-900 uppercase tracking-wider">
+              No Class Assigned to Your Teacher Account
+            </h4>
+            <p className="text-[11px] text-amber-700 font-semibold mt-0.5">
+              Aapko abhi tak koi class assign nahi ki gayi hai. Attendance, marks aur coursework manage karne ke liye kripya School Administrator se apni class assign karwayen.
+            </p>
+          </div>
+        </div>
+      )}
 
 
 
@@ -503,17 +511,27 @@ export default function TeacherDashboard() {
 
                   <div className="flex items-center gap-2">
                     <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Class:</label>
-                    <select
-                      value={selectedClass}
-                      onChange={(e) => setSelectedClass(e.target.value)}
-                      className="text-[11px] font-extrabold py-2 px-3 border border-slate-200/60 rounded-2xl outline-none bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300 focus:bg-white focus:border-indigo-600 text-slate-700 transition-all cursor-pointer shadow-2xs"
-                    >
-                      {availableClasses.map((cs) => (
-                        <option key={cs} value={cs}>
-                          {normalizeDisplayClassName(cs)}
-                        </option>
-                      ))}
-                    </select>
+                    {availableClasses.length === 1 ? (
+                      <span className="text-[11px] font-extrabold py-1.5 px-3 border border-indigo-200 bg-indigo-50/70 rounded-2xl text-indigo-900 shadow-2xs">
+                        {normalizeDisplayClassName(availableClasses[0])}
+                      </span>
+                    ) : availableClasses.length === 0 ? (
+                      <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-xl">
+                        None
+                      </span>
+                    ) : (
+                      <select
+                        value={selectedClass}
+                        onChange={(e) => setSelectedClass(e.target.value)}
+                        className="text-[11px] font-extrabold py-2 px-3 border border-slate-200/60 rounded-2xl outline-none bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300 focus:bg-white focus:border-indigo-600 text-slate-700 transition-all cursor-pointer shadow-2xs"
+                      >
+                        {availableClasses.map((cs) => (
+                          <option key={cs} value={cs}>
+                            {normalizeDisplayClassName(cs)}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </div>
                 </div>
 

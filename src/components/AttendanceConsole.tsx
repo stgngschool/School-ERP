@@ -14,6 +14,9 @@ import {
   Printer,
   CheckCircle2,
   Users,
+  UserCheck,
+  RefreshCw,
+  Loader2,
 } from "lucide-react";
 import StudentProfileModal from "@/components/StudentProfileModal";
 import ModernDatePicker from "@/components/ModernDatePicker";
@@ -34,7 +37,12 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
     leaveRequests,
     markBatchAttendance,
     showToast,
+    refreshAttendance,
   } = useAuth();
+
+  // On-demand gate state (Zero auto-load to conserve Supabase egress)
+  const [isRosterLoaded, setIsRosterLoaded] = useState<boolean>(false);
+  const [isLoadingRoster, setIsLoadingRoster] = useState<boolean>(false);
 
   // Selected Class & Date
   const todayStr = useMemo(() => getTodayIST(), []);
@@ -53,8 +61,21 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
   // Save feedback state
   const [isSaving, setIsSaving] = useState<boolean>(false);
 
+  const isTeacher = (user?.role === "TEACHER") && user?.role !== "ADMIN" && user?.role !== "ACCOUNTANT";
+
   // Get available classes from classes & students list with natural order
   const availableClasses = useMemo(() => {
+    if (isTeacher) {
+      const classSet = new Set<string>();
+      if (user?.teacherProfile?.classes && user.teacherProfile.classes.length > 0) {
+        user.teacherProfile.classes.forEach((c) => {
+          const key = getCleanClassKey(c.name, c.section);
+          if (key) classSet.add(key);
+        });
+      }
+      return sortClasses(Array.from(classSet));
+    }
+
     const classSet = new Set<string>();
     if (classes && classes.length > 0) {
       classes.forEach((c) => {
@@ -73,25 +94,27 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
     }
     const sorted = sortClasses(Array.from(classSet));
     return ["ALL", ...sorted];
-  }, [students, classes]);
+  }, [students, classes, isTeacher, user]);
 
   // Sync selected class when initialClass is resolved asynchronously or teacher profile loads
   useEffect(() => {
+    if (isTeacher) {
+      if (availableClasses.length > 0) {
+        if (!selectedClass || !availableClasses.includes(selectedClass)) {
+          setSelectedClass(availableClasses[0]);
+        }
+      } else {
+        setSelectedClass("");
+      }
+      return;
+    }
+
     if (initialClass) {
       setSelectedClass(initialClass);
-    } else if (user?.role === "TEACHER" && user.teacherProfile?.classes && user.teacherProfile.classes.length > 0) {
-      const cls = user.teacherProfile.classes[0];
-      const classKey = getCleanClassKey(cls.name, cls.section);
-      setSelectedClass(classKey);
-    }
-  }, [initialClass, user]);
-
-  // Set default class if current selectedClass has no students
-  useEffect(() => {
-    if (user?.role !== "TEACHER" && availableClasses.length > 1 && !availableClasses.includes(selectedClass)) {
+    } else if (availableClasses.length > 1 && !availableClasses.includes(selectedClass)) {
       setSelectedClass(availableClasses[1]);
     }
-  }, [availableClasses, selectedClass, user]);
+  }, [initialClass, isTeacher, availableClasses, selectedClass]);
 
   // Students in selected class
   const classStudents = useMemo(() => {
@@ -107,8 +130,9 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
   // Sent as expectedUpdatedAt on save so the server can detect stale writes.
   const [localAttendanceTimestampMap, setLocalAttendanceTimestampMap] = useState<Record<string, string>>({});
 
-  // Initialize attendance map: DEFAULT EVERYTHING TO PRESENT
+  // Initialize attendance map: DEFAULT EVERYTHING TO PRESENT (Only when roster is explicitly loaded)
   useEffect(() => {
+    if (!isRosterLoaded) return;
     const newMap: Record<string, AttendanceStatus> = {};
     const newTsMap: Record<string, string> = {};
 
@@ -141,7 +165,46 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
     setLocalAttendanceMap(newMap);
     setLocalAttendanceTimestampMap(newTsMap);
     setIsModified(false);
-  }, [selectedClass, selectedDate, classStudents, attendances, leaveRequests]);
+  }, [isRosterLoaded, selectedClass, selectedDate, classStudents, attendances, leaveRequests]);
+
+  // Handle class selection change: reset roster load so no eager egress is burned
+  const handleClassChange = (newCls: string) => {
+    setSelectedClass(newCls);
+    setIsRosterLoaded(false);
+  };
+
+  // Load attendance data on demand
+  const handleLoadRoster = async () => {
+    if (isTeacher && availableClasses.length === 0) {
+      showToast("error", "No Class Assigned", "Aapko koi class assign nahi hai.");
+      return;
+    }
+    setIsLoadingRoster(true);
+    try {
+      await refreshAttendance();
+      setIsRosterLoaded(true);
+      showToast("success", "Attendance Loaded", `Class ${normalizeDisplayClassName(selectedClass)} attendance loaded.`);
+    } catch (err) {
+      console.error(err);
+      showToast("error", "Failed to Load", "Attendance data fetch nahi ho paya.");
+    } finally {
+      setIsLoadingRoster(false);
+    }
+  };
+
+  // Force-refresh attendance data on demand
+  const handleReloadRoster = async () => {
+    setIsLoadingRoster(true);
+    try {
+      await refreshAttendance(true);
+      showToast("success", "Attendance Refreshed", "Latest attendance records fetched.");
+    } catch (err) {
+      console.error(err);
+      showToast("error", "Refresh Failed", "Attendance refresh nahi ho paya.");
+    } finally {
+      setIsLoadingRoster(false);
+    }
+  };
 
   // BINARY TOGGLE: PRESENT <-> ABSENT
   const toggleStudentStatus = (studentId: string) => {
@@ -264,17 +327,30 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
             </div>
             
             {!hideClassSelector && (
-              <select
-                value={selectedClass}
-                onChange={(e) => setSelectedClass(e.target.value)}
-                className="bg-slate-50 border border-slate-200/60 text-slate-800 text-xs font-bold py-1.5 px-3 rounded-2xl outline-none cursor-pointer shrink-0"
-              >
-                {availableClasses.map((cls) => (
-                  <option key={cls} value={cls}>
-                    {cls === "ALL" ? "All Classes" : normalizeDisplayClassName(cls)}
-                  </option>
-                ))}
-              </select>
+              isTeacher && availableClasses.length === 1 ? (
+                <div className="bg-indigo-50/80 border border-indigo-200 text-indigo-900 text-xs font-black py-1 px-3 rounded-2xl flex items-center gap-1.5 shrink-0">
+                  <span>{normalizeDisplayClassName(availableClasses[0])}</span>
+                  <span className="text-[8px] font-black uppercase text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded">
+                    Assigned
+                  </span>
+                </div>
+              ) : isTeacher && availableClasses.length === 0 ? (
+                <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold py-1 px-3 rounded-2xl shrink-0">
+                  No Class Assigned
+                </div>
+              ) : (
+                <select
+                  value={selectedClass}
+                  onChange={(e) => handleClassChange(e.target.value)}
+                  className="bg-slate-50 border border-slate-200/60 text-slate-800 text-xs font-bold py-1.5 px-3 rounded-2xl outline-none cursor-pointer shrink-0"
+                >
+                  {availableClasses.map((cls) => (
+                    <option key={cls} value={cls}>
+                      {cls === "ALL" ? "All Classes" : normalizeDisplayClassName(cls)}
+                    </option>
+                  ))}
+                </select>
+              )
             )}
           </div>
 
@@ -308,52 +384,118 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
           </div>
         </div>
 
-        {/* Row 2: Search + Quick Actions */}
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 pt-1">
-          <div className="relative flex-1 w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search student or roll no..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold outline-none focus:bg-white text-slate-800"
-            />
-          </div>
+        {/* Rows 2 & 3: Rendered ONLY when isRosterLoaded is TRUE */}
+        {isRosterLoaded && (
+          <>
+            {/* Row 2: Search + Quick Actions */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 pt-1">
+              <div className="relative flex-1 w-full">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search student or roll no..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold outline-none focus:bg-white text-slate-800"
+                />
+              </div>
 
-          <div className="flex items-center justify-center sm:justify-end gap-4 shrink-0 text-xs font-bold w-full sm:w-auto px-1 sm:px-0">
-            <button onClick={handleMarkAllPresent} className="text-emerald-700 hover:bg-emerald-50 px-3 py-1.5 rounded-lg transition-colors">
-              Mark All Present
-            </button>
-            <div className="w-px h-4 bg-slate-200 hidden sm:block"></div>
-            <button onClick={handleMarkAllAbsent} className="text-rose-700 hover:bg-rose-50 px-3 py-1.5 rounded-lg transition-colors">
-              Mark All Absent
-            </button>
-          </div>
-        </div>
+              <div className="flex items-center justify-center sm:justify-end gap-4 shrink-0 text-xs font-bold w-full sm:w-auto px-1 sm:px-0">
+                <button onClick={handleMarkAllPresent} className="text-emerald-700 hover:bg-emerald-50 px-3 py-1.5 rounded-lg transition-colors cursor-pointer">
+                  Mark All Present
+                </button>
+                <div className="w-px h-4 bg-slate-200 hidden sm:block"></div>
+                <button onClick={handleMarkAllAbsent} className="text-rose-700 hover:bg-rose-50 px-3 py-1.5 rounded-lg transition-colors cursor-pointer">
+                  Mark All Absent
+                </button>
+              </div>
+            </div>
 
-        {/* Row 3: Live Count Summary Bar */}
-        <div className="flex items-center justify-between text-xs font-bold pt-2 mt-1 border-t border-slate-50 text-slate-700">
-          <div className="flex items-center justify-between w-full sm:w-auto sm:gap-4">
-            <span className="text-emerald-700 font-extrabold">{counts.present} Present</span>
-            <span className="text-rose-700 font-extrabold">{counts.absent} Absent</span>
-            <span className="text-slate-400 font-semibold">Total: {counts.total}</span>
-          </div>
+            {/* Row 3: Live Count Summary Bar */}
+            <div className="flex items-center justify-between text-xs font-bold pt-2 mt-1 border-t border-slate-50 text-slate-700">
+              <div className="flex items-center justify-between w-full sm:w-auto sm:gap-4">
+                <span className="text-emerald-700 font-extrabold">{counts.present} Present</span>
+                <span className="text-rose-700 font-extrabold">{counts.absent} Absent</span>
+                <span className="text-slate-400 font-semibold">Total: {counts.total}</span>
+              </div>
 
-          <button
-            onClick={handleSaveAttendance}
-            disabled={isSaving}
-            className="hidden sm:inline-flex bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer shadow-xs disabled:opacity-50"
-          >
-            {isSaving ? "Saving..." : "Save Attendance"}
-          </button>
-        </div>
+              <div className="hidden sm:flex items-center gap-2">
+                <button
+                  onClick={handleReloadRoster}
+                  disabled={isLoadingRoster}
+                  title="Reload attendance data from server"
+                  className="p-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 transition-all cursor-pointer active:scale-95"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${isLoadingRoster ? "animate-spin" : ""}`} />
+                </button>
+
+                <button
+                  onClick={handleSaveAttendance}
+                  disabled={isSaving}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer shadow-xs disabled:opacity-50 active:scale-95"
+                >
+                  {isSaving ? "Saving..." : "Save Attendance"}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
+
+      {/* ─── ON-DEMAND GATE CARD (Shown when isRosterLoaded is FALSE) ─── */}
+      {!isRosterLoaded && (
+        <div className="bg-white border-y sm:border border-slate-200/60 p-8 sm:p-12 sm:rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] text-center space-y-4 my-4 print:hidden">
+          <div className="w-14 h-14 mx-auto rounded-2xl bg-indigo-50 border border-indigo-100/80 flex items-center justify-center text-indigo-600 shadow-2xs">
+            <Users className="h-7 w-7" />
+          </div>
+
+          <div className="max-w-md mx-auto space-y-1.5">
+            <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+              Student Attendance Sheet
+            </h3>
+            <p className="text-xs text-slate-500 font-medium">
+              Class ki attendance sheet dekhne aur mark karne ke liye neeche click karein.
+            </p>
+
+            <div className="inline-flex flex-wrap items-center justify-center gap-2 bg-slate-50 border border-slate-200/70 px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-700 mt-2">
+              <span>Class: <strong className="text-indigo-600">{normalizeDisplayClassName(selectedClass) || "Select Class"}</strong></span>
+              <span className="text-slate-300">•</span>
+              <span>Date: <strong className="text-slate-800">{selectedDate}</strong></span>
+              {classStudents.length > 0 && (
+                <>
+                  <span className="text-slate-300">•</span>
+                  <span className="text-slate-500">{classStudents.length} Students</span>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="pt-2">
+            <button
+              onClick={handleLoadRoster}
+              disabled={isLoadingRoster || (isTeacher && availableClasses.length === 0)}
+              className="inline-flex items-center justify-center gap-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs sm:text-sm font-black py-3.5 px-8 rounded-2xl shadow-lg shadow-indigo-600/20 transition-all cursor-pointer disabled:opacity-50"
+            >
+              {isLoadingRoster ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Loading Attendance Sheet...</span>
+                </>
+              ) : (
+                <>
+                  <UserCheck className="h-4 w-4" />
+                  <span>Load Student Attendance</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
 
 
 
       {/* ─── FULL-WIDTH ROSTER LIST (ZERO SIDE PADDING WASTE) ─── */}
-      {activeView === "ROSTER" && (
+      {isRosterLoaded && activeView === "ROSTER" && (
         <div className="bg-white border-y sm:border border-slate-200/60 divide-y divide-slate-100 sm:rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] mt-4">
           {filteredStudents.length === 0 ? (
             <div className="text-center py-8 text-slate-400">
@@ -408,7 +550,7 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
       )}
 
       {/* ─── MONTHLY REGISTER VIEW ─── */}
-      {activeView === "MONTHLY" && (
+      {isRosterLoaded && activeView === "MONTHLY" && (
         <div className="bg-white border-y sm:border border-slate-200/60 p-4 sm:p-6 sm:rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] space-y-3 mt-4 print:p-0 print:border-0 print:shadow-none">
           {/* Printable Official School Header (Visible ONLY on Print) */}
           <div className="hidden print:block text-center border-b-2 border-slate-800 pb-4 mb-4">
@@ -540,7 +682,8 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
       )}
 
       {/* ─── MOBILE STICKY FLOATING SAVE DOCK ─── */}
-      <div className="fixed bottom-[72px] inset-x-4 sm:hidden z-40">
+      {isRosterLoaded && (
+        <div className="fixed bottom-[72px] inset-x-4 sm:hidden z-40">
         <div className="bg-slate-900 text-white rounded-2xl p-3 shadow-[0_8px_30px_rgba(0,0,0,0.3)] border border-slate-800 flex items-center justify-between gap-3 backdrop-blur-xl">
           <div className="min-w-0 pl-1">
             <p className="text-[10px] uppercase text-slate-400 font-black tracking-widest">{selectedDate}</p>
@@ -559,6 +702,7 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
           </button>
         </div>
       </div>
+      )}
 
       {/* Student Profile Modal */}
       {showProfileModal && profileStudentId && (

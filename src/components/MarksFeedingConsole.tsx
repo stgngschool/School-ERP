@@ -30,7 +30,9 @@ import {
   ArrowUpDown,
   Download,
   Lock,
-  Unlock
+  Unlock,
+  AlertTriangle,
+  Shield,
 } from "lucide-react";
 
 const DEFAULT_EXAM_CONFIG: Record<string, { isSplit: boolean; maxMarks: number; components?: { name: string; max: number }[] }> = {
@@ -969,8 +971,21 @@ const StudentTableRow = React.memo(
 export default function MarksFeedingConsole() {
   const { user, activeRole, students, classes, schoolInfo, refreshSchool } = useAuth();
   const canExport = activeRole === "ADMIN" || activeRole === "ACCOUNTANT" || user?.role === "ADMIN" || user?.role === "ACCOUNTANT";
+  const isTeacher = (activeRole === "TEACHER" || user?.role === "TEACHER") && activeRole !== "ADMIN" && activeRole !== "ACCOUNTANT";
 
+  // ── Compute available classes: Teachers strictly see their assigned class(es); Admin & Accountant see all school classes ──
   const availableClasses = useMemo(() => {
+    if (isTeacher) {
+      const classSet = new Set<string>();
+      if (user?.teacherProfile?.classes && user.teacherProfile.classes.length > 0) {
+        user.teacherProfile.classes.forEach((c) => {
+          const key = getCleanClassKey(c.name, c.section);
+          if (key) classSet.add(key);
+        });
+      }
+      return sortClasses(Array.from(classSet));
+    }
+
     const classSet = new Set<string>();
     if (classes && classes.length > 0) {
       classes.forEach((c) => {
@@ -988,7 +1003,7 @@ export default function MarksFeedingConsole() {
       });
     }
     return sortClasses(Array.from(classSet));
-  }, [students, classes]);
+  }, [students, classes, isTeacher, user]);
 
   const availableExams = useMemo(() => {
     return schoolInfo.exams && schoolInfo.exams.length > 0
@@ -1173,24 +1188,26 @@ export default function MarksFeedingConsole() {
 
   const defaultClassInitializedRef = useRef(false);
 
-  // Auto-set teacher's assigned class as default, while allowing changing to any class
+  // Auto-set teacher's assigned class strictly, while allowing changing to any class for admin/accountant
   useEffect(() => {
-    if (defaultClassInitializedRef.current) return;
-
-    if (user?.teacherProfile?.classes && user.teacherProfile.classes.length > 0) {
-      const tClass = user.teacherProfile.classes[0];
-      const targetStr = getCleanClassKey(tClass.name, tClass.section);
-      if (availableClasses.includes(targetStr)) {
-        setSelectedClass(targetStr);
-        defaultClassInitializedRef.current = true;
-        return;
+    if (isTeacher) {
+      if (availableClasses.length > 0) {
+        if (!selectedClass || !availableClasses.includes(selectedClass)) {
+          setSelectedClass(availableClasses[0]);
+        }
+      } else {
+        setSelectedClass("");
       }
+      return;
     }
+
+    if (defaultClassInitializedRef.current) return;
 
     if (availableClasses.length > 0 && !selectedClass) {
       setSelectedClass(availableClasses[0]);
+      defaultClassInitializedRef.current = true;
     }
-  }, [user, availableClasses, selectedClass]);
+  }, [isTeacher, availableClasses, selectedClass]);
 
   useEffect(() => {
     if (availableExams.length > 0 && !selectedExam) {
@@ -2073,6 +2090,21 @@ export default function MarksFeedingConsole() {
         </div>
       )}
 
+      {/* ─── Unassigned Teacher Notice ─── */}
+      {isTeacher && availableClasses.length === 0 && (
+        <div className="p-4 bg-amber-50 border border-amber-200/80 rounded-2xl sm:rounded-3xl flex items-start gap-3 shadow-2xs">
+          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <h4 className="text-xs font-black text-amber-900 uppercase tracking-wider">
+              No Class Assigned to Your Teacher Account
+            </h4>
+            <p className="text-[11px] text-amber-700 font-semibold mt-0.5">
+              Aapko abhi tak koi class assign nahi ki gayi hai. Marks feed karne ke liye kripya School Administrator se apni class assign karwayen.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* ─── Header & Selection Panel ─── */}
       <div className="bg-white border-0 sm:border border-slate-200/60 rounded-2xl sm:rounded-3xl p-3.5 sm:p-7 shadow-sm text-left">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-2 border-b border-slate-100 pb-3">
@@ -2139,17 +2171,31 @@ export default function MarksFeedingConsole() {
             <label className="text-[8.5px] sm:text-[9px] font-black uppercase text-slate-400 block mb-1 tracking-wider truncate">
               Class & Section
             </label>
-            <select
-              value={selectedClass}
-              onChange={(e) => setSelectedClass(e.target.value)}
-              className="w-full text-[11px] font-extrabold py-2 px-2.5 sm:py-2.5 sm:px-3 border border-slate-200/80 rounded-xl sm:rounded-2xl outline-none bg-slate-50 hover:bg-slate-100/60 focus:bg-white focus:border-indigo-600 text-slate-700 transition-all cursor-pointer shadow-2xs truncate"
-            >
-              {availableClasses.map((cls) => (
-                <option key={cls} value={cls}>
-                  {normalizeDisplayClassName(cls)}
-                </option>
-              ))}
-            </select>
+            {isTeacher && availableClasses.length === 1 ? (
+              <div className="w-full text-[11px] font-extrabold py-2 px-2.5 sm:py-2.5 sm:px-3 border border-indigo-200 bg-indigo-50/60 rounded-xl sm:rounded-2xl text-indigo-900 flex items-center justify-between shadow-2xs">
+                <span className="truncate">{normalizeDisplayClassName(availableClasses[0])}</span>
+                <span className="text-[8px] font-black uppercase tracking-wider text-indigo-700 bg-indigo-100/80 border border-indigo-200 px-1.5 py-0.5 rounded shrink-0 flex items-center gap-1">
+                  <Shield className="w-2.5 h-2.5 text-indigo-600" /> Assigned
+                </span>
+              </div>
+            ) : isTeacher && availableClasses.length === 0 ? (
+              <div className="w-full text-[11px] font-bold py-2 px-2.5 sm:py-2.5 sm:px-3 border border-amber-200 bg-amber-50 rounded-xl sm:rounded-2xl text-amber-800 flex items-center gap-1.5 shadow-2xs">
+                <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                <span className="truncate">No Class Assigned</span>
+              </div>
+            ) : (
+              <select
+                value={selectedClass}
+                onChange={(e) => setSelectedClass(e.target.value)}
+                className="w-full text-[11px] font-extrabold py-2 px-2.5 sm:py-2.5 sm:px-3 border border-slate-200/80 rounded-xl sm:rounded-2xl outline-none bg-slate-50 hover:bg-slate-100/60 focus:bg-white focus:border-indigo-600 text-slate-700 transition-all cursor-pointer shadow-2xs truncate"
+              >
+                {availableClasses.map((cls) => (
+                  <option key={cls} value={cls}>
+                    {normalizeDisplayClassName(cls)}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           <div>

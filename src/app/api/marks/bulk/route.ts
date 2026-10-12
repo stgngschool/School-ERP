@@ -59,6 +59,44 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Active academic session not found." }, { status: 400 });
     }
 
+    // ── Security Guard: Restrict TEACHER role strictly to students in their assigned class(es) ──
+    if (authUser.role === "TEACHER") {
+      const teacherProfile = await db.teacherProfile.findUnique({
+        where: { userId: authUser.userId },
+        include: { classes: { where: { status: "ACTIVE" } } },
+      });
+
+      if (!teacherProfile || !teacherProfile.classes || teacherProfile.classes.length === 0) {
+        return NextResponse.json(
+          { error: "Forbidden. No class has been assigned to your teacher account." },
+          { status: 403 }
+        );
+      }
+
+      const allowedClassIds = teacherProfile.classes.map((c) => c.id);
+
+      const candidateStudentIds: string[] = [
+        ...(Array.isArray(marksList) ? marksList.map((m: any) => m.studentId) : []),
+        ...(Array.isArray(deletedStudentIds) ? deletedStudentIds : []),
+      ].filter(Boolean);
+
+      if (candidateStudentIds.length > 0) {
+        const unauthorizedStudentsCount = await db.student.count({
+          where: {
+            id: { in: candidateStudentIds },
+            classId: { notIn: allowedClassIds },
+          },
+        });
+
+        if (unauthorizedStudentsCount > 0) {
+          return NextResponse.json(
+            { error: "Forbidden. You are only authorized to enter or modify marks for students in your assigned class." },
+            { status: 403 }
+          );
+        }
+      }
+    }
+
     const isAbsentString = (val: any) => {
       if (typeof val === "string") {
         const clean = val.trim().toUpperCase();
