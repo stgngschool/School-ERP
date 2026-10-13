@@ -857,7 +857,7 @@ export default function DefaultersReportTab({
 
           {/* Scrollable Table */}
           <div className="overflow-x-auto select-text scrollbar-thin">
-            <table className="w-full text-left border-collapse text-xs mobile-table-to-cards">
+            <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-slate-100/90 border-b border-slate-200 text-slate-600 text-[10px] font-black uppercase tracking-wider divide-x divide-slate-200">
                   <th className="py-2.5 px-3 text-center w-10">#</th>

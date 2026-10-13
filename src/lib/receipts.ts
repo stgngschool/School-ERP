@@ -155,53 +155,22 @@ export function getGroupedReceiptItems(items: ReceiptItemInput[]): GroupedReceip
     }
 
     let baseFeeHead = rest;
-    let month = "";
-
-    if (rest.includes("-")) {
-      const parts = rest.split("-");
-      let monthPartIndex = -1;
-      for (let i = parts.length - 1; i >= 0; i--) {
-        const partLower = parts[i].toLowerCase();
-        const hasMonth = MONTHS_LOWER_LIST.some((m) => partLower.includes(m));
-        if (hasMonth) {
-          monthPartIndex = i;
-          break;
-        }
-      }
-
-      if (monthPartIndex !== -1) {
-        month = parts.slice(monthPartIndex).join("-").trim();
-        baseFeeHead = parts.slice(0, monthPartIndex).join("-").trim();
-      }
+    let months: string[] = [];
+    const monthRegex = new RegExp(`\\b(${MONTHS_LOWER_LIST.join("|")})\\b`, "gi");
+    const monthMatches = [...rest.matchAll(monthRegex)];
+    const monthCountMatch = rest.match(/\[(\d+)\s+Months?\]/i);
+    const monthCount = monthCountMatch ? Number(monthCountMatch[1]) : 0;
+    if (monthMatches.length > 0 && monthMatches[0].index !== undefined) {
+      months = monthMatches.map((match) => match[0]);
+      baseFeeHead = rest
+        .slice(0, monthMatches[0].index)
+        .replace(/[\s\-–(:]+$/, "")
+        .replace(/\s+-\s+Exam$/i, "")
+        .trim();
     }
 
-    return { rawName, studentPrefix, baseFeeHead, month, rest };
+    return { rawName, studentPrefix, baseFeeHead, months, monthCount, rest };
   };
-
-  // If 4 or fewer items AND no duplicate fee heads for the same child, format individual items
-  const feeHeadCount: { [key: string]: number } = {};
-  items.forEach((item) => {
-    const { studentPrefix, baseFeeHead } = parseItemName(item);
-    const key = `${studentPrefix}||${baseFeeHead}`;
-    feeHeadCount[key] = (feeHeadCount[key] || 0) + 1;
-  });
-  const hasMultipleMonthsSameHead = Object.values(feeHeadCount).some((cnt) => cnt > 1);
-
-  if (items.length <= 4 && !hasMultipleMonthsSameHead) {
-    return items.map((item) => {
-      const { studentPrefix, rest } = parseItemName(item);
-      return {
-        ...item,
-        name: item.name || item.description || "",
-        studentPrefix: studentPrefix || undefined,
-        baseParticular: formatCompactParticulars(rest || item.name || item.description || ""),
-        amount: item.amount,
-        originalAmount: item.originalAmount !== undefined ? item.originalAmount : item.amount,
-        discount: item.discount || 0,
-        balance: item.balance || 0,
-      };
-    });
-  }
 
   // Otherwise, group consolidated rows
   const groups: {
@@ -209,6 +178,7 @@ export function getGroupedReceiptItems(items: ReceiptItemInput[]): GroupedReceip
       studentPrefix: string;
       baseFeeHead: string;
       months: string[];
+      monthCount: number;
       amount: number;
       originalAmount: number;
       discount: number;
@@ -217,7 +187,7 @@ export function getGroupedReceiptItems(items: ReceiptItemInput[]): GroupedReceip
   } = {};
 
   items.forEach((item) => {
-    const { studentPrefix, baseFeeHead, month } = parseItemName(item);
+    const { studentPrefix, baseFeeHead, months, monthCount } = parseItemName(item);
     const key = `${studentPrefix}||${baseFeeHead}`;
 
     if (!groups[key]) {
@@ -225,6 +195,7 @@ export function getGroupedReceiptItems(items: ReceiptItemInput[]): GroupedReceip
         studentPrefix,
         baseFeeHead,
         months: [],
+        monthCount: 0,
         amount: 0,
         originalAmount: 0,
         discount: 0,
@@ -232,7 +203,7 @@ export function getGroupedReceiptItems(items: ReceiptItemInput[]): GroupedReceip
       };
     }
 
-    if (month) {
+    for (const month of months) {
       const monthLower = month.toLowerCase();
       const matchedMonth = MONTHS_LOWER_LIST.find((m) => monthLower.includes(m));
       if (matchedMonth) {
@@ -242,6 +213,7 @@ export function getGroupedReceiptItems(items: ReceiptItemInput[]): GroupedReceip
         }
       }
     }
+    groups[key].monthCount = Math.max(groups[key].monthCount, monthCount);
 
     groups[key].amount += item.amount;
     groups[key].originalAmount += item.originalAmount !== undefined ? item.originalAmount : item.amount;
@@ -249,16 +221,20 @@ export function getGroupedReceiptItems(items: ReceiptItemInput[]): GroupedReceip
     groups[key].balance += item.balance || 0;
   });
 
-  return Object.values(groups).map((g) => {
+  const consolidated = Object.values(groups).map((g) => {
     let baseParticular = formatCompactParticulars(g.baseFeeHead);
     if (g.months.length > 0) {
-      if (g.months.length >= 3 && areMonthsConsecutive(g.months)) {
-        const sorted = [...g.months].sort(
+      const sorted = [...g.months].sort(
           (a, b) => ACADEMIC_MONTH_ORDER.indexOf(a) - ACADEMIC_MONTH_ORDER.indexOf(b)
-        );
-        baseParticular += ` (${sorted[0]} to ${sorted[sorted.length - 1]}) [${g.months.length} Months]`;
+      );
+      const hasConsecutiveRange = areMonthsConsecutive(sorted) && sorted.length >= 3;
+      const matchesExplicitRange = g.monthCount >= 2 && sorted.length >= 2 &&
+        ACADEMIC_MONTH_ORDER.indexOf(sorted[sorted.length - 1]) - ACADEMIC_MONTH_ORDER.indexOf(sorted[0]) === g.monthCount - 1;
+      if (hasConsecutiveRange || matchesExplicitRange) {
+        const count = g.monthCount || g.months.length;
+        baseParticular += ` (${sorted[0]} to ${sorted[sorted.length - 1]}) [${count} Months]`;
       } else {
-        baseParticular += ` (${g.months.join(", ")})`;
+        baseParticular += ` (${sorted.join(", ")})`;
       }
     }
 
@@ -267,6 +243,7 @@ export function getGroupedReceiptItems(items: ReceiptItemInput[]): GroupedReceip
     return {
       name: finalName,
       studentPrefix: g.studentPrefix || undefined,
+      baseFeeHead: g.baseFeeHead,
       baseParticular,
       amount: g.amount,
       originalAmount: g.originalAmount,
@@ -275,6 +252,61 @@ export function getGroupedReceiptItems(items: ReceiptItemInput[]): GroupedReceip
       months: g.months,
     };
   });
+
+  // Keep the exam names visible, while consolidating multiple exam charges for
+  // the same child into one compact row. Tuition, M/S and previous-session dues
+  // remain separate rows so the receipt stays easy to audit.
+  const examGroups = new Map<string, { item: GroupedReceiptItem; examNames: Set<string> }>();
+  const result: GroupedReceiptItem[] = [];
+  for (const item of consolidated) {
+    const { baseFeeHead = "", studentPrefix = "" } = item;
+    if (!/\bexam\b/i.test(baseFeeHead)) {
+      result.push(item);
+      continue;
+    }
+
+    const key = `${studentPrefix}||exam-fees`;
+    let group = examGroups.get(key);
+    if (!group) {
+      group = {
+        item: {
+          name: "",
+          studentPrefix: studentPrefix || undefined,
+          baseParticular: "",
+          amount: 0,
+          originalAmount: 0,
+          discount: 0,
+          balance: 0,
+        },
+        examNames: new Set<string>(),
+      };
+      examGroups.set(key, group);
+      result.push(group.item);
+    }
+
+    const examName = baseFeeHead
+      .replace(/\s*-\s*Exam$/i, "")
+      .replace(/\bExam\b/gi, "")
+      .replace(/[()]/g, "")
+      .trim();
+    if (examName) group.examNames.add(formatCompactParticulars(examName));
+    group.item.amount += item.amount;
+    group.item.originalAmount = (group.item.originalAmount || 0) + (item.originalAmount || 0);
+    group.item.discount = (group.item.discount || 0) + (item.discount || 0);
+    group.item.balance = (group.item.balance || 0) + (item.balance || 0);
+  }
+
+  for (const group of examGroups.values()) {
+    const examNames = [...group.examNames];
+    group.item.baseParticular = examNames.length
+      ? `Exam Fees (${examNames.join(", ")})`
+      : "Exam Fees";
+    group.item.name = group.item.studentPrefix
+      ? `${group.item.studentPrefix}: ${group.item.baseParticular}`
+      : group.item.baseParticular;
+  }
+
+  return result;
 }
 
 /**

@@ -65,9 +65,9 @@ export default function PrintReceiptModal({
 
   const students = getReceiptStudents(activeReceipt);
   const isMultiChild = students.length > 1;
-  const isCompactSiblings = students.length >= 3;
+  const isCompactSiblings = students.length >= 2;
   const groupedItems = getGroupedReceiptItems(activeReceipt.items || []);
-  const isCompactFeeTable = groupedItems.length >= 4 || students.length >= 3;
+  const isCompactFeeTable = groupedItems.length >= 3 || students.length >= 2;
   const hasDiscounts = (activeReceipt.discount || 0) > 0 || groupedItems.some((i: any) => (i.discount || 0) > 0);
 
   // Build the receipt as a PDF file. On mobile it opens the native share sheet
@@ -151,22 +151,22 @@ export default function PrintReceiptModal({
   const modalContent = (
     <div id="gng-receipt-print-portal">
       <div className="receipt-modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/80 modal-backdrop-optimized animate-in fade-in duration-200">
-        <div className="receipt-modal-dialog bg-white rounded-3xl max-w-3xl w-full p-3.5 sm:p-5 shadow-2xl border border-slate-100 max-h-[94vh] overflow-y-auto space-y-3">
+        <div className="receipt-modal-dialog flex max-h-[94vh] w-full max-w-4xl flex-col gap-3 overflow-y-auto rounded-2xl border border-slate-200/90 bg-white p-3 shadow-[0_24px_70px_rgba(15,23,42,0.28)] sm:p-4">
           {/* Modal Header & Page Size Switcher */}
-          <div className="no-print flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+          <div className="receipt-modal-header no-print flex flex-col justify-between gap-3 border-b border-slate-200 pb-3 sm:flex-row sm:items-center">
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 ring-4 ring-emerald-50"></span>
               <div>
-                <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider">
+                <h3 className="text-[13px] font-black uppercase tracking-wide text-slate-800">
                   Official Payment Voucher
                 </h3>
-                <p className="text-[10px] text-slate-400 font-semibold">
+                <p className="text-[11px] font-medium text-slate-500">
                   Instant voucher preview & print layout
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl self-start sm:self-auto">
+            <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1 self-start sm:self-auto">
               <button
                 type="button"
                 onClick={() => setReceiptPageSize("A5")}
@@ -197,7 +197,7 @@ export default function PrintReceiptModal({
             @media print {
               @page {
                 size: ${receiptPageSize === "A5" ? "A5 landscape" : "A4 portrait"};
-                margin: ${receiptPageSize === "A5" ? "4mm 5mm" : "8mm 10mm"};
+                margin: ${receiptPageSize === "A5" ? "3mm" : "8mm 10mm"};
               }
 
               /* Clean printable root document */
@@ -266,6 +266,8 @@ export default function PrintReceiptModal({
                 visibility: visible !important;
                 color-adjust: exact !important;
                 -webkit-print-color-adjust: exact !important;
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
               }
 
               #receipt-print-area {
@@ -278,13 +280,13 @@ export default function PrintReceiptModal({
                 min-height: auto !important;
                 max-height: none !important;
                 margin: 0 auto !important;
-                padding: ${receiptPageSize === "A5" ? "6px 10px" : "16px 20px"} !important;
-                border: 1.5px solid #0f172a !important;
+                padding: ${receiptPageSize === "A5" ? "5mm 7mm" : "18px 22px"} !important;
+                border: 1px solid #0f172a !important;
                 border-radius: 8px !important;
                 box-shadow: none !important;
                 background: #ffffff !important;
                 box-sizing: border-box !important;
-                gap: ${receiptPageSize === "A5" ? "4px" : "8px"} !important;
+                gap: ${receiptPageSize === "A5" ? "2.5mm" : "8px"} !important;
                 page-break-after: avoid !important;
                 break-after: avoid !important;
                 page-break-before: avoid !important;
@@ -298,10 +300,13 @@ export default function PrintReceiptModal({
                 margin-top: 0 !important;
               }
 
-              /* Keep every section intact on the single page (no mid-section splits) */
-              #receipt-print-area > * {
-                page-break-inside: avoid !important;
-                break-inside: avoid !important;
+              /* Fee table displays all rows fully without clipping */
+              .receipt-fee-table-container {
+                flex: none !important;
+                display: block !important;
+                width: 100% !important;
+                min-height: auto !important;
+                overflow: visible !important;
               }
 
               .receipt-fee-table-container table {
@@ -319,7 +324,7 @@ export default function PrintReceiptModal({
           `}</style>
 
         {/* Mobile Horizontal Scroll Helper Banner */}
-        <div className="sm:hidden flex items-center justify-between px-3 py-1.5 bg-slate-100/90 rounded-xl text-[10px] text-slate-500 font-semibold border border-slate-200/60">
+        <div className="no-print sm:hidden flex items-center justify-between px-3 py-1.5 bg-slate-100/90 rounded-xl text-[10px] text-slate-500 font-semibold border border-slate-200/60">
           <span className="flex items-center gap-1.5">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
             ↔ Swipe to view complete voucher
@@ -380,13 +385,13 @@ export default function PrintReceiptModal({
                     src={verifyQrUrl}
                     alt="Scan to Verify Online"
                     className={`object-contain ${
-                      receiptPageSize === "A5" ? "w-[68px] h-[68px]" : "w-[80px] h-[80px]"
+                      receiptPageSize === "A5" ? "w-[56px] h-[56px]" : "w-[80px] h-[80px]"
                     }`}
                   />
                 ) : (
                   <div
                     className={`bg-slate-100 animate-pulse rounded ${
-                      receiptPageSize === "A5" ? "w-[68px] h-[68px]" : "w-[80px] h-[80px]"
+                      receiptPageSize === "A5" ? "w-[56px] h-[56px]" : "w-[80px] h-[80px]"
                     }`}
                   />
                 )}
@@ -441,7 +446,7 @@ export default function PrintReceiptModal({
                     <th className={`${isCompactSiblings ? "py-1 px-2" : "py-1.5 px-2.5"}`}>Student Name</th>
                     <th className={`${isCompactSiblings ? "py-1 px-2" : "py-1.5 px-2.5"}`}>Class & Sec</th>
                     <th className={`${isCompactSiblings ? "py-1 px-2" : "py-1.5 px-2.5"}`}>Roll No</th>
-                    <th className={`${isCompactSiblings ? "py-1 px-2.5" : "py-1.5 px-3"} text-right`}>Admission ID</th>
+                    <th className={`${isCompactSiblings ? "py-1 px-2" : "py-1.5 px-3"} text-right`}>Admission ID</th>
                   </tr>
                 </thead>
                 <tbody className={`divide-y divide-slate-200/50 font-semibold text-slate-800 ${
@@ -453,7 +458,7 @@ export default function PrintReceiptModal({
                       <td className={`${isCompactSiblings ? "py-0.5 px-2" : "py-1.5 px-2.5"} font-black text-slate-900 break-words`}>{s.name}</td>
                       <td className={`${isCompactSiblings ? "py-0.5 px-2" : "py-1.5 px-2.5"} font-bold text-indigo-950 break-words`}>{s.classSection || "—"}</td>
                       <td className={`${isCompactSiblings ? "py-0.5 px-2" : "py-1.5 px-2.5"} font-bold text-slate-700`}>{s.rollNo || "—"}</td>
-                      <td className={`${isCompactSiblings ? "py-0.5 px-2.5" : "py-1.5 px-3"} text-right font-extrabold text-slate-800`}>{s.admissionNo || "—"}</td>
+                      <td className={`${isCompactSiblings ? "py-0.5 px-2" : "py-1.5 px-3"} text-right font-extrabold text-slate-800`}>{s.admissionNo || "—"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -538,13 +543,13 @@ export default function PrintReceiptModal({
                     receiptPageSize === "A5" ? "text-[9px]" : "text-[9.5px]"
                   }`}
                 >
-                  <th className="py-1.5 px-3.5 w-8 text-slate-400">#</th>
-                  <th className="py-1.5 px-3.5">Fee Particulars</th>
-                  <th className="py-1.5 px-3.5 text-right">Billed Due</th>
+                  <th className={`${isCompactFeeTable ? "py-1 px-3" : "py-1.5 px-3.5"} w-8 text-slate-400`}>#</th>
+                  <th className={`${isCompactFeeTable ? "py-1 px-3" : "py-1.5 px-3.5"}`}>Fee Particulars</th>
+                  <th className={`${isCompactFeeTable ? "py-1 px-3" : "py-1.5 px-3.5"} text-right`}>Billed Due</th>
                   {hasDiscounts && (
-                    <th className="py-1.5 px-3.5 text-right text-indigo-700">Concession</th>
+                    <th className={`${isCompactFeeTable ? "py-1 px-3" : "py-1.5 px-3.5"} text-right text-indigo-700`}>RBT</th>
                   )}
-                  <th className="py-1.5 px-3.5 text-right text-slate-900">Amount Paid</th>
+                  <th className={`${isCompactFeeTable ? "py-1 px-3" : "py-1.5 px-3.5"} text-right text-slate-900`}>Amount Paid</th>
                 </tr>
               </thead>
               <tbody
@@ -662,12 +667,12 @@ export default function PrintReceiptModal({
                     </span>
                     <div
                       className={`flex items-center justify-center rounded-full bg-emerald-50 border border-emerald-200 ${
-                        receiptPageSize === "A5" ? "w-[72px] h-[72px]" : "w-[84px] h-[84px]"
+                        receiptPageSize === "A5" ? "w-14 h-14" : "w-[84px] h-[84px]"
                       }`}
                     >
                       <CheckCircle2
                         className={`text-emerald-600 ${
-                          receiptPageSize === "A5" ? "w-9 h-9" : "w-10 h-10"
+                          receiptPageSize === "A5" ? "w-7 h-7" : "w-10 h-10"
                         }`}
                       />
                     </div>
@@ -702,7 +707,7 @@ export default function PrintReceiptModal({
                   </div>
                   {activeReceipt.discount > 0 && (
                     <div className="flex justify-between items-center text-indigo-600 font-bold">
-                      <span>Total Concession:</span>
+                      <span>Total RBT:</span>
                       <span className="font-black font-mono">-{formatP(activeReceipt.discount)}</span>
                     </div>
                   )}
@@ -775,13 +780,13 @@ export default function PrintReceiptModal({
       </div>
 
         {/* Modal Action Buttons — sticky bottom bar for easy reach on mobile */}
-        <div className="receipt-modal-actions no-print sticky bottom-0 bg-white/95 backdrop-blur-md pt-2 pb-1 border-t border-slate-100 z-30 flex flex-col sm:flex-row gap-2">
-          <div className="grid grid-cols-1 sm:flex sm:flex-1 gap-2">
+        <div className="receipt-modal-actions no-print sticky bottom-0 z-30 flex flex-col gap-2.5 border-t border-slate-200 bg-white/95 pt-3 pb-1 backdrop-blur-md sm:flex-row sm:items-center">
+          <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-1">
             {/* 1. WhatsApp Share — direct text message redirect to parent's phone */}
             <button
               type="button"
               onClick={() => onSendWhatsApp(activeReceipt)}
-              className="flex items-center justify-center gap-2 py-3 px-4 sm:flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-black transition-colors cursor-pointer shadow-md shadow-emerald-600/20"
+              className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white shadow-sm shadow-emerald-600/20 transition-colors cursor-pointer hover:bg-emerald-700 sm:flex-1"
             >
               <WhatsAppIcon className="w-5 h-5 text-white shrink-0" />
               <span>WhatsApp Share</span>
@@ -793,7 +798,7 @@ export default function PrintReceiptModal({
               type="button"
               disabled={isGeneratingPdf}
               onClick={() => handleGeneratePdf(true)}
-              className="flex items-center justify-center gap-2 py-3 px-4 sm:flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-sm font-black transition-colors cursor-pointer shadow-md shadow-indigo-600/20"
+              className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white shadow-sm shadow-indigo-600/20 transition-colors cursor-pointer hover:bg-indigo-700 disabled:opacity-50 sm:flex-1"
               title="Share the receipt PDF via WhatsApp or any app (downloads on desktop)"
             >
               {isGeneratingPdf ? (
@@ -808,7 +813,7 @@ export default function PrintReceiptModal({
             <button
               type="button"
               onClick={() => window.print()}
-              className="flex items-center justify-center gap-1.5 py-3 px-4 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-2xs"
+              className="flex min-h-12 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 shadow-sm transition-colors cursor-pointer hover:bg-slate-50"
             >
               <Printer className="h-4 w-4 shrink-0" />
               <span>Print</span>
@@ -819,7 +824,7 @@ export default function PrintReceiptModal({
           <button
             type="button"
             onClick={onClose}
-            className="py-3 px-5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+            className="min-h-12 rounded-xl border border-slate-200 bg-slate-100 px-5 py-2.5 text-xs font-bold text-slate-700 transition-colors cursor-pointer hover:bg-slate-200"
           >
             Close
           </button>

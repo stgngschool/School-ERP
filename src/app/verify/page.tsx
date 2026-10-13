@@ -476,7 +476,7 @@ function VerifyContent() {
                 </div>
                 {receipt.discount > 0 && (
                   <div className="flex justify-between text-indigo-600 font-bold">
-                    <span>Total Concession:</span>
+                    <span>Total RBT:</span>
                     <span className="font-mono font-black">-{formatP(receipt.discount)}</span>
                   </div>
                 )}
