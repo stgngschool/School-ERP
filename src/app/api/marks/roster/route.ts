@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
 import { getCachedSchoolConfig } from "@/lib/cache/schoolConfigCache";
+import { getCachedActiveSession } from "@/lib/cache/sessionCache";
 
 export const dynamic = "force-dynamic";
 
@@ -85,7 +86,7 @@ export async function GET(request: Request) {
 
     let targetSessionId: string | null = sessionId;
     if (!targetSessionId) {
-      const currentSession = await db.academicSession.findFirst({ where: { isCurrent: true } });
+      const currentSession = await getCachedActiveSession();
       targetSessionId = currentSession ? currentSession.id : null;
     }
 

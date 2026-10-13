@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
+import { clearActiveSessionCache } from "@/lib/cache/sessionCache";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,8 @@ export async function POST(request: Request) {
       }
     });
 
+    clearActiveSessionCache();
+
     return NextResponse.json({ success: true, session });
   } catch (error) {
     console.error("Create session error:", error);
@@ -78,6 +81,8 @@ export async function PATCH(request: Request) {
       where: { id },
       data: { isCurrent: Boolean(isCurrent) }
     });
+
+    clearActiveSessionCache();
 
     return NextResponse.json({ success: true, session: updated });
   } catch (error) {

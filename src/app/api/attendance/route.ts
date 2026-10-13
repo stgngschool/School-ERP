@@ -126,6 +126,13 @@ export async function GET(request: Request) {
         skip,
         take: limit,
         orderBy: { date: "desc" },
+        select: {
+          id: true,
+          studentId: true,
+          date: true,
+          status: true,
+          updatedAt: true,
+        },
       }),
     ]);
 

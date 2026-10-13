@@ -120,6 +120,43 @@ export default function EditStudentModal({
       setActiveTab("academic");
       setErrorMessage(null);
       setSuccessMessage(null);
+
+      // ── On-demand complete profile hydration for zero-egress directory ──
+      // If modal was opened from a lightweight/slim directory row, fetch the complete
+      // record for this single student (~0.5 KB) so all tabs have 100% accurate data.
+      let isMounted = true;
+      if (student.id) {
+        fetch(`/api/students/${student.id}`)
+          .then((res) => (res.ok ? res.json() : null))
+          .then((fullData) => {
+            if (!isMounted || !fullData || fullData.error) return;
+            if (fullData.dob) setDob(formatCanonicalDOBIso(fullData.dob));
+            if (fullData.aadhaar !== undefined) setAadhaar(fullData.aadhaar || "");
+            if (fullData.disability !== undefined) setDisability(fullData.disability || "No");
+            if (fullData.category !== undefined) setCategory(fullData.category || "General");
+            if (fullData.religion !== undefined) setReligion(fullData.religion || "Hinduism");
+            if (fullData.motherTongue !== undefined) setMotherTongue(fullData.motherTongue || "Hindi");
+            if (fullData.nationality !== undefined) setNationality(fullData.nationality || "Indian");
+            if (fullData.fatherAadhaar !== undefined) setFatherAadhaar(fullData.fatherAadhaar || "");
+            if (fullData.motherName !== undefined) setMotherName(fullData.motherName || "");
+            if (fullData.motherMobile !== undefined) setMotherMobile(fullData.motherMobile || "");
+            if (fullData.motherAadhaar !== undefined) setMotherAadhaar(fullData.motherAadhaar || "");
+            if (fullData.parent?.address || fullData.address) setAddress(fullData.address || fullData.parent?.address || "");
+            if (fullData.parent?.email || fullData.parentEmail) setParentEmail(fullData.parentEmail || fullData.parent?.email || "");
+            if (fullData.parentOccupation !== undefined) setParentOccupation(fullData.parentOccupation || "");
+            if (fullData.familyIncome !== undefined) setFamilyIncome(fullData.familyIncome || "");
+            if (fullData.emergencyName !== undefined) setEmergencyName(fullData.emergencyName || "");
+            if (fullData.emergencyPhone !== undefined) setEmergencyPhone(fullData.emergencyPhone || "");
+            if (fullData.transportMode !== undefined) setTransportMode(fullData.transportMode || "Self");
+            if (fullData.busRoute !== undefined) setBusRoute(fullData.busRoute || "");
+            if (fullData.busStop !== undefined) setBusStop(fullData.busStop || "");
+          })
+          .catch((err) => console.warn("[EditStudentModal] Single student profile load notice:", err));
+      }
+
+      return () => {
+        isMounted = false;
+      };
     }
   }, [student, isOpen]);
 

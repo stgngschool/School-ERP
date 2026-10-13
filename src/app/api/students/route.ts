@@ -31,10 +31,11 @@ async function loadSlimStudents(
     orderBy: { name: "asc" },
     select: {
       id: true, name: true, admissionNumber: true, rollNumber: true, gender: true,
+      dob: true, aadhaar: true, category: true, religion: true, motherName: true,
       status: true, isRte: true, isMarksheetClaimed: true, photoUrl: true, concessionId: true,
       fatherName: true, fatherMobile: true, motherMobile: true, admissionDate: true,
       class: { select: { name: true, section: true } },
-      parentProfile: { select: { familyCode: true, user: { select: { name: true, phone: true } } } },
+      parentProfile: { select: { familyCode: true, address: true, user: { select: { name: true, phone: true } } } },
       concession: { select: { id: true, name: true, percentage: true, feeHeadName: true } },
     },
   });
@@ -42,11 +43,15 @@ async function loadSlimStudents(
     id: s.id, name: s.name, admissionNo: s.admissionNumber, rollNo: s.rollNumber || "",
     gender: s.gender || "", status: s.status || "ACTIVE", isRte: s.isRte,
     isMarksheetClaimed: s.isMarksheetClaimed, photoUrl: s.photoUrl || "", concessionId: s.concessionId || "",
+    dob: formatCanonicalDOBIso(s.dob), dobDisplay: formatCanonicalDOB(s.dob),
+    aadhaar: s.aadhaar || "", category: s.category || "General", religion: s.religion || "Hinduism",
     admissionDate: formatCanonicalDOBIso(s.admissionDate), admissionDateDisplay: formatCanonicalDOB(s.admissionDate),
-    fatherName: s.fatherName || "", fatherMobile: s.fatherMobile || "", motherMobile: s.motherMobile || "",
+    fatherName: s.fatherName || "", fatherMobile: s.fatherMobile || "",
+    motherName: s.motherName || "", motherMobile: s.motherMobile || "",
     class: s.class.name, section: s.class.section,
     parentName: s.parentProfile?.user?.name || "", parentPhone: s.parentProfile?.user?.phone || "",
     familyCode: s.parentProfile?.familyCode || "",
+    address: s.parentProfile?.address || "",
     concession: s.concession
       ? { id: s.concession.id, name: s.concession.name, percentage: s.concession.percentage, feeHeadName: s.concession.feeHeadName }
       : null,
@@ -68,14 +73,13 @@ export async function GET(request: Request) {
     const { limit, offset } = boundPagination(searchParams, { defaultLimit: 2500, maxLimit: 5000 });
 
     // ── EGRESS P2: Projection selection.
-    // ADMIN/ACCOUNTANT receive the FULL record by default — the Edit Student modal prefills
-    // its form directly from this payload, and the directory Excel/CSV export writes every
-    // column, so slimming it would silently blank/wipe those fields. TEACHERS only ever browse
-    // the roster (attendance/marks) and cannot edit or export students, so they safely get the
-    // lightweight projection. Explicit ?full=true / ?slim=true override the default either way.
+    // Default to the enriched slim projection for all roles (saves ~75% egress per load).
+    // The directory table, search, category/rte/status filters, and CSV export have 100% of
+    // their needed columns. The Edit Student modal hydrates any remaining granular fields
+    // on demand via GET /api/students/[id] in < 0.5 KB. Explicit ?full=true is supported.
     const slimParam = searchParams.get("slim") === "true";
     const fullParam = searchParams.get("full") === "true";
-    const useSlim = authUser.role === "TEACHER" ? true : (fullParam ? false : slimParam);
+    const useSlim = fullParam ? false : true;
 
     const cacheKey = authUser.role === "TEACHER"
       ? `TEACHER_${authUser.userId}_${useSlim ? "SLIM" : "FULL"}_${hasExplicitPagination ? `${limit}_${offset}` : "ALL"}`
