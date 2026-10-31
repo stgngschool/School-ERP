@@ -1,0 +1,12 @@
+.chart { min-width: 0; }
+.readout { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 12px; color: #475569; margin: 0 0 8px; }
+.readout span { display: inline-flex; align-items: center; gap: 8px; }
+.readout strong { font-size: 14px; color: #1e293b; font-variant-numeric: tabular-nums; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: #4f46e5; }
+.scroll { overflow-x: auto; scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
+.plot { width: 100%; min-width: 560px; display: block; }
+.axis { fill: #64748b; font-size: 11px; font-weight: 500; }
+.current { fill: #4338ca; font-size: 11px; font-weight: 700; }
+.target { cursor: pointer; outline: none; }
+.target:focus-visible { stroke: #818cf8; stroke-width: 1.5; rx: 6; }
+.hint { margin: 8px 0 0; color: #64748b; font-size: 11px; }

@@ -21,6 +21,7 @@ import {
 import StudentProfileModal from "@/components/StudentProfileModal";
 import ModernDatePicker from "@/components/ModernDatePicker";
 import { getTodayIST } from "@/lib/dateUtils";
+import { buildAttendanceReadScope } from "@/lib/attendanceReadScope";
 
 interface AttendanceConsoleProps {
   initialClass?: string;
@@ -41,7 +42,7 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
   } = useAuth();
 
   // On-demand gate state (Zero auto-load to conserve Supabase egress)
-  const [isRosterLoaded, setIsRosterLoaded] = useState<boolean>(false);
+  const [loadedScopeKey, setLoadedScopeKey] = useState<string | null>(null);
   const [isLoadingRoster, setIsLoadingRoster] = useState<boolean>(false);
 
   // Selected Class & Date
@@ -53,6 +54,8 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [activeView, setActiveView] = useState<"ROSTER" | "MONTHLY">("ROSTER");
   const [selectedMonth, setSelectedMonth] = useState<string>(() => getTodayIST().slice(0, 7));
+  const attendanceScopeKey = JSON.stringify([user?.id, selectedClass, selectedDate, activeView, selectedMonth]);
+  const isRosterLoaded = loadedScopeKey === attendanceScopeKey;
 
   // Profile modal state
   const [showProfileModal, setShowProfileModal] = useState<boolean>(false);
@@ -102,17 +105,23 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
       if (availableClasses.length > 0) {
         if (!selectedClass || !availableClasses.includes(selectedClass)) {
           setSelectedClass(availableClasses[0]);
+          setLoadedScopeKey(null);
         }
       } else {
         setSelectedClass("");
+        setLoadedScopeKey(null);
       }
       return;
     }
 
     if (initialClass) {
-      setSelectedClass(initialClass);
+      if (initialClass !== selectedClass) {
+        setSelectedClass(initialClass);
+        setLoadedScopeKey(null);
+      }
     } else if (availableClasses.length > 1 && !availableClasses.includes(selectedClass)) {
       setSelectedClass(availableClasses[1]);
+      setLoadedScopeKey(null);
     }
   }, [initialClass, isTeacher, availableClasses, selectedClass]);
 
@@ -132,7 +141,7 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
 
   // Initialize attendance map: DEFAULT EVERYTHING TO PRESENT (Only when roster is explicitly loaded)
   useEffect(() => {
-    if (!isRosterLoaded) return;
+    if (!isRosterLoaded || activeView !== "ROSTER") return;
     const newMap: Record<string, AttendanceStatus> = {};
     const newTsMap: Record<string, string> = {};
 
@@ -165,13 +174,25 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
     setLocalAttendanceMap(newMap);
     setLocalAttendanceTimestampMap(newTsMap);
     setIsModified(false);
-  }, [isRosterLoaded, selectedClass, selectedDate, classStudents, attendances, leaveRequests]);
+  }, [isRosterLoaded, activeView, selectedClass, selectedDate, classStudents, attendances, leaveRequests]);
 
   // Handle class selection change: reset roster load so no eager egress is burned
   const handleClassChange = (newCls: string) => {
     setSelectedClass(newCls);
-    setIsRosterLoaded(false);
+    setLoadedScopeKey(null);
   };
+
+  const getSelectedAttendanceScope = () => buildAttendanceReadScope({
+    selectedClass,
+    selectedDate,
+    selectedMonth,
+    activeView,
+    classes: [
+      ...classes,
+      ...(user?.teacherProfile?.classes ?? []),
+      ...students.map((student) => ({ name: student.class, section: student.section })),
+    ],
+  });
 
   // Load attendance data on demand
   const handleLoadRoster = async () => {
@@ -181,8 +202,8 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
     }
     setIsLoadingRoster(true);
     try {
-      await refreshAttendance();
-      setIsRosterLoaded(true);
+      await refreshAttendance(false, getSelectedAttendanceScope());
+      setLoadedScopeKey(attendanceScopeKey);
       showToast("success", "Attendance Loaded", `Class ${normalizeDisplayClassName(selectedClass)} attendance loaded.`);
     } catch (err) {
       console.error(err);
@@ -196,7 +217,7 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
   const handleReloadRoster = async () => {
     setIsLoadingRoster(true);
     try {
-      await refreshAttendance(true);
+      await refreshAttendance(true, getSelectedAttendanceScope());
       showToast("success", "Attendance Refreshed", "Latest attendance records fetched.");
     } catch (err) {
       console.error(err);
@@ -208,6 +229,7 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
 
   // BINARY TOGGLE: PRESENT <-> ABSENT
   const toggleStudentStatus = (studentId: string) => {
+    if (!isRosterLoaded || isLoadingRoster || activeView !== "ROSTER") return;
     setLocalAttendanceMap((prev) => {
       const current = prev[studentId] || "PRESENT";
       const nextStatus: AttendanceStatus = current === "PRESENT" ? "ABSENT" : "PRESENT";
@@ -221,6 +243,7 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
 
   // Quick Actions
   const handleMarkAllPresent = () => {
+    if (!isRosterLoaded || isLoadingRoster || activeView !== "ROSTER") return;
     const updated: Record<string, AttendanceStatus> = {};
     classStudents.forEach((s) => {
       updated[s.id] = "PRESENT";
@@ -230,6 +253,7 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
   };
 
   const handleMarkAllAbsent = () => {
+    if (!isRosterLoaded || isLoadingRoster || activeView !== "ROSTER") return;
     const updated: Record<string, AttendanceStatus> = {};
     classStudents.forEach((s) => {
       updated[s.id] = "ABSENT";
@@ -240,7 +264,7 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
 
   // Save Attendance to Backend
   const handleSaveAttendance = async () => {
-    if (classStudents.length === 0) return;
+    if (!isRosterLoaded || activeView !== "ROSTER" || isLoadingRoster || isSaving || classStudents.length === 0) return;
     setIsSaving(true);
 
     // ── AT-04: Include expectedUpdatedAt for records that already exist on the
@@ -355,17 +379,25 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
           </div>
 
           <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0 w-full sm:w-auto">
-            <ModernDatePicker
+            {activeView === "MONTHLY" ? (
+              <input
+                type="month"
+                aria-label="Attendance month"
+                value={selectedMonth}
+                onChange={(e) => { setSelectedMonth(e.target.value); setLoadedScopeKey(null); }}
+                className="bg-slate-50 border border-slate-200 rounded-lg py-1 px-2 text-xs font-bold text-slate-800 outline-none"
+              />
+            ) : <ModernDatePicker
               value={selectedDate}
-              onChange={(val) => val && setSelectedDate(val)}
+              onChange={(val) => { if (val) { setSelectedDate(val); setLoadedScopeKey(null); } }}
               placeholder="Select date"
               className="flex-1 sm:flex-none"
               showClear={false}
-            />
+            />}
 
             <div className="inline-flex p-0.5 bg-slate-100 rounded-lg border border-slate-200 text-[11px] font-bold shrink-0">
               <button
-                onClick={() => setActiveView("ROSTER")}
+                onClick={() => { if (activeView !== "ROSTER") { setActiveView("ROSTER"); setLoadedScopeKey(null); } }}
                 className={`px-3 py-1 rounded-md transition-all ${
                   activeView === "ROSTER" ? "bg-white text-slate-900 shadow-2xs font-black" : "text-slate-500"
                 }`}
@@ -373,7 +405,7 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
                 Daily List
               </button>
               <button
-                onClick={() => setActiveView("MONTHLY")}
+                onClick={() => { if (activeView !== "MONTHLY") { setActiveView("MONTHLY"); setLoadedScopeKey(null); } }}
                 className={`px-3 py-1 rounded-md transition-all ${
                   activeView === "MONTHLY" ? "bg-white text-slate-900 shadow-2xs font-black" : "text-slate-500"
                 }`}
@@ -385,7 +417,7 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
         </div>
 
         {/* Rows 2 & 3: Rendered ONLY when isRosterLoaded is TRUE */}
-        {isRosterLoaded && (
+        {isRosterLoaded && activeView === "ROSTER" && (
           <>
             {/* Row 2: Search + Quick Actions */}
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 pt-1">
@@ -431,7 +463,7 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
 
                 <button
                   onClick={handleSaveAttendance}
-                  disabled={isSaving}
+                  disabled={isSaving || isLoadingRoster}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer shadow-xs disabled:opacity-50 active:scale-95"
                 >
                   {isSaving ? "Saving..." : "Save Attendance"}
@@ -460,7 +492,7 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
             <div className="inline-flex flex-wrap items-center justify-center gap-2 bg-slate-50 border border-slate-200/70 px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-700 mt-2">
               <span>Class: <strong className="text-indigo-600">{normalizeDisplayClassName(selectedClass) || "Select Class"}</strong></span>
               <span className="text-slate-300">•</span>
-              <span>Date: <strong className="text-slate-800">{selectedDate}</strong></span>
+              <span>{activeView === "MONTHLY" ? "Month" : "Date"}: <strong className="text-slate-800">{activeView === "MONTHLY" ? selectedMonth : selectedDate}</strong></span>
               {classStudents.length > 0 && (
                 <>
                   <span className="text-slate-300">•</span>
@@ -586,12 +618,9 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
             </div>
 
             <div className="flex items-center gap-2">
-              <input
-                type="month"
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-                className="bg-slate-50 border border-slate-200 rounded-lg py-1 px-2 text-xs font-bold text-slate-800 outline-none"
-              />
+              <button onClick={handleReloadRoster} disabled={isLoadingRoster} title="Reload monthly attendance" className="p-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 transition-all cursor-pointer">
+                <RefreshCw className={`h-3.5 w-3.5 ${isLoadingRoster ? "animate-spin" : ""}`} />
+              </button>
               <button
                 onClick={() => window.print()}
                 className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black transition-all shadow-md cursor-pointer active:scale-95"
@@ -682,7 +711,7 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
       )}
 
       {/* ─── MOBILE STICKY FLOATING SAVE DOCK ─── */}
-      {isRosterLoaded && (
+      {isRosterLoaded && activeView === "ROSTER" && (
         <div className="fixed bottom-[72px] inset-x-4 sm:hidden z-40">
         <div className="bg-slate-900 text-white rounded-2xl p-3 shadow-[0_8px_30px_rgba(0,0,0,0.3)] border border-slate-800 flex items-center justify-between gap-3 backdrop-blur-xl">
           <div className="min-w-0 pl-1">
@@ -694,7 +723,7 @@ export default function AttendanceConsole({ initialClass, hideClassSelector }: A
 
           <button
             onClick={handleSaveAttendance}
-            disabled={isSaving}
+            disabled={isSaving || isLoadingRoster}
             className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-slate-950 font-black h-11 px-5 rounded-xl text-xs transition-all shrink-0 shadow-md cursor-pointer"
           >
             <Save className="h-4 w-4" />

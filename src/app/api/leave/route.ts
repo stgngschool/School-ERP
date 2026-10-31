@@ -16,7 +16,7 @@ export async function GET(request: Request) {
     if (authUser.role === "PARENT") {
       const parentProfile = await db.parentProfile.findUnique({
         where: { userId: authUser.userId },
-        include: { students: true }
+        select: { students: { select: { id: true } } }
       });
       if (!parentProfile) {
         return NextResponse.json([]);
@@ -35,10 +35,20 @@ export async function GET(request: Request) {
     const leaves = await db.leaveRequest.findMany({
       where: whereClause,
       take: 100,
-      include: {
+      select: {
+        id: true,
+        studentId: true,
+        startDate: true,
+        endDate: true,
+        reason: true,
+        status: true,
+        createdAt: true,
+        fileUrl: true,
+        remarks: true,
         student: {
-          include: {
-            class: true,
+          select: {
+            name: true,
+            class: { select: { name: true, section: true } },
           },
         },
       },
@@ -116,8 +126,9 @@ export async function POST(request: Request) {
 
     const student = await db.student.findUnique({
       where: { id: studentId },
-      include: {
-        class: true,
+      select: {
+        parentProfileId: true,
+        class: { select: { classTeacherId: true } },
       },
     });
 
@@ -127,7 +138,8 @@ export async function POST(request: Request) {
 
     if (authUser.role === "PARENT") {
       const parentProfile = await db.parentProfile.findUnique({
-        where: { userId: authUser.userId }
+        where: { userId: authUser.userId },
+        select: { id: true },
       });
       if (!parentProfile || student.parentProfileId !== parentProfile.id) {
         return NextResponse.json({ error: "Unauthorized access. You can only request leaves for your own children." }, { status: 403 });

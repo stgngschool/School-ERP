@@ -44,6 +44,7 @@ export default function EditStudentModal({
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Form states
+  const [expectedSessionId, setExpectedSessionId] = useState("");
   const [name, setName] = useState("");
   const [classVal, setClassVal] = useState("");
   const [section, setSection] = useState("A");
@@ -83,6 +84,7 @@ export default function EditStudentModal({
   // Sync state whenever selected student changes
   useEffect(() => {
     if (student) {
+      setExpectedSessionId("");
       setName(student.name || "");
       setClassVal(student.class || "");
       setSection(student.section || "A");
@@ -130,6 +132,8 @@ export default function EditStudentModal({
           .then((res) => (res.ok ? res.json() : null))
           .then((fullData) => {
             if (!isMounted || !fullData || fullData.error) return;
+            setExpectedSessionId(fullData.expectedSessionId || "");
+            setClassVal(fullData.class || ""); setSection(fullData.section || "A"); setRollNo(fullData.rollNo || "");
             if (fullData.dob) setDob(formatCanonicalDOBIso(fullData.dob));
             if (fullData.aadhaar !== undefined) setAadhaar(fullData.aadhaar || "");
             if (fullData.disability !== undefined) setDisability(fullData.disability || "No");
@@ -187,7 +191,9 @@ export default function EditStudentModal({
     setSaving(true);
 
     try {
+      if (!expectedSessionId) throw new Error("Student profile/session is still loading. Reopen the form if loading failed.");
       const payload: any = {
+        expectedSessionId,
         name: name.trim(),
         classVal: classVal.trim(),
         section: section.trim(),

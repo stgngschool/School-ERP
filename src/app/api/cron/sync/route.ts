@@ -61,8 +61,9 @@ async function handleSync(request: Request) {
     }
 
     // ── EGRESS P1: Debounce accidental repeated MANUAL syncs so double/triple clicks
-    // don't each trigger a full multi-MB database dump. The scheduled cron (authorized
-    // via CRON_SECRET) is never rate-limited and always runs.
+    // don't each trigger a repeated full database read. Scheduled cron bypasses this
+    // persisted manual cooldown; the shared sync helper still coalesces duplicates
+    // and suppresses repeats for two minutes within the same warm process.
     if (!isCron) {
       const MANUAL_SYNC_COOLDOWN_MS = 2 * 60 * 1000;
       try {
@@ -86,6 +87,8 @@ async function handleSync(request: Request) {
 
     // 3. Synchronize All 4 Google Sheets Modules
     const res = await syncAllDataToSheet(spreadsheetId);
+    // Keep the actual completion time on a cooldown hit; do not write a fresh one.
+    if (res.skipped) return NextResponse.json({ ...res, spreadsheetId });
     const nowIso = new Date().toISOString();
 
     // 4. Update lastSynced in PostgreSQL SchoolConfig singleton

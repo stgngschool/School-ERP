@@ -1,6 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import dynamic from "next/dynamic";
+import { searchStudents } from "@/lib/studentSearch";
+import BillingDataBoundary from "@/components/BillingDataBoundary";
 import { useAuth, Role } from "@/context/AuthContext";
 import BottomSheet from "./BottomSheet";
 import {
@@ -42,6 +45,8 @@ import {
 interface AppLayoutProps {
   children: React.ReactNode;
 }
+
+const SearchStudentProfile = dynamic(() => import("./StudentProfileModal"), { ssr: false });
 
 export interface NavItem {
   category: string;
@@ -304,9 +309,29 @@ export default function AppLayout({ children }: AppLayoutProps) {
   // Desktop states
   const [megaMenuOpen, setMegaMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeSearchIndex, setActiveSearchIndex] = useState(-1);
+  const [searchStudentId, setSearchStudentId] = useState<string | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchResults = searchStudents(students, searchQuery);
+  const openSearchStudent = (id: string) => {
+    setSearchStudentId(id);
+    setSearchQuery("");
+    setActiveSearchIndex(-1);
+  };
+
+  useEffect(() => {
+    if (activeRole === "PARENT") return;
+    const focusSearch = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", focusSearch);
+    return () => document.removeEventListener("keydown", focusSearch);
+  }, [activeRole]);
   const [showNoticeDropdown, setShowNoticeDropdown] = useState(false);
-  const [sessionYear, setSessionYear] = useState("2026-2027");
-  const [sessions, setSessions] = useState<{ id: string; name: string; isCurrent: boolean }[]>([]);
+  const [sessionYear, setSessionYear] = useState("Loading…");
   const [showAppsModal, setShowAppsModal] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
@@ -324,7 +349,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
-          setSessions(data);
           const current = data.find(s => s.isCurrent);
           if (current) setSessionYear(current.name);
         }
@@ -578,36 +602,62 @@ export default function AppLayout({ children }: AppLayoutProps) {
                   <Search className="h-3.5 w-3.5" />
                 </div>
                 <input
+                  ref={searchInputRef}
                   type="text"
+                  role="combobox"
+                  aria-label="Search students by name, Admission No, Roll No or family code"
+                  aria-autocomplete="list"
+                  aria-expanded={Boolean(searchQuery.trim())}
+                  aria-controls="header-student-results"
+                  aria-activedescendant={searchQuery.trim() && activeSearchIndex >= 0 && searchResults[activeSearchIndex] ? `header-student-${searchResults[activeSearchIndex].id}` : undefined}
                   placeholder="Search students, admission no, family code... (Ctrl+K)"
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onBlur={(event) => {
+                    if (!searchRef.current?.contains(event.relatedTarget as Node | null)) {
+                      setSearchQuery("");
+                      setActiveSearchIndex(-1);
+                    }
+                  }}
+                  onChange={(e) => { setSearchQuery(e.target.value); setActiveSearchIndex(-1); }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") {
+                      event.preventDefault();
+                      setSearchQuery("");
+                      setActiveSearchIndex(-1);
+                    } else if ((event.key === "ArrowDown" || event.key === "ArrowUp") && searchResults.length) {
+                      event.preventDefault();
+                      const next = event.key === "ArrowDown"
+                        ? (activeSearchIndex + 1) % searchResults.length
+                        : (activeSearchIndex <= 0 ? searchResults.length - 1 : activeSearchIndex - 1);
+                      setActiveSearchIndex(next);
+                      document.getElementById(`header-student-${searchResults[next].id}`)?.scrollIntoView({ block: "nearest" });
+                    } else if (event.key === "Enter" && searchResults.length) {
+                      event.preventDefault();
+                      openSearchStudent((searchResults[activeSearchIndex] ?? searchResults[0]).id);
+                    }
+                  }}
                   className="w-full pl-9 pr-14 py-2 bg-slate-100/50 border border-slate-200/50 rounded-2xl text-xs font-semibold focus:outline-none focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500 focus:bg-white transition-all text-slate-800 shadow-[inset_0_1px_2px_rgba(0,0,0,0.02)] placeholder:text-slate-400"
                 />
                 <div className="absolute inset-y-0 right-3.5 flex items-center pointer-events-none">
                   <kbd className="hidden sm:inline-block text-[9px] font-black text-slate-500 bg-slate-200/60 border border-transparent rounded-lg px-2 py-0.5">Ctrl K</kbd>
                 </div>
-                {searchQuery && (
-                  <div className="absolute top-11 left-0 right-0 bg-white border border-slate-200/90 rounded-2xl shadow-xl max-h-60 overflow-y-auto z-50 p-2 space-y-1">
-                    {students && students.filter(s =>
-                      s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                      s.admissionNo?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                      (s.rollNo && String(s.rollNo).toLowerCase().includes(searchQuery.toLowerCase()))
-                    ).slice(0, 8).map((student) => (
-                      <button key={student.id} onClick={() => { setActiveTab("students"); setSearchQuery(""); }}
-                        className="w-full text-left flex justify-between items-center p-2 rounded-xl hover:bg-indigo-50/60 transition-all">
+                {searchQuery.trim() && (
+                  <div id="header-student-results" role="listbox" aria-label="Matching students" className="absolute top-11 left-0 right-0 bg-white border border-slate-200/90 rounded-2xl shadow-xl max-h-60 overflow-y-auto z-50 p-2 space-y-1">
+                    {searchResults.map((student, index) => (
+                      <button key={student.id} id={`header-student-${student.id}`} type="button" role="option" tabIndex={-1}
+                        aria-selected={index === activeSearchIndex}
+                        aria-label={`View ${student.name}, Admission No ${student.admissionNo || "unavailable"}, Class ${student.class}`}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => openSearchStudent(student.id)}
+                        className={`w-full text-left flex justify-between items-center p-2 rounded-xl hover:bg-indigo-50/60 transition-all ${index === activeSearchIndex ? "bg-indigo-50" : ""}`}>
                         <div>
                           <p className="text-xs font-bold text-slate-800">{student.name}</p>
-                          <p className="text-[10px] text-slate-400 font-semibold">Roll: {student.rollNo || "--"} • {student.admissionNo} • Class {student.class}</p>
+                          <p className="text-[11px] text-slate-600 font-semibold">Roll No: {student.rollNo ?? "--"} • {student.admissionNo} • Class {student.class}{student.familyCode ? ` • Family ${student.familyCode}` : ""}</p>
                         </div>
                         <span className="text-[10px] font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full uppercase">View</span>
                       </button>
                     ))}
-                    {students && students.filter(s =>
-                      s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                      s.admissionNo?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                      (s.rollNo && String(s.rollNo).toLowerCase().includes(searchQuery.toLowerCase()))
-                    ).length === 0 && (
+                    {searchResults.length === 0 && (
                       <p className="text-center py-4 text-xs font-semibold text-slate-400">No students found.</p>
                     )}
                   </div>
@@ -627,17 +677,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
             <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/50 py-1 px-3 rounded-2xl shadow-sm">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 status-dot-pulse inline-block shrink-0" />
               <span className="text-[9px] font-black text-emerald-600 uppercase tracking-wider hidden sm:inline-block">Live:</span>
-              <select value={sessionYear} onChange={(e) => setSessionYear(e.target.value)}
-                className="bg-transparent text-xs font-extrabold text-slate-700 py-0.5 outline-none cursor-pointer">
-                {sessions.length > 0 ? (
-                  sessions.map(s => <option key={s.id} value={s.name}>{s.name}</option>)
-                ) : (
-                  <>
-                    <option value="2026-2027">2026-2027</option>
-                    <option value="2025-2026">2025-2026</option>
-                  </>
-                )}
-              </select>
+              <span className="text-xs font-extrabold text-slate-700" title="Current working session. Historical reports have their own session selection.">{sessionYear}</span>
             </div>
 
             {/* Notifications */}
@@ -706,7 +746,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
               </div>
             </div>
           ) : (
-            children
+            <BillingDataBoundary>{children}</BillingDataBoundary>
           )}
         </main>
       </div>
@@ -835,7 +875,14 @@ export default function AppLayout({ children }: AppLayoutProps) {
       </BottomSheet>
 
       {/* Apps & Integrations Connector Modal */}
-
+      {searchStudentId && (
+        <SearchStudentProfile
+          key={searchStudentId}
+          studentId={searchStudentId}
+          isOpen
+          onClose={() => { setSearchStudentId(null); searchInputRef.current?.focus(); }}
+        />
+      )}
     </div>
   );
 }

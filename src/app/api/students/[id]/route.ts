@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getCachedActiveSession } from "@/lib/cache/sessionCache";
 import db from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
 import { formatCanonicalDOB, formatCanonicalDOBIso } from "@/lib/dateUtils";
@@ -13,6 +14,7 @@ export async function GET(
   if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
+    const profileSession = await getCachedActiveSession();
     const { id } = await params;
 
     if (!id) {
@@ -243,6 +245,7 @@ export async function GET(
 
     // Format output
     const formatted = {
+      expectedSessionId: profileSession?.id || null,
       id: student.id,
       name: student.name,
       admissionNo: student.admissionNumber,

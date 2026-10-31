@@ -1,5 +1,8 @@
 import db from "@/lib/db";
-import { EntryType } from "@prisma/client";
+import { EntryType, type Prisma } from "@prisma/client";
+import { lockSessionWorkflow } from "./sessionWorkflow";
+import { resolveChargeSession, entryBelongsToSession } from "./chargeSession";
+import { selectSessionStructures } from "./sessionFees";
 
 // Academic year months in order: April → March
 const ACADEMIC_MONTHS = [
@@ -40,6 +43,7 @@ function getNormalizedChargeKey(description: string, feeHeadName: string, fallba
   const yearMatch = description.match(/\d{4}-\d{4}/);
   const yearSuffix = yearMatch ? `_${yearMatch[0]}` : (fallbackYear ? `_${fallbackYear}` : "");
   
+  if (descLower.includes("one-time") || descLower.includes("onetime")) return `${headLower}_onetime`;
   for (const month of ACADEMIC_MONTHS) {
     if (descLower.includes(month.toLowerCase())) {
       return `${headLower}_${month.toLowerCase()}${yearSuffix}`;
@@ -77,7 +81,8 @@ export function getAcademicYear(date = new Date()): string {
  * @param academicYear - e.g. "2026-2027" (defaults to current)
  * @param startingFeeMonth - Optional starting month (e.g. "July") for mid-session admissions
  */
-export async function generateYearlyCharges(
+async function generateYearlyChargesInTransaction(
+  db: Prisma.TransactionClient,
   studentId: string,
   className: string,
   createdById: string,
@@ -86,10 +91,16 @@ export async function generateYearlyCharges(
   targetFeeHeadName?: string
 ): Promise<{ generated: number; skipped: number }> {
   // ── GY-04: Resolve active academic session
-  const activeSession = await db.academicSession.findFirst({ where: { isCurrent: true } });
-  const sessionYear = activeSession?.name || getAcademicYear();
-  const acYear = academicYear || sessionYear;
-  const targetSessionId = activeSession?.id || null;
+  const { target: targetSession, current: activeSession } = await resolveChargeSession(db, academicYear);
+  const acYear = targetSession.name;
+  const targetSessionId = targetSession.id;
+
+  const enrollment = await db.studentSession.findUnique({
+    where: { studentId_sessionId: { studentId, sessionId: targetSessionId } },
+    select: { class: { select: { name: true } } },
+  });
+  if (enrollment) className = enrollment.class.name;
+  else throw new Error("Target-session enrollment is required before generating fees. Review existing data first.");
 
   // Determine active months based on startingFeeMonth
   let activeMonths = ACADEMIC_MONTHS;
@@ -99,14 +110,17 @@ export async function generateYearlyCharges(
   }
 
   // Find class-specific structure, fall back to "All"
-  const structures = await db.feeStructure.findMany({
-    where: {
-      OR: [{ className }, { className: "All" }],
-    },
+  const allStructures = await db.feeStructure.findMany({
+    where: { AND: [
+      { OR: [{ className }, { className: "All" }] },
+      { OR: [{ name: { startsWith: `[Session ${acYear}] ` } }, ...(targetSession.id === activeSession?.id ? [{ name: { not: { startsWith: "[Session " } } }] : [])] },
+    ] },
     include: {
       items: { include: { feeHead: true } },
     },
   });
+
+  const structures = selectSessionStructures(allStructures, acYear, activeSession?.name);
 
   if (structures.length === 0) {
     return { generated: 0, skipped: 0 };
@@ -117,6 +131,7 @@ export async function generateYearlyCharges(
   // Process "All" first
   for (const struct of structures.filter((s) => s.className === "All")) {
     for (const item of struct.items) {
+      if (item.feeHead.status === "ARCHIVED") continue;
       headMap.set(item.feeHead.name, {
         feeHeadId: item.feeHeadId,
         amount: item.amount,
@@ -128,6 +143,7 @@ export async function generateYearlyCharges(
   // Process class-specific
   for (const struct of structures.filter((s) => s.className !== "All")) {
     for (const item of struct.items) {
+      if (item.feeHead.status === "ARCHIVED") continue;
       headMap.set(item.feeHead.name, {
         feeHeadId: item.feeHeadId,
         amount: item.amount,
@@ -155,16 +171,16 @@ export async function generateYearlyCharges(
 
   // Fetch all existing entries (charges and discounts) for this student
   const existingEntries = await db.ledgerEntry.findMany({
-    where: { studentId },
-    select: { id: true, description: true, entryType: true, amount: true, receiptItems: true, sessionId: true, feeHead: { select: { name: true } } },
+    where: { studentId, OR: [{ sessionId: targetSessionId }, { sessionId: null, description: { contains: acYear } }, { description: { contains: "One-Time", mode: "insensitive" } }, { description: { contains: "onetime", mode: "insensitive" } }] },
+    select: { id: true, description: true, entryType: true, amount: true, receiptItems: { select: { id: true } }, sessionId: true, feeHead: { select: { name: true } } },
   });
   const existingChargesMap = new Map(
-    existingEntries.filter(e => e.entryType === EntryType.CHARGE).map(e => [
+    existingEntries.filter(e => e.entryType === EntryType.CHARGE && (/one-?time/i.test(e.description) || entryBelongsToSession(e, targetSessionId, acYear))).map(e => [
       `${studentId}_${getNormalizedChargeKey(e.description, e.feeHead?.name || "", acYear)}`, e
     ])
   );
   const existingDiscountsMap = new Map(
-    existingEntries.filter(e => e.entryType === EntryType.DISCOUNT).map(e => [
+    existingEntries.filter(e => e.entryType === EntryType.DISCOUNT && (/one-?time/i.test(e.description) || entryBelongsToSession(e, targetSessionId, acYear))).map(e => [
       `${studentId}_${getNormalizedChargeKey(e.description, e.feeHead?.name || "", acYear)}`, e
     ])
   );
@@ -226,8 +242,10 @@ export async function generateYearlyCharges(
       const keyConcessionDiscount = concessionDesc ? `${studentId}_${getNormalizedChargeKey(concessionDesc, name, acYear)}` : "";
 
       const existingChargeEntry = existingChargesMap.get(keyCharge);
-      if (existingChargeEntry && existingChargeEntry.amount !== charge.amount && existingChargeEntry.receiptItems.length === 0) {
-        toUpdate.push({ id: existingChargeEntry.id, amount: charge.amount });
+      if (existingChargeEntry?.receiptItems.length) { skipped++; continue; }
+      if (frequency === "one_time" && existingChargeEntry && existingChargeEntry.sessionId !== targetSessionId) { skipped++; continue; }
+      if (existingChargeEntry && existingChargeEntry.receiptItems.length === 0) {
+        if (existingChargeEntry.amount !== charge.amount) toUpdate.push({ id: existingChargeEntry.id, amount: charge.amount });
         if (isRte) {
           const existingDiscountEntry = existingDiscountsMap.get(keyDiscount);
           if (existingDiscountEntry && existingDiscountEntry.amount !== -charge.amount) {
@@ -291,20 +309,8 @@ export async function generateYearlyCharges(
     }
   }
 
-  await db.$transaction(async (tx) => {
-    if (toCreate.length > 0) {
-      await tx.ledgerEntry.createMany({
-        data: toCreate,
-      });
-    }
-
-    for (const update of toUpdate) {
-      await tx.ledgerEntry.update({
-        where: { id: update.id },
-        data: { amount: update.amount },
-      });
-    }
-  });
+  if (toCreate.length) await db.ledgerEntry.createMany({ data: toCreate });
+  await applyUnpaidUpdates(db, toUpdate);
 
   return { generated, skipped };
 }
@@ -357,7 +363,8 @@ export function getStartingFeeMonthFromDate(
  * If absent, `admissionDate` is used via getStartingFeeMonthFromDate().
  * If both are absent, all months are generated (April → March).
  */
-export async function generateYearlyChargesBulk(
+async function generateYearlyChargesBulkInTransaction(
+  db: Prisma.TransactionClient,
   students: {
     id: string;
     class: { name: string };
@@ -369,22 +376,34 @@ export async function generateYearlyChargesBulk(
   targetFeeHeadName?: string
 ): Promise<{ generated: number; skipped: number; failed?: number; errors?: string[] }> {
   // ── GY-04: Resolve active academic session
-  const activeSession = await db.academicSession.findFirst({ where: { isCurrent: true } });
-  const sessionYear = activeSession?.name || getAcademicYear();
-  const acYear = academicYear || sessionYear;
-  const targetSessionId = activeSession?.id || null;
+  const { target: targetSession, current: activeSession } = await resolveChargeSession(db, academicYear);
+  const acYear = targetSession.name;
+  const targetSessionId = targetSession.id;
+
+  if (students.length > 100) throw new Error("Generate fees in batches of at most 100 students.");
+  const enrollments = await db.studentSession.findMany({
+    where: { sessionId: targetSessionId, studentId: { in: students.map(s => s.id) } },
+    select: { studentId: true, class: { select: { name: true } } },
+  });
+  const classByStudent = new Map(enrollments.map(e => [e.studentId, e.class]));
+  if (students.some(s => !classByStudent.has(s.id))) throw new Error("Target-session enrollments are missing. Review existing data first.");
+  students = students.map(s => ({ ...s, class: classByStudent.get(s.id)! }));
 
   // 1. Fetch all structures
-  const structures = await db.feeStructure.findMany({
+  const allStructures = await db.feeStructure.findMany({
+    where: { OR: [{ name: { startsWith: `[Session ${acYear}] ` } }, ...(targetSession.id === activeSession?.id ? [{ name: { not: { startsWith: "[Session " } } }] : [])] },
     include: {
       items: { include: { feeHead: true } },
     },
   });
 
+  const structures = selectSessionStructures(allStructures, acYear, activeSession?.name);
+
   // 2. Fetch all existing entries (charges and discounts) for these students
   const existingEntries = await db.ledgerEntry.findMany({
     where: {
       studentId: { in: students.map((s) => s.id) },
+      OR: [{ sessionId: targetSessionId }, { sessionId: null, description: { contains: acYear } }, { description: { contains: "One-Time", mode: "insensitive" } }, { description: { contains: "onetime", mode: "insensitive" } }],
     },
     select: {
       id: true,
@@ -392,14 +411,14 @@ export async function generateYearlyChargesBulk(
       description: true,
       entryType: true,
       amount: true,
-      receiptItems: true,
+      receiptItems: { select: { id: true } },
       sessionId: true,
       feeHead: { select: { name: true } },
     },
   });
 
   const existingChargesMap = new Map(
-    existingEntries.filter(e => e.entryType === EntryType.CHARGE).map((e) => {
+    existingEntries.filter(e => e.entryType === EntryType.CHARGE && (/one-?time/i.test(e.description) || entryBelongsToSession(e, targetSessionId, acYear))).map((e) => {
       // Find matching fee head or description name with session-scoping
       const normKey = `${e.studentId}_${getNormalizedChargeKey(e.description, e.feeHead?.name || "", acYear)}`;
       return [normKey, e];
@@ -407,7 +426,7 @@ export async function generateYearlyChargesBulk(
   );
   const existingChargesSet = new Set(existingChargesMap.keys());
   const existingDiscountsMap = new Map(
-    existingEntries.filter(e => e.entryType === EntryType.DISCOUNT).map((e) => [
+    existingEntries.filter(e => e.entryType === EntryType.DISCOUNT && (/one-?time/i.test(e.description) || entryBelongsToSession(e, targetSessionId, acYear))).map((e) => [
       `${e.studentId}_${getNormalizedChargeKey(e.description, e.feeHead?.name || "", acYear)}`, e
     ])
   );
@@ -442,6 +461,7 @@ export async function generateYearlyChargesBulk(
     // Process "All" first
     for (const struct of classStructures.filter((s) => s.className === "All")) {
       for (const item of struct.items) {
+        if (item.feeHead.status === "ARCHIVED") continue;
         headMap.set(item.feeHead.name, {
           feeHeadId: item.feeHeadId,
           amount: item.amount,
@@ -453,6 +473,7 @@ export async function generateYearlyChargesBulk(
     // Process class-specific
     for (const struct of classStructures.filter((s) => s.className !== "All")) {
       for (const item of struct.items) {
+        if (item.feeHead.status === "ARCHIVED") continue;
         headMap.set(item.feeHead.name, {
           feeHeadId: item.feeHeadId,
           amount: item.amount,
@@ -546,9 +567,11 @@ export async function generateYearlyChargesBulk(
         const keyConcessionDiscount = concessionDesc ? `${student.id}_${getNormalizedChargeKey(concessionDesc, name, acYear)}` : "";
 
         const existingChargeEntry = existingChargesMap.get(keyCharge);
-        if (existingChargeEntry && existingChargeEntry.amount !== charge.amount && existingChargeEntry.receiptItems.length === 0) {
-          // Unpaid existing charge has a different amount (fee structure was updated), queue update
-          toUpdate.push({ id: existingChargeEntry.id, amount: charge.amount });
+        if (existingChargeEntry?.receiptItems.length) { skipped++; continue; }
+        if (frequency === "one_time" && existingChargeEntry && existingChargeEntry.sessionId !== targetSessionId) { skipped++; continue; }
+        if (existingChargeEntry && existingChargeEntry.receiptItems.length === 0) {
+          // Synchronize unpaid charge and waiver amounts independently.
+          if (existingChargeEntry.amount !== charge.amount) toUpdate.push({ id: existingChargeEntry.id, amount: charge.amount });
           if (isRte) {
             const existingDiscountEntry = existingDiscountsMap.get(keyDiscount);
             if (existingDiscountEntry && existingDiscountEntry.amount !== -charge.amount) {
@@ -613,59 +636,36 @@ export async function generateYearlyChargesBulk(
     }
   }
 
-  // ── GY-01 fix: chunked batch writes ─────────────────────────────────────
-  // A single db.$transaction wrapping all toCreate/toUpdate rows can exceed
-  // Prisma's 5-second default timeout when there are many students (e.g. 100+
-  // students × 12 months × 2 rows = 2400+ rows). Instead, we:
-  //   1. Chunk updates into batches of CHUNK_SIZE and commit each batch in its
-  //      own short transaction. An interruption mid-way leaves already-committed
-  //      chunks intact; generateYearlyCharges is idempotent so a re-run skips
-  //      what was already written and finishes the rest.
-  //   2. Chunk creates similarly. createMany inside each chunk is fast (~ms).
-  //
-  // Isolation guarantee: Within a single student's data the charge + discount
-  // rows for that student are guaranteed to land in the same chunk because the
-  // per-student loop appends both in sequence before moving on.
-
-  const CHUNK_SIZE = 100; // rows per transaction — well within 5s
-  let failed = 0;
-  const errors: string[] = [];
-
-  // Process updates in chunks
-  for (let i = 0; i < toUpdate.length; i += CHUNK_SIZE) {
-    const chunk = toUpdate.slice(i, i + CHUNK_SIZE);
-    try {
-      await db.$transaction(async (tx) => {
-        for (const updateItem of chunk) {
-          await tx.ledgerEntry.update({
-            where: { id: updateItem.id },
-            data: { amount: updateItem.amount },
-          });
-        }
-      });
-    } catch (chunkErr: any) {
-      console.error(`[generateYearlyChargesBulk] Update chunk ${i / CHUNK_SIZE} failed:`, chunkErr);
-      failed += chunk.length;
-      errors.push(`Update batch ${i / CHUNK_SIZE + 1} failed: ${chunkErr.message || "Unknown error"}`);
-    }
-  }
-
-  // Process creates in chunks
-  for (let i = 0; i < toCreate.length; i += CHUNK_SIZE) {
-    const chunk = toCreate.slice(i, i + CHUNK_SIZE);
-    try {
-      await db.$transaction(async (tx) => {
-        await tx.ledgerEntry.createMany({ data: chunk });
-      });
-    } catch (chunkErr: any) {
-      console.error(`[generateYearlyChargesBulk] Create chunk ${i / CHUNK_SIZE} failed:`, chunkErr);
-      failed += chunk.length;
-      generated = Math.max(0, generated - chunk.length);
-      errors.push(`Create batch ${i / CHUNK_SIZE + 1} failed: ${chunkErr.message || "Unknown error"}`);
-    }
-  }
-
-  return { generated, skipped, failed, errors };
+  // The outer workflow-locked transaction cover reads and writes.
+  // This prevents concurrent retries from generating duplicate charges.
+  await applyUnpaidUpdates(db, toUpdate);
+  for (let i = 0; i < toCreate.length; i += 1000) await db.ledgerEntry.createMany({ data: toCreate.slice(i, i + 1000) });
+  return { generated, skipped, failed: 0, errors: [] as string[] };
 }
 
-// End of generateYearlyCharges module. Verified clean.
+async function applyUnpaidUpdates(tx: Prisma.TransactionClient, updates: { id: string; amount: number }[]) {
+  const groups = new Map<number, string[]>();
+  for (const update of updates) {
+    if (!groups.has(update.amount)) groups.set(update.amount, []);
+    groups.get(update.amount)!.push(update.id);
+  }
+  for (const [amount, ids] of groups) {
+    for (let start = 0; start < ids.length; start += 1000) await tx.ledgerEntry.updateMany({ where: { id: { in: ids.slice(start, start + 1000) } }, data: { amount } });
+  }
+}
+
+export async function generateYearlyCharges(...args: Parameters<typeof generateYearlyChargesInTransaction> extends [Prisma.TransactionClient, ...infer Rest] ? Rest : never) {
+  return db.$transaction(async tx => {
+    await lockSessionWorkflow(tx);
+    return generateYearlyChargesInTransaction(tx, ...args);
+  }, { isolationLevel: "ReadCommitted", timeout: 30000, maxWait: 10000 });
+}
+
+export async function generateYearlyChargesBulk(...args: Parameters<typeof generateYearlyChargesBulkInTransaction> extends [Prisma.TransactionClient, ...infer Rest] ? Rest : never) {
+  return db.$transaction(async tx => {
+    await lockSessionWorkflow(tx);
+    return generateYearlyChargesBulkInTransaction(tx, ...args);
+  }, { isolationLevel: "ReadCommitted", timeout: 30000, maxWait: 10000 });
+}
+
+// No production corrections or automatic legacy enrollment backfill occur here.

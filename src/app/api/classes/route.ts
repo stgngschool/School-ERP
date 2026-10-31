@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { lockSessionWorkflow } from "@/lib/sessionWorkflow";
+import { SessionError } from "@/lib/sessionPolicy";
 import { db } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
 import { ClassStatus } from "@prisma/client";
@@ -98,15 +100,20 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "Class ID is required" }, { status: 400 });
     }
 
-    // DB-05: Using ClassStatus enum — only valid enum values can be stored
-    await db.class.update({
-      where: { id },
-      data: { status: ClassStatus.ARCHIVED },
+    await db.$transaction(async tx => {
+      await lockSessionWorkflow(tx);
+      const [students, future] = await Promise.all([
+        tx.student.count({ where: { classId: id, status: "ACTIVE" } }),
+        tx.studentSession.count({ where: { classId: id, session: { isCurrent: false, startDate: { gt: new Date() } } } }),
+      ]);
+      if (students || future) throw new SessionError("This class has active students or prepared enrollments. Review them before archiving.", 409);
+      await tx.class.update({ where: { id }, data: { status: ClassStatus.ARCHIVED } });
     });
 
     serverClassesCache.clear();
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof SessionError) return NextResponse.json({ error: error.message }, { status: error.status });
     console.error("Delete class error:", error);
     return NextResponse.json({ error: "Failed to archive class" }, { status: 500 });
   }

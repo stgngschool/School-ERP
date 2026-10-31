@@ -1,5 +1,6 @@
 "use client";
 
+import MonthlyCollectionChart from "@/components/admin/MonthlyCollectionChart";
 import React, { useState, useEffect, useMemo } from "react";
 import { 
   Sparkles, EyeOff, Eye, TrendingUp, Users, AlertTriangle, 
@@ -59,7 +60,6 @@ export default function DashboardOverviewTab({
 }: DashboardOverviewTabProps) {
 
   // Redesigned Dashboard State
-  const [hoveredMonth, setHoveredMonth] = useState<string | null>(null);
   const [notes, setNotes] = useState<string[]>([]);
   const [newNoteText, setNewNoteText] = useState("");
 
@@ -454,32 +454,6 @@ export default function DashboardOverviewTab({
           const monthsOrder = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
           const currentMonthShort = new Date().toLocaleString("en-US", { month: "short" });
           
-          // Custom SVG Line Chart Coordinates
-          const maxRev = Math.max(...Object.values(monthlyRevenue), 1000);
-          const chartWidth = 600;
-          const chartHeight = 220;
-          const paddingLeft = 55;
-          const paddingRight = 20;
-          const paddingTop = 20;
-          const paddingBottom = 30;
-          
-          const activeWidth = chartWidth - paddingLeft - paddingRight;
-          const activeHeight = chartHeight - paddingTop - paddingBottom;
-          
-          const points = monthsOrder.map((m, idx) => {
-            const val = monthlyRevenue[m] || 0;
-            const x = paddingLeft + (idx / (monthsOrder.length - 1)) * activeWidth;
-            const y = chartHeight - paddingBottom - (val / maxRev) * activeHeight;
-            return { x, y, month: m, val };
-          });
-          
-          let linePath = "";
-          let areaPath = "";
-          if (points.length > 0) {
-            linePath = `M ${points[0].x} ${points[0].y} ` + points.slice(1).map(p => `L ${p.x} ${p.y}`).join(" ");
-            areaPath = `${linePath} L ${points[points.length - 1].x} ${chartHeight - paddingBottom} L ${points[0].x} ${chartHeight - paddingBottom} Z`;
-          }
-
           // Doughnut Chart Setup
           const doughnutRadius = 45;
           const doughnutCirc = 2 * Math.PI * doughnutRadius;
@@ -708,9 +682,9 @@ export default function DashboardOverviewTab({
                       </span>
                     </div>
                     {!studentsLoaded ? (
-                      <div className="mt-3 sm:mt-4 animate-pulse">
-                        <div className="h-6 sm:h-8 w-16 sm:w-20 bg-slate-200/70 rounded-xl" />
-                      </div>
+                      <button type="button" onClick={() => setActiveTab("attendance")} className="mt-3 min-h-11 text-sm font-bold text-indigo-700 underline underline-offset-4">
+                        Open Attendance
+                      </button>
                     ) : (
                       <h3 className="text-base sm:text-2xl font-black text-slate-800 tracking-tight mt-2 sm:mt-4">{totalStudents}</h3>
                     )}
@@ -827,7 +801,7 @@ export default function DashboardOverviewTab({
                   </div>
                   <div className="mt-3 sm:mt-4 pt-2.5 sm:pt-3 border-t border-slate-100/80">
                     {!attendanceLoaded ? (
-                      <div className="h-6 sm:h-8 w-full bg-slate-100 rounded-xl animate-pulse" />
+                      <p className="text-xs text-slate-600">Load attendance for a class and date in the Attendance screen.</p>
                     ) : hasTodayAttendance ? (
                       <div className="grid grid-cols-4 gap-0.5 sm:gap-1 text-center text-[9px] sm:text-[10px] font-bold text-slate-500">
                         <div className="bg-emerald-50 text-emerald-700 py-0.5 sm:py-1 rounded">
@@ -859,7 +833,7 @@ export default function DashboardOverviewTab({
 
               {/* ─── Visualizations Section (SVG Charts) ─── */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-3.5 sm:gap-6">
-                {/* Revenue Curve Chart (Modern Rounded Bar Chart with Growth Analytics) */}
+                {/* Monthly collection trend */}
                 <div className="lg:col-span-2 bg-white rounded-2xl sm:rounded-3xl border-0 sm:border border-slate-200/60 shadow-sm p-4 sm:p-6 relative flex flex-col justify-between">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3 sm:mb-4 pb-2.5 sm:pb-3 border-b border-slate-100">
                     <div>
@@ -874,60 +848,8 @@ export default function DashboardOverviewTab({
                     </div>
                   </div>
 
-                  <div className="relative w-full h-[200px] sm:h-[210px] flex items-end justify-between gap-1 sm:gap-3 pt-6 pb-2 px-0.5 sm:px-1 overflow-x-auto scrollbar-none no-scrollbar">
-                    {monthsOrder.map((m) => {
-                      const valPaise = monthlyRevenue[m] || 0;
-                      const valRupees = Math.round(valPaise / 100);
-                      const heightPct = maxRev > 0 ? Math.max((valPaise / maxRev) * 100, valPaise > 0 ? 8 : 3) : 3;
-                      const isCurrentMonth = m.toLowerCase() === currentMonthShort.toLowerCase();
-                      const isHighest = valPaise === Math.max(...Object.values(monthlyRevenue)) && valPaise > 0;
+                  <MonthlyCollectionChart months={monthsOrder} values={monthlyRevenue} masked={isCardMasked("chart")} currentMonth={currentMonthShort} />
 
-                      return (
-                        <div 
-                          key={m} 
-                          className="flex-1 min-w-[20px] flex flex-col items-center h-full justify-end group relative cursor-pointer"
-                        >
-                          {/* Hover Tooltip Popup */}
-                          <div className="absolute -top-9 opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none bg-slate-900 text-white text-[10px] font-bold py-1 px-2 rounded-lg shadow-xl whitespace-nowrap z-20">
-                            <span className="text-slate-300">{m}: </span>
-                            <span className="text-amber-300 font-black">{isCardMasked("chart") ? "₹••••••" : `₹${valRupees.toLocaleString('en-IN')}`}</span>
-                          </div>
-
-                          {/* Top value label for active months */}
-                          {valRupees > 0 && (
-                            <span className="text-[8px] sm:text-[9px] font-black text-slate-700 mb-1 tracking-tight group-hover:text-indigo-600 truncate max-w-full">
-                              {isCardMasked("chart") ? "••" : (valRupees >= 100000 ? `₹${(valRupees / 100000).toFixed(1)}L` : valRupees >= 1000 ? `₹${(valRupees / 1000).toFixed(valRupees % 1000 === 0 ? 0 : 1)}k` : `₹${valRupees}`)}
-                            </span>
-                          )}
-
-                          {/* Bar Cylinder */}
-                          <div className="w-full max-w-[34px] bg-slate-100/90 rounded-2xl p-0.5 flex flex-col justify-end h-full max-h-[140px]">
-                            <div
-                              style={{ height: `${heightPct}%` }}
-                              className={`w-full rounded-xl transition-all duration-500 relative ${
-                                isHighest
-                                  ? "bg-gradient-to-t from-indigo-600 to-indigo-400 shadow-md shadow-indigo-500/30"
-                                  : valRupees > 0
-                                  ? "bg-gradient-to-t from-indigo-500 to-indigo-300"
-                                  : "bg-slate-200/50"
-                              } group-hover:brightness-110`}
-                            >
-                              {isCurrentMonth && valRupees > 0 && (
-                                <span className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-amber-400 border border-white animate-ping" />
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Month Label */}
-                          <span className={`text-[9px] sm:text-[10px] font-extrabold mt-1.5 uppercase tracking-wider ${
-                            isCurrentMonth ? "text-indigo-600 font-black" : "text-slate-400 group-hover:text-slate-700"
-                          }`}>
-                            {m}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
                 </div>
 
                 {/* Collection efficiency Doughnut */}

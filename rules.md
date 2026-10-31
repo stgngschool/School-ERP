@@ -22,6 +22,15 @@ This document outlines the rules, styling guidelines, database patterns, and saf
 
 ## 2. API & Performance Rules
 
+### Supabase Free-Tier Egress (User Requirement, 31 October 2026)
+* Treat low egress as a requirement for every future change. Read `docs/audits/2026-10-31-egress-review.md` before changing data-loading flows.
+* Preserve the original dashboard and direct navigation. Do not add a summary gateway, extra "Open dashboard" step or manual-load barrier for egress optimization. Fetch required data automatically within the existing screen, with accurate loading states and caching (explicit user correction).
+* Select only required database fields; filter before transfer. Use database aggregates for totals and bounded pages for lists. Never silently truncate financial records or totals to save bandwidth.
+* Load detail on demand, deduplicate concurrent reads, and avoid unnecessary polling/full-school refreshes. Preserve cross-device correctness, private cache isolation and mutation invalidation.
+* Verify with offline fixtures first. Do not run full live exports, syncs, bulk downloads or repeated production reads for testing. Prefer small aggregate diagnostics; do not claim exact monthly savings without measurements.
+* Preserve backups, security checks, student records, receipt allocations and accounting history. Do not delete school data to reduce egress.
+* Academic session implementation/activation is deferred until session end by the user. Preserve pending work; do not mix it into UI/egress releases inadvertently.
+
 ### A. Loop Optimization
 * **No O(N^2) Scans**: Avoid nested scans over large arrays (like scanning all discounts/receipt items for every ledger entry). Group child records in memory using `Map` structures before looping.
 * **Bulk Writes**: For bulk imports, do not use awaited sequential prisma write operations in loops. Collect structures in memory and execute batch queries using `createMany` (divided into chunks of 1000).

@@ -1,3 +1,4 @@
+import { getCachedSchoolConfig } from "@/lib/cache/schoolConfigCache";
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { formatCanonicalDOBIso } from "@/lib/dateUtils";
@@ -34,7 +35,7 @@ function recordFailedAttempt(ip: string) {
 // Helper: Read dynamic portal configuration from DB (SchoolConfig singleton) or env fallback
 async function getPortalConfig(): Promise<{ isEnabled: boolean; allowedExams: string[] }> {
   try {
-    const row = await db.schoolConfig.findUnique({ where: { id: "singleton" } });
+    const row = await getCachedSchoolConfig();
     if (row && row.data && typeof row.data === "object") {
       const data = row.data as Record<string, any>;
       const isEnabled =

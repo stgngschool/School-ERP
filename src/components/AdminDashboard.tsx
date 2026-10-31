@@ -86,9 +86,11 @@ const PrintReceiptModal = dynamic(() => import("@/components/accountant/PrintRec
   ssr: false,
 });
 
+
 // AD-09: validTabs is a static list — defined at module level
 const VALID_ADMIN_TABS = [
   "dashboard",
+  "sessions",
   "collect",
   "attendance",
   "marks",
@@ -156,7 +158,7 @@ export default function AdminDashboard() {
     refreshBilling,
     refreshUsers,
     studentsLoaded,
-    billingLoaded,
+    billingDetailsLoaded: billingLoaded,
     attendanceLoaded,
     showToast,
     bulkImportStudents,
@@ -337,6 +339,8 @@ export default function AdminDashboard() {
       )}
 
       {activeTab === "enquiries" && <AdmissionLeadsDesk />}
+
+      {activeTab === "sessions" && <p role="status">Session changes are on hold until the current session ends.</p>}
 
       {activeTab === "families" && <FamilyHubTab />}
 

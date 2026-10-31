@@ -169,16 +169,17 @@ export default function FeeStructuresTab({
     setNewClassSection("A");
   };
 
-  const handleAddHead = (e: React.FormEvent) => {
+  const handleAddHead = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newHead) return;
-    addFeeHead(newHead, newHeadFreq);
-    showToast("success", "Fee Head Created", `Fee category "${newHead}" created successfully.`);
-    setNewHead("");
-    setNewHeadFreq("monthly");
+    try {
+      await addFeeHead(newHead, newHeadFreq);
+      showToast("success", "Fee Head Created", `Fee category "${newHead}" saved.`);
+      setNewHead(""); setNewHeadFreq("monthly");
+    } catch (error) { showToast("error", "Save Failed", (error as Error).message); }
   };
 
-  const handleSaveClassGrid = (clsId: string, className: string) => {
+  const handleSaveClassGrid = async (clsId: string, className: string) => {
     const freq = gridFrequencies[clsId] || "monthly";
     const inputs = gridInputs[clsId] || {};
     const templateName = `Class ${className} Fees Template`;
@@ -193,8 +194,10 @@ export default function FeeStructuresTab({
       }
     });
 
-    addFeeStructure(templateName, freq, total, className, itemsList);
-    showToast("success", "Fee Schedule Saved", `Class ${className} fee schedule updated successfully.`);
+    try {
+      await addFeeStructure(templateName, freq, total, className, itemsList);
+      showToast("success", "Fee Schedule Saved", `Class ${className} fee setup saved. Existing bills were preserved.`);
+    } catch (error) { showToast("error", "Save Failed", (error as Error).message); }
   };
 
   return (
@@ -377,7 +380,7 @@ export default function FeeStructuresTab({
                 </h4>
                 <p className="text-[10px] text-slate-500 font-semibold mt-0.5">
                   Generate or update monthly fee ledger charges for a single student, a specific class, or all active students.
-                  <span className="block mt-1 text-amber-600 font-bold">⚠️ Note: This is a fallback utility. Regular monthly bills are auto-generated when you save the Fee Structure Matrix!</span>
+                  <span className="block mt-1 text-amber-600 font-bold">⚠️ Note: This is a fallback utility. Saving fee setup preserves existing bills. Generate fees separately after reviewing the session.</span>
                 </p>
               </div>
             </div>
@@ -581,24 +584,21 @@ export default function FeeStructuresTab({
                         setLedgerGenLoading(true);
                         setLedgerGenResult(null);
                         try {
-                          const res = await fetch("/api/fee-config", {
+                          const res = await fetch("/api/billing/generate", {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({
-                              action: "GENERATE_STUDENT_LEDGER",
                               studentId: ledgerGenTarget === "single" ? ledgerGenSelectedStudentId : undefined,
                               className: ledgerGenTarget === "class" ? ledgerGenClass : ledgerGenTarget === "all" ? "All" : undefined,
-                              startingFeeMonth: ledgerGenStartMonth,
                               targetFeeHeadName: ledgerGenFeeHead,
                             }),
                           });
                           if (!res.ok) {
-                            const text = await res.text();
-                            try { const json = JSON.parse(text); throw new Error(json.error || "Failed"); }
-                            catch { throw new Error(`HTTP Error: ${res.status}`); }
+                            const failure = await res.json().catch(() => ({}));
+                            throw new Error(failure.error || `HTTP Error: ${res.status}`);
                           }
                           const json = await res.json();
-                          setLedgerGenResult(`✓ Generated: ${json.generated || 0} | Skipped: ${json.skipped || 0}`);
+                          setLedgerGenResult(`Generated: ${json.totalGenerated || 0} | Skipped: ${json.totalSkipped || 0}${json.nextCursor ? " — More students remain; use Session & Promotion for the full batch run." : ""}`);
                           await refreshBilling();
                         } catch (err: any) {
                           setLedgerGenResult(`Error: ${err.message || "Failed"}`);
@@ -638,7 +638,7 @@ export default function FeeStructuresTab({
             <div className="flex justify-between items-center">
               <div>
                 <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider">
-                  Fee Structure Matrix (Auto-Billing)
+                  Fee Structure Matrix
                 </h3>
                 <p className="text-[10px] text-slate-500 font-semibold mt-0.5">
                   1. First set the &quot;Global Default&quot; fees and click Save. <br/>
@@ -965,7 +965,7 @@ export default function FeeStructuresTab({
                           </div>
                           <button
                             type="button"
-                            onClick={() => removeFeeHead(head.name)}
+                            onClick={async () => { try { await removeFeeHead(head.name); } catch (error) { showToast("error", "Fee head preserved", (error as Error).message); } }}
                             className="ml-2 text-red-400 hover:text-red-600 p-1 hover:bg-red-50 rounded transition-all cursor-pointer opacity-0 group-hover:opacity-100 flex-shrink-0"
                             title="Delete Fee Type"
                           >

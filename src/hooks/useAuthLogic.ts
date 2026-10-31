@@ -178,7 +178,8 @@ export function useAuthLogic(refreshData: (user?: MockUser | null) => Promise<vo
         body: JSON.stringify({ username: usernameVal, password: passwordVal, portal: portalVal }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
+      if (!data) return { success: false, error: "Login service is temporarily unavailable. Please try again shortly." };
 
       if (!res.ok) {
         return { success: false, error: data.error || "Invalid username/phone or password." };

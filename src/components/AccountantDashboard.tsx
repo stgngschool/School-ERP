@@ -55,7 +55,7 @@ export default function AccountantDashboard() {
     setActiveTab,
     classes,
     studentsLoaded,
-    billingLoaded,
+    billingDetailsLoaded: billingLoaded,
     refreshStudents,
     refreshBilling,
   } = useAuth();

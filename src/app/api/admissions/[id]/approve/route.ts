@@ -8,12 +8,17 @@ import { getAuthUser } from "@/lib/auth";
 import { getSafeErrorMessage } from "@/lib/validation";
 import { parseCanonicalDOB } from "@/lib/dateUtils";
 
+import { lockSessionWorkflow } from "@/lib/sessionWorkflow";
+import { clearServerStudentsCache } from "@/lib/cache/studentsCache";
+import { clearServerBillingCache } from "@/lib/cache/billingCache";
+
 export const dynamic = "force-dynamic";
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  let canInvalidateRoster = false;
   try {
     const { id } = await params;
     const authUser = await getAuthUser(request);
@@ -21,6 +26,7 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized access. Admin privileges required." }, { status: 401 });
     }
 
+    canInvalidateRoster = true;
     const application = await db.admissionApplication.findUnique({
       where: { id },
     });
@@ -160,8 +166,14 @@ export async function POST(
       rollNumber = `${className}-${section}-${rollNoStr}`;
     }
 
+    const { student, updatedApplication, academicYear } = await db.$transaction(async tx => {
+      await lockSessionWorkflow(tx);
+      const fresh = await tx.admissionApplication.findUnique({ where: { id: application.id } });
+      if (!fresh || fresh.status === "APPROVED" || fresh.enrolledStudentId) throw new Error("This application was already processed. Refresh before continuing.");
+      const activeSession = await tx.academicSession.findFirst({ where: { isCurrent: true } });
+      if (!activeSession) throw new Error("An active academic session is required before admission approval.");
     // 5. Create Student in Database
-    const student = await db.student.create({
+    const student = await tx.student.create({
       data: {
         name: application.studentName,
         admissionNumber: admissionNo,
@@ -205,64 +217,10 @@ export async function POST(
       },
     });
 
-    // 6. Generate Academic Session Record & Yearly Fee Charges
-    try {
-      const academicYear = getAcademicYear();
-      let activeSession = await db.academicSession.findFirst({
-        where: { isCurrent: true },
-      });
 
-      if (!activeSession) {
-        activeSession = await db.academicSession.findFirst({
-          where: { name: academicYear },
-        });
-      }
-
-      if (!activeSession) {
-        activeSession = await db.academicSession.create({
-          data: {
-            name: academicYear,
-            isCurrent: true,
-            startDate: new Date(`${academicYear.split("-")[0]}-04-01`),
-            endDate: new Date(`${academicYear.split("-")[1]}-03-31`),
-          },
-        });
-      }
-
-      // Link StudentSession
-      await db.studentSession.upsert({
-        where: {
-          studentId_sessionId: {
-            studentId: student.id,
-            sessionId: activeSession.id,
-          },
-        },
-        update: {
-          classId: classObj.id,
-          rollNumber: student.rollNumber,
-        },
-        create: {
-          studentId: student.id,
-          sessionId: activeSession.id,
-          classId: classObj.id,
-          rollNumber: student.rollNumber,
-        },
-      });
-
-      // Auto-generate fee structures and charges
-      await generateYearlyCharges(
-        student.id,
-        className,
-        authUser.userId,
-        academicYear,
-        startingFeeMonth || undefined
-      );
-    } catch (chargeErr) {
-      console.warn("Auto-generating fee charges encountered a non-critical notice:", chargeErr);
-    }
-
+      await tx.studentSession.create({ data: { studentId: student.id, sessionId: activeSession.id, classId: classObj.id, rollNumber: student.rollNumber } });
     // 7. Update AdmissionApplication Status
-    const updatedApplication = await db.admissionApplication.update({
+    const updatedApplication = await tx.admissionApplication.update({
       where: { id: application.id },
       data: {
         status: "APPROVED",
@@ -282,6 +240,15 @@ export async function POST(
         },
       },
     });
+
+
+      return { student, updatedApplication, academicYear: activeSession.name };
+    }, { isolationLevel: "ReadCommitted", timeout: 30000 });
+    let feesPending = false;
+    try {
+      await generateYearlyCharges(student.id, className, authUser.userId, academicYear, startingFeeMonth || undefined);
+    } catch (error) { feesPending = true; console.warn("Admission saved; fee generation is pending:", error); }
+    clearServerStudentsCache(); clearServerBillingCache();
 
     // 8. Audit Log
     try {
@@ -306,6 +273,7 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
+      feesPending,
       message: `Admission successfully approved! Student ${student.name} has been enrolled in ${className}-${section}.`,
       student: {
         id: student.id,
@@ -327,5 +295,8 @@ export async function POST(
       { error: safeError },
       { status: 500 }
     );
+  } finally {
+    // Parent details may have committed before a later enrollment step fails.
+    if (canInvalidateRoster) clearServerStudentsCache();
   }
 }

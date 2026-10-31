@@ -1,451 +1,148 @@
-import { NextResponse } from "next/server";
-import db from "@/lib/db";
-import { generateYearlyCharges, generateYearlyChargesBulk, getAcademicYear } from "@/lib/generateYearlyCharges";
-import { getAuthUser } from "@/lib/auth";
-import { BoundedCache } from "@/lib/cache/BoundedCache";
+import { NextResponse } from 'next/server';
+import type { Prisma } from '@prisma/client';
+import db from '@/lib/db';
+import { getAuthUser } from '@/lib/auth';
+import { BoundedCache } from '@/lib/cache/BoundedCache';
+import { clearServerBillingCache } from '@/lib/cache/billingCache';
+import { getCachedActiveSession } from '@/lib/cache/sessionCache';
+import { validateCsrfOrigin } from '@/lib/security';
+import { SessionError } from '@/lib/sessionPolicy';
+import { feeStructureName, feeStructureLabel, selectSessionStructures } from '@/lib/sessionFees';
+import { lockSessionWorkflow } from '@/lib/sessionWorkflow';
 
-export const dynamic = "force-dynamic";
-
-const serverFeeConfigCache = new BoundedCache(10, 10 * 60 * 1000);
-
+export const dynamic = 'force-dynamic';
+const serverFeeConfigCache = new BoundedCache(20, 60 * 1000);
 export async function GET(request: Request) {
   try {
-    const authUser = await getAuthUser(request);
-    if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
-    }
-
-    const cachedConfig = serverFeeConfigCache.get("fee_config");
-    if (cachedConfig) {
-      return NextResponse.json(cachedConfig, {
-        headers: {
-          "Cache-Control": "private, max-age=60, stale-while-revalidate=300",
-          "X-Server-Cache": "HIT",
-        },
-      });
-    }
-
-    // ── F-04: GET must be a pure read operation without database side effects.
-    // Return active fee heads directly without upserting defaults on read.
-    const heads = await db.feeHead.findMany({ where: { status: "ACTIVE" } });
-
-    const structures = await db.feeStructure.findMany({
-      include: {
-        items: {
-          include: {
-            feeHead: true,
-          },
-        },
-      },
-    });
-
-    const formattedHeads = heads.map((h) => ({
-      name: h.name,
-      frequency: h.frequency,
-    }));
-    const formattedStructures = structures.map((s) => ({
-      name: s.name,
-      frequency: s.frequency,
-      className: s.className || "All",
-      total: s.items.reduce((sum, item) => sum + item.amount, 0) / 100,
-      items: s.items.map(item => ({
-        headName: item.feeHead.name,
-        amount: item.amount / 100
+    if (!await getAuthUser(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+    const current = await getCachedActiveSession();
+    const id = new URL(request.url).searchParams.get('sessionId');
+    const session = id ? await db.academicSession.findUnique({ where: { id } }) : current;
+    if (!session) throw new SessionError('Academic session not found.', 404);
+    const cacheKey = `${session.id}:${current?.id ?? ''}`;
+    const cached = serverFeeConfigCache.get(cacheKey);
+    if (cached) return NextResponse.json(cached, { headers: { 'Cache-Control': 'private, max-age=30' } });
+    const [heads, all] = await Promise.all([
+      db.feeHead.findMany({ where: { status: 'ACTIVE' } }),
+      db.feeStructure.findMany({ where: { OR: [{ name: { startsWith: `[Session ${session.name}] ` } }, ...(session.id === current?.id ? [{ name: { not: { startsWith: '[Session ' } } }] : [])] }, include: { items: { include: { feeHead: true } } } }),
+    ]);
+    const result = { sessionId: session.id, sessionName: session.name,
+      feeHeads: heads.map(h => ({ name: h.name, frequency: h.frequency })),
+      feeStructures: selectSessionStructures(all, session.name, current?.name).map(s => ({
+        name: feeStructureLabel(s.name), frequency: s.frequency, className: s.className || 'All',
+        total: s.items.reduce((sum, i) => sum + i.amount, 0) / 100,
+        items: s.items.map(i => ({ headName: i.feeHead.name, amount: i.amount / 100 })),
       })),
-    }));
-
-    const result = {
-      feeHeads: formattedHeads,
-      feeStructures: formattedStructures,
     };
-    serverFeeConfigCache.set("fee_config", result);
-
-    return NextResponse.json(result, {
-      headers: {
-        "Cache-Control": "private, max-age=60, stale-while-revalidate=300",
-      },
-    });
-  } catch (error) {
-    console.error("Fetch fee config error:", error);
-    return NextResponse.json({ error: "Failed to fetch fee structures" }, { status: 500 });
-  }
+    serverFeeConfigCache.set(cacheKey, result);
+    return NextResponse.json(result, { headers: { 'Cache-Control': 'private, max-age=30' } });
+  } catch (error) { return failure(error); }
 }
 
 export async function POST(request: Request) {
+  if (!validateCsrfOrigin(request)) return NextResponse.json({ error: 'Invalid request origin.' }, { status: 403 });
+  const user = await getAuthUser(request);
+  if (!user) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+  if (!['ADMIN', 'ACCOUNTANT'].includes(user.role)) return NextResponse.json({ error: 'Staff access required.' }, { status: 403 });
   try {
-    const authUser = await getAuthUser(request);
-    if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-    }
-    if (authUser.role !== "ADMIN" && authUser.role !== "ACCOUNTANT") {
-      return NextResponse.json({ error: "Forbidden. Admin or Accountant access required." }, { status: 403 });
-    }
-
     const body = await request.json();
-    const { action, name, frequency, total } = body;
-
-    if (action === "ADD_HEAD") {
-      if (!name) return NextResponse.json({ error: "Fee head name is required." }, { status: 400 });
-      
-      const headName = String(name).trim();
-      const head = await db.feeHead.upsert({
-        where: { name: headName },
-        update: { frequency: frequency || "monthly", status: "ACTIVE" },
-        create: { name: headName, frequency: frequency || "monthly", status: "ACTIVE" },
-      });
-
-      serverFeeConfigCache.clear();
-      return NextResponse.json({ success: true, head });
-    }
-
-    if (action === "ADD_STRUCTURE") {
-      const { className, items } = body;
-      if (!name || !frequency) {
-        return NextResponse.json({ error: "Name and frequency are required." }, { status: 400 });
+    const { action } = body;
+    // Fee generation is a separate, bounded, explicit operation.
+    if (action === 'GENERATE_STUDENT_LEDGER') throw new SessionError('Use Generate fees in Session & Promotion. Saving fee setup never generates bills.', 409);
+    if (action === 'CLEANUP_DUPLICATES') throw new SessionError('Automatic financial deletion is disabled. Review duplicate entries before making corrections.', 409);
+    const result = await db.$transaction(async tx => {
+      await lockSessionWorkflow(tx);
+      const current = await tx.academicSession.findFirst({ where: { isCurrent: true } });
+      const session = body.sessionId ? await tx.academicSession.findUnique({ where: { id: body.sessionId } }) : current;
+      if (!session || !current) throw new SessionError('Select a valid academic session.', 409);
+      if (session.startDate < current.startDate) throw new SessionError('Historical fee templates are read-only.', 409);
+      if (action === 'ADD_HEAD') {
+        const name = String(body.name || '').trim();
+        if (!name || !['monthly', 'annual', 'one_time', 'exam', 'ad_hoc'].includes(body.frequency)) throw new SessionError('Enter a fee head and valid frequency.');
+        const existingHead = await tx.feeHead.findUnique({ where: { name } });
+        if (existingHead && existingHead.frequency !== body.frequency && await tx.feeStructureItem.count({ where: { feeHeadId: existingHead.id } })) throw new SessionError('This fee head is already used. Create a separate fee head for a different frequency; previous sessions were preserved.', 409);
+        const head = await tx.feeHead.upsert({ where: { name }, update: { frequency: body.frequency, status: 'ACTIVE' }, create: { name, frequency: body.frequency } });
+        return { head };
       }
-
-      const structName = String(name).trim();
-      const structClass = className || "All";
-
-      const structure = await db.$transaction(async (tx) => {
-        // ── F-02: Upsert fee heads safely without concurrency collisions
-        const preparedItems: { feeHeadId: string; amount: number }[] = [];
-        if (items && Array.isArray(items) && items.length > 0) {
-          for (const item of items) {
-            const headName = String(item.headName).trim();
-            if (!headName) continue;
-            const feeHead = await tx.feeHead.upsert({
-              where: { name: headName },
-              update: { status: "ACTIVE" },
-              create: { name: headName, frequency: "monthly", status: "ACTIVE" },
-            });
-            const itemAmountPaisa = Math.round(Number(item.amount) || 0);
-            preparedItems.push({ feeHeadId: feeHead.id, amount: itemAmountPaisa });
-          }
-        }
-
-        // Upsert structure uniquely by [name, className]
-        const struct = await tx.feeStructure.upsert({
-          where: {
-            name_className: {
-              name: structName,
-              className: structClass,
-            },
-          },
-          update: { frequency },
-          create: {
-            name: structName,
-            frequency,
-            className: structClass,
-          },
-        });
-
-        // Replace items atomically
-        await tx.feeStructureItem.deleteMany({
-          where: { feeStructureId: struct.id },
-        });
-
-        for (const item of preparedItems) {
-          await tx.feeStructureItem.create({
-            data: {
-              feeStructureId: struct.id,
-              feeHeadId: item.feeHeadId,
-              amount: item.amount,
-            },
-          });
-        }
-
-        // ── F-03: Ensure fee assignments point to this active structure and clean up stale assignments
-        const activeSession = await tx.academicSession.findFirst({ where: { isCurrent: true } });
-        if (activeSession) {
-          const targetStudents = await tx.student.findMany({
-            where: {
-              status: "ACTIVE",
-              ...(structClass !== "All" ? { class: { name: structClass } } : {}),
-            },
-            select: { id: true },
-          });
-
-          for (const s of targetStudents) {
-            await tx.feeAssignment.upsert({
-              where: {
-                studentId_feeStructureId_sessionId: {
-                  studentId: s.id,
-                  feeStructureId: struct.id,
-                  sessionId: activeSession.id,
-                },
-              },
-              update: {},
-              create: {
-                studentId: s.id,
-                feeStructureId: struct.id,
-                sessionId: activeSession.id,
-              },
-            });
-          }
-        }
-
-        return struct;
-      });
-
-      // ── F-01 fix: detach bulk backfill from the HTTP request path ──────────
-      const targetClass = className || "All";
-      const systemUser = await db.user.findFirst({
-        where: { OR: [{ role: "ADMIN" }, { role: "ACCOUNTANT" }] },
-      });
-
-      if (systemUser) {
-        // Kick off the backfill without blocking the response.
-        void (async () => {
-          try {
-            const studentsToBackfill = await db.student.findMany({
-              where: {
-                status: "ACTIVE",
-                ...(targetClass !== "All" ? { class: { name: targetClass } } : {}),
-              },
-              include: { class: true },
-            });
-            if (studentsToBackfill.length > 0) {
-              await generateYearlyChargesBulk(studentsToBackfill, systemUser.id, getAcademicYear());
-            }
-          } catch (err) {
-            console.error("[fee-config] ADD_STRUCTURE backfill error:", err);
-          }
-        })();
+      if (action === 'COPY_SESSION') {
+        if (session.id === current.id || session.startDate <= current.endDate) throw new SessionError('Copy fees into a future session.');
+        const all = await tx.feeStructure.findMany({ include: { items: true } });
+        if (selectSessionStructures(all, session.name, current.name).length) throw new SessionError('Target session already has fee templates. Existing rates were preserved.', 409);
+        const source = selectSessionStructures(all, current.name, current.name);
+        if (!source.length) throw new SessionError('Current session has no fee templates to copy.');
+        for (const s of source) await tx.feeStructure.create({ data: {
+          name: feeStructureName(session.name, s.name), className: s.className, frequency: s.frequency,
+          items: { createMany: { data: s.items.map(i => ({ feeHeadId: i.feeHeadId, amount: i.amount })) } },
+        } });
+        await log(tx, user.userId, session.id, 'SESSION_FEES_COPIED');
+        return { count: source.length };
       }
-
-      serverFeeConfigCache.clear();
-      return NextResponse.json({ success: true, structure });
-
-    }
-
-    if (action === "CLONE_STRUCTURE") {
-      const { fromClassName, toClassName } = body;
-      if (!fromClassName || !toClassName) {
-        return NextResponse.json({ error: "Source and target class names are required." }, { status: 400 });
-      }
-
-      const sourceStructure = await db.feeStructure.findFirst({
-        where: { className: fromClassName },
-        include: { items: { include: { feeHead: true } } },
-      });
-
-      if (!sourceStructure) {
-        return NextResponse.json({ error: "Source class fee structure not found." }, { status: 404 });
-      }
-
-      const targetStructName = `${toClassName} Fee Structure`;
-
-      const targetStructure = await db.$transaction(async (tx) => {
-        const target = await tx.feeStructure.upsert({
-          where: {
-            name_className: {
-              name: targetStructName,
-              className: toClassName,
-            },
-          },
-          update: {
-            frequency: sourceStructure.frequency,
-          },
-          create: {
-            name: targetStructName,
-            frequency: sourceStructure.frequency,
-            className: toClassName,
-          },
-        });
-
-        await tx.feeStructureItem.deleteMany({
-          where: { feeStructureId: target.id },
-        });
-
-        for (const item of sourceStructure.items) {
-          await tx.feeStructureItem.create({
-            data: {
-              feeStructureId: target.id,
-              feeHeadId: item.feeHeadId,
-              amount: item.amount,
-            },
-          });
-        }
-
-        // ── F-03: Sync fee assignments for target class
-        const activeSession = await tx.academicSession.findFirst({ where: { isCurrent: true } });
-        if (activeSession) {
-          const targetStudents = await tx.student.findMany({
-            where: { status: "ACTIVE", class: { name: toClassName } },
-            select: { id: true },
-          });
-
-          for (const s of targetStudents) {
-            await tx.feeAssignment.upsert({
-              where: {
-                studentId_feeStructureId_sessionId: {
-                  studentId: s.id,
-                  feeStructureId: target.id,
-                  sessionId: activeSession.id,
-                },
-              },
-              update: {},
-              create: {
-                studentId: s.id,
-                feeStructureId: target.id,
-                sessionId: activeSession.id,
-              },
-            });
-          }
-        }
-
-        return target;
-      });
-
-      const systemUser = await db.user.findFirst({
-        where: { OR: [{ role: "ADMIN" }, { role: "ACCOUNTANT" }] },
-      });
-      if (systemUser) {
-        void (async () => {
-          try {
-            const studentsToBackfill = await db.student.findMany({
-              where: { status: "ACTIVE", class: { name: toClassName } },
-              include: { class: true },
-            });
-            if (studentsToBackfill.length > 0) {
-              await generateYearlyChargesBulk(studentsToBackfill, systemUser.id, getAcademicYear());
-            }
-          } catch (err) {
-            console.error("[fee-config] CLONE_STRUCTURE backfill error:", err);
-          }
-        })();
-      }
-
-      serverFeeConfigCache.clear();
-      return NextResponse.json({ success: true });
-
-    }
-
-    if (action === "GENERATE_STUDENT_LEDGER") {
-      const { studentId, className, startingFeeMonth, targetFeeHeadName } = body;
-      if (!studentId && !className) {
-        return NextResponse.json({ error: "studentId or className is required." }, { status: 400 });
-      }
-
-      const systemUser = await db.user.findFirst({
-        where: { OR: [{ role: "ADMIN" }, { role: "ACCOUNTANT" }] },
-      });
-
-      if (!systemUser) {
-        return NextResponse.json({ error: "System user not found." }, { status: 404 });
-      }
-
-      if (studentId) {
-        const student = await db.student.findUnique({
-          where: { id: studentId },
-          include: { class: true },
-        });
-        if (!student) {
-          return NextResponse.json({ error: "Student not found." }, { status: 404 });
-        }
-        const res = await generateYearlyCharges(student.id, student.class.name, systemUser.id, getAcademicYear(), startingFeeMonth, targetFeeHeadName);
-        return NextResponse.json({ success: true, generated: res.generated, skipped: res.skipped });
-      } else if (className) {
-        const students = await db.student.findMany({
-          where: { status: "ACTIVE", ...(className !== "All" ? { class: { name: className } } : {}) },
-          include: { class: true },
-        });
-        const res = await generateYearlyChargesBulk(students, systemUser.id, getAcademicYear(), targetFeeHeadName);
-        return NextResponse.json({ success: true, count: students.length, generated: res.generated, skipped: res.skipped });
-      }
-    }
-
-    if (action === "CLEANUP_DUPLICATES") {
-      // ── F-02: Clean up genuine duplicate unpaid CHARGE entries within the SAME
-      // academic year/session.
-      // Charges with receiptItems (payment history) are strictly IMMUTABLE and never deleted.
-      // Charges belonging to different academic sessions (e.g. 2025-2026 vs 2026-2027)
-      // are recognized as distinct and preserved.
-      const allCharges = await db.ledgerEntry.findMany({
-        where: { entryType: "CHARGE" },
-        include: { receiptItems: { select: { id: true } } },
-        orderBy: { createdAt: "asc" },
-      });
-
+      let name = String(body.name || '').trim();
+      let className = String(body.className || 'All').trim();
+      let frequency = String(body.frequency || 'monthly');
+      let items: { headName: string; amount: number }[] = [];
+      if (action === 'CLONE_STRUCTURE') {
+        if (!body.fromClassName || !body.toClassName) throw new SessionError('Choose source and target classes.');
+        const all = await tx.feeStructure.findMany({ include: { items: { include: { feeHead: true } } } });
+        const source = selectSessionStructures(all, session.name, current.name).find(s => s.className === body.fromClassName);
+        if (!source) throw new SessionError('Source fee structure not found.', 404);
+        className = body.toClassName; name = `${className} Fee Structure`; frequency = source.frequency;
+        items = source.items.map(i => ({ headName: i.feeHead.name, amount: i.amount }));
+      } else if (action === 'ADD_STRUCTURE') {
+        if (!Array.isArray(body.items)) throw new SessionError('Fee items are required.');
+        items = body.items;
+      } else throw new SessionError('Invalid fee action.');
+      if (!name || !className || !items.length || items.length > 100 || !['monthly', 'quarterly', 'half-yearly', 'annual', 'one_time', 'exam', 'ad_hoc'].includes(frequency)) throw new SessionError('Enter a valid fee template with 1 to 100 items.');
       const seen = new Set<string>();
-      const duplicateIdsToDelete: string[] = [];
-
-      for (const entry of allCharges) {
-        // Rule 1: Never touch or consider an entry with payment history as a deletable duplicate
-        if (entry.receiptItems.length > 0) {
-          continue;
-        }
-
-        // Rule 2: Derive authoritative session year (from description or createdAt)
-        const yearMatch = entry.description.match(/(20\d{2}-20\d{2}|20\d{2}-\d{2})/);
-        const sessionYear = yearMatch ? yearMatch[1] : getAcademicYear(entry.createdAt);
-
-        // Rule 3: Normalize description without the year or "Assigned:" prefix
-        const cleanDesc = entry.description
-          .replace(/^Assigned:\s*/i, "")
-          .replace(/(20\d{2}-20\d{2}|20\d{2}-\d{2})/g, "")
-          .trim()
-          .toLowerCase()
-          .replace(/[^a-z0-9]/g, "");
-
-        // Unique charge identity = student + feeHead + academicSession + particular
-        const key = `${entry.studentId}_${entry.feeHeadId || "none"}_${sessionYear}_${cleanDesc}`;
-
-        if (seen.has(key)) {
-          duplicateIdsToDelete.push(entry.id);
-        } else {
-          seen.add(key);
-        }
+      for (const item of items) {
+        if (typeof item.headName !== 'string' || !item.headName.trim() || !Number.isSafeInteger(item.amount) || item.amount < 0 || item.amount > 100000000) throw new SessionError('Fee amounts must be non-negative integer paisa.');
+        const key = item.headName.trim().toLowerCase();
+        if (seen.has(key)) throw new SessionError('Duplicate fee head in this template.');
+        seen.add(key);
       }
-
-      if (duplicateIdsToDelete.length > 0) {
-        await db.ledgerEntry.deleteMany({
-          where: { id: { in: duplicateIdsToDelete } },
-        });
+      const scopedName = feeStructureName(session.name, name);
+      const candidates = selectSessionStructures(await tx.feeStructure.findMany({ where: { className } }), session.name, current.name);
+      if (candidates.length > 1) throw new SessionError('Multiple fee templates for this class need review before editing.', 409);
+      const existing = candidates[0];
+      const prepared: { feeHeadId: string; amount: number }[] = [];
+      for (const item of items) {
+        const head = await tx.feeHead.upsert({ where: { name: item.headName.trim() }, update: { status: 'ACTIVE' }, create: { name: item.headName.trim(), frequency: 'monthly' } });
+        prepared.push({ feeHeadId: head.id, amount: item.amount });
       }
-
-      return NextResponse.json({ success: true, cleanedCount: duplicateIdsToDelete.length });
-    }
-
-    return NextResponse.json({ error: "Invalid action type." }, { status: 400 });
-  } catch (error: any) {
-    console.error("Fee config error:", error);
-    return NextResponse.json({ error: "Failed to modify fee structure settings" }, { status: 500 });
-  }
+      const structure = existing ? await tx.feeStructure.update({ where: { id: existing.id }, data: { name: scopedName, frequency } }) : await tx.feeStructure.create({ data: { name: scopedName, frequency, className } });
+      await tx.feeStructureItem.deleteMany({ where: { feeStructureId: structure.id } });
+      await tx.feeStructureItem.createMany({ data: prepared.map(i => ({ ...i, feeStructureId: structure.id })) });
+      await log(tx, user.userId, session.id, 'SESSION_FEES_SAVED');
+      return { structure };
+    }, { isolationLevel: 'ReadCommitted', timeout: 15000 });
+    serverFeeConfigCache.clear(); clearServerBillingCache();
+    return NextResponse.json({ success: true, ...result, message: 'Fee setup saved. Existing bills and receipts were preserved.' });
+  } catch (error) { return failure(error); }
 }
-
+async function log(tx: Prisma.TransactionClient, userId: string, sessionId: string, action: string) {
+  await tx.auditLog.create({ data: { userId, action, entityType: 'AcademicSession', entityId: sessionId } });
+}
+function failure(error: unknown) {
+  if (error instanceof SessionError) return NextResponse.json({ error: error.message }, { status: error.status });
+  if (error instanceof SyntaxError) return NextResponse.json({ error: 'Invalid request data.' }, { status: 400 });
+  console.error('Fee setup failed:', error);
+  return NextResponse.json({ error: 'Unable to save fee setup. Refresh and try again.' }, { status: 409 });
+}
 export async function DELETE(request: Request) {
-  const authUser = await getAuthUser(request);
-  if (!authUser) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-
-  if (authUser.role !== "ADMIN" && authUser.role !== "ACCOUNTANT") {
-    return NextResponse.json({ error: "Forbidden. Admin or Accountant access required." }, { status: 403 });
-  }
-
+  if (!validateCsrfOrigin(request)) return NextResponse.json({ error: 'Invalid request origin.' }, { status: 403 });
+  const user = await getAuthUser(request);
+  if (!user) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+  if (!['ADMIN', 'ACCOUNTANT'].includes(user.role)) return NextResponse.json({ error: 'Staff access required.' }, { status: 403 });
   try {
     const body = await request.json();
-    const { action, name } = body;
-
-    if (action === "DELETE_HEAD") {
-      if (!name) return NextResponse.json({ error: "Fee head name is required." }, { status: 400 });
-
-      const head = await db.feeHead.findUnique({ where: { name } });
-      if (!head) return NextResponse.json({ error: "Fee head not found." }, { status: 404 });
-
-      // Mark the fee head as archived
-      await db.feeHead.update({
-        where: { id: head.id },
-        data: { status: "ARCHIVED" },
-      });
-
-      serverFeeConfigCache.clear();
-      return NextResponse.json({ success: true });
-    }
-
-    return NextResponse.json({ error: "Invalid action type." }, { status: 400 });
-  } catch (error: any) {
-    console.error("Delete fee head error:", error);
-    return NextResponse.json({ error: "Failed to delete fee head" }, { status: 500 });
-  }
+    if (body.action !== 'DELETE_HEAD' || typeof body.name !== 'string' || !body.name.trim()) throw new SessionError('Select a fee head.');
+    await db.$transaction(async tx => {
+      await lockSessionWorkflow(tx);
+      const head = await tx.feeHead.findUnique({ where: { name: body.name.trim() } });
+      if (!head) throw new SessionError('Fee head not found.', 404);
+      if (await tx.feeStructureItem.count({ where: { feeHeadId: head.id } })) throw new SessionError('This fee head belongs to fee templates. Remove it from the intended template instead; other sessions were preserved.', 409);
+      await tx.feeHead.update({ where: { id: head.id }, data: { status: 'ARCHIVED' } });
+    }, { isolationLevel: 'ReadCommitted' });
+    serverFeeConfigCache.clear(); return NextResponse.json({ success: true });
+  } catch (error) { return failure(error); }
 }

@@ -147,16 +147,19 @@ export async function GET(request: Request) {
 
     // 1. Session
     const currentSession = await db.academicSession.findFirst({
-      where: { isCurrent: true }
+      where: { isCurrent: true },
+      select: { id: true },
     });
     const sessionId = currentSession?.id;
 
     // 2. Classes & Teachers
     const classes = await db.class.findMany({
       where: { status: "ACTIVE" },
-      include: {
+      select: {
+        name: true,
+        section: true,
         classTeacher: {
-          include: {
+          select: {
             user: { select: { name: true, phone: true } }
           }
         }
@@ -166,8 +169,14 @@ export async function GET(request: Request) {
     // 3. Students
     const allActiveStudents = await db.student.findMany({
       where: { status: "ACTIVE" },
-      include: {
-        class: true,
+      select: {
+        id: true,
+        name: true,
+        admissionNumber: true,
+        rollNumber: true,
+        fatherName: true,
+        fatherMobile: true,
+        class: { select: { name: true, section: true } },
       }
     });
 
@@ -203,10 +212,8 @@ export async function GET(request: Request) {
         ...(sessionId ? { sessionId } : {})
       },
       select: {
-        id: true,
         studentId: true,
         subject: true,
-        examName: true,
         marksObtained: true,
         maxMarks: true,
         remarks: true,

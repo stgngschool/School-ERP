@@ -16,7 +16,7 @@ export async function GET(request: Request) {
     if (authUser.role === "PARENT") {
       const parentProfile = await db.parentProfile.findUnique({
         where: { userId: authUser.userId },
-        include: { students: true }
+        select: { students: { select: { classId: true } } }
       });
       if (!parentProfile) {
         return NextResponse.json([]);
@@ -28,7 +28,16 @@ export async function GET(request: Request) {
     const homeworks = await db.homework.findMany({
       where: whereClause,
       take: 100,
-      include: { class: true },
+      select: {
+        id: true,
+        subject: true,
+        title: true,
+        description: true,
+        dueDate: true,
+        createdAt: true,
+        fileUrl: true,
+        class: { select: { name: true, section: true } },
+      },
       orderBy: { createdAt: "desc" },
     });
 

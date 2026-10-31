@@ -6,6 +6,8 @@ import { toRupees } from "@/lib/currency";
 import { getSafeErrorMessage } from "@/lib/validation";
 import { formatCanonicalDOB, getTodayIST, getISTDateString } from "@/lib/dateUtils";
 import { formatExcelNumericDate } from "@/lib/exportStudentXLS";
+import type { Prisma } from "@prisma/client";
+import { buildExportSearchWhere, getExportStudentSelect, matchesExportSearch, readExportPages } from "@/lib/exportQueries";
 
 export const dynamic = "force-dynamic";
 
@@ -78,12 +80,12 @@ export async function GET(request: Request) {
     const onlyDefaulters = searchParams.get("onlyDefaulters") === "true";
 
     // ── Server-Side Authorization & Scope Resolution ─────────────────────────
-    let studentWhere: any = {};
+    let studentWhere: Prisma.StudentWhereInput = {};
 
     if (authUser.role === "PARENT") {
       const parentProfile = await db.parentProfile.findUnique({
         where: { userId: authUser.userId },
-        include: { students: { select: { id: true } } },
+        select: { students: { select: { id: true } } },
       });
 
       if (!parentProfile || parentProfile.students.length === 0) {
@@ -110,7 +112,7 @@ export async function GET(request: Request) {
     } else if (authUser.role === "TEACHER") {
       const teacherProfile = await db.teacherProfile.findUnique({
         where: { userId: authUser.userId },
-        include: { classes: { select: { id: true, name: true, section: true } } },
+        select: { classes: { select: { id: true } } },
       });
 
       const assignedClassIds = teacherProfile?.classes.map((c: { id: string }) => c.id) || [];
@@ -153,48 +155,29 @@ export async function GET(request: Request) {
     }
 
     // ── Fetch Authoritative Data from Database ────────────────────────────────
-    const students: any[] = await db.student.findMany({
-      where: studentWhere,
-      include: {
-        class: true,
-        parentProfile: {
-          include: {
-            user: { select: { name: true, phone: true, email: true } },
-          },
-        },
-        ledgerEntries: {
-          where: { entryType: "CHARGE" },
-          include: {
-            receiptItems: {
-              where: { receipt: { status: "ACTIVE" } },
-              select: { amount: true },
-            },
-          },
-          orderBy: { createdAt: "asc" },
-        },
-      },
+    const exportWhere = buildExportSearchWhere(studentWhere, searchQuery);
+    const select = getExportStudentSelect(type);
+    const students = await readExportPages((afterId, pageSize) => db.student.findMany({
+      where: exportWhere,
+      select,
+      take: pageSize,
+      ...(afterId ? { cursor: { id: afterId }, skip: 1 } : {}),
       orderBy: [
         { class: { name: "asc" } },
         { class: { section: "asc" } },
         { rollNumber: "asc" },
+        { id: "asc" },
       ],
-    });
+    }));
 
-    const schoolConfig = await db.schoolConfig.findFirst({ orderBy: { updatedAt: "desc" } });
+    const schoolConfig = await db.schoolConfig.findFirst({ select: { data: true }, orderBy: { updatedAt: "desc" } });
     const configData = (schoolConfig?.data as any) || {};
     const schoolName = configData.name || "School";
     const dateStr = getTodayIST();
 
-    // Filter by search query if provided
-    const filteredStudents = students.filter((s: any) => {
-      if (!searchQuery) return true;
-      return (
-        s.name.toLowerCase().includes(searchQuery) ||
-        s.admissionNumber.toLowerCase().includes(searchQuery) ||
-        (s.fatherName && s.fatherName.toLowerCase().includes(searchQuery)) ||
-        (s.fatherMobile && s.fatherMobile.includes(searchQuery))
-      );
-    });
+    // Keep the exact existing substring predicate after database narrowing,
+    // including case-sensitive mobile matching and Unicode fallback searches.
+    const filteredStudents = students.filter((s) => matchesExportSearch(s, searchQuery));
 
     // ── Full Student Directory Master Export ─────────────────────────────────
     if (type === "directory" || type === "students") {
@@ -351,6 +334,14 @@ export async function GET(request: Request) {
         where: {
           studentId: student.id,
           status: "ACTIVE",
+        },
+        select: {
+          receiptNumber: true,
+          manualReceiptNo: true,
+          createdAt: true,
+          amountPaid: true,
+          paymentMethod: true,
+          transactionReference: true,
         },
         orderBy: { createdAt: "desc" },
       });

@@ -1,3 +1,4 @@
+import { clearServerStudentsCache } from "@/lib/cache/studentsCache";
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import bcrypt from "bcryptjs";
@@ -85,6 +86,7 @@ export async function GET(request: Request) {
 }
 
 export async function PATCH(request: Request) {
+  let canInvalidateRoster = false;
   try {
     const authUser = await getAuthUser(request);
     if (!authUser || authUser.role !== "ADMIN") {
@@ -99,6 +101,7 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "User ID is required." }, { status: 400 });
     }
 
+    canInvalidateRoster = true;
     const user = await db.user.findUnique({
       where: { id: userId },
     });
@@ -263,10 +266,14 @@ export async function PATCH(request: Request) {
   } catch (error: any) {
     console.error("Toggle/Reset user status error:", error);
     return NextResponse.json({ error: "Failed to update user security profile" }, { status: 500 });
+  } finally {
+    // Clear after completion, including a partially committed bulk failure.
+    if (canInvalidateRoster) clearServerStudentsCache();
   }
 }
 
 export async function POST(request: Request) {
+  let canInvalidateRoster = false;
   try {
     const authUser = await getAuthUser(request);
     if (!authUser || authUser.role !== "ADMIN") {
@@ -287,6 +294,7 @@ export async function POST(request: Request) {
     const cleanEmployeeId = employeeId ? employeeId.trim() : undefined;
 
     // Check if username/email already exists (case-insensitive)
+    canInvalidateRoster = true;
     const existing = await db.user.findFirst({
       where: {
         OR: [
@@ -372,10 +380,14 @@ export async function POST(request: Request) {
     console.error("Create staff error:", error);
     const safeError = getSafeErrorMessage(error, "Failed to register staff account.");
     return NextResponse.json({ error: safeError }, { status: 500 });
+  } finally {
+    // Clear after completion, including a partially committed bulk failure.
+    if (canInvalidateRoster) clearServerStudentsCache();
   }
 }
 
 export async function DELETE(request: Request) {
+  let canInvalidateRoster = false;
   try {
     const authUser = await getAuthUser(request);
     if (!authUser || authUser.role !== "ADMIN") {
@@ -393,6 +405,7 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "You cannot delete your own admin account." }, { status: 400 });
     }
 
+    canInvalidateRoster = true;
     const user = await db.user.findUnique({
       where: { id: userId },
       include: {
@@ -498,6 +511,9 @@ export async function DELETE(request: Request) {
     console.error("Delete user error:", error);
     const safeError = getSafeErrorMessage(error, "Failed to delete user account.");
     return NextResponse.json({ error: safeError }, { status: 500 });
+  } finally {
+    // Clear after completion, including a partially committed bulk failure.
+    if (canInvalidateRoster) clearServerStudentsCache();
   }
 }
 

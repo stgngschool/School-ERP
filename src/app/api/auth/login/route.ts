@@ -19,6 +19,7 @@ export async function POST(request: Request) {
   // ── SEC-09: Trusted client IP resolution from edge infrastructure (Vercel)
   const clientIp = getTrustedClientIp(request);
 
+  try {
   // Network IP rate limit (10 attempts / 15m)
   const allowed = await checkLoginRateLimit(clientIp);
   if (!allowed) {
@@ -28,7 +29,6 @@ export async function POST(request: Request) {
     );
   }
 
-  try {
     const { username, password, portal } = await request.json();
 
     if (!username || !password) {
@@ -211,6 +211,6 @@ export async function POST(request: Request) {
   } catch (error: any) {
     const duration = (performance.now() - startTime).toFixed(2);
     console.error(`[DIAGNOSTIC][API][ERROR] POST /api/auth/login [${reqId}] | status: 500 | duration: ${duration}ms | error: ${error.message}`);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: "Login service is temporarily unavailable. Please try again shortly." }, { status: 503 });
   }
 }

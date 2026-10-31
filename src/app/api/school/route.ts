@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { clearServerBillingCache } from "@/lib/cache/billingCache";
 import db from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
 import fs from "fs";
@@ -145,6 +146,7 @@ export async function POST(request: Request) {
     }).catch((err) => console.error("Audit log error on school config:", err));
 
     clearSchoolConfigCache();
+    clearServerBillingCache();
     return NextResponse.json({ success: true, data: mergedData });
   } catch (error) {
     console.error("Error writing school settings:", error);

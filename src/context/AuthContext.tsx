@@ -1,6 +1,8 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
+import { cacheableRead, shouldRetryRead, successfulStudentIds, createReadDeduplicator } from "@/lib/readPolicy";
+import { mergeAttendanceScope } from "@/lib/attendanceMerge";
 import { useAuthLogic } from "../hooks/useAuthLogic";
 import { CheckCircle2, AlertCircle, AlertTriangle, Info, X } from "lucide-react";
 
@@ -339,6 +341,7 @@ interface AuthContextType {
   auditLogs: MockAuditLog[];
   studentsLoaded: boolean;
   billingLoaded: boolean;
+  billingDetailsLoaded: boolean;
   attendanceLoaded: boolean;
   switchRole: (role: Role) => Promise<void>;
   toggleUserStatus: (userId: string) => Promise<void>;
@@ -451,7 +454,7 @@ interface AuthContextType {
   removeClass: (id: string) => Promise<void>;
   generateBills: (academicYear: string) => Promise<{ success: boolean; totalGenerated: number; totalSkipped: number; message: string } | null>;
   triggerAudit: (action: string) => Promise<void>;
-  updateStudentStatus: (studentId: string | string[], status: string) => Promise<void>;
+  updateStudentStatus: (studentId: string | string[], status: string) => Promise<{ success: boolean; error?: string }>;
   promoteStudent: (studentId: string | string[], classVal: string, section: string) => Promise<void>;
   editStudentDetails: (studentId: string, studentData: any) => Promise<{ success: boolean; error?: string; student?: any }>;
   updateStudentPhoto: (studentId: string, photoUrl: string) => void;
@@ -476,11 +479,11 @@ interface AuthContextType {
   logout: () => Promise<void>;
   refreshData: () => Promise<void>;
   refreshStudents: (force?: boolean) => Promise<void>;
-  refreshBilling: (force?: boolean) => Promise<void>;
+  refreshBilling: (force?: boolean, requireSuccess?: boolean) => Promise<void>;
   refreshStudentBilling: (targetStudentIds: string | string[]) => Promise<void>;
   billingSummary: any | null;
   fetchBillingSummary: () => Promise<any>;
-  refreshAttendance: (force?: boolean) => Promise<void>;
+  refreshAttendance: (force?: boolean, scope?: { startDate: string; endDate: string; className?: string; classNames?: string[]; section?: string }) => Promise<void>;
   refreshHomework: () => Promise<void>;
   refreshLeave: () => Promise<void>;
   refreshEvents: () => Promise<void>;
@@ -597,7 +600,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       upiId: "",
       upiMerchantName: "",
       enableTransport: true,
-      enableLateFee: true,
+      enableLateFee: false,
       lateFeeGraceDays: 10,
       lateFeeAmount: 50,
       lateFeeType: "FLAT",
@@ -680,6 +683,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return false;
     }
   });
+  const [billingDetailsLoaded, setBillingDetailsLoaded] = useState(false);
   const [billingLoaded, setBillingLoaded] = useState(() => {
     if (typeof window === "undefined") return false;
     try {
@@ -689,17 +693,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return false;
     }
   });
-  const [attendanceLoaded, setAttendanceLoaded] = useState(() => {
-    if (typeof window === "undefined") return false;
-    try {
-      const cached = localStorage.getItem("gng_cached_attendances");
-      return !!cached && (JSON.parse(cached)?.data?.length > 0 || JSON.parse(cached)?.length > 0);
-    } catch {
-      return false;
-    }
-  });
+  // Cached or scoped attendance is not proof of a complete school dataset.
+  const [attendanceLoaded, setAttendanceLoaded] = useState(false);
 
+  const readGenerationRef = useRef(0);
   const clearApiCache = (urlPrefix?: string) => {
+    readGenerationRef.current++;
     if (typeof window === 'undefined') return;
     if (!urlPrefix) {
       Object.keys(sessionStorage).forEach((key) => {
@@ -713,7 +712,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
-  const apiFetch = async (
+  const deduplicatedRead = useRef(createReadDeduplicator());
+  const performApiFetch = async (
     url: string,
     options: RequestInit = {},
     timeoutMs = 15000,
@@ -726,18 +726,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     //    at least one array value must be non-empty — an object consisting
     //    entirely of empty arrays is not meaningful cached state and must not
     //    be returned to callers instead of a fresh fetch after a mutation.
-    const hasSubstantiveData = (d: any): boolean => {
-      if (!d) return false;
-      if (Array.isArray(d)) return d.length > 0;
-      if (typeof d === 'object') {
-        const vals = Object.values(d);
-        // If every value is an empty array, treat as empty
-        const allEmptyArrays = vals.length > 0 && vals.every((v) => Array.isArray(v) && v.length === 0);
-        if (allEmptyArrays) return false;
-        return vals.length > 0;
-      }
-      return !!d;
-    };
+    const hasSubstantiveData = cacheableRead;
 
     // 1. Check Session Cache (never serve empty-array state if cached accidentally)
     if (useCache && typeof window !== 'undefined') {
@@ -776,7 +765,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (!res.ok) {
           console.warn(`[apiFetch] ${url} returned ${res.status} on attempt ${attempt + 1}/${retries + 1}`);
-          if (attempt < retries) continue;
+          if (attempt < retries && shouldRetryRead(res.status)) continue;
           return null;
         }
 
@@ -806,6 +795,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
 
+  const apiFetch = (url: string, options: RequestInit = {}, timeoutMs = 15000, useCache = false, retries = 1): Promise<any> => {
+    if (options.method && options.method.toUpperCase() !== "GET") {
+      return performApiFetch(url, options, timeoutMs, useCache, 0);
+    }
+    const identity = userRef.current;
+    const key = JSON.stringify([identity?.id, identity?.role, readGenerationRef.current, url, options.cache, timeoutMs, useCache, retries]);
+    return deduplicatedRead.current(key, () => performApiFetch(url, options, timeoutMs, useCache, retries));
+  };
+
   // ── AC-06: Keep a ref to the latest user so refreshData can be defined with []
   // dependency (stable across renders) without creating stale closures.
   const userRef = useRef<MockUser | null>(user);
@@ -826,7 +824,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         upiId: "",
         upiMerchantName: "",
         enableTransport: true,
-        enableLateFee: true,
+        enableLateFee: false,
         lateFeeGraceDays: 10,
         lateFeeAmount: 50,
         lateFeeType: "FLAT",
@@ -850,6 +848,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setConcessions([]);
       setStudentsLoaded(false);
       setBillingLoaded(false);
+      setBillingDetailsLoaded(false);
+      lastFullBillingLoadRef.current = 0;
       setAttendanceLoaded(false);
       return;
     }
@@ -955,36 +955,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await Promise.allSettled(allCoreLoads);
       setCurrentStage("DASHBOARD READY");
 
-      // 3. Lazy Secondary Data (Deferred to not block main thread or bandwidth)
-      setTimeout(() => {
-        if (role === "ADMIN" || role === "ACCOUNTANT") {
-          apiFetch("/api/admissions", {}, 10000, false).then(
-            (data) => data?.applications && setAdmissionApplications(data.applications)
-          );
-          apiFetch("/api/events", {}, 10000, true).then((data) => data && setEventsList(data));
+      // Teacher/parent dashboard information remains scoped to their own records.
+      if (role === "TEACHER" || role === "PARENT") {
+        apiFetch("/api/homework", {}, 10000, true).then((data) => data && setHomeworks(data));
+        apiFetch("/api/leave", {}, 10000, true).then((data) => data && setLeaveRequests(data));
+      }
 
-          // ── EGRESS P1: The dashboard renders from the lightweight /api/billing/summary.
-          // The detailed receipts/ledger/dues that the Overview, Defaulters, and
-          // Ledger views read are hydrated ONCE here via a freshness-guarded, in-flight-
-          // locked full load — instead of the old blast that fired on every hydration
-          // and was re-fired across every device every 3 minutes by the sync probe.
-          setTimeout(() => {
-            loadFullBillingRef.current?.(false);
-          }, 3000);
-        }
-
-        if (role === "ADMIN") {
-          apiFetch("/api/users", {}, 10000, true).then((data) => data && setUsersList(data));
-          apiFetch("/api/audits?limit=25", {}, 10000, true).then((data) => {
-            if (data) setAuditLogs(Array.isArray(data) ? data : (data.logs || []));
-          });
-        }
-
-        if (role === "TEACHER" || role === "PARENT") {
-          apiFetch("/api/homework", {}, 10000, true).then((data) => data && setHomeworks(data));
-          apiFetch("/api/leave", {}, 10000, true).then((data) => data && setLeaveRequests(data));
-        }
-      }, 1000);
     } catch (err) {
       console.error("[AuthContext] refreshData EXCEPTION:", err);
     }
@@ -993,6 +969,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   refreshDataDelegateRef.current = refreshData;
+
+  useEffect(() => {
+    if (!user || !["ADMIN", "ACCOUNTANT"].includes(user.role)) return;
+    const detailedDashboard = activeTab === "dashboard" && billingDetailsLoaded;
+    let cancelled = false;
+    if (activeTab === "students") {
+      void apiFetch("/api/admissions", {}, 10000, true).then(data => {
+        if (!cancelled && data?.applications) setAdmissionApplications(data.applications);
+      });
+    }
+    if (detailedDashboard) {
+      void apiFetch("/api/events", {}, 10000, true).then(data => { if (!cancelled && data) setEventsList(data); });
+    }
+    if (user.role === "ADMIN" && (activeTab === "users" || detailedDashboard)) {
+      void apiFetch("/api/users", {}, 10000, true).then(data => { if (!cancelled && data) setUsersList(data); });
+    }
+    if (user.role === "ADMIN" && (activeTab === "audit" || detailedDashboard)) {
+      void apiFetch("/api/audits?limit=25", {}, 10000, true).then(data => {
+        if (!cancelled && data) setAuditLogs(Array.isArray(data) ? data : (data.logs || []));
+      });
+    }
+    return () => { cancelled = true; };
+  }, [user?.id, user?.role, activeTab, billingDetailsLoaded]);
+
 
   const refreshFeeConfig = async () => {
     try {
@@ -1028,7 +1028,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // ── EGRESS P1: timestamp of the last successful FULL billing load + a ref handle
   // so refreshData (defined earlier with a stable [] closure) can trigger it.
   const lastFullBillingLoadRef = useRef<number>(0);
-  const loadFullBillingRef = useRef<((force?: boolean) => Promise<void>) | null>(null);
 
   // ── EGRESS P1: Single source of truth for the FULL school-wide billing dataset
   // (receipts + ledger + dues) consumed by the Overview, Defaulters, and Ledger views.
@@ -1045,7 +1044,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         clearApiCache("/api/billing");
       }
       const data = await apiFetch("/api/billing?all=true", {}, 15000, !force);
+      if (!data) throw new Error("Unable to load fee details. Please try again.");
       if (data) {
+        setBillingDetailsLoaded(true);
         setLedgerEntries(data.ledgerEntries || []);
         setReceipts(data.receipts || []);
         setDueItems(data.dueItems || []);
@@ -1065,15 +1066,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isRefreshingBillingRef.current = false;
     }
   };
-  loadFullBillingRef.current = loadFullBilling;
 
   // Public refresh — defaults to a FORCED full refresh. Used after mutations that
   // change many charges/receipts across students (bill generation, admissions,
   // fee-structure clones, the manual Ledger "Sync" button, etc.) so those views
   // reflect the change immediately. Routine reads should rely on the guarded
   // loadFullBilling() freshness window instead.
-  const refreshBilling = async (force = true) => {
-    await loadFullBilling(force);
+  const refreshBilling = async (force = true, requireSuccess = false) => {
+    try {
+      await loadFullBilling(force);
+    } catch (error) {
+      if (requireSuccess) throw error;
+      // A completed write remains successful if its subsequent display refresh
+      // fails. Do not invite users to repeat an already committed payment/import.
+      showToast("error", "Refresh Needed", "Your saved changes are preserved. Fee details could not be refreshed; please reload them.");
+    }
   };
 
   const isRefreshingStudentBillingRef = useRef<Set<string>>(new Set());
@@ -1100,6 +1107,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         })
       );
 
+      const refreshedIds = successfulStudentIds(uniqueToRefresh, results);
+      if (!refreshedIds.length) return;
       const allFreshDues: MockDueItem[] = [];
       const allFreshReceipts: MockReceipt[] = [];
       const allFreshLedger: MockLedgerEntry[] = [];
@@ -1114,7 +1123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // 1. Atomically patch dueItems for the affected students
       setDueItems((prev) => {
         const safePrev = Array.isArray(prev) ? prev : [];
-        const remaining = safePrev.filter((d) => !uniqueToRefresh.includes(d.studentId));
+        const remaining = safePrev.filter((d) => !refreshedIds.includes(d.studentId));
         const next = [...remaining, ...allFreshDues];
         setLocalCache("gng_cached_dueItems", next);
         return next;
@@ -1135,7 +1144,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // 3. Atomically patch ledgerEntries
       setLedgerEntries((prev) => {
         const safePrev = Array.isArray(prev) ? prev : [];
-        const remaining = safePrev.filter((l) => !uniqueToRefresh.includes(l.studentId));
+        const remaining = safePrev.filter((l) => !refreshedIds.includes(l.studentId));
         const next = [...allFreshLedger, ...remaining];
         setLocalCache("gng_cached_ledgerEntries", next);
         return next;
@@ -1227,16 +1236,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return await apiFetch("/api/billing/summary", {}, 10000, true);
   };
 
-  const refreshAttendance = async (force = false) => {
-    if (force) {
-      clearApiCache("/api/attendance");
+  const refreshAttendance = async (force = false, scope?: { startDate: string; endDate: string; className?: string; classNames?: string[]; section?: string }) => {
+    if (force) clearApiCache("/api/attendance");
+    const query = new URLSearchParams({ paginated: "true", limit: "500" });
+    if (scope) {
+      query.set("startDate", scope.startDate);
+      query.set("endDate", scope.endDate);
+      if (scope.className) query.set("className", scope.className);
+      if (scope.classNames?.length) query.set("classNames", JSON.stringify(scope.classNames));
+      if (scope.section) query.set("section", scope.section);
     }
-    const data = await apiFetch("/api/attendance", {}, 12000, !force);
-    if (data && Array.isArray(data)) {
-      setAttendances(data);
-      setAttendanceLoaded(true);
-      setLocalCache("gng_cached_attendances", data);
+    const records: MockAttendance[] = [];
+    for (let page = 1; ; page++) {
+      query.set("page", String(page));
+      const data = await apiFetch(`/api/attendance?${query}`, {}, 12000, !force);
+      if (!data || !Array.isArray(data.records) || !Number.isInteger(data.totalCount)) {
+        throw new Error("Attendance could not be loaded. Existing records are preserved.");
+      }
+      records.push(...data.records);
+      if (records.length >= data.totalCount) break;
+      if (!data.records.length) throw new Error("Attendance changed while loading. Please refresh again.");
     }
+    const classNames = scope?.classNames ?? (scope?.className ? [scope.className] : null);
+    const scopedIds = classNames ? new Set(students.filter(student =>
+      classNames.some(name => name.toLowerCase() === student.class.toLowerCase()) && (!scope?.section || student.section.toLowerCase() === scope.section.toLowerCase())
+    ).map(student => student.id)) : null;
+    setAttendances(previous => {
+      const next = mergeAttendanceScope(previous, records, scope, scopedIds);
+      setLocalCache("gng_cached_attendances", next);
+      return next;
+    });
+    setAttendanceLoaded(!scope);
   };
 
   const refreshHomework = async () => {
@@ -1264,6 +1294,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const refreshAdmissionApplications = async () => {
+    clearApiCache("/api/admissions");
     const data = await apiFetch("/api/admissions");
     if (data && data.applications) setAdmissionApplications(data.applications);
   };
@@ -1493,30 +1524,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateSchoolInfo = async (info: Partial<MockSchoolInfo>) => {
-    try {
-      // ── SCH-02: Atomic update — merge `info` with the in-context schoolInfo state
-      // rather than doing a GET→merge→POST sequence that is susceptible to lost-update
-      // race conditions when two concurrent saves run simultaneously.
-      // The backend upserts the merged payload in a single transaction.
-      const mergedConfig = { ...schoolInfo, ...info };
-
-      // Optimistic update for 0ms instantaneous UI feedback across all website components
-      setSchoolInfo(mergedConfig);
-      setLocalCache("gng_cached_schoolInfo", mergedConfig);
-      clearApiCache("/api/school");
-
-      const res = await fetch("/api/school", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(mergedConfig),
-      });
-
-      if (res.ok) {
-        await refreshSchool();
-      }
-    } catch (err) {
-      console.error("Update school profile failed:", err);
-    }
+    const res = await fetch("/api/school", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(info) });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || "School settings could not be saved.");
+    clearApiCache("/api/school");
+    setSchoolInfo(prev => { const next = { ...prev, ...info }; setLocalCache("gng_cached_schoolInfo", next); return next; });
   };
 
   const markAttendance = async (studentId: string, date: string, status: AttendanceStatus) => {
@@ -2034,49 +2046,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const addFeeHead = async (name: string, frequency = "MONTHLY") => {
-    try {
-      const res = await fetch("/api/fee-config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "ADD_HEAD", name, frequency }),
-      });
-      if (res.ok) {
-        await refreshFeeConfig();
-      }
-    } catch (err) {
-      console.error("Add fee head failed:", err);
-    }
+  const addFeeHead = async (name: string, frequency = "monthly") => {
+    const res = await fetch("/api/fee-config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "ADD_HEAD", name, frequency: frequency.toLowerCase() }) });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || "Fee head could not be saved.");
+    clearApiCache("/api/fee-config"); await refreshFeeConfig();
   };
-
   const removeFeeHead = async (name: string) => {
-    try {
-      const res = await fetch("/api/fee-config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "REMOVE_HEAD", name }),
-      });
-      if (res.ok) {
-        await refreshFeeConfig();
-      }
-    } catch (err) {
-      console.error("Remove fee head failed:", err);
-    }
+    const res = await fetch("/api/fee-config", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "DELETE_HEAD", name }) });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || "Fee head could not be archived.");
+    clearApiCache("/api/fee-config"); await refreshFeeConfig();
   };
 
   const addFeeStructure = async (name: string, frequency: string, total: number, className?: string, items?: { headName: string; amount: number }[]) => {
-    try {
-      const res = await fetch("/api/fee-config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "ADD_STRUCTURE", name, frequency, total, className, items }),
-      });
-      if (res.ok) {
-        await refreshFeeConfig();
-      }
-    } catch (err) {
-      console.error("Add fee structure failed:", err);
-    }
+    const res = await fetch("/api/fee-config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "ADD_STRUCTURE", name, frequency, total, className, items }) });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || "Fee setup could not be saved.");
+    clearApiCache("/api/fee-config");
+    await refreshFeeConfig();
   };
 
   const addClass = async (name: string, section: string) => {
@@ -2110,23 +2098,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const generateBills = async (academicYear: string) => {
-    try {
-      const res = await fetch("/api/billing/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ academicYear }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        // ── AC-05: Reuse authoritative refreshBilling() instead of duplicate fetch ──
-        await refreshBilling();
-        return data;
-      }
-      return null;
-    } catch (err) {
-      console.error("Generate bills failed:", err);
-      return null;
-    }
+    let cursor: string | undefined;
+    let totalGenerated = 0, totalSkipped = 0;
+    do {
+      const res = await fetch("/api/billing/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ academicYear, cursor }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Fee batch failed. Completed earlier batches are preserved.");
+      totalGenerated += data.totalGenerated || 0; totalSkipped += data.totalSkipped || 0; cursor = data.nextCursor || undefined;
+    } while (cursor);
+    await refreshBilling();
+    return { success: true, totalGenerated, totalSkipped, message: "Fee generation completed." };
   };
 
   const triggerAudit = async (action: string) => {
@@ -2152,39 +2133,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ studentId, action: "updateStatus", data: { status } }),
       });
-      if (res.ok) {
-        const targetIds = new Set(Array.isArray(studentId) ? studentId : [studentId]);
-        setStudents((prev) => {
-          const updated = prev.map((s) => (targetIds.has(s.id) ? { ...s, status } : s));
-          setLocalCache("gng_cached_students", updated);
-          return updated;
-        });
-      }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Student status could not be changed. Please try again.");
+      const targetIds = new Set(Array.isArray(studentId) ? studentId : [studentId]);
+      clearApiCache("/api/students");
+      setStudents((prev) => {
+        const updated = prev.map((s) => (targetIds.has(s.id) ? { ...s, status } : s));
+        setLocalCache("gng_cached_students", updated);
+        return updated;
+      });
+      showToast("success", "Student Status Updated", `Status changed to ${status.toLowerCase()}.`);
+      return { success: true };
     } catch (err) {
-      console.error("Update student status failed:", err);
+      const error = err instanceof Error ? err.message : "Student status could not be changed. Please try again.";
+      showToast("error", "Status Update Failed", error);
+      return { success: false, error };
     }
   };
 
-  const promoteStudent = async (studentId: string | string[], classVal: string, section: string) => {
-    try {
-      const res = await fetch("/api/students", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ studentId, action: "promote", data: { classVal, section } }),
-      });
-      if (res.ok) {
-        const targetIds = new Set(Array.isArray(studentId) ? studentId : [studentId]);
-        setStudents((prev) => {
-          const updated = prev.map((s) =>
-            targetIds.has(s.id) ? { ...s, class: classVal, section } : s
-          );
-          setLocalCache("gng_cached_students", updated);
-          return updated;
-        });
-      }
-    } catch (err) {
-      console.error("Promote student failed:", err);
-    }
+  const promoteStudent = async () => {
+    setActiveTab("sessions");
+    showToast("info", "Session & Promotion", "Prepare and preview next-session enrollments here. Current classes have not changed.");
   };
 
   const editStudentDetails = async (studentId: string, studentData: any) => {
@@ -2458,6 +2427,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         retryInitSession: initSession,
         studentsLoaded,
         billingLoaded,
+        billingDetailsLoaded,
         attendanceLoaded,
         showToast,
       }}

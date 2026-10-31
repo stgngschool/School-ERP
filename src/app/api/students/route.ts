@@ -1,63 +1,24 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
-import bcrypt from "bcryptjs";
 import crypto from "crypto";
-import { generateYearlyCharges, getAcademicYear } from "@/lib/generateYearlyCharges";
+import { generateYearlyCharges } from "@/lib/generateYearlyCharges";
 import { getNextFamilyCode, getNextAdmissionNumber, getNextRollNumber, findMatchingParentProfile } from "@/lib/family";
 import { getAuthUser } from "@/lib/auth";
 import { boundPagination, getSafeErrorMessage } from "@/lib/validation";
-import { BoundedCache } from "@/lib/cache/BoundedCache";
 import { validateCsrfOrigin } from "@/lib/security";
 import { formatCanonicalDOB, formatCanonicalDOBIso, parseCanonicalDOB } from "@/lib/dateUtils";
-import { serverStudentsCache, clearServerStudentsCache } from "@/lib/cache/studentsCache";
+import { serverStudentsCache, clearServerStudentsCache, getCachedSlimStudents } from "@/lib/cache/studentsCache";
+import type { Prisma } from "@prisma/client";
 import { clearServerBillingCache } from "@/lib/cache/billingCache";
+
+import { getCachedActiveSession } from "@/lib/cache/sessionCache";
+import { assertSessionIntent, SessionError } from "@/lib/sessionPolicy";
+import { lockSessionWorkflow } from "@/lib/sessionWorkflow";
 
 export const dynamic = "force-dynamic";
 
-// ── EGRESS P2: Lightweight roster/directory projection.
-// Drops the heavy PII/detail columns (aadhaar x3, dob, address, prev-school, emergency
-// contacts, tc/board numbers, income/occupation, religion/category/nationality, transport
-// detail, etc.) that ONLY the Edit Student modal prefill and the master-data Excel/CSV
-// export consume. Keeps everything the roster lists, student search, defaulter lists, and
-// the teacher dashboard actually render. The full record stays available via
-// GET /api/students/[id] and GET /api/students?full=true.
-async function loadSlimStudents(
-  where: Record<string, any>,
-  pagination: Record<string, number>
-): Promise<Record<string, any>[]> {
-  const rows = await db.student.findMany({
-    where,
-    ...pagination,
-    orderBy: { name: "asc" },
-    select: {
-      id: true, name: true, admissionNumber: true, rollNumber: true, gender: true,
-      dob: true, aadhaar: true, category: true, religion: true, motherName: true,
-      status: true, isRte: true, isMarksheetClaimed: true, photoUrl: true, concessionId: true,
-      fatherName: true, fatherMobile: true, motherMobile: true, admissionDate: true,
-      class: { select: { name: true, section: true } },
-      parentProfile: { select: { familyCode: true, address: true, user: { select: { name: true, phone: true } } } },
-      concession: { select: { id: true, name: true, percentage: true, feeHeadName: true } },
-    },
-  });
-  return rows.map((s) => ({
-    id: s.id, name: s.name, admissionNo: s.admissionNumber, rollNo: s.rollNumber || "",
-    gender: s.gender || "", status: s.status || "ACTIVE", isRte: s.isRte,
-    isMarksheetClaimed: s.isMarksheetClaimed, photoUrl: s.photoUrl || "", concessionId: s.concessionId || "",
-    dob: formatCanonicalDOBIso(s.dob), dobDisplay: formatCanonicalDOB(s.dob),
-    aadhaar: s.aadhaar || "", category: s.category || "General", religion: s.religion || "Hinduism",
-    admissionDate: formatCanonicalDOBIso(s.admissionDate), admissionDateDisplay: formatCanonicalDOB(s.admissionDate),
-    fatherName: s.fatherName || "", fatherMobile: s.fatherMobile || "",
-    motherName: s.motherName || "", motherMobile: s.motherMobile || "",
-    class: s.class.name, section: s.class.section,
-    parentName: s.parentProfile?.user?.name || "", parentPhone: s.parentProfile?.user?.phone || "",
-    familyCode: s.parentProfile?.familyCode || "",
-    address: s.parentProfile?.address || "",
-    concession: s.concession
-      ? { id: s.concession.id, name: s.concession.name, percentage: s.concession.percentage, feeHeadName: s.concession.feeHeadName }
-      : null,
-  }));
-}
-
+// Keep the complete default roster contract for in-memory search and filters.
+// Detailed fields remain available through /api/students/[id] or ?full=true.
 export async function GET(request: Request) {
   const reqId = `std_${Math.random().toString(36).substring(2, 9)}`;
   const startTime = performance.now();
@@ -72,22 +33,20 @@ export async function GET(request: Request) {
     const hasExplicitPagination = searchParams.has("limit") || searchParams.has("take") || searchParams.has("page") || searchParams.has("offset") || searchParams.has("skip");
     const { limit, offset } = boundPagination(searchParams, { defaultLimit: 2500, maxLimit: 5000 });
 
-    // ── EGRESS P2: Projection selection.
-    // Default to the enriched slim projection for all roles (saves ~75% egress per load).
-    // The directory table, search, category/rte/status filters, and CSV export have 100% of
-    // their needed columns. The Edit Student modal hydrates any remaining granular fields
-    // on demand via GET /api/students/[id] in < 0.5 KB. Explicit ?full=true is supported.
-    const slimParam = searchParams.get("slim") === "true";
+    // Cache the existing slim projection durably; preserve explicit full reads.
     const fullParam = searchParams.get("full") === "true";
     const useSlim = fullParam ? false : true;
 
-    const cacheKey = authUser.role === "TEACHER"
+    const activeAcademicSession = await getCachedActiveSession();
+    const cacheKey = `${activeAcademicSession?.id || "none"}_` + (authUser.role === "TEACHER"
       ? `TEACHER_${authUser.userId}_${useSlim ? "SLIM" : "FULL"}_${hasExplicitPagination ? `${limit}_${offset}` : "ALL"}`
       : (authUser.role === "PARENT"
-        ? `PARENT_${authUser.userId}`
-        : `STAFF_STUDENTS_${useSlim ? "SLIM" : "FULL"}_${hasExplicitPagination ? `${limit}_${offset}` : "ALL"}`);
+        ? `PARENT_${authUser.userId}_${useSlim ? "SLIM" : "FULL"}_${hasExplicitPagination ? `${limit}_${offset}` : "ALL"}`
+        : `STAFF_STUDENTS_${useSlim ? "SLIM" : "FULL"}_${hasExplicitPagination ? `${limit}_${offset}` : "ALL"}`));
 
-    const cachedData = serverStudentsCache.get(cacheKey);
+    // Slim entries use only the durable tagged cache. A process-local copy could
+    // outlive an invalidation issued by a mutation on another server instance.
+    const cachedData = useSlim ? undefined : serverStudentsCache.get(cacheKey);
     if (cachedData) {
       return NextResponse.json(cachedData, {
         headers: {
@@ -97,10 +56,11 @@ export async function GET(request: Request) {
       });
     }
 
-    let whereClause: Record<string, any> = {};
+    let whereClause: Prisma.StudentWhereInput = {};
     if (authUser.role === "PARENT") {
       const parentProfile = await db.parentProfile.findUnique({
-        where: { userId: authUser.userId }
+        where: { userId: authUser.userId },
+        select: { id: true },
       });
       if (!parentProfile) {
         return NextResponse.json([]);
@@ -110,7 +70,7 @@ export async function GET(request: Request) {
     if (authUser.role === "TEACHER") {
       const teacherProfile = await db.teacherProfile.findUnique({
         where: { userId: authUser.userId },
-        include: { classes: { where: { status: "ACTIVE" }, select: { id: true } } },
+        select: { classes: { where: { status: "ACTIVE" }, select: { id: true } } },
       });
       const allowedClassIds = teacherProfile?.classes.map((c) => c.id) || [];
       whereClause = { classId: { in: allowedClassIds } };
@@ -121,11 +81,11 @@ export async function GET(request: Request) {
     let formatted: Record<string, any>[];
 
     if (useSlim) {
-      formatted = await loadSlimStudents(
+      formatted = await getCachedSlimStudents(
         whereClause,
         hasExplicitPagination ? { take: limit, skip: offset } : {}
       );
-      console.log(`[DIAGNOSTIC][DB][${reqId}] db.student.findMany(slim) | rows: ${formatted.length}`);
+      console.log(`[DIAGNOSTIC][ROSTER][${reqId}] slim result | rows: ${formatted.length}`);
     } else {
     const students = await db.student.findMany({
       where: whereClause,
@@ -239,12 +199,12 @@ export async function GET(request: Request) {
     }));
     }
 
-    serverStudentsCache.set(cacheKey, formatted);
+    if (!useSlim) serverStudentsCache.set(cacheKey, formatted);
 
     return NextResponse.json(formatted, {
       headers: {
         "Cache-Control": "private, max-age=30, stale-while-revalidate=60",
-        "X-Server-Cache": "MISS",
+        "X-Server-Cache": useSlim ? "DURABLE" : "MISS",
       },
     });
   } catch (error: any) {
@@ -255,6 +215,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  let authorizedMutation = false;
   try {
     // ── H-11: Validate CSRF Origin on state-mutating requests
     if (!validateCsrfOrigin(request)) {
@@ -265,6 +226,7 @@ export async function POST(request: Request) {
     if (!authUser || (authUser.role !== "ADMIN" && authUser.role !== "ACCOUNTANT")) {
       return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
     }
+    authorizedMutation = true;
 
     // Invalidate server cache on student creation
     clearServerStudentsCache();
@@ -302,7 +264,6 @@ export async function POST(request: Request) {
       busRoute,
       busStop,
       isRte,
-      initialDues,
       familyCode,
       previousDues,
       concessionId,
@@ -384,6 +345,7 @@ export async function POST(request: Request) {
     });
 
     const { student, parentResult } = await db.$transaction(async (tx) => {
+      await lockSessionWorkflow(tx);
       // ── Resolve or create the parent profile inside the transaction ─────────
       let resolvedParent = parent as any;
 
@@ -507,6 +469,9 @@ export async function POST(request: Request) {
         },
       });
 
+      const currentSession = await tx.academicSession.findFirst({ where: { isCurrent: true } });
+      if (!currentSession) throw new Error("An active academic session is required before admission.");
+      await tx.studentSession.create({ data: { studentId: newStudent.id, sessionId: currentSession.id, classId: classObj.id, rollNumber } });
       return { student: newStudent, parentResult: resolvedParent };
     }, {
       // Raise timeout for the admission transaction — it includes bcrypt hashing
@@ -518,7 +483,7 @@ export async function POST(request: Request) {
     // generateYearlyCharges is idempotent (skips existing entries) and does not
     // need to be atomic with the student record creation.
     if (systemUser) {
-      await generateYearlyCharges(student.id, classVal, systemUser.id, getAcademicYear(), startingFeeMonth);
+      await generateYearlyCharges(student.id, classVal, systemUser.id, undefined, startingFeeMonth);
       if (previousDues && parseFloat(previousDues) > 0) {
         const prevDuesAmountInPaisa = Math.round(parseFloat(previousDues) * 100);
         await db.ledgerEntry.create({
@@ -574,6 +539,9 @@ export async function POST(request: Request) {
     }
     const safeError = getSafeErrorMessage(error, "Failed to create student record.");
     return NextResponse.json({ error: safeError }, { status: 500 });
+  } finally {
+    // Earlier parent/profile writes can commit even if later admission work fails.
+    if (authorizedMutation) clearServerStudentsCache();
   }
 }
 
@@ -609,35 +577,20 @@ export async function PATCH(request: Request) {
         );
       }
 
-      clearServerStudentsCache();
-      const updated = await db.student.updateMany({
-        where: { id: { in: studentIds } },
-        data: { status: data.status },
+      const updated = await db.$transaction(async tx => {
+        await lockSessionWorkflow(tx);
+        return tx.student.updateMany({ where: { id: { in: studentIds } }, data: { status: data.status } });
       });
+      clearServerStudentsCache();
       return NextResponse.json({ success: true, count: updated.count });
     }
 
     if (action === "promote") {
-      const { classVal, section } = data;
-      let classObj = await db.class.findFirst({
-        where: { name: classVal, section: section },
-      });
-
-      if (!classObj) {
-        classObj = await db.class.create({
-          data: { name: classVal, section: section },
-        });
-      }
-
-      const updated = await db.student.updateMany({
-        where: { id: { in: studentIds } },
-        data: { classId: classObj.id },
-      });
-
-      return NextResponse.json({ success: true, count: updated.count });
+      return NextResponse.json({ error: "Use Session & Promotion to prepare next-session enrollments. Current classes were not changed." }, { status: 409 });
     }
 
     if (action === "updateDetails") {
+      assertSessionIntent(data.expectedSessionId, (await getCachedActiveSession())?.id);
       const targetId = Array.isArray(studentId) ? studentId[0] : studentId;
       const student = await db.student.findUnique({
         where: { id: targetId },
@@ -723,12 +676,12 @@ export async function PATCH(request: Request) {
       const concessionChanged = newConcessionId !== previousConcessionId;
       const transportStopChanged = newTransportStopId !== previousTransportStopId;
 
-      clearServerStudentsCache();
-
       // ── C-03 + T-03 + BL-05: Wrap the student update, stale-discount cleanup,
       // and transport charge management in ONE transaction so the student record and
       // its financial adjustments are either both committed or both rolled back.
-      let updated = await db.$transaction(async (tx) => {
+      const updated = await db.$transaction(async (tx) => {
+      await lockSessionWorkflow(tx);
+      assertSessionIntent(data.expectedSessionId, (await tx.academicSession.findFirst({ where: { isCurrent: true } }))?.id);
         const updatedStudent = await tx.student.update({
           where: { id: targetId },
           data: {
@@ -764,6 +717,13 @@ export async function PATCH(request: Request) {
           },
         });
 
+        const currentSession = await tx.academicSession.findFirst({ where: { isCurrent: true } });
+        if (!currentSession) throw new Error("An active academic session is required before editing students.");
+        // Update an existing current enrollment only. Never backfill legacy enrollments here.
+        await tx.studentSession.updateMany({ where: { studentId: targetId, sessionId: currentSession.id }, data: { classId: updatedStudent.classId, rollNumber: updatedStudent.rollNumber } });
+        const committedCharges = await tx.ledgerEntry.findMany({ where: { studentId: targetId, sessionId: currentSession.id, entryType: "CHARGE", receiptItems: { some: {} } }, select: { description: true } });
+        const paidChargeLabels = new Set(committedCharges.map(c => c.description.replace(/^Assigned: /, "").trim().toLowerCase()));
+
         // Only update the shared Parent user and profile if this student is the only child
         // in this family, or if the update explicitly matches existing parent identity.
         // If there are multiple siblings, updating one student's individual parent fields
@@ -791,6 +751,7 @@ export async function PATCH(request: Request) {
           const staleRteDiscounts = await tx.ledgerEntry.findMany({
             where: {
               studentId: targetId,
+              sessionId: currentSession.id,
               entryType: "DISCOUNT",
               description: { startsWith: "RTE Fee Waiver:" },
             },
@@ -798,7 +759,7 @@ export async function PATCH(request: Request) {
           });
 
           const deletableRteIds = staleRteDiscounts
-            .filter((d) => d.receiptItems.length === 0)
+            .filter((d) => d.receiptItems.length === 0 && !paidChargeLabels.has(d.description.replace(/^.*: /, "").trim().toLowerCase()))
             .map((d) => d.id);
 
           if (deletableRteIds.length > 0) {
@@ -812,6 +773,7 @@ export async function PATCH(request: Request) {
           const staleConcessionDiscounts = await tx.ledgerEntry.findMany({
             where: {
               studentId: targetId,
+              sessionId: currentSession.id,
               entryType: "DISCOUNT",
               description: { contains: "Concession Waiver" },
             },
@@ -819,7 +781,7 @@ export async function PATCH(request: Request) {
           });
 
           const deletableConcIds = staleConcessionDiscounts
-            .filter((d) => d.receiptItems.length === 0)
+            .filter((d) => d.receiptItems.length === 0 && !paidChargeLabels.has(d.description.replace(/^.*: /, "").trim().toLowerCase()))
             .map((d) => d.id);
 
           if (deletableConcIds.length > 0) {
@@ -840,6 +802,7 @@ export async function PATCH(request: Request) {
             const staleDiscounts = await tx.ledgerEntry.findMany({
               where: {
                 studentId: targetId,
+              sessionId: currentSession.id,
                 entryType: "DISCOUNT",
                 description: { contains: stalePrefix },
               },
@@ -847,7 +810,7 @@ export async function PATCH(request: Request) {
             });
 
             const deletableIds = staleDiscounts
-              .filter((d) => d.receiptItems.length === 0)
+              .filter((d) => d.receiptItems.length === 0 && !paidChargeLabels.has(d.description.replace(/^.*: /, "").trim().toLowerCase()))
               .map((d) => d.id);
 
             if (deletableIds.length > 0) {
@@ -868,6 +831,7 @@ export async function PATCH(request: Request) {
           const existingTransportCharge = await tx.ledgerEntry.findFirst({
             where: {
               studentId: targetId,
+              sessionId: currentSession.id,
               entryType: "CHARGE",
               description: { startsWith: "Transport Fee:" },
             },
@@ -899,6 +863,7 @@ export async function PATCH(request: Request) {
                 await tx.ledgerEntry.create({
                   data: {
                     studentId: targetId,
+              sessionId: currentSession.id,
                     entryType: "CHARGE",
                     description: `Transport Fee: ${newStop.name}`,
                     amount: newStop.amount,
@@ -919,6 +884,7 @@ export async function PATCH(request: Request) {
 
         return updatedStudent;
       });
+      clearServerStudentsCache();
 
       // ── S-03 & BL-05: Regenerate discounts when isRte status changes or concessionId changes
       // generateYearlyCharges is idempotent: it skips existing charges and only
@@ -931,7 +897,7 @@ export async function PATCH(request: Request) {
           where: { id: updated.classId },
         });
         if (systemUser && studentClass) {
-          await generateYearlyCharges(updated.id, studentClass.name, systemUser.id, getAcademicYear());
+          await generateYearlyCharges(updated.id, studentClass.name, systemUser.id);
         }
       }
       // ─────────────────────────────────────────────────────────────────────────
@@ -942,6 +908,7 @@ export async function PATCH(request: Request) {
 
     return NextResponse.json({ error: "Invalid action." }, { status: 400 });
   } catch (error: any) {
+    if (error instanceof SessionError) return NextResponse.json({ error: error.message }, { status: error.status });
     console.error("Student update error:", error);
     const safeError = getSafeErrorMessage(error, "Failed to update student record.");
     return NextResponse.json({ error: safeError }, { status: 500 });

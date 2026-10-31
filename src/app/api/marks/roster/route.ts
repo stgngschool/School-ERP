@@ -4,6 +4,8 @@ import { getAuthUser } from "@/lib/auth";
 import { getCachedSchoolConfig } from "@/lib/cache/schoolConfigCache";
 import { getCachedActiveSession } from "@/lib/cache/sessionCache";
 
+import { sessionClassFilter } from "@/lib/sessionClassFilter";
+
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
@@ -113,9 +115,13 @@ export async function GET(request: Request) {
           : { OR: classOrConditions },
       },
     };
-    if (targetSessionId) {
-      whereClause.sessionId = targetSessionId;
-    }
+    if (!targetSessionId) return NextResponse.json({ error: "Select a valid academic session." }, { status: 409 });
+    const selectedSession = await db.academicSession.findUnique({ where: { id: targetSessionId } });
+    if (!selectedSession) return NextResponse.json({ error: "Session not found." }, { status: 404 });
+    const selectedClassWhere = whereClause.student.class;
+    whereClause.student = sessionClassFilter(targetSessionId, selectedClassWhere, selectedSession.isCurrent);
+    whereClause.sessionId = targetSessionId;
+
 
     const marks = await db.mark.findMany({
       where: whereClause,

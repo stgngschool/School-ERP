@@ -22,6 +22,7 @@ import {
   Download,
 } from "lucide-react";
 import dynamic from "next/dynamic";
+import StudentStatusConfirmation, { type StudentStatusRequest } from "@/components/StudentStatusConfirmation";
 import { sortClasses, normalizeClassName, normalizeSectionName } from "@/lib/classUtils";
 import StudentProfileModal from "@/components/StudentProfileModal";
 import EditStudentModal from "@/components/modals/EditStudentModal";
@@ -80,6 +81,7 @@ export default function StudentDirectoryTab({ onCollectFee }: StudentDirectoryTa
   const [selectedStudent, setSelectedStudent] = useState<any | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [statusRequest, setStatusRequest] = useState<(StudentStatusRequest) | null>(null);
   const [showPromoteModal, setShowPromoteModal] = useState(false);
   const [showBulkPromoteModal, setShowBulkPromoteModal] = useState(false);
 
@@ -478,9 +480,9 @@ export default function StudentDirectoryTab({ onCollectFee }: StudentDirectoryTa
         >
           {/* 1. Class */}
           <div>
-            <label className="text-[9px] font-black uppercase text-slate-400 block mb-1 tracking-wider">Class</label>
+            <label htmlFor="accountant-directory-class" className="text-[11px] font-black uppercase text-slate-600 block mb-1 tracking-wider">Class</label>
             <select
-              value={dirClassFilter}
+              id="accountant-directory-class" value={dirClassFilter}
               onChange={(e) => {
                 setDirClassFilter(e.target.value);
                 setCurrentPage(1);
@@ -498,9 +500,9 @@ export default function StudentDirectoryTab({ onCollectFee }: StudentDirectoryTa
 
           {/* 2. Section */}
           <div>
-            <label className="text-[9px] font-black uppercase text-slate-400 block mb-1 tracking-wider">Section</label>
+            <label htmlFor="accountant-directory-section" className="text-[11px] font-black uppercase text-slate-600 block mb-1 tracking-wider">Section</label>
             <select
-              value={dirSectionFilter}
+              id="accountant-directory-section" value={dirSectionFilter}
               onChange={(e) => {
                 setDirSectionFilter(e.target.value);
                 setCurrentPage(1);
@@ -518,9 +520,9 @@ export default function StudentDirectoryTab({ onCollectFee }: StudentDirectoryTa
 
           {/* 3. Family ID */}
           <div>
-            <label className="text-[9px] font-black uppercase text-slate-400 block mb-1 tracking-wider">Family ID</label>
+            <label htmlFor="accountant-directory-family" className="text-[11px] font-black uppercase text-slate-600 block mb-1 tracking-wider">Family ID</label>
             <select
-              value={dirFamilyFilter}
+              id="accountant-directory-family" value={dirFamilyFilter}
               onChange={(e) => {
                 setDirFamilyFilter(e.target.value);
                 setCurrentPage(1);
@@ -538,9 +540,9 @@ export default function StudentDirectoryTab({ onCollectFee }: StudentDirectoryTa
 
           {/* 4. Status */}
           <div>
-            <label className="text-[9px] font-black uppercase text-slate-400 block mb-1 tracking-wider">Status</label>
+            <label htmlFor="accountant-directory-status" className="text-[11px] font-black uppercase text-slate-600 block mb-1 tracking-wider">Status</label>
             <select
-              value={dirStatusFilter}
+              id="accountant-directory-status" value={dirStatusFilter}
               onChange={(e) => {
                 setDirStatusFilter(e.target.value);
                 setCurrentPage(1);
@@ -556,9 +558,9 @@ export default function StudentDirectoryTab({ onCollectFee }: StudentDirectoryTa
 
           {/* 5. Billing Type / RTE */}
           <div>
-            <label className="text-[9px] font-black uppercase text-slate-400 block mb-1 tracking-wider">Billing Type</label>
+            <label htmlFor="accountant-directory-rte" className="text-[11px] font-black uppercase text-slate-600 block mb-1 tracking-wider">Billing Type</label>
             <select
-              value={dirRteFilter}
+              id="accountant-directory-rte" value={dirRteFilter}
               onChange={(e) => {
                 setDirRteFilter(e.target.value);
                 setCurrentPage(1);
@@ -574,9 +576,9 @@ export default function StudentDirectoryTab({ onCollectFee }: StudentDirectoryTa
 
           {/* 6. Category */}
           <div>
-            <label className="text-[9px] font-black uppercase text-slate-400 block mb-1 tracking-wider">Category</label>
+            <label htmlFor="accountant-directory-category" className="text-[11px] font-black uppercase text-slate-600 block mb-1 tracking-wider">Category</label>
             <select
-              value={dirCategoryFilter}
+              id="accountant-directory-category" value={dirCategoryFilter}
               onChange={(e) => {
                 setDirCategoryFilter(e.target.value);
                 setCurrentPage(1);
@@ -593,9 +595,9 @@ export default function StudentDirectoryTab({ onCollectFee }: StudentDirectoryTa
 
           {/* 7. Fee Dues */}
           <div>
-            <label className="text-[9px] font-black uppercase text-slate-400 block mb-1 tracking-wider">Fee Dues</label>
+            <label htmlFor="accountant-directory-dues" className="text-[11px] font-black uppercase text-slate-600 block mb-1 tracking-wider">Fee Dues</label>
             <select
-              value={dirDuesFilter}
+              id="accountant-directory-dues" value={dirDuesFilter}
               onChange={(e) => {
                 setDirDuesFilter(e.target.value);
                 setCurrentPage(1);
@@ -728,13 +730,7 @@ export default function StudentDirectoryTab({ onCollectFee }: StudentDirectoryTa
             </button>
             <button
               type="button"
-              onClick={async () => {
-                if (confirm(`Suspend ${selectedStudentIds.length} selected students?`)) {
-                  await updateStudentStatus(selectedStudentIds, "SUSPENDED");
-                  showToast("warning", "Status Updated", `${selectedStudentIds.length} students marked as SUSPENDED.`);
-                  setSelectedStudentIds([]);
-                }
-              }}
+              onClick={() => setStatusRequest({ ids: [...selectedStudentIds], name: `${selectedStudentIds.length} selected students`, status: "SUSPENDED" })}
               className="py-1.5 px-2.5 sm:px-3 bg-white border border-amber-200 hover:bg-amber-50 text-amber-700 rounded-xl font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-2xs text-xs"
             >
               <UserMinus className="h-3.5 w-3.5" />
@@ -743,13 +739,7 @@ export default function StudentDirectoryTab({ onCollectFee }: StudentDirectoryTa
             </button>
             <button
               type="button"
-              onClick={async () => {
-                if (confirm(`Mark ${selectedStudentIds.length} selected students as LEFT (TC Issued)?`)) {
-                  await updateStudentStatus(selectedStudentIds, "LEFT");
-                  showToast("info", "Status Updated", `${selectedStudentIds.length} students marked as LEFT.`);
-                  setSelectedStudentIds([]);
-                }
-              }}
+              onClick={() => setStatusRequest({ ids: [...selectedStudentIds], name: `${selectedStudentIds.length} selected students`, status: "LEFT" })}
               className="py-1.5 px-2.5 sm:px-3 bg-white border border-rose-200 hover:bg-rose-50 text-rose-700 rounded-xl font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-2xs text-xs"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -1010,7 +1000,8 @@ export default function StudentDirectoryTab({ onCollectFee }: StudentDirectoryTa
                       <td className="py-3 px-4 text-right relative">
                         <button
                           type="button"
-                          onClick={() =>
+                          id={`accountant-student-actions-${std.id}`} aria-label={`Actions for ${std.name}`}
+                                  onClick={() =>
                             setActiveMenuStudentId(activeMenuStudentId === std.id ? null : std.id)
                           }
                           className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 cursor-pointer"
@@ -1079,11 +1070,8 @@ export default function StudentDirectoryTab({ onCollectFee }: StudentDirectoryTa
                               {status !== "SUSPENDED" ? (
                                 <button
                                   type="button"
-                                  onClick={async () => {
-                                    if (confirm(`Are you sure you want to suspend ${std.name}?`)) {
-                                      await updateStudentStatus(std.id, "SUSPENDED");
-                                      showToast("warning", "Student Suspended", `${std.name} has been suspended.`);
-                                    }
+                                  onClick={() => {
+                                    setStatusRequest({ ids: std.id, name: std.name, status: "SUSPENDED" });
                                     setActiveMenuStudentId(null);
                                   }}
                                   className="w-full px-4 py-2 hover:bg-amber-50 text-[11px] font-bold text-amber-700 flex items-center gap-2 cursor-pointer"
@@ -1095,7 +1083,6 @@ export default function StudentDirectoryTab({ onCollectFee }: StudentDirectoryTa
                                   type="button"
                                   onClick={async () => {
                                     await updateStudentStatus(std.id, "ACTIVE");
-                                    showToast("success", "Student Activated", `${std.name} is now ACTIVE.`);
                                     setActiveMenuStudentId(null);
                                   }}
                                   className="w-full px-4 py-2 hover:bg-emerald-50 text-[11px] font-bold text-emerald-700 flex items-center gap-2 cursor-pointer"
@@ -1107,15 +1094,8 @@ export default function StudentDirectoryTab({ onCollectFee }: StudentDirectoryTa
                               {status !== "LEFT" && (
                                 <button
                                   type="button"
-                                  onClick={async () => {
-                                    if (
-                                      confirm(
-                                        `Mark ${std.name} as LEFT (TC Issued)? This student will not generate future billing charges.`
-                                      )
-                                    ) {
-                                      await updateStudentStatus(std.id, "LEFT");
-                                      showToast("info", "Student Marked Left", `${std.name} status set to LEFT (TC Issued).`);
-                                    }
+                                  onClick={() => {
+                                    setStatusRequest({ ids: std.id, name: std.name, status: "LEFT" });
                                     setActiveMenuStudentId(null);
                                   }}
                                   className="w-full px-4 py-2 hover:bg-rose-50 text-[11px] font-bold text-rose-700 flex items-center gap-2 cursor-pointer"
@@ -1227,6 +1207,24 @@ export default function StudentDirectoryTab({ onCollectFee }: StudentDirectoryTa
       )}
 
       {/* ── MODALS ── */}
+
+      {statusRequest && (
+        <StudentStatusConfirmation
+          request={statusRequest}
+          onConfirm={async () => {
+            const result = await updateStudentStatus(statusRequest.ids, statusRequest.status);
+            if (result?.success && Array.isArray(statusRequest.ids)) setSelectedStudentIds([]);
+            return result;
+          }}
+          onClose={() => {
+            const targetId = typeof statusRequest.ids === "string" ? statusRequest.ids : null;
+            setStatusRequest(null);
+            if (targetId) requestAnimationFrame(() => {
+              (document.getElementById(`accountant-student-actions-${targetId}`) ?? document.getElementById("accountant-directory-class"))?.focus();
+            });
+          }}
+        />
+      )}
 
       {/* 1. Student Profile Modal */}
       {showDetailModal && selectedStudent && (

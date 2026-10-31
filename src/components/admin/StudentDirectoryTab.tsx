@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useRef } from "react";
 import dynamic from "next/dynamic";
+import StudentStatusConfirmation, { type StudentStatusRequest } from "@/components/StudentStatusConfirmation";
 import {
   Users,
   PlusCircle,
@@ -83,7 +84,6 @@ export default function StudentDirectoryTab({
   admissionApplications = [],
   setActiveTab,
   updateStudentStatus,
-  promoteStudent,
   bulkImportStudents,
   showToast,
   setSelectedStudentId,
@@ -117,10 +117,7 @@ export default function StudentDirectoryTab({
   const [selectedStudent, setSelectedStudent] = useState<any | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [showPromoteModal, setShowPromoteModal] = useState(false);
-  const [showBulkPromoteModal, setShowBulkPromoteModal] = useState(false);
-  const [promoteClass, setPromoteClass] = useState("");
-  const [promoteSection, setPromoteSection] = useState("A");
+  const [statusRequest, setStatusRequest] = useState<(StudentStatusRequest & { ids: string }) | null>(null);
 
   // Bulk CSV Import states
   const [csvPreview, setCsvPreview] = useState<any[] | null>(null);
@@ -752,9 +749,9 @@ export default function StudentDirectoryTab({
               <div className={"grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 pt-4 border-t border-slate-200/60 " + (showMobileFilters ? "" : "hidden sm:grid")}>
                 {/* 1. Class Filter */}
                 <div>
-                  <label className="text-[9px] font-black uppercase text-slate-400 block mb-1.5 tracking-wider">Class</label>
+                  <label htmlFor="admin-directory-class" className="text-[11px] font-black uppercase text-slate-600 block mb-1.5 tracking-wider">Class</label>
                   <select
-                    value={dirClassFilter}
+                    id="admin-directory-class" value={dirClassFilter}
                     onChange={(e) => {
                       setDirClassFilter(e.target.value);
                       setCurrentPage(1);
@@ -770,9 +767,9 @@ export default function StudentDirectoryTab({
 
                 {/* 2. Section Filter */}
                 <div>
-                  <label className="text-[9px] font-black uppercase text-slate-400 block mb-1.5 tracking-wider">Section</label>
+                  <label htmlFor="admin-directory-section" className="text-[11px] font-black uppercase text-slate-600 block mb-1.5 tracking-wider">Section</label>
                   <select
-                    value={dirSectionFilter}
+                    id="admin-directory-section" value={dirSectionFilter}
                     onChange={(e) => {
                       setDirSectionFilter(e.target.value);
                       setCurrentPage(1);
@@ -788,9 +785,9 @@ export default function StudentDirectoryTab({
 
                 {/* 3. Family ID Filter */}
                 <div>
-                  <label className="text-[9px] font-black uppercase text-slate-400 block mb-1.5 tracking-wider">Family ID</label>
+                  <label htmlFor="admin-directory-family" className="text-[11px] font-black uppercase text-slate-600 block mb-1.5 tracking-wider">Family ID</label>
                   <select
-                    value={dirFamilyFilter}
+                    id="admin-directory-family" value={dirFamilyFilter}
                     onChange={(e) => {
                       setDirFamilyFilter(e.target.value);
                       setCurrentPage(1);
@@ -806,9 +803,9 @@ export default function StudentDirectoryTab({
 
                 {/* 4. Account Status */}
                 <div>
-                  <label className="text-[9px] font-black uppercase text-slate-400 block mb-1.5 tracking-wider">Status</label>
+                  <label htmlFor="admin-directory-status" className="text-[11px] font-black uppercase text-slate-600 block mb-1.5 tracking-wider">Status</label>
                   <select
-                    value={dirStatusFilter}
+                    id="admin-directory-status" value={dirStatusFilter}
                     onChange={(e) => {
                       setDirStatusFilter(e.target.value);
                       setCurrentPage(1);
@@ -824,9 +821,9 @@ export default function StudentDirectoryTab({
 
                 {/* 5. Billing / RTE Filter */}
                 <div>
-                  <label className="text-[9px] font-black uppercase text-slate-400 block mb-1.5 tracking-wider">Billing Type</label>
+                  <label htmlFor="admin-directory-rte" className="text-[11px] font-black uppercase text-slate-600 block mb-1.5 tracking-wider">Billing Type</label>
                   <select
-                    value={dirRteFilter}
+                    id="admin-directory-rte" value={dirRteFilter}
                     onChange={(e) => {
                       setDirRteFilter(e.target.value);
                       setCurrentPage(1);
@@ -842,9 +839,9 @@ export default function StudentDirectoryTab({
 
                 {/* 6. Caste Category */}
                 <div>
-                  <label className="text-[9px] font-black uppercase text-slate-400 block mb-1.5 tracking-wider">Category</label>
+                  <label htmlFor="admin-directory-category" className="text-[11px] font-black uppercase text-slate-600 block mb-1.5 tracking-wider">Category</label>
                   <select
-                    value={dirCategoryFilter}
+                    id="admin-directory-category" value={dirCategoryFilter}
                     onChange={(e) => {
                       setDirCategoryFilter(e.target.value);
                       setCurrentPage(1);
@@ -861,9 +858,9 @@ export default function StudentDirectoryTab({
 
                 {/* 7. Fee Dues Status */}
                 <div>
-                  <label className="text-[9px] font-black uppercase text-slate-400 block mb-1.5 tracking-wider">Fee Dues</label>
+                  <label htmlFor="admin-directory-dues" className="text-[11px] font-black uppercase text-slate-600 block mb-1.5 tracking-wider">Fee Dues</label>
                   <select
-                    value={dirDuesFilter}
+                    id="admin-directory-dues" value={dirDuesFilter}
                     onChange={(e) => {
                       setDirDuesFilter(e.target.value);
                       setCurrentPage(1);
@@ -889,7 +886,7 @@ export default function StudentDirectoryTab({
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => setShowBulkPromoteModal(true)}
+                      onClick={() => setActiveTab("sessions")}
                       className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
                     >
                       <ArrowUpRight className="h-3.5 w-3.5" /> Bulk Promote
@@ -1012,6 +1009,7 @@ export default function StudentDirectoryTab({
                               <td className="py-3 px-4 text-right relative">
                                 <button
                                   type="button"
+                                  id={`admin-student-actions-${std.id}`} aria-label={`Actions for ${std.name}`}
                                   onClick={() => setActiveMenuStudentId(activeMenuStudentId === std.id ? null : std.id)}
                                   className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 cursor-pointer"
                                 >
@@ -1053,9 +1051,7 @@ export default function StudentDirectoryTab({
                                         type="button"
                                         onClick={() => {
                                           setSelectedStudent(std);
-                                          setPromoteClass(std.class);
-                                          setPromoteSection(std.section);
-                                          setShowPromoteModal(true);
+                                          setActiveTab("sessions");
                                           setActiveMenuStudentId(null);
                                         }}
                                         className="w-full px-4 py-2 hover:bg-indigo-50/50 text-[11px] font-bold text-slate-700 hover:text-indigo-700 flex items-center gap-1.5 cursor-pointer text-left"
@@ -1078,12 +1074,10 @@ export default function StudentDirectoryTab({
                                       {status !== "SUSPENDED" ? (
                                         <button
                                           type="button"
-                                          onClick={async () => {
-                                            if (confirm(`Are you sure you want to suspend ${std.name}?`)) {
-                                              await updateStudentStatus(std.id, "SUSPENDED");
-                                            }
-                                            setActiveMenuStudentId(null);
-                                          }}
+                                          onClick={() => {
+                                    setStatusRequest({ ids: std.id, name: std.name, status: "SUSPENDED" });
+                                    setActiveMenuStudentId(null);
+                                  }}
                                           className="w-full px-4 py-2 hover:bg-amber-50 text-[11px] font-bold text-amber-700 flex items-center gap-1.5 cursor-pointer text-left"
                                         >
                                           <UserMinus className="h-3.5 w-3.5" /> Suspend Student
@@ -1104,12 +1098,10 @@ export default function StudentDirectoryTab({
                                       {status !== "LEFT" && (
                                         <button
                                           type="button"
-                                          onClick={async () => {
-                                            if (confirm(`Mark ${std.name} as LEFT (TC Issued)? This student will not generate future billing charges.`)) {
-                                              await updateStudentStatus(std.id, "LEFT");
-                                            }
-                                            setActiveMenuStudentId(null);
-                                          }}
+                                          onClick={() => {
+                                    setStatusRequest({ ids: std.id, name: std.name, status: "LEFT" });
+                                    setActiveMenuStudentId(null);
+                                  }}
                                           className="w-full px-4 py-2 hover:bg-rose-50 text-[11px] font-bold text-rose-700 flex items-center gap-1.5 cursor-pointer text-left"
                                         >
                                           <Trash2 className="h-3.5 w-3.5" /> Mark as LEFT (TC)
@@ -1357,6 +1349,23 @@ export default function StudentDirectoryTab({
         </div>
       )}
 
+      {statusRequest && (
+        <StudentStatusConfirmation
+          request={statusRequest}
+          onConfirm={async () => {
+            const result = await updateStudentStatus(statusRequest.ids, statusRequest.status);
+            return result;
+          }}
+          onClose={() => {
+            const targetId = typeof statusRequest.ids === "string" ? statusRequest.ids : null;
+            setStatusRequest(null);
+            if (targetId) requestAnimationFrame(() => {
+              (document.getElementById(`admin-student-actions-${targetId}`) ?? document.getElementById("admin-directory-class"))?.focus();
+            });
+          }}
+        />
+      )}
+
       {/* Edit Student Modal */}
       <EditStudentModal
         isOpen={showEditModal}
@@ -1367,174 +1376,7 @@ export default function StudentDirectoryTab({
         }}
       />
 
-      {/* Promote Student Modal */}
-      {showPromoteModal && selectedStudent && (
-        <div className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200/60 rounded-3xl max-w-sm w-full p-6 sm:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.015)] relative space-y-5 text-left animate-scale-in">
-            <div className="flex justify-between items-center border-b border-slate-200/60 pb-4">
-              <div>
-                <h3 className="text-xs font-black uppercase text-indigo-700 bg-indigo-50 border border-indigo-100/50 px-3 py-1 rounded-xl inline-flex items-center gap-1.5 tracking-wider">
-                  <ArrowUpRight className="h-3.5 w-3.5" /> Promote Student
-                </h3>
-                <p className="text-[10px] text-slate-400 font-semibold mt-1.5">Move pupil to next Academic Class/Section</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowPromoteModal(false);
-                  setSelectedStudent(null);
-                }}
-                className="h-8 w-8 bg-slate-50 border border-slate-200/60 text-slate-500 rounded-xl hover:bg-slate-100 hover:text-slate-700 transition-all flex items-center justify-center shrink-0 shadow-2xs active:scale-90 cursor-pointer"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
 
-            <div className="p-3 bg-slate-50 border border-slate-150 rounded-xl space-y-1">
-              <p className="text-xs font-extrabold text-slate-800">Student: {selectedStudent.name}</p>
-              <p className="text-[10px] text-slate-500 font-bold">Current Class: Class {selectedStudent.class}-{selectedStudent.section}</p>
-            </div>
-
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                await promoteStudent(selectedStudent.id, promoteClass, promoteSection);
-                setShowPromoteModal(false);
-                setSelectedStudent(null);
-              }}
-              className="space-y-4"
-            >
-              <div>
-                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Target Class Name</label>
-                <select
-                  required
-                  value={promoteClass}
-                  onChange={(e) => setPromoteClass(e.target.value)}
-                  className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 cursor-pointer"
-                >
-                  <option value="">Select Class</option>
-                  {["KG", "LKG", "UKG", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"].map((clsName) => (
-                    <option key={clsName} value={clsName}>Class {clsName}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Target Section</label>
-                <select
-                  required
-                  value={promoteSection}
-                  onChange={(e) => setPromoteSection(e.target.value)}
-                  className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 cursor-pointer"
-                >
-                  <option value="A">Section A</option>
-                  <option value="B">Section B</option>
-                  <option value="C">Section C</option>
-                </select>
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowPromoteModal(false);
-                    setSelectedStudent(null);
-                  }}
-                  className="flex-1 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl text-xs font-bold transition-all cursor-pointer text-center"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-500/10 cursor-pointer text-center"
-                >
-                  Promote Student
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Bulk Promote Students Modal */}
-      {showBulkPromoteModal && selectedStudentIds.length > 0 && (
-        <div className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200/60 rounded-3xl max-w-sm w-full p-6 sm:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.015)] relative space-y-5 text-left animate-scale-in">
-            <div className="flex justify-between items-start border-b border-slate-100 pb-3">
-              <div>
-                <h4 className="font-extrabold text-slate-800 text-base">Bulk Promote Class</h4>
-                <p className="text-[10px] text-slate-400 font-bold mt-0.5">Promote selected {selectedStudentIds.length} pupils in bulk</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowBulkPromoteModal(false);
-                }}
-                className="text-slate-400 hover:text-slate-600 text-xs font-bold py-1 px-2 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer"
-              >
-                Cancel
-              </button>
-            </div>
-
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                await promoteStudent(selectedStudentIds, promoteClass, promoteSection);
-                setShowBulkPromoteModal(false);
-                setSelectedStudentIds([]);
-              }}
-              className="space-y-4"
-            >
-              <div>
-                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Target Class Name</label>
-                <select
-                  required
-                  value={promoteClass}
-                  onChange={(e) => setPromoteClass(e.target.value)}
-                  className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 cursor-pointer"
-                >
-                  <option value="">Select Class</option>
-                  {["KG", "LKG", "UKG", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"].map((clsName) => (
-                    <option key={clsName} value={clsName}>Class {clsName}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Target Section</label>
-                <select
-                  required
-                  value={promoteSection}
-                  onChange={(e) => setPromoteSection(e.target.value)}
-                  className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-lg outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 cursor-pointer"
-                >
-                  <option value="A">Section A</option>
-                  <option value="B">Section B</option>
-                  <option value="C">Section C</option>
-                </select>
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowBulkPromoteModal(false);
-                  }}
-                  className="flex-1 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl text-xs font-bold transition-all cursor-pointer text-center"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-500/10 cursor-pointer text-center"
-                >
-                  Promote Students
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

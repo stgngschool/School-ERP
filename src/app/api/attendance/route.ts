@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
+import { getCachedActiveSession } from "@/lib/cache/sessionCache";
+import { requireCurrentAttendanceDate, SessionError } from "@/lib/sessionPolicy";
 import db from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
-import { AttendanceStatus } from "@prisma/client";
+import { AttendanceStatus, type Prisma } from "@prisma/client";
 import { getAcademicYear } from "@/lib/generateYearlyCharges";
 import { getSafeErrorMessage } from "@/lib/validation";
 import { BoundedCache } from "@/lib/cache/BoundedCache";
+import { parseAttendanceClassNames, withAttendanceClassFilter } from "@/lib/attendanceReadScope";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +20,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
     }
 
-    const cacheKey = `${authUser.role}_${authUser.userId}_${request.url}`;
+    const currentAcademicSession = await getCachedActiveSession();
+    const cacheKey = `${currentAcademicSession?.id || "none"}_${authUser.role}_${authUser.userId}_${request.url}`;
     const cachedData = serverAttendanceCache.get(cacheKey);
     if (cachedData) {
       return NextResponse.json(cachedData.formatted, {
@@ -36,17 +40,27 @@ export async function GET(request: Request) {
     const endDateParam = searchParams.get("endDate");
     const studentIdParam = searchParams.get("studentId");
     const sessionIdParam = searchParams.get("sessionId");
+    const classNameParam = searchParams.get("className");
+    const sectionParam = searchParams.get("section");
+    let classNamesParam: string[] | undefined;
+    try {
+      classNamesParam = parseAttendanceClassNames(searchParams.get("classNames"));
+    } catch {
+      return NextResponse.json({ error: "Invalid classNames. Supply a JSON array of 1 to 50 class names, each 1 to 100 characters." }, { status: 400 });
+    }
+    const paginated = searchParams.get("paginated") === "true";
 
     const page = Math.max(1, parseInt(pageParam || "1", 10) || 1);
     const limit = Math.min(2000, Math.max(1, parseInt(limitParam || "1000", 10) || 1000));
     const skip = (page - 1) * limit;
+    const emptyAttendanceResponse = () => NextResponse.json(paginated ? { records: [], totalCount: 0, page, limit } : []);
 
     const acYear = getAcademicYear();
     const startYear = parseInt(acYear.split("-")[0]);
     // ── AT-03: Academic year session begins April 1st (04-01), not March 1st (03-01)
     const sessionStartDate = new Date(`${startYear}-04-01T00:00:00.000Z`);
 
-    let dateFilter: any = {};
+    const dateFilter: Prisma.DateTimeFilter = {};
     if (startDateParam) {
       dateFilter.gte = new Date(startDateParam);
     } else {
@@ -56,7 +70,7 @@ export async function GET(request: Request) {
       dateFilter.lte = new Date(endDateParam);
     }
 
-    let whereClause: any = {
+    let whereClause: Prisma.AttendanceWhereInput = {
       date: dateFilter
     };
 
@@ -71,10 +85,10 @@ export async function GET(request: Request) {
     if (authUser.role === "PARENT") {
       const parentProfile = await db.parentProfile.findUnique({
         where: { userId: authUser.userId },
-        include: { students: { select: { id: true } } }
+        select: { students: { select: { id: true } } }
       });
       if (!parentProfile) {
-        return NextResponse.json([]);
+        return emptyAttendanceResponse();
       }
       const studentIds = parentProfile.students.map((s) => s.id);
       if (studentIdParam) {
@@ -94,11 +108,11 @@ export async function GET(request: Request) {
     if (authUser.role === "TEACHER") {
       const teacherProfile = await db.teacherProfile.findUnique({
         where: { userId: authUser.userId },
-        include: { classes: { select: { id: true } } },
+        select: { classes: { select: { id: true } } },
       });
       const classIds = teacherProfile?.classes.map((c) => c.id) || [];
       if (classIds.length === 0) {
-        return NextResponse.json([]);
+        return emptyAttendanceResponse();
       }
       const classStudents = await db.student.findMany({
         where: { classId: { in: classIds } },
@@ -118,6 +132,9 @@ export async function GET(request: Request) {
       }
     }
 
+    // Requested class/date scopes intersect all authorization restrictions above.
+    whereClause = withAttendanceClassFilter(whereClause, classNameParam, sectionParam, classNamesParam);
+
     // ── AT-02: Bounded pagination retrieving total count and paged logs without hard truncation
     const [totalCount, logs] = await Promise.all([
       db.attendance.count({ where: whereClause }),
@@ -125,7 +142,7 @@ export async function GET(request: Request) {
         where: whereClause,
         skip,
         take: limit,
-        orderBy: { date: "desc" },
+        orderBy: [{ date: "desc" }, { id: "asc" }],
         select: {
           id: true,
           studentId: true,
@@ -157,9 +174,11 @@ export async function GET(request: Request) {
       "Cache-Control": "private, max-age=30, stale-while-revalidate=120",
     };
 
-    serverAttendanceCache.set(cacheKey, { formatted, headers: resHeaders });
+    // Opt-in metadata lets clients fetch every page. Legacy callers retain arrays.
+    const payload = paginated ? { records: formatted, totalCount, page, limit } : formatted;
+    serverAttendanceCache.set(cacheKey, { formatted: payload, headers: resHeaders });
 
-    return NextResponse.json(formatted, {
+    return NextResponse.json(payload, {
       headers: resHeaders,
     });
   } catch (error) {
@@ -178,6 +197,8 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const teacherUserId = authUser.userId;
+    const writeSession = await getCachedActiveSession();
+    for (const row of (Array.isArray(body.records) ? body.records : [body])) requireCurrentAttendanceDate(writeSession, row.date);
 
     // ── AT-01: Enforce class-level authorization for teachers ─────────────────
     let allowedClassIds: Set<string> | null = null;
@@ -278,6 +299,7 @@ export async function POST(request: Request) {
               date: dateObj,
               status: rec.status as AttendanceStatus,
               markedBy: teacherUserId,
+              sessionId: writeSession!.id,
             },
           });
         }
@@ -354,6 +376,7 @@ export async function POST(request: Request) {
         date: dateObj,
         status: status as AttendanceStatus,
         markedBy: teacherUserId,
+        sessionId: writeSession!.id,
       },
     });
 
@@ -369,6 +392,7 @@ export async function POST(request: Request) {
       },
     });
   } catch (error: any) {
+    if (error instanceof SessionError) return NextResponse.json({ error: error.message }, { status: error.status });
     // ── AT-04: Return 409 for optimistic concurrency conflicts so the frontend
     // can distinguish a stale-write rejection from a generic server error.
     if (error?.message === "ATTENDANCE_CONFLICT") {

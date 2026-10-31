@@ -1,8 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
-import { AuthProvider } from "@/context/AuthContext";
-import PWAInitializer from "@/components/PWAInitializer";
+import AppProviders from "@/components/AppProviders";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   variable: "--font-plus-jakarta",
@@ -94,8 +93,7 @@ export default function RootLayout({
 
       </head>
       <body className="min-h-full flex flex-col bg-slate-50 text-slate-900">
-        <PWAInitializer />
-        <AuthProvider>{children}</AuthProvider>
+        <AppProviders>{children}</AppProviders>
       </body>
     </html>
   );

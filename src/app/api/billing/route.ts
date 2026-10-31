@@ -1,3 +1,4 @@
+import { allocationScope } from "@/lib/readPolicy";
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import db from "@/lib/db";
@@ -11,91 +12,15 @@ import { numberToIndianWords } from "@/lib/currency";
 import { validatePaisaAmount, getSafeErrorMessage } from "@/lib/validation";
 import { BoundedCache } from "@/lib/cache/BoundedCache";
 import { getISTDateString } from "@/lib/dateUtils";
+import { getChargeDueDate, calculateLateFee } from "@/lib/lateFees";
+import { lockSessionWorkflow } from "@/lib/sessionWorkflow";
+import { payableSessions } from "@/lib/billingSessionScope";
+import { getCachedActiveSession } from "@/lib/cache/sessionCache";
 import { validateCsrfOrigin } from "@/lib/security";
 
 import { serverBillingCache, clearServerBillingCache } from "@/lib/cache/billingCache";
 import { getCachedSchoolConfig } from "@/lib/cache/schoolConfigCache";
 import { appendReceiptToSheet } from "@/lib/google";
-
-function getChargeDueDate(chargeName: string, fallbackTime: number): string {
-  const nameLower = chargeName.toLowerCase();
-
-  // 1. Check if charge description explicitly has a 4-digit academic year pattern like "2024-2025" or "2025-26"
-  let sy: number | null = null;
-  let ey: number | null = null;
-
-  const yearRangeMatch = chargeName.match(/(\d{4})\s*-\s*(\d{2,4})/);
-  if (yearRangeMatch) {
-    const rawSy = parseInt(yearRangeMatch[1], 10);
-    let rawEy = parseInt(yearRangeMatch[2], 10);
-    if (rawEy < 100) rawEy = Math.floor(rawSy / 100) * 100 + rawEy;
-    if (rawSy >= 2000 && rawSy <= 2100) {
-      sy = rawSy;
-      ey = rawEy;
-    }
-  }
-
-  // 2. If not found in text, derive from fallbackTime (createdAt timestamp)
-  if (!sy || !ey) {
-    if (fallbackTime && Number.isFinite(fallbackTime) && fallbackTime > 0) {
-      const d = new Date(fallbackTime);
-      const m = d.getMonth(); // 0 = Jan, 3 = Apr
-      sy = m >= 3 ? d.getFullYear() : d.getFullYear() - 1;
-      ey = sy + 1;
-    }
-  }
-
-  // 3. Fallback to active academic year if fallbackTime was missing/invalid
-  if (!sy || !ey) {
-    const acYear = getAcademicYear();
-    const [syStr, eyStr] = acYear.split("-");
-    sy = parseInt(syStr, 10);
-    ey = parseInt(eyStr, 10);
-  }
-
-  // Months April–December fall in the START year; Jan–March in the END year.
-  if (nameLower.includes("april"))     return `${sy}-04-10`;
-  if (nameLower.includes("may"))       return `${sy}-05-10`;
-  if (nameLower.includes("june"))      return `${sy}-06-10`;
-  if (nameLower.includes("july")) {
-    if (nameLower.includes("unit 1") || nameLower.includes("exam")) return `${sy}-07-15`;
-    return `${sy}-07-10`;
-  }
-  if (nameLower.includes("august"))    return `${sy}-08-10`;
-  if (nameLower.includes("september")) return `${sy}-09-10`;
-  if (nameLower.includes("october")) {
-    if (nameLower.includes("half yearly") || nameLower.includes("exam")) return `${sy}-10-15`;
-    return `${sy}-10-10`;
-  }
-  if (nameLower.includes("november"))  return `${sy}-11-10`;
-  if (nameLower.includes("december")) {
-    if (nameLower.includes("unit 2") || nameLower.includes("exam")) return `${sy}-12-15`;
-    return `${sy}-12-10`;
-  }
-  if (nameLower.includes("january"))   return `${ey}-01-10`;
-  if (nameLower.includes("february"))  return `${ey}-02-10`;
-  if (nameLower.includes("march")) {
-    if (nameLower.includes("yearly") || nameLower.includes("exam")) return `${ey}-03-15`;
-    return `${ey}-03-10`;
-  }
-  if (
-    nameLower.includes("m/s") ||
-    nameLower.includes("annual") ||
-    nameLower.includes("admission") ||
-    nameLower.includes("previous session")
-  ) {
-    return `${sy}-04-10`;
-  }
-
-  // Specific Exam Fallbacks if month name was not explicitly in the description
-  if (nameLower.includes("unit 1") || nameLower.includes("unit-1") || nameLower.includes("unit1")) return `${sy}-07-15`;
-  if (nameLower.includes("half yearly") || nameLower.includes("half-yearly")) return `${sy}-10-15`;
-  if (nameLower.includes("unit 2") || nameLower.includes("unit-2") || nameLower.includes("unit2")) return `${sy}-12-15`;
-  if (nameLower.includes("yearly exam") || nameLower.includes("annual exam")) return `${ey}-03-15`;
-
-  return getISTDateString(fallbackTime);
-}
-
 
 export async function GET(request: Request) {
   try {
@@ -126,7 +51,8 @@ export async function GET(request: Request) {
       ? (studentIdParam || receiptIdParam || receiptNoParam ? `STAFF_${studentIdParam || ""}_${receiptIdParam || ""}_${receiptNoParam || ""}` : "STAFF_GLOBAL")
       : `${authUser.role}_${authUser.userId}`;
 
-    const cacheKey = `BILL_${cacheScope}_all:${allParam}_p:${page}_l:${limit}_q:${searchParam}`;
+    const activeSession = await getCachedActiveSession();
+    const cacheKey = `BILL_${activeSession?.id || "none"}_${cacheScope}_student:${studentIdParam || ""}_receipt:${receiptIdParam || ""}_no:${receiptNoParam || ""}_all:${allParam}_p:${page}_l:${limit}_q:${searchParam}`;
     const cachedData = serverBillingCache.get(cacheKey);
     if (cachedData) {
       return NextResponse.json(cachedData, {
@@ -349,26 +275,17 @@ export async function GET(request: Request) {
       }
     }
 
-    const acYear = getAcademicYear();
+    const acYear = activeSession?.name || getAcademicYear();
     const startYear = parseInt(acYear.split("-")[0]);
     // Fetch charges created from March 1st of the current academic year to cover early assignments
     const sessionStartDate = new Date(`${startYear}-03-01T00:00:00.000Z`);
-    if (!studentIdParam) {
-      chargesWhere.createdAt = { gte: sessionStartDate };
-      discountsWhere.createdAt = { gte: sessionStartDate };
+    if (activeSession) {
+      Object.assign(chargesWhere, payableSessions(new Date(activeSession.startDate)));
+      Object.assign(discountsWhere, payableSessions(new Date(activeSession.startDate)));
     }
+    discountsWhere.AND = [{ OR: [{ referenceId: null }, { receipt: { status: "ACTIVE" } }] }];
 
     // Execute optimized queries concurrently with minimal join overhead
-    // ── B-05: Scope paidGroups aggregation to only the authorized students and non-reversed receipts
-    let receiptItemGroupWhere: any = {
-      receipt: { status: { not: "REVERSED" } },
-    };
-    if (scopedStudentIds && scopedStudentIds.length > 0) {
-      receiptItemGroupWhere.ledgerEntry = {
-        studentId: { in: scopedStudentIds },
-      };
-    }
-
     // SCH-01: school config is now fetched from DB in the same parallel batch
     const [
       ledger,
@@ -376,7 +293,6 @@ export async function GET(request: Request) {
       totalReceiptsCount,
       charges,
       discounts,
-      paidGroups,
       schoolConfigRow,
       receiptsAggregate,
       receiptsByMethod,
@@ -474,6 +390,8 @@ export async function GET(request: Request) {
           description: true,
           amount: true,
           createdAt: true,
+          sessionId: true,
+          session: { select: { name: true } },
         },
       }),
       // ── Bounded discounts query: covers full school academic year without truncation
@@ -489,12 +407,6 @@ export async function GET(request: Request) {
           description: true,
           amount: true,
         },
-      }),
-      // ── B-05: Scoped paidGroups grouping
-      db.receiptItem.groupBy({
-        by: ["ledgerEntryId"],
-        where: receiptItemGroupWhere,
-        _sum: { amount: true },
       }),
       // SCH-01: Read school config from in-memory cache instead of querying DB every time
       getCachedSchoolConfig(),
@@ -516,6 +428,14 @@ export async function GET(request: Request) {
         _count: { id: true },
       }),
     ]);
+
+    // Only returned charges consume allocation totals. Include every active receipt
+    // paying those charges (including family receipts), not just the receipt page.
+    const paidGroups = charges.length ? await db.receiptItem.groupBy({
+      by: ["ledgerEntryId"],
+      where: allocationScope(charges.map(c => c.id)),
+      _sum: { amount: true },
+    }) : [];
 
     const formattedLedger = ledger.map((l) => ({
       id: l.id,
@@ -769,14 +689,14 @@ export async function GET(request: Request) {
     const now = Date.now();
     const graceDays = schoolConfig.lateFeeGraceDays ?? 10;
     const isLateFeeEnabled = !!schoolConfig.enableLateFee;
-    const isDailyFine = schoolConfig.lateFeeType === "DAILY";
+
     // ── B-06: Both FLAT and DAILY modes read from the same lateFeeAmount field.
     // Previously dailyFineUnit used `?? 5` while baseFineAmount used `?? 50`,
     // creating an inconsistency from a different (wrong) magic number.
     // The fallback for both is now `?? 50`.
     const lateFeeAmountRupees = schoolConfig.lateFeeAmount ?? 50;
-    const baseFineAmount = lateFeeAmountRupees * 100;  // FLAT fine in paise
-    const dailyFineUnit  = lateFeeAmountRupees * 100;  // Per-day fine in paise
+
+
 
 
     const formattedDues = charges.map((c) => {
@@ -788,19 +708,10 @@ export async function GET(request: Request) {
       const outstanding = c.amount - totalDiscount - totalPaid;
       const cTime = c.createdAt.getTime();
       const dueTime = cTime + 15 * 24 * 60 * 60 * 1000;
-      const graceTime = dueTime + graceDays * 24 * 60 * 60 * 1000;
 
-      let fineAmount = 0;
-      if (isLateFeeEnabled && now > graceTime && outstanding > 0) {
-        if (isDailyFine) {
-          const daysOver = Math.floor((now - graceTime) / (24 * 60 * 60 * 1000)) + 1;
-          fineAmount = daysOver * dailyFineUnit;
-        } else {
-          fineAmount = baseFineAmount;
-        }
-      }
 
-      const chargeDueDate = getChargeDueDate(chargeName, dueTime);
+      const chargeDueDate = getChargeDueDate(/\d{4}-\d{4}/.test(chargeName) ? chargeName : `${chargeName} ${c.session?.name || acYear}`, dueTime);
+      const fineAmount = calculateLateFee({ enabled: isLateFeeEnabled, type: schoolConfig.lateFeeType, amountRupees: lateFeeAmountRupees, graceDays, dueDate: chargeDueDate, outstanding, now });
 
       return {
         id: c.id,
@@ -811,8 +722,8 @@ export async function GET(request: Request) {
         totalPaid: totalPaid,
         totalDiscount: totalDiscount,
         dueDate: chargeDueDate,
-        sessionName: acYear,
-        isCurrentSession: c.createdAt >= sessionStartDate,
+        sessionName: /previous session/i.test(chargeName) ? "Previous session" : (c.session?.name || acYear),
+        isCurrentSession: !/previous session/i.test(chargeName) && (c.sessionId ? c.sessionId === activeSession?.id : c.createdAt >= sessionStartDate),
         status: (outstanding <= 0 ? "PAID" : "UNPAID") as "PAID" | "UNPAID",
         fine: fineAmount,
       };
@@ -980,6 +891,7 @@ export async function POST(request: Request) {
       }
 
       const reversedReceipt = await db.$transaction(async (tx) => {
+      await lockSessionWorkflow(tx);
         // 1. Mark receipt as REVERSED
         // ── M-11 fix: Gracefully handle legacy non-JSON plain text remarks
         let remarksObj: Record<string, any> = {};
@@ -1013,6 +925,7 @@ export async function POST(request: Request) {
               id: randomUUID(),
               studentId: entry.studentId,
               feeHeadId: entry.feeHeadId,
+              sessionId: entry.sessionId,
               entryType: EntryType.REVERSAL,
               amount: Math.abs(entry.amount),
               referenceId: targetReceipt.id,
@@ -1197,6 +1110,7 @@ export async function POST(request: Request) {
     }
 
     const { receipt: result, snapshot, validatedItems, relatedStudents } = await db.$transaction(async (tx) => {
+      await lockSessionWorkflow(tx);
       const receiptNo = await getNextReceiptNumber(tx);
       let actualTotalPayPaisa = 0;
 
@@ -1552,6 +1466,7 @@ export async function POST(request: Request) {
             id: fineEntryId,
             studentId: itemStudentId,
             feeHeadId: charge.feeHeadId,
+            sessionId: charge.sessionId ?? null,
             entryType: EntryType.FINE,
             amount: fineAmountPaisa,
             description: `Late Fee Fine: ${chargeName}`,
@@ -1570,6 +1485,7 @@ export async function POST(request: Request) {
             id: randomUUID(),
             studentId: itemStudentId,
             feeHeadId: charge.feeHeadId,
+            sessionId: charge.sessionId ?? null,
             entryType: EntryType.PAYMENT,
             amount: -fineAmountPaisa,
             referenceId: receipt.id,
@@ -1584,6 +1500,7 @@ export async function POST(request: Request) {
             id: randomUUID(),
             studentId: itemStudentId,
             feeHeadId: charge.feeHeadId,
+            sessionId: charge.sessionId ?? null,
             entryType: EntryType.DISCOUNT,
             amount: -discountAmountPaisa,
             referenceId: receipt.id,
@@ -1605,6 +1522,7 @@ export async function POST(request: Request) {
             id: randomUUID(),
             studentId: itemStudentId,
             feeHeadId: charge.feeHeadId,
+            sessionId: charge.sessionId ?? null,
             entryType: EntryType.PAYMENT,
             amount: -payAmountPaisa,
             referenceId: receipt.id,

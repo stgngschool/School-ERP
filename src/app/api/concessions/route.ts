@@ -1,3 +1,4 @@
+import { clearServerStudentsCache } from "@/lib/cache/studentsCache";
 import { NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -55,6 +56,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Forbidden. Admin or Accountant access required." }, { status: 403 });
   }
 
+  let canInvalidateRoster = false;
   try {
     const { name, percentage, feeHeadName } = await request.json();
     if (!name || percentage === undefined || !feeHeadName) {
@@ -78,6 +80,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Fee head name cannot be empty." }, { status: 400 });
     }
 
+    canInvalidateRoster = true;
     const concession = await db.concession.upsert({
       where: { name: nameStr },
       update: { percentage: pctVal, feeHeadName: headNameStr },
@@ -101,6 +104,9 @@ export async function POST(request: Request) {
     console.error("Create concession error:", error);
     const safeError = getSafeErrorMessage(error, "Failed to save concession.");
     return NextResponse.json({ error: safeError }, { status: 500 });
+  } finally {
+    // Clear after completion, including a partially committed bulk failure.
+    if (canInvalidateRoster) clearServerStudentsCache();
   }
 }
 
@@ -111,6 +117,7 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Forbidden. Admin or Accountant access required." }, { status: 403 });
   }
 
+  let canInvalidateRoster = false;
   try {
     const { id } = await request.json();
     if (!id) {
@@ -118,6 +125,7 @@ export async function DELETE(request: Request) {
     }
 
     try {
+    canInvalidateRoster = true;
       await db.concession.delete({
         where: { id },
       });
@@ -130,6 +138,9 @@ export async function DELETE(request: Request) {
   } catch (error) {
     console.error("Delete concession error:", error);
     return NextResponse.json({ error: "Failed to delete concession" }, { status: 500 });
+  } finally {
+    // Clear after completion, including a partially committed bulk failure.
+    if (canInvalidateRoster) clearServerStudentsCache();
   }
 }
 

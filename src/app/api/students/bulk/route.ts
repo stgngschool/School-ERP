@@ -1,8 +1,10 @@
+import { clearServerStudentsCache } from "@/lib/cache/studentsCache";
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { generateYearlyChargesBulk, getAcademicYear } from "@/lib/generateYearlyCharges";
+import { lockSessionWorkflow } from "@/lib/sessionWorkflow";
 import { getAuthUser } from "@/lib/auth";
 import { findMatchingParentProfile } from "@/lib/family";
 import { parseCanonicalDOB } from "@/lib/dateUtils";
@@ -23,6 +25,7 @@ function getMaxSuffixNumber(codes: (string | null | undefined)[]): number {
 }
 
 export async function POST(request: Request) {
+  let canInvalidateRoster = false;
   try {
     const authUser = await getAuthUser(request);
     if (!authUser || (authUser.role !== "ADMIN" && authUser.role !== "ACCOUNTANT")) {
@@ -35,10 +38,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No students data provided." }, { status: 400 });
     }
 
+    canInvalidateRoster = true;
     const systemUser = await db.user.findFirst({
       where: { OR: [{ role: "ADMIN" }, { role: "ACCOUNTANT" }] },
     });
 
+    const activeSession = await db.academicSession.findFirst({ where: { isCurrent: true } });
+    if (!activeSession) return NextResponse.json({ error: "Create an active academic session before importing students." }, { status: 409 });
     const year = new Date().getFullYear();
 
     // 1. Pre-calculate starting admission number max counter
@@ -308,15 +314,23 @@ export async function POST(request: Request) {
 
     // 8. Bulk insert student records instantly
     if (studentsToCreate.length > 0) {
-      await db.student.createMany({
-        data: studentsToCreate,
+      await db.$transaction(async tx => {
+        await lockSessionWorkflow(tx);
+        const current = await tx.academicSession.findFirst({ where: { isCurrent: true } });
+        if (current?.id !== activeSession.id) throw new Error("Current session changed during import. No students were inserted; refresh and retry.");
+        await tx.student.createMany({ data: studentsToCreate });
+        await tx.studentSession.createMany({ data: studentsToCreate.map(s => ({ studentId: s.id, sessionId: activeSession.id, classId: s.classId, rollNumber: s.rollNumber })) });
       });
     }
 
     // 9. Generate full-year billing charges in bulk for imported students
     let billingResult = null;
     if (systemUser && backfillMap.length > 0) {
-      billingResult = await generateYearlyChargesBulk(backfillMap, systemUser.id, getAcademicYear());
+      billingResult = { generated: 0, skipped: 0 };
+      for (let offset = 0; offset < backfillMap.length; offset += 100) {
+        const result = await generateYearlyChargesBulk(backfillMap.slice(offset, offset + 100), systemUser.id, activeSession.name);
+        billingResult.generated += result.generated; billingResult.skipped += result.skipped;
+      }
     }
 
     return NextResponse.json({
@@ -329,5 +343,8 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error("Bulk import error detailed:", error);
     return NextResponse.json({ error: "Failed to import students. Please check your data format and try again." }, { status: 500 });
+  } finally {
+    // Clear after completion, including a partially committed bulk failure.
+    if (canInvalidateRoster) clearServerStudentsCache();
   }
 }

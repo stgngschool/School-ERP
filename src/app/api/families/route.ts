@@ -1,3 +1,4 @@
+import { clearServerStudentsCache } from "@/lib/cache/studentsCache";
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import db from "@/lib/db";
@@ -223,6 +224,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  let canInvalidateRoster = false;
   try {
     if (!validateCsrfOrigin(request)) {
       return NextResponse.json({ error: "Invalid request origin (CSRF verification failed)." }, { status: 403 });
@@ -233,6 +235,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
     }
 
+    canInvalidateRoster = true;
     serverFamiliesCache.clear();
 
     const body = await request.json();
@@ -531,5 +534,8 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error("Family API POST error:", error);
     return NextResponse.json({ error: error.message || "Failed to process family operation." }, { status: 500 });
+  } finally {
+    // Clear after completion, including a partially committed bulk failure.
+    if (canInvalidateRoster) clearServerStudentsCache();
   }
 }

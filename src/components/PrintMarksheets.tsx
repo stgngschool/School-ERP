@@ -22,25 +22,27 @@ import {
 } from "lucide-react";
 
 export default function PrintMarksheets() {
-  const { students, schoolInfo, updateStudentClaimMarksheet, showToast } = useAuth();
+  const { students: currentStudents, classes, schoolInfo, updateStudentClaimMarksheet, showToast } = useAuth();
+  const [sessionRoster, setSessionRoster] = useState<{ session: string; classKey: string; students: typeof currentStudents } | null>(null);
 
   const availableClasses = useMemo(() => {
     const classSet = new Set<string>();
-    if (students && students.length > 0) {
-      students.forEach((s) => {
+    classes.forEach(c => { const key = getCleanClassKey(c.name, c.section); if (key) classSet.add(key); });
+    if (currentStudents && currentStudents.length > 0) {
+      currentStudents.forEach((s) => {
         const key = getCleanClassKey(s.class, s.section);
         if (key) classSet.add(key);
       });
     }
     return sortClasses(Array.from(classSet));
-  }, [students]);
+  }, [currentStudents, classes]);
 
   const availableExams = schoolInfo.exams && schoolInfo.exams.length > 0
     ? schoolInfo.exams
     : ["Unit-1", "Half Yearly", "Unit-2", "Annual"];
 
   const [sessions, setSessions] = useState<{ id: string; name: string; isCurrent: boolean }[]>([]);
-  const [selectedSession, setSelectedSession] = useState<string>("2026-2027");
+  const [selectedSession, setSelectedSession] = useState<string>("");
   const [issueDateIso, setIssueDateIso] = useState<string>(() => {
     const d = new Date();
     const year = d.getFullYear();
@@ -63,6 +65,30 @@ export default function PrintMarksheets() {
   }, []);
 
   const [selectedClass, setSelectedClass] = useState(availableClasses[0] || "");
+  const students = sessionRoster?.session === selectedSession && sessionRoster?.classKey === selectedClass ? sessionRoster.students : [];
+  useEffect(() => {
+    const session = sessions.find(s => s.name === selectedSession);
+    if (!session || !selectedClass) return;
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const name = normalizeClassName(selectedClass);
+        const section = normalizeSectionName(undefined, selectedClass);
+        let cursor: string | undefined;
+        const all: typeof currentStudents = [];
+        do {
+          const query = new URLSearchParams({ sessionId: session.id, className: name, section, ...(cursor ? { cursor } : {}) });
+          const res = await fetch(`/api/sessions/roster?${query}`, { signal: controller.signal, cache: "no-store" });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Unable to load session roster.");
+          all.push(...data.students); cursor = data.nextCursor || undefined;
+        } while (cursor);
+        if (!controller.signal.aborted) setSessionRoster({ session: selectedSession, classKey: selectedClass, students: all });
+      } catch (error) { if (!controller.signal.aborted) showToast("error", "Session roster unavailable", (error as Error).message); }
+    })();
+    return () => controller.abort();
+  }, [selectedClass, selectedSession, sessions]);
+
   const [selectedReportCardStudentId, setSelectedReportCardStudentId] = useState("");
   const [selectedReportCardExam, setSelectedReportCardExam] = useState("All");
   const [isBulkPrintMode, setIsBulkPrintMode] = useState(false);

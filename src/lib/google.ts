@@ -3,6 +3,8 @@ import { Readable } from "stream";
 import { db as prisma } from "./db";
 import { formatCanonicalDOB, getISTDateString } from "./dateUtils";
 import { isAbsentRemark } from "./marksAbsence";
+import { runGoogleSheetSync } from "./googleSyncCoordinator";
+import { fetchDirectoryStudents, syncStudentOrder, syncStudentProfileSelect } from "./googleSyncData";
 
 // Bulletproof Google Service Account private key sanitizer
 function formatPrivateKey(rawKey: string): string {
@@ -230,26 +232,15 @@ function analyzeStudentMonthlyFees(std: any) {
 }
 
 /**
- * ── EGRESS P1: Shared student fetch for the Directory + Fee Register tabs.
- * Both tabs previously ran their OWN prisma.student.findMany, and each one pulled
- * the ENTIRE ledger (~14k rows) via the ledgerEntries include — i.e. the whole
- * ledger was transferred TWICE per sync. This single superset fetch is reused by
- * both, eliminating the duplicate pull. The shape is the richer Fee Register
- * projection; the Directory only reads entryType + amount, which are included here.
+ * Shared detailed fetch for combined Directory + Fee Register syncs.
+ * Standalone directory sync uses database totals and does not load this ledger.
  */
 async function fetchStudentsForSync() {
   return prisma.student.findMany({
-    include: {
-      class: true,
-      parentProfile: {
-        include: {
-          user: true,
-        },
-      },
-      concession: true,
+    select: {
+      ...syncStudentProfileSelect,
       ledgerEntries: {
         select: {
-          id: true,
           entryType: true,
           amount: true,
           description: true,
@@ -261,11 +252,7 @@ async function fetchStudentsForSync() {
         },
       },
     },
-    orderBy: [
-      { class: { name: "asc" } },
-      { class: { section: "asc" } },
-      { admissionNumber: "asc" },
-    ],
+    orderBy: syncStudentOrder,
   });
 }
 
@@ -274,7 +261,7 @@ async function fetchStudentsForSync() {
  * @param spreadsheetId Google Spreadsheet ID (from URL)
  * @param preloadedStudents Optional pre-fetched students (shared with Fee Register to avoid a duplicate full-ledger pull)
  */
-export async function syncStudentDirectoryToSheet(spreadsheetId: string, preloadedStudents?: any[]) {
+async function writeStudentDirectoryToSheet(spreadsheetId: string, preloadedStudents?: any[]) {
   const auth = getGoogleAuth(["https://www.googleapis.com/auth/spreadsheets"]);
   const sheets = google.sheets({ version: "v4", auth });
 
@@ -282,7 +269,7 @@ export async function syncStudentDirectoryToSheet(spreadsheetId: string, preload
   await ensureSheetTab(sheets, spreadsheetId, "Student Directory");
 
   // 2. Reuse the shared fetch when provided; otherwise fetch standalone
-  const students = preloadedStudents ?? await fetchStudentsForSync();
+  const students = preloadedStudents ?? await fetchDirectoryStudents(prisma);
 
   const headers = [
     "Admission Number",
@@ -314,11 +301,11 @@ export async function syncStudentDirectoryToSheet(spreadsheetId: string, preload
   ];
 
   const rows = students.map((std) => {
-    let totalChargesPaisa = 0;
-    let totalPaymentsPaisa = 0;
-    let totalDiscountsPaisa = 0;
+    let totalChargesPaisa = std.financialTotals?.totalChargesPaisa ?? 0;
+    let totalPaymentsPaisa = std.financialTotals?.totalPaymentsPaisa ?? 0;
+    let totalDiscountsPaisa = std.financialTotals?.totalDiscountsPaisa ?? 0;
 
-    for (const entry of std.ledgerEntries) {
+    for (const entry of std.ledgerEntries ?? []) {
       if (entry.entryType === "CHARGE" || entry.entryType === "FINE") {
         totalChargesPaisa += entry.amount;
       } else if (entry.entryType === "PAYMENT") {
@@ -375,6 +362,7 @@ export async function syncStudentDirectoryToSheet(spreadsheetId: string, preload
     });
   } catch (err: any) {
     console.warn("[Google Sheets] Student Directory tab update notice:", err.message);
+    throw err;
   }
 
   return { success: true, count: students.length };
@@ -384,7 +372,7 @@ export async function syncStudentDirectoryToSheet(spreadsheetId: string, preload
  * Synchronize the Month-by-Month Student Fee Register to Google Sheets (Tab: "Student Fee Register")
  * @param spreadsheetId Google Spreadsheet ID (from URL)
  */
-export async function syncStudentFeeRegisterToSheet(spreadsheetId: string, preloadedStudents?: any[]) {
+async function writeStudentFeeRegisterToSheet(spreadsheetId: string, preloadedStudents?: any[]) {
   const auth = getGoogleAuth(["https://www.googleapis.com/auth/spreadsheets"]);
   const sheets = google.sheets({ version: "v4", auth });
 
@@ -498,6 +486,7 @@ export async function syncStudentFeeRegisterToSheet(spreadsheetId: string, prelo
     });
   } catch (err: any) {
     console.warn("[Google Sheets] Student Fee Register tab update notice:", err.message);
+    throw err;
   }
 
   return { success: true, count: students.length };
@@ -506,11 +495,11 @@ export async function syncStudentFeeRegisterToSheet(spreadsheetId: string, prelo
 /**
  * Convenience wrapper to synchronize both Student Directory and Student Fee Register
  */
-export async function syncStudentsToSheet(spreadsheetId: string) {
+async function writeStudentsToSheet(spreadsheetId: string) {
   // ── EGRESS P1: fetch students ONCE and share between both tabs
   const students = await fetchStudentsForSync();
-  const dirRes = await syncStudentDirectoryToSheet(spreadsheetId, students);
-  const feeRes = await syncStudentFeeRegisterToSheet(spreadsheetId, students);
+  const dirRes = await writeStudentDirectoryToSheet(spreadsheetId, students);
+  const feeRes = await writeStudentFeeRegisterToSheet(spreadsheetId, students);
   return { success: true, count: dirRes.count, feeRegisterCount: feeRes.count };
 }
 
@@ -518,7 +507,7 @@ export async function syncStudentsToSheet(spreadsheetId: string) {
  * Synchronize all financial transactions to Google Sheets with detailed breakdowns
  * @param spreadsheetId Google Spreadsheet ID
  */
-export async function syncLedgerToSheet(spreadsheetId: string) {
+async function writeLedgerToSheet(spreadsheetId: string) {
   const auth = getGoogleAuth(["https://www.googleapis.com/auth/spreadsheets"]);
   const sheets = google.sheets({ version: "v4", auth });
 
@@ -624,7 +613,7 @@ export async function syncLedgerToSheet(spreadsheetId: string) {
  * Synchronize all student examination marks to Google Sheets in detailed breakdown
  * @param spreadsheetId Google Spreadsheet ID
  */
-export async function syncMarksToSheet(spreadsheetId: string) {
+async function writeMarksToSheet(spreadsheetId: string) {
   const auth = getGoogleAuth(["https://www.googleapis.com/auth/spreadsheets"]);
   const sheets = google.sheets({ version: "v4", auth });
 
@@ -634,7 +623,6 @@ export async function syncMarksToSheet(spreadsheetId: string) {
   // 2. Fetch all marks with selective student and class details
   const marks = await prisma.mark.findMany({
     select: {
-      id: true,
       subject: true,
       examName: true,
       marksObtained: true,
@@ -643,7 +631,6 @@ export async function syncMarksToSheet(spreadsheetId: string) {
       notebook: true,
       subjectEnrichment: true,
       practical: true,
-      breakdown: true,
       remarks: true,
       updatedAt: true,
       session: {
@@ -759,6 +746,7 @@ export async function syncMarksToSheet(spreadsheetId: string) {
     });
   } catch (err: any) {
     console.warn("[Google Sheets] Examination Marks tab update notice:", err.message);
+    throw err;
   }
 
   return { success: true, count: marks.length };
@@ -768,7 +756,7 @@ export async function syncMarksToSheet(spreadsheetId: string) {
  * Synchronize all fee receipts & vouchers to Google Sheets
  * @param spreadsheetId Google Spreadsheet ID
  */
-export async function syncReceiptsToSheet(spreadsheetId: string) {
+async function writeReceiptsToSheet(spreadsheetId: string) {
   const auth = getGoogleAuth(["https://www.googleapis.com/auth/spreadsheets"]);
   const sheets = google.sheets({ version: "v4", auth });
 
@@ -778,7 +766,6 @@ export async function syncReceiptsToSheet(spreadsheetId: string) {
   // 2. Fetch all receipts with relations
   const receipts = await prisma.receipt.findMany({
     select: {
-      id: true,
       receiptNumber: true,
       manualReceiptNo: true,
       paymentMethod: true,
@@ -916,6 +903,7 @@ export async function syncReceiptsToSheet(spreadsheetId: string) {
     });
   } catch (err: any) {
     console.warn("[Google Sheets] Fee Receipts Register tab update notice:", err.message);
+    throw err;
   }
 
   return { success: true, count: receipts.length };
@@ -925,14 +913,14 @@ export async function syncReceiptsToSheet(spreadsheetId: string) {
  * Synchronize clean, actionable modules (Student Directory, Fee Register, Receipts, Marks) into Google Sheets
  * @param spreadsheetId Google Spreadsheet ID
  */
-export async function syncAllDataToSheet(spreadsheetId: string) {
+async function writeAllDataToSheet(spreadsheetId: string) {
   // ── EGRESS P1: fetch students ONCE and share between Directory + Fee Register
   // (previously each tab pulled the entire ledger independently — a doubled dump).
   const students = await fetchStudentsForSync();
-  const dirRes = await syncStudentDirectoryToSheet(spreadsheetId, students);
-  const feeRes = await syncStudentFeeRegisterToSheet(spreadsheetId, students);
-  const recRes = await syncReceiptsToSheet(spreadsheetId);
-  const mrkRes = await syncMarksToSheet(spreadsheetId);
+  const dirRes = await writeStudentDirectoryToSheet(spreadsheetId, students);
+  const feeRes = await writeStudentFeeRegisterToSheet(spreadsheetId, students);
+  const recRes = await writeReceiptsToSheet(spreadsheetId);
+  const mrkRes = await writeMarksToSheet(spreadsheetId);
 
   return {
     success: true,
@@ -941,6 +929,36 @@ export async function syncAllDataToSheet(spreadsheetId: string) {
     receiptsCount: recRes.count,
     marksCount: mrkRes.count,
   };
+}
+
+// Use the same process-local guard for cron and manual callers. Combined actions
+// call private writers so their tabs cannot be skipped by another action's cooldown.
+export function syncStudentDirectoryToSheet(spreadsheetId: string) {
+  return runGoogleSheetSync(spreadsheetId, "SYNC_DIRECTORY", () => writeStudentDirectoryToSheet(spreadsheetId));
+}
+
+export function syncStudentFeeRegisterToSheet(spreadsheetId: string) {
+  return runGoogleSheetSync(spreadsheetId, "SYNC_FEE_REGISTER", () => writeStudentFeeRegisterToSheet(spreadsheetId));
+}
+
+export function syncStudentsToSheet(spreadsheetId: string) {
+  return runGoogleSheetSync(spreadsheetId, "SYNC_STUDENTS", () => writeStudentsToSheet(spreadsheetId));
+}
+
+export function syncLedgerToSheet(spreadsheetId: string) {
+  return runGoogleSheetSync(spreadsheetId, "SYNC_LEDGER", () => writeLedgerToSheet(spreadsheetId));
+}
+
+export function syncMarksToSheet(spreadsheetId: string) {
+  return runGoogleSheetSync(spreadsheetId, "SYNC_MARKS", () => writeMarksToSheet(spreadsheetId));
+}
+
+export function syncReceiptsToSheet(spreadsheetId: string) {
+  return runGoogleSheetSync(spreadsheetId, "SYNC_RECEIPTS", () => writeReceiptsToSheet(spreadsheetId));
+}
+
+export function syncAllDataToSheet(spreadsheetId: string) {
+  return runGoogleSheetSync(spreadsheetId, "SYNC_ALL", () => writeAllDataToSheet(spreadsheetId));
 }
 
 /**

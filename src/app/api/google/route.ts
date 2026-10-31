@@ -157,6 +157,9 @@ export async function POST(request: Request) {
         }
       } catch (e) {}
       const result = await syncAllDataToSheet(cleanSheetId);
+      // The shared process-local guard also covers concurrent cron/manual calls.
+      // A cooldown hit must not advance the persisted successful-sync timestamp.
+      if (result.skipped) return NextResponse.json(result);
       const nowIso = new Date().toISOString();
       try {
         const { db } = await import("@/lib/db");
