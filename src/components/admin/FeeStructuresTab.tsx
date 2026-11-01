@@ -5,7 +5,6 @@ import {
   CreditCard,
   Clock,
   CheckCircle,
-  AlertTriangle,
   PlusCircle,
   Trash2,
   Settings,
@@ -93,7 +92,6 @@ export default function FeeStructuresTab({
   const [ledgerGenFeeHead, setLedgerGenFeeHead] = useState("ALL");
   const [ledgerGenLoading, setLedgerGenLoading] = useState(false);
   const [ledgerGenResult, setLedgerGenResult] = useState<string | null>(null);
-  const [cleanupLoading, setCleanupLoading] = useState(false);
 
   // Fee Config States
   const [newHead, setNewHead] = useState("");
@@ -386,32 +384,9 @@ export default function FeeStructuresTab({
             </div>
 
             {/* Duplicate Cleanup Button */}
-            <button
-              type="button"
-              disabled={cleanupLoading}
-              onClick={async () => {
-                setCleanupLoading(true);
-                try {
-                  const res = await fetch("/api/fee-config", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ action: "CLEANUP_DUPLICATES" }),
-                  });
-                  const json = await res.json();
-                  setLedgerGenResult(`✓ Cleaned up ${json.cleanedCount || 0} duplicate unpaid entries.`);
-                  await refreshBilling();
-                } catch (err) {
-                  setLedgerGenResult("Failed to cleanup duplicates.");
-                } finally {
-                  setCleanupLoading(false);
-                  setTimeout(() => setLedgerGenResult(null), 5000);
-                }
-              }}
-              className="py-1.5 px-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 cursor-pointer shadow-sm shrink-0 transition-all"
-            >
-              <AlertTriangle className="h-3.5 w-3.5" />
-              {cleanupLoading ? "Cleaning..." : "🧹 Clean Up Duplicates"}
-            </button>
+            <p className="text-xs text-amber-700">
+              Duplicate fee entries need manual review. Automatic financial deletion is disabled.
+            </p>
           </div>
 
           {/* DYNAMIC 2-ROW CONTROL LAYOUT */}

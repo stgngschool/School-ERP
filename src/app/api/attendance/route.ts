@@ -254,6 +254,15 @@ export async function POST(request: Request) {
       let conflicts: string[] = [];
 
       await db.$transaction(async (tx) => {
+        const checks = records.filter((rec: { expectedUpdatedAt?: string }) => rec.expectedUpdatedAt);
+        const existingRows = checks.length ? await tx.attendance.findMany({
+          where: { OR: checks.map((rec: { studentId: string; date: string | Date }) => ({
+            studentId: rec.studentId,
+            date: new Date(`${typeof rec.date === "string" ? rec.date.split("T")[0] : new Date(rec.date).toISOString().split("T")[0]}T00:00:00.000Z`),
+          })) },
+          select: { studentId: true, date: true, updatedAt: true },
+        }) : [];
+        const existingByKey = new Map(existingRows.map(row => [`${row.studentId}:${row.date.toISOString()}`, row]));
         // Phase 1: conflict detection (only for records that sent a timestamp)
         for (const rec of records) {
           if (!rec.expectedUpdatedAt) continue;
@@ -263,10 +272,7 @@ export async function POST(request: Request) {
             : new Date(rec.date).toISOString().split("T")[0];
           const dateObj = new Date(`${dateStr}T00:00:00.000Z`);
 
-          const existing = await tx.attendance.findUnique({
-            where: { studentId_date: { studentId: rec.studentId, date: dateObj } },
-            select: { updatedAt: true, studentId: true },
-          });
+          const existing = existingByKey.get(`${rec.studentId}:${dateObj.toISOString()}`);
 
           if (existing) {
             const expectedTs = new Date(rec.expectedUpdatedAt).getTime();

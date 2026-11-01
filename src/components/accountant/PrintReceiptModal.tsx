@@ -6,7 +6,7 @@ import QRCode from "qrcode";
 import { Printer, X, CheckCircle2, AlertCircle, ShieldCheck, Share2, Loader2, Sparkles, Award } from "lucide-react";
 import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
 import { formatP, numberToIndianWords } from "@/lib/currency";
-import { getGroupedReceiptItems, getReceiptStudents, formatCompactParticulars, generateReceiptSecurityToken } from "@/lib/receipts";
+import { getGroupedReceiptItems, getReceiptStudents, formatCompactParticulars } from "@/lib/receipts";
 
 interface PrintReceiptModalProps {
   show: boolean;
@@ -40,20 +40,23 @@ export default function PrintReceiptModal({
 
     // 1. Verification QR: Encodes URL to public web verification page with cryptographic token
     const origin = typeof window !== "undefined" && window.location.origin ? window.location.origin : "";
-    const token = generateReceiptSecurityToken(activeReceipt.receiptNo);
-    const verifyPayload = `${origin}/verify?id=${encodeURIComponent(activeReceipt.receiptNo)}&t=${token}`;
-
-    QRCode.toDataURL(verifyPayload, {
-      width: 320,
-      margin: 1.5,
-      errorCorrectionLevel: "M",
-      color: {
-        dark: "#0f172a",
-        light: "#ffffff",
-      },
-    })
-      .then((url) => setVerifyQrUrl(url))
-      .catch((err) => console.error("Error generating verify QR:", err));
+    let cancelled = false;
+    setVerifyQrUrl("");
+    const generateVerificationQr = async () => {
+      let token = activeReceipt.verificationToken;
+      if (!token) {
+        // Old locally cached receipts must obtain a signature through the existing scoped API.
+        const response = await fetch(`/api/billing?receiptNo=${encodeURIComponent(activeReceipt.receiptNo)}`, { cache: "no-store" });
+        if (!response.ok) throw new Error("Unable to load receipt verification");
+        const data = await response.json();
+        token = data.receipts?.find((r: { receiptNo: string }) => r.receiptNo === activeReceipt.receiptNo)?.verificationToken;
+      }
+      if (!token) throw new Error("Receipt verification is unavailable");
+      const payload = `${origin}/verify?id=${encodeURIComponent(activeReceipt.receiptNo)}&t=${token}`;
+      const url = await QRCode.toDataURL(payload, { width: 320, margin: 1.5, errorCorrectionLevel: "M", color: { dark: "#0f172a", light: "#ffffff" } });
+      if (!cancelled) setVerifyQrUrl(url);
+    };
+    generateVerificationQr().catch((err) => console.error("Error generating verify QR:", err));
 
     // 2. Fixed-Amount UPI QR Code
     const isUpiPayment = Boolean(
@@ -87,6 +90,7 @@ export default function PrintReceiptModal({
     } else {
       setUpiQrUrl("");
     }
+    return () => { cancelled = true; };
   }, [activeReceipt, user, schoolInfo]);
 
   if (!show || !activeReceipt || !mounted) return null;

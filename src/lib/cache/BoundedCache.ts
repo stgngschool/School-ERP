@@ -51,6 +51,8 @@ export class BoundedCache<T = any> {
       return undefined;
     }
 
+    this.cache.delete(key);
+    this.cache.set(key, entry);
     return entry.data;
   }
 

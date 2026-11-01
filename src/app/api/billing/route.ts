@@ -1,3 +1,5 @@
+import { generateReceiptSecurityToken } from "@/lib/server/receiptSecurity";
+import { receiptArrears } from "@/lib/receiptArrears";
 import { allocationScope } from "@/lib/readPolicy";
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
@@ -625,6 +627,7 @@ export async function GET(request: Request) {
         studentId: r.studentId || (studentIds.length === 1 ? (studentIds[0] as string) : null),
         studentIds,
         receiptNo: r.receiptNumber,
+        verificationToken: generateReceiptSecurityToken(r.receiptNumber),
         status: r.status || "ACTIVE",
         manualReceiptNo: r.manualReceiptNo || meta?.manualReceiptNo || null,
         amount: r.amountPaid,
@@ -1076,6 +1079,7 @@ export async function POST(request: Request) {
             id: existingReceipt.id,
             studentId: existingReceipt.studentId,
             receiptNo: existingReceipt.receiptNumber,
+        verificationToken: generateReceiptSecurityToken(existingReceipt.receiptNumber),
             manualReceiptNo: existingReceipt.manualReceiptNo || snapshot.manualReceiptNo || null,
             amount: existingReceipt.amountPaid,
             subtotal: snapshot.subtotal !== undefined ? snapshot.subtotal : existingReceipt.amountPaid,
@@ -1113,6 +1117,7 @@ export async function POST(request: Request) {
       await lockSessionWorkflow(tx);
       const receiptNo = await getNextReceiptNumber(tx);
       let actualTotalPayPaisa = 0;
+      let totalFeePaidPaisa = 0;
 
       // ── B-02: Reject duplicate ledgerEntryIds up-front ──────────────────
       const seenLedgerIds = new Set<string>();
@@ -1247,6 +1252,7 @@ export async function POST(request: Request) {
         const payAmountPaisa = Math.min(requestedPayPaisa, maxPayablePaisa);
 
         actualTotalPayPaisa += payAmountPaisa + fineAmountPaisa;
+        totalFeePaidPaisa += payAmountPaisa;
 
         validatedItems.push({
           charge,
@@ -1357,10 +1363,7 @@ export async function POST(request: Request) {
       }
 
       // True arrears after this receipt = all family outstanding − what this receipt pays/discounts
-      const trueArrearsPaisa = Math.max(
-        0,
-        familyTotalOutstandingPaisa - actualTotalPayPaisa - totalDiscountPaisa
-      );
+      const trueArrearsPaisa = receiptArrears(familyTotalOutstandingPaisa, totalFeePaidPaisa, totalDiscountPaisa);
 
       const lockedStudents = studentIdArray.length > 0
         ? await tx.student.findMany({
@@ -1592,6 +1595,7 @@ export async function POST(request: Request) {
         id: result.id,
         studentId: result.studentId,
         receiptNo: result.receiptNumber,
+        verificationToken: generateReceiptSecurityToken(result.receiptNumber),
         manualReceiptNo: result.manualReceiptNo || cleanManualReceiptNo || null,
         amount: result.amountPaid,
         // RS-01: Include snapshot-derived fields so the immediate post-payment receipt

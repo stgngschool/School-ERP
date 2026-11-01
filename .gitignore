@@ -46,3 +46,9 @@ scratch/
 *.csv
 src/data/google-credentials.json
 src/lib/testDrive.js
+
+# Local agent configuration may contain account credentials
+.codex/
+
+# Browser verification artifacts
+.playwright-cli/

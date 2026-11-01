@@ -28,26 +28,7 @@ const WINDOW_SECONDS = 15 * 60; // 15 minutes
  * Prioritizes Vercel-generated edge headers (x-vercel-forwarded-for, x-real-ip)
  * which cannot be forged by downstream clients on Vercel infrastructure.
  */
-export function getTrustedClientIp(request: Request): string {
-  // 1. Vercel trusted edge headers
-  const vercelIp = request.headers.get("x-vercel-forwarded-for");
-  if (vercelIp && vercelIp.trim()) {
-    return vercelIp.split(",")[0].trim();
-  }
-
-  const realIp = request.headers.get("x-real-ip");
-  if (realIp && realIp.trim()) {
-    return realIp.trim();
-  }
-
-  // 2. Standard proxy header fallback
-  const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded && forwarded.trim()) {
-    return forwarded.split(",")[0].trim();
-  }
-
-  return "127.0.0.1";
-}
+export { getTrustedClientIp } from "./clientIp";
 
 /**
  * Single atomic upsert checking and recording rate limits in LoginAttempt table.

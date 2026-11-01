@@ -167,6 +167,7 @@ export interface MockReceipt {
   id: string;
   studentId: string;
   receiptNo: string;
+  verificationToken?: string;
   manualReceiptNo?: string | null;
   amount: number;
   subtotal?: number;

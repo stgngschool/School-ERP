@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { uploadFile, deleteFile } from "@/lib/storage";
-import { cookies } from "next/headers";
-import { verifyToken, getAuthUser } from "@/lib/auth";
+import { getAuthUser } from "@/lib/auth";
 import { validateUploadedFile } from "@/lib/validation";
 
 export async function GET(request: Request) {
@@ -61,15 +60,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get("auth_token")?.value;
-
-    if (!token) {
-      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-    }
-
-    const decoded = verifyToken(token);
-    if (!decoded) {
+    const decoded = await getAuthUser(request);
+    if (!decoded || decoded.role !== "TEACHER") {
       return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
     }
 
@@ -97,14 +89,12 @@ export async function POST(request: Request) {
     const section = parts.pop() || "";
     const className = parts.join("-");
     
-    let classObj = await db.class.findFirst({
+    const classObj = await db.class.findFirst({
       where: { name: className, section: section },
     });
 
     if (!classObj) {
-      classObj = await db.class.create({
-        data: { name: className, section: section },
-      });
+      return NextResponse.json({ error: "Select an existing class and section." }, { status: 400 });
     }
 
     let fileUrl: string | null = null;

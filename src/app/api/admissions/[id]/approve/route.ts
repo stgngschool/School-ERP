@@ -1,3 +1,4 @@
+import { SessionError } from "@/lib/sessionPolicy";
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import bcrypt from "bcryptjs";
@@ -56,13 +57,19 @@ export async function POST(
     const className = application.classApplied;
     const section = (assignedSection || "A").trim().toUpperCase();
 
+    const { student, updatedApplication, academicYear } = await db.$transaction(async tx => {
+      await lockSessionWorkflow(tx);
+      const fresh = await tx.admissionApplication.findUnique({ where: { id: application.id } });
+      if (!fresh || fresh.status === "APPROVED" || fresh.enrolledStudentId) throw new Error("This application was already processed. Refresh before continuing.");
+      const activeSession = await tx.academicSession.findFirst({ where: { isCurrent: true } });
+      if (!activeSession) throw new Error("An active academic session is required before admission approval.");
     // 1. Find or create Class with Section
-    let classObj = await db.class.findFirst({
+    let classObj = await tx.class.findFirst({
       where: { name: className, section: section },
     });
 
     if (!classObj) {
-      classObj = await db.class.create({
+      classObj = await tx.class.create({
         data: { name: className, section: section },
       });
     }
@@ -71,9 +78,24 @@ export async function POST(
     let parent = null;
 
     // Check existing profiles by mobile / name / email
-    const existingProfiles = await db.parentProfile.findMany({
+    const phones = [application.fatherMobile, application.motherMobile]
+      .map(value => (value || "").replace(/\D/g, "")).filter(value => value.length >= 8);
+    const father = (application.fatherName || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+    // Fetch only candidate families; retain the existing conservative matching rules below.
+    const candidateIds = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT p.id FROM "ParentProfile" p JOIN "User" u ON u.id = p."userId"
+      WHERE (LOWER(TRIM(u.email)) = ${application.parentEmail?.trim().toLowerCase() || ""} AND ${Boolean(application.parentEmail)})
+        OR REGEXP_REPLACE(COALESCE(u.phone, ''), '[^0-9]', '', 'g') = ANY(${phones}::text[])
+        OR (${father} <> '' AND REGEXP_REPLACE(LOWER(u.name), '[^a-z0-9]', '', 'g') = ${father})
+        OR EXISTS (SELECT 1 FROM "Student" s WHERE s."parentProfileId" = p.id AND (
+          REGEXP_REPLACE(COALESCE(s."fatherMobile", ''), '[^0-9]', '', 'g') = ANY(${phones}::text[])
+          OR REGEXP_REPLACE(COALESCE(s."motherMobile", ''), '[^0-9]', '', 'g') = ANY(${phones}::text[])
+          OR (${father} <> '' AND REGEXP_REPLACE(LOWER(COALESCE(s."fatherName", '')), '[^a-z0-9]', '', 'g') = ${father})
+        ))`;
+    const existingProfiles = await tx.parentProfile.findMany({
+      where: { id: { in: candidateIds.map(row => row.id) } },
       include: {
-        user: true,
+        user: { select: { id: true, name: true, phone: true, email: true } },
         students: {
           select: {
             fatherName: true,
@@ -100,7 +122,7 @@ export async function POST(
     if (matched) {
       parent = matched;
       if (!parent.address && application.address) {
-        await db.parentProfile.update({
+        await tx.parentProfile.update({
           where: { id: parent.id },
           data: { address: application.address },
         });
@@ -111,14 +133,14 @@ export async function POST(
       const username = `parent_${sanitizedPhone || Date.now()}`;
       const email = application.parentEmail || `${username}@school.com`;
 
-      const existingUser = await db.user.findUnique({
+      const existingUser = await tx.user.findUnique({
         where: { email },
       });
 
       const finalEmail = existingUser ? `parent_${Date.now()}@school.com` : email;
       const passwordHash = `PENDING_ACTIVATION:${crypto.randomBytes(16).toString("hex")}`;
 
-      const user = await db.user.create({
+      const user = await tx.user.create({
         data: {
           username: `parent_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
           email: finalEmail,
@@ -129,8 +151,8 @@ export async function POST(
         },
       });
 
-      const newFamilyCode = await getNextFamilyCode();
-      parent = await db.parentProfile.create({
+      const newFamilyCode = await getNextFamilyCode(tx);
+      parent = await tx.parentProfile.create({
         data: {
           userId: user.id,
           familyCode: newFamilyCode,
@@ -143,35 +165,26 @@ export async function POST(
     // 3. Determine Admission Number
     let admissionNo = (customAdmissionNo || "").trim();
     if (admissionNo) {
-      const existing = await db.student.findUnique({
+      const existing = await tx.student.findUnique({
         where: { admissionNumber: admissionNo },
       });
       if (existing) {
-        return NextResponse.json(
-          { error: `Admission Number "${admissionNo}" is already taken.` },
-          { status: 400 }
-        );
+        throw new SessionError(`Admission Number "${admissionNo}" is already taken.`, 400);
       }
     } else {
-      admissionNo = await getNextAdmissionNumber();
+      admissionNo = await getNextAdmissionNumber(tx);
     }
 
     // 4. Determine Roll Number
     let rollNumber = (customRollNo || "").trim();
     if (!rollNumber) {
-      const rollCount = await db.student.count({
+      const rollCount = await tx.student.count({
         where: { classId: classObj.id },
       });
       const rollNoStr = String(rollCount + 1).padStart(2, "0");
       rollNumber = `${className}-${section}-${rollNoStr}`;
     }
 
-    const { student, updatedApplication, academicYear } = await db.$transaction(async tx => {
-      await lockSessionWorkflow(tx);
-      const fresh = await tx.admissionApplication.findUnique({ where: { id: application.id } });
-      if (!fresh || fresh.status === "APPROVED" || fresh.enrolledStudentId) throw new Error("This application was already processed. Refresh before continuing.");
-      const activeSession = await tx.academicSession.findFirst({ where: { isCurrent: true } });
-      if (!activeSession) throw new Error("An active academic session is required before admission approval.");
     // 5. Create Student in Database
     const student = await tx.student.create({
       data: {
@@ -289,6 +302,7 @@ export async function POST(
       application: updatedApplication,
     });
   } catch (error: any) {
+    if (error instanceof SessionError) return NextResponse.json({ error: error.message }, { status: error.status });
     console.error("Approve admission application error:", error);
     const safeError = getSafeErrorMessage(error, "Failed to approve admission application.");
     return NextResponse.json(
@@ -296,7 +310,7 @@ export async function POST(
       { status: 500 }
     );
   } finally {
-    // Parent details may have committed before a later enrollment step fails.
+    // Invalidate after either a committed approval or a rolled-back attempt.
     if (canInvalidateRoster) clearServerStudentsCache();
   }
 }

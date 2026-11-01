@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
-import { numberToIndianWords, isValidReceiptSecurityToken } from "@/lib/receipts";
+import { numberToIndianWords } from "@/lib/receipts";
+import { isValidReceiptSecurityToken } from "@/lib/server/receiptSecurity";
 import { getCachedSchoolConfig } from "@/lib/cache/schoolConfigCache";
 
 export const dynamic = "force-dynamic";
@@ -76,8 +77,7 @@ export async function GET(request: Request) {
     // Cryptographic Token Validation: Prevents changing URL numbers (e.g. REC-2026-00093 -> REC-2026-00090)
     const isTokenValid = isValidReceiptSecurityToken(
       receipt.receiptNumber,
-      token,
-      receipt.manualReceiptNo
+      token
     );
 
     if (!isTokenValid) {
@@ -218,7 +218,7 @@ export async function GET(request: Request) {
       },
       {
         headers: {
-          "Cache-Control": "public, s-maxage=10, stale-while-revalidate=30",
+          "Cache-Control": "private, no-store",
         },
       }
     );

@@ -1,5 +1,6 @@
 "use client";
 
+import { assertMarksSaved } from "@/lib/marksSaveResult";
 import React, { useState, useEffect, useRef, useDeferredValue, useMemo, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -1807,6 +1808,7 @@ export default function MarksFeedingConsole() {
           throw new Error(json.error || "Failed to save student marks.");
         }
 
+        assertMarksSaved(json, 1);
         setSavedMap((prev) => ({ ...prev, [studentId]: true }));
         setSavedInDbMap((prev) => ({ ...prev, [studentId]: true }));
         const actionLabel = payload.isAbsent ? "Absent status recorded!" : "Marks safely saved!";
@@ -1912,7 +1914,9 @@ export default function MarksFeedingConsole() {
             );
           }
 
-          // Mark this chunk as saved immediately
+          assertMarksSaved(json, chunk.length);
+
+          // Mark this chunk as saved only after all rows are confirmed
           setSavedMap((prev) => {
             const next = { ...prev };
             chunk.forEach((item) => {

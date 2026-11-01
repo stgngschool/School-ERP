@@ -1,36 +1,10 @@
+import { getTrustedClientIp, checkRateLimit } from "@/lib/rateLimit";
 import { getCachedSchoolConfig } from "@/lib/cache/schoolConfigCache";
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { formatCanonicalDOBIso } from "@/lib/dateUtils";
 
 export const dynamic = "force-dynamic";
-
-// In-memory rate limiting map for FAILED attempts per IP (IP -> { failedCount, resetTime })
-const failedAttemptsMap = new Map<string, { failedCount: number; resetTime: number }>();
-const MAX_FAILED_ATTEMPTS = 15;
-const WINDOW_MS = 10 * 60 * 1000; // 10 minutes
-
-function isIpBlocked(ip: string): boolean {
-  const now = Date.now();
-  const entry = failedAttemptsMap.get(ip);
-  if (!entry) return false;
-  if (now > entry.resetTime) {
-    failedAttemptsMap.delete(ip);
-    return false;
-  }
-  return entry.failedCount >= MAX_FAILED_ATTEMPTS;
-}
-
-function recordFailedAttempt(ip: string) {
-  const now = Date.now();
-  const entry = failedAttemptsMap.get(ip);
-  if (!entry || now > entry.resetTime) {
-    failedAttemptsMap.set(ip, { failedCount: 1, resetTime: now + WINDOW_MS });
-  } else {
-    entry.failedCount += 1;
-  }
-}
-
 
 // Helper: Read dynamic portal configuration from DB (SchoolConfig singleton) or env fallback
 async function getPortalConfig(): Promise<{ isEnabled: boolean; allowedExams: string[] }> {
@@ -90,16 +64,9 @@ export async function POST(request: Request) {
   }
 
   // Rate Limiting: check if IP is currently locked due to repeated failures
-  const clientIp =
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    request.headers.get("x-real-ip") ||
-    "unknown";
-
-  if (isIpBlocked(clientIp)) {
-    return NextResponse.json(
-      { error: "Too many incorrect attempts from this device. Please wait 10 minutes before trying again." },
-      { status: 429 }
-    );
+  const clientIp = getTrustedClientIp(request);
+  if (!(await checkRateLimit(`public-results:ip:${clientIp}`, 15, 600)).allowed) {
+    return NextResponse.json({ error: "Too many attempts. Please wait 10 minutes." }, { status: 429 });
   }
 
   try {
@@ -137,6 +104,9 @@ export async function POST(request: Request) {
       );
     }
 
+    if (!(await checkRateLimit(`public-results:student:${admissionNumber.trim().toLowerCase()}`, 15, 600)).allowed) {
+      return NextResponse.json({ error: "Too many attempts. Please wait 10 minutes." }, { status: 429 });
+    }
     const trimmedAdm = admissionNumber.trim();
     const cleanDobInput = formatCanonicalDOBIso(dob);
 
@@ -159,7 +129,6 @@ export async function POST(request: Request) {
     });
 
     if (!student) {
-      recordFailedAttempt(clientIp);
       return NextResponse.json(
         { error: "No student found with this Admission Number. Please verify from fee receipt or ID card." },
         { status: 404 }
@@ -176,7 +145,6 @@ export async function POST(request: Request) {
 
     const studentDobIso = formatCanonicalDOBIso(student.dob);
     if (!cleanDobInput || !studentDobIso || studentDobIso !== cleanDobInput) {
-      recordFailedAttempt(clientIp);
       return NextResponse.json(
         { error: "Date of Birth does not match school records. Please check and try again." },
         { status: 401 }
