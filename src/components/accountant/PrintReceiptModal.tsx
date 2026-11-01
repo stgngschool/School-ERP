@@ -1,9 +1,10 @@
 "use client";
 
+import { receiptSettlement } from "@/lib/receiptSettlement";
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import QRCode from "qrcode";
-import { Printer, X, CheckCircle2, AlertCircle, ShieldCheck, Share2, Loader2, Sparkles, Award } from "lucide-react";
+import { Printer, X, CheckCircle2, AlertCircle, ShieldCheck, Share2, Loader2 } from "lucide-react";
 import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
 import { formatP, numberToIndianWords } from "@/lib/currency";
 import { getGroupedReceiptItems, getReceiptStudents, formatCompactParticulars } from "@/lib/receipts";
@@ -28,7 +29,6 @@ export default function PrintReceiptModal({
   const [mounted, setMounted] = useState(false);
   const [receiptPageSize, setReceiptPageSize] = useState<"A4" | "A5">("A5");
   const [verifyQrUrl, setVerifyQrUrl] = useState<string>("");
-  const [upiQrUrl, setUpiQrUrl] = useState<string>("");
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   useEffect(() => {
@@ -58,38 +58,6 @@ export default function PrintReceiptModal({
     };
     generateVerificationQr().catch((err) => console.error("Error generating verify QR:", err));
 
-    // 2. Fixed-Amount UPI QR Code
-    const isUpiPayment = Boolean(
-      activeReceipt.method?.toUpperCase() === "UPI" ||
-      activeReceipt.paymentMethod?.toUpperCase() === "UPI" ||
-      (activeReceipt.transactionRef && /upi|gpay|phonepe|paytm|bhim/i.test(activeReceipt.transactionRef)) ||
-      (activeReceipt.remarks && /upi/i.test(activeReceipt.remarks))
-    );
-
-    if (isUpiPayment) {
-      const upiId = activeReceipt.upiId || schoolInfo?.upiId || "8423926608@upi";
-      const merchant = activeReceipt.upiMerchantName || schoolInfo?.upiMerchantName || schoolInfo?.name || "St. GNG School";
-      const rupeeAmount = (Number(activeReceipt.amount || 0) / 100).toFixed(2);
-      const upiPayload = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(
-        merchant
-      )}&am=${rupeeAmount}&cu=INR&tn=${encodeURIComponent(
-        "Fee Payment " + (activeReceipt.receiptNo || "")
-      )}`;
-
-      QRCode.toDataURL(upiPayload, {
-        width: 320,
-        margin: 1,
-        errorCorrectionLevel: "M",
-        color: {
-          dark: "#0f172a",
-          light: "#ffffff",
-        },
-      })
-        .then((url) => setUpiQrUrl(url))
-        .catch((err) => console.error("Error generating UPI QR:", err));
-    } else {
-      setUpiQrUrl("");
-    }
     return () => { cancelled = true; };
   }, [activeReceipt, user, schoolInfo]);
 
@@ -97,47 +65,10 @@ export default function PrintReceiptModal({
 
   const students = getReceiptStudents(activeReceipt);
   const isMultiChild = students.length > 1;
-  const isCompactSiblings = students.length >= 2;
   const groupedItems = getGroupedReceiptItems(activeReceipt.items || []);
-  const isCompactFeeTable = groupedItems.length >= 3 || students.length >= 2;
   const hasDiscounts = (activeReceipt.discount || 0) > 0 || groupedItems.some((i: any) => (i.discount || 0) > 0);
 
-  // Premium Receipt Detection:
-  // Qualifying condition: Touches March (academic session end) AND covers > 3 months (e.g. 4+ months like Dec to March, May to March)
-  let isPremiumReceipt = false;
-  if (activeReceipt) {
-    const allTexts: string[] = [
-      activeReceipt.details || "",
-      activeReceipt.remarks || "",
-      ...groupedItems.map((i: any) => `${i.name || ""} ${i.baseParticular || ""} ${i.description || ""}`),
-    ];
-    const combined = allTexts.join(" ").toLowerCase();
-
-    // 1. Must touch March (academic year end)
-    const touchesMarch = /\b(to\s+march|to\s+mar|thru\s+march|-mar|-march|upto\s+march|\bmarch\b|\bmar\b)/i.test(combined);
-    if (touchesMarch) {
-      // 2. Check explicit month count in brackets e.g. [11 Months] or (11 Months)
-      const monthMatch = combined.match(/\[(\d+)\s*months?\]/) || combined.match(/\((\d+)\s*months?\)/);
-      if (monthMatch && monthMatch[1]) {
-        isPremiumReceipt = parseInt(monthMatch[1], 10) > 3;
-      } else {
-        // 3. Check starting month to March:
-        // Qualifying start months (> 3 months ending in March):
-        // April to March (12), May to March (11), June to March (10), July to March (9),
-        // Aug to March (8), Sept to March (7), Oct to March (6), Nov to March (5), Dec to March (4)
-        // Non-qualifying: Jan to March (3), Feb to March (2)
-        const qualifyingStartPattern = /\b(april|apr|may|june|jun|july|jul|august|aug|september|sept|sep|october|oct|november|nov|december|dec)\s*(to|-|\/)\s*(march|mar)\b/i;
-        if (qualifyingStartPattern.test(combined)) {
-          isPremiumReceipt = true;
-        } else if (Array.isArray(activeReceipt.months)) {
-          const hasMarch = activeReceipt.months.some((m: string) => /mar/i.test(m));
-          if (hasMarch && activeReceipt.months.length > 3) {
-            isPremiumReceipt = true;
-          }
-        }
-      }
-    }
-  }
+  const settlement = receiptSettlement(activeReceipt.arrears);
 
   // Build the receipt as a PDF file. On mobile it opens the native share sheet
   // (WhatsApp / contacts / anywhere); on desktop (or if share is unavailable) it
@@ -146,6 +77,8 @@ export default function PrintReceiptModal({
     const receiptElement = document.getElementById("receipt-print-area");
     if (!receiptElement) return;
 
+    if (!verifyQrUrl) return;
+    await document.fonts.ready;
     setIsGeneratingPdf(true);
     try {
       const { default: jsPDF } = await import("jspdf");
@@ -156,7 +89,7 @@ export default function PrintReceiptModal({
         useCORS: true,
         logging: false,
         backgroundColor: "#ffffff",
-        windowWidth: 1200,
+        windowWidth: window.innerWidth,
       });
 
       const isA5 = receiptPageSize === "A5";
@@ -172,21 +105,28 @@ export default function PrintReceiptModal({
       const maxPdfWidth = pageWidth - margin * 2;
       const maxPdfHeight = pageHeight - margin * 2;
 
-      const ratio = canvas.width / canvas.height;
-
-      let imgWidth = maxPdfWidth;
-      let imgHeight = maxPdfWidth / ratio;
-
-      if (imgHeight > maxPdfHeight) {
-        imgHeight = maxPdfHeight;
-        imgWidth = maxPdfHeight * ratio;
+      const pixelsPerMm = canvas.width / maxPdfWidth;
+      const maxSliceHeight = Math.floor(maxPdfHeight * pixelsPerMm);
+      const bounds = receiptElement.getBoundingClientRect();
+      const scaleY = canvas.height / bounds.height;
+      const boundaries = Array.from(receiptElement.querySelectorAll("tr, [data-receipt-block]"))
+        .map(el => Math.floor((el.getBoundingClientRect().bottom - bounds.top) * scaleY))
+        .filter(y => y > 0).sort((a, b) => a - b);
+      let top = 0;
+      while (top < canvas.height) {
+        const limit = Math.min(top + maxSliceHeight, canvas.height);
+        const candidates = boundaries.filter(y => y > top && y <= limit);
+        const bottom = limit === canvas.height ? limit : (candidates.at(-1) || limit);
+        const slice = document.createElement("canvas");
+        slice.width = canvas.width;
+        slice.height = bottom - top;
+        const context = slice.getContext("2d");
+        if (!context) throw new Error("PDF canvas unavailable");
+        context.drawImage(canvas, 0, top, canvas.width, slice.height, 0, 0, canvas.width, slice.height);
+        if (top > 0) pdf.addPage();
+        pdf.addImage(slice.toDataURL("image/png"), "PNG", margin, margin, maxPdfWidth, slice.height / pixelsPerMm, undefined, "FAST");
+        top = bottom;
       }
-
-      const xOffset = margin + (maxPdfWidth - imgWidth) / 2;
-      const yOffset = margin + (maxPdfHeight - imgHeight) / 2;
-
-      const imgData = canvas.toDataURL("image/png");
-      pdf.addImage(imgData, "PNG", xOffset, yOffset, imgWidth, imgHeight, undefined, "FAST");
 
       const studentNameClean = (students[0]?.name || "Student").replace(/[^a-zA-Z0-9_-]/g, "_");
       const fileName = `Receipt-${activeReceipt.receiptNo}-${studentNameClean}.pdf`;
@@ -259,138 +199,48 @@ export default function PrintReceiptModal({
             </div>
           </div>
 
-          {/* Single-Page Clean Print Styling Override */}
           <style>{`
-            @media print {
-              @page {
-                size: ${receiptPageSize === "A5" ? "A5 landscape" : "A4 portrait"};
-                margin: ${receiptPageSize === "A5" ? "2.5mm" : "8mm 10mm"};
-              }
-
-              /* Clean printable root document */
-              html, body {
-                width: 100% !important;
-                height: 100% !important;
-                margin: 0 !important;
-                padding: 0 !important;
-                overflow: hidden !important;
-                background: #ffffff !important;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-                color-adjust: exact !important;
-              }
-
-              /* HIDE ENTIRE APP FRAME: Collapses background dashboard so only receipt voucher prints */
-              body > *:not(#gng-receipt-print-portal) {
-                display: none !important;
-                visibility: hidden !important;
-              }
-
-              /* Reveal ONLY the voucher portal */
-              #gng-receipt-print-portal {
-                display: block !important;
-                position: static !important;
-                margin: 0 !important;
-                padding: 0 !important;
-                width: 100% !important;
-                height: 100% !important;
-                background: transparent !important;
-                visibility: visible !important;
-              }
-
-              /* Strip ALL modal backdrop and dialog isolation constraints */
-              .receipt-modal-backdrop,
+            @media screen {
               .receipt-modal-dialog {
-                all: unset !important;
-                display: block !important;
-                position: static !important;
-                contain: none !important;
-                transform: none !important;
-                filter: none !important;
-                backdrop-filter: none !important;
-                -webkit-backdrop-filter: none !important;
-                opacity: 1 !important;
-                background: transparent !important;
-                overflow: hidden !important;
-                max-height: none !important;
-                max-width: 100% !important;
-                width: 100% !important;
-                border: none !important;
-                box-shadow: none !important;
-                padding: 0 !important;
-                margin: 0 !important;
+                width: min(calc(${receiptPageSize === "A5" ? "200mm" : "194mm"} + 34px), calc(100vw - 20px));
               }
-
-              .no-print,
-              .receipt-modal-actions {
-                display: none !important;
-                visibility: hidden !important;
-              }
-
-              /* Strictly display receipt voucher canvas on 1 single page */
-              #receipt-print-area,
-              #receipt-print-area * {
-                visibility: visible !important;
-                color-adjust: exact !important;
-                -webkit-print-color-adjust: exact !important;
-                page-break-inside: avoid !important;
-                break-inside: avoid !important;
-              }
-
-              #receipt-print-area {
-                display: flex !important;
-                flex-direction: column !important;
-                position: relative !important;
-                width: 100% !important;
-                max-width: 100% !important;
-                height: auto !important;
-                max-height: ${receiptPageSize === "A5" ? "138mm" : "none"} !important;
-                margin: 0 auto !important;
-                padding: ${receiptPageSize === "A5" ? "4.5mm 5.5mm" : "18px 22px"} !important;
-                border: ${isPremiumReceipt ? "1.5px solid #d97706" : "1px solid #cbd5e1"} !important;
-                border-radius: 8px !important;
-                box-shadow: none !important;
-                background: #ffffff !important;
-                box-sizing: border-box !important;
-                gap: ${receiptPageSize === "A5" ? "2.2mm" : "8px"} !important;
-                page-break-after: avoid !important;
-                break-after: avoid !important;
-                page-break-before: avoid !important;
-                break-before: avoid !important;
-                page-break-inside: avoid !important;
-                break-inside: avoid !important;
-                overflow: hidden !important;
-              }
-
-              /* Kill Tailwind space-y-* margin-top so gap controls spacing */
-              #receipt-print-area > * + * {
-                margin-top: 0 !important;
-              }
-
-              /* Natural table sizing without artificial stretching */
-              .receipt-fee-table-container {
-                flex: none !important;
-                display: block !important;
-                width: 100% !important;
-                min-height: auto !important;
-                overflow: hidden !important;
-                border-radius: 8px !important;
-              }
-
-              .receipt-fee-table-container table {
-                width: 100% !important;
-                border-collapse: separate !important;
-                border-spacing: 0 !important;
-                transform: none !important;
-              }
-
-              .receipt-scroll-container {
-                overflow: visible !important;
-                width: 100% !important;
-                padding: 0 !important;
-                border: none !important;
-                background: transparent !important;
-              }
+              #receipt-print-area { margin-inline: auto; }
+            }
+            #receipt-print-area {
+              width: ${receiptPageSize === "A5" ? "200mm" : "194mm"};
+              min-width: ${receiptPageSize === "A5" ? "200mm" : "194mm"};
+              max-width: none; box-sizing: border-box;
+              padding: 3mm; gap: 2mm; font-size: 12px; line-height: 1.35;
+              border: 0; border-radius: 0 !important; box-shadow: none !important; color: #172033;
+            }
+            #receipt-print-area div, #receipt-print-area span { border-radius: 0 !important; box-shadow: none !important; }
+            #receipt-print-area [class*="text-["] { font-size: 11px; }
+            #receipt-print-area [class*="font-black"] { font-weight: 700; }
+            #receipt-print-area .truncate { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+            #receipt-print-area .receipt-students { border: 0; border-bottom: 1px solid #cbd5e1; background: white; padding: 2mm 0; }
+            #receipt-print-area .receipt-students > div { background: white; flex-wrap: wrap; }
+            #receipt-print-area .receipt-sibling-grid { display: grid; grid-template-columns: repeat(${Math.min(students.length, 4)}, minmax(0, 1fr)); align-items: start; }
+            #receipt-print-area .receipt-fee-table-container { border: 0; border-radius: 0; overflow: visible; }
+            #receipt-print-area table { border-collapse: collapse; table-layout: auto; }
+            #receipt-print-area th { background: #f1f5f9; color: #334155; border-top: 1px solid #94a3b8; border-bottom: 1px solid #94a3b8; }
+            #receipt-print-area th, #receipt-print-area td { border-radius: 0; padding: 2mm; }
+            #receipt-print-area td:not(:nth-child(2)) { white-space: nowrap; font-variant-numeric: tabular-nums; }
+            #receipt-print-area td span { border: 0; background: transparent; padding-left: 0; }
+            #receipt-print-area .receipt-totals { border: 0; border-top: 1px solid #64748b; background: white; padding: 2mm 0; }
+            #receipt-print-area .receipt-totals + div { border: 0; background: white; padding: 2mm 0; }
+            #receipt-print-area .receipt-footer { align-items: start; }
+            @media print {
+              @page { size: ${receiptPageSize === "A5" ? "A5 landscape" : "A4 portrait"}; margin: ${receiptPageSize === "A5" ? "5mm" : "8mm"}; }
+              html, body { margin: 0 !important; padding: 0 !important; height: auto !important; overflow: visible !important; background: white !important; }
+              body > *:not(#gng-receipt-print-portal) { display: none !important; }
+              #gng-receipt-print-portal { display: block !important; position: static !important; }
+              .receipt-modal-backdrop, .receipt-modal-dialog { all: unset !important; display: block !important; overflow: visible !important; }
+              .no-print, .receipt-modal-actions { display: none !important; }
+              .receipt-scroll-container { overflow: visible !important; padding: 0 !important; border: 0 !important; background: white !important; }
+              #receipt-print-area { display: block !important; height: auto !important; max-height: none !important; overflow: visible !important; margin: 0 !important; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+              #receipt-print-area > * + * { margin-top: 2mm; }
+              #receipt-print-area thead { display: table-header-group; }
+              #receipt-print-area tr, #receipt-print-area [data-receipt-block] { break-inside: avoid; }
             }
           `}</style>
 
@@ -408,9 +258,7 @@ export default function PrintReceiptModal({
             <div
               id="receipt-print-area"
               className={`border rounded-xl bg-white text-slate-900 shadow-sm relative flex flex-col min-w-[550px] sm:min-w-0 transition-all ${
-                isPremiumReceipt
-                  ? "border-amber-500/90 shadow-amber-500/10 ring-1 ring-amber-400/40"
-                  : "border-slate-300"
+                "border-slate-300"
               } ${
                 receiptPageSize === "A5"
                   ? "p-3.5 sm:p-4 gap-2.5 text-[10.5px]"
@@ -418,7 +266,7 @@ export default function PrintReceiptModal({
               }`}
             >
               {/* 1. Header: School Info, Verification QR & Official Badges (Thin Elegant Divider) */}
-              <div className="flex justify-between items-start border-b border-slate-200 pb-2.5">
+              <div data-receipt-block className="flex justify-between items-start border-b border-slate-200 pb-2.5">
                 <div className="flex items-center gap-3">
                   <img
                     src="/logo.png"
@@ -430,12 +278,7 @@ export default function PrintReceiptModal({
                       <h4 className="font-black text-slate-900 uppercase tracking-tight leading-none text-lg">
                         {schoolInfo.name || "ST. GNG SCHOOL"}
                       </h4>
-                      {isPremiumReceipt && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-100 border border-amber-300 text-amber-900 text-[7px] font-black uppercase rounded tracking-wider shrink-0">
-                          <Sparkles className="w-2.5 h-2.5 text-amber-600" />
-                          Honor Seal
-                        </span>
-                      )}
+
                     </div>
                     <p className="text-slate-600 font-semibold leading-tight text-[9.5px] max-w-[420px]">
                       {schoolInfo.address || "Salarpur, Rasulgarh, Varanasi - 221007"}
@@ -471,16 +314,11 @@ export default function PrintReceiptModal({
 
                   {/* Receipt Metadata Header Block */}
                   <div className="text-right space-y-0.5">
-                    {isPremiumReceipt ? (
-                      <span className="inline-flex items-center gap-1 bg-gradient-to-r from-amber-700 via-amber-800 to-indigo-950 text-amber-200 border border-amber-400/60 font-black uppercase rounded tracking-wider text-[8px] px-2 py-0.5 shadow-xs">
-                        <Sparkles className="w-2.5 h-2.5 text-amber-300 shrink-0" />
-                        PREMIUM FEE VOUCHER
-                      </span>
-                    ) : (
+
                       <span className="bg-slate-900 text-white font-black uppercase rounded tracking-wider text-[8.5px] px-2 py-0.5 inline-block">
                         OFFICIAL FEE RECEIPT
                       </span>
-                    )}
+
                     <p className="text-slate-600 font-bold text-[9px] mt-0.5">
                       Receipt No: <span className="font-black text-slate-950 font-mono">{activeReceipt.receiptNo}</span>
                     </p>
@@ -499,7 +337,7 @@ export default function PrintReceiptModal({
               {/* 2. Adaptive Student Information Section */}
               {isMultiChild ? (
                 /* Compact Multi-Child Sibling Strip */
-                <div className="border border-slate-200/90 rounded-xl overflow-hidden bg-slate-50/70">
+                <div data-receipt-block className="receipt-students border border-slate-200/90 rounded-xl overflow-hidden bg-slate-50/70">
                   <div className="bg-slate-100/90 px-3 py-1 border-b border-slate-200 flex flex-wrap items-center justify-between text-[8.5px] sm:text-[9px] gap-2">
                     <div className="flex items-center gap-2">
                       <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 shrink-0"></span>
@@ -521,24 +359,20 @@ export default function PrintReceiptModal({
                     </div>
                   </div>
 
-                  {/* Sibling Columns Grid (Clean Numbers Without Box) */}
-                  <div className={`grid ${students.length === 2 ? "grid-cols-2" : students.length === 3 ? "grid-cols-3" : "grid-cols-2 sm:grid-cols-4"} divide-x divide-slate-200/70 bg-white`}>
-                    {students.map((s, idx) => (
-                      <div key={idx} className="p-1.5 px-3 text-[9px] flex items-center justify-between gap-1.5 min-w-0">
-                        <div className="flex items-center gap-1.5 truncate">
-                          <span className="font-black text-indigo-700 text-[10.5px] shrink-0">
-                            {idx + 1}.
-                          </span>
-                          <div className="truncate">
-                            <p className="font-black text-slate-900 leading-tight truncate text-[10.5px]">{s.name}</p>
-                            <p className="text-slate-500 font-semibold text-[8px] leading-none mt-0.5">
-                              Class: <span className="text-indigo-950 font-black">{s.classSection || "—"}</span>
-                            </p>
+                  {/* Keep up to four sibling identities on one paper-width row. */}
+                  <div className="receipt-sibling-grid divide-x divide-slate-200/70 bg-white">
+                    {students.map((student, index) => (
+                      <div key={student.id || index} className="flex min-w-0 items-start justify-between gap-1 px-2 py-1.5 text-[9px]">
+                        <div className="flex min-w-0 flex-1 items-start gap-1">
+                          <span className="shrink-0 font-bold text-indigo-700">{index + 1}.</span>
+                          <div className="min-w-0 leading-tight">
+                            <p className="font-bold text-slate-900 break-words">{student.name}</p>
+                            <p className="text-slate-600">Class: <span className="font-semibold text-slate-900">{student.classSection || "—"}</span></p>
                           </div>
                         </div>
-                        <div className="text-right shrink-0 text-[7.5px] sm:text-[8px] font-bold text-slate-500 leading-tight">
-                          <div>Roll: <span className="text-slate-800 font-black">{s.rollNo || "—"}</span></div>
-                          <div>Adm: <span className="text-slate-800 font-black">{s.admissionNo || "—"}</span></div>
+                        <div className="shrink-0 text-right leading-tight text-slate-600">
+                          <p>Roll: <span className="font-semibold text-slate-900">{student.rollNo || "—"}</span></p>
+                          <p>Adm: <span className="font-semibold text-slate-900">{student.admissionNo || "—"}</span></p>
                         </div>
                       </div>
                     ))}
@@ -546,7 +380,7 @@ export default function PrintReceiptModal({
                 </div>
               ) : (
                 /* Single Student Executive Strip */
-                <div className="bg-slate-50/80 border border-slate-200/90 rounded-xl py-1.5 px-3 text-[9.5px] flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                <div data-receipt-block className="receipt-students bg-slate-50/80 border border-slate-200/90 rounded-xl py-1.5 px-3 text-[9.5px] flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-slate-400 font-bold uppercase text-[8px]">Student:</span>
                     <span className="font-black text-slate-950 text-[11px]">{students[0]?.name || activeReceipt.studentName}</span>
@@ -585,7 +419,7 @@ export default function PrintReceiptModal({
                     <tr className="bg-slate-100/90 text-slate-700 font-black uppercase tracking-wider text-[8.5px] sm:text-[9px]">
                       <th className="py-1.5 px-3 w-7 text-slate-400 border-b border-slate-200 rounded-tl-xl">#</th>
                       <th className="py-1.5 px-3 border-b border-slate-200">Fee Particulars</th>
-                      <th className="py-1.5 px-3 text-right border-b border-slate-200">Billed Due</th>
+                      <th className="py-1.5 px-3 text-right border-b border-slate-200">Fee Amount</th>
                       {hasDiscounts && (
                         <th className="py-1.5 px-3 text-right text-indigo-700 border-b border-slate-200">RBT</th>
                       )}
@@ -661,17 +495,10 @@ export default function PrintReceiptModal({
               {(() => {
                 const billedTarget = (activeReceipt.subtotal || activeReceipt.amount) - (activeReceipt.discount || 0);
                 const isVoucherFullyPaid = activeReceipt.amount >= billedTarget;
-                const isUpiPayment = Boolean(
-                  activeReceipt.method?.toUpperCase() === "UPI" ||
-                  activeReceipt.paymentMethod?.toUpperCase() === "UPI" ||
-                  (activeReceipt.transactionRef && /upi|gpay|phonepe|paytm|bhim/i.test(activeReceipt.transactionRef)) ||
-                  (activeReceipt.remarks && /upi/i.test(activeReceipt.remarks))
-                );
-
                 return (
-                  <div className="grid grid-cols-12 gap-3 items-end pt-1.5">
+                  <div data-receipt-block className="receipt-footer grid grid-cols-12 gap-3 items-end pt-1.5">
                     {/* Left: Unboxed Words & Voucher Status */}
-                    <div className={`${isUpiPayment ? "col-span-5" : "col-span-7"} flex flex-col justify-between py-1 space-y-2.5`}>
+                    <div className={`col-span-7 flex flex-col justify-between py-1 space-y-2.5`}>
                       <div>
                         <span className="text-[8.5px] font-bold uppercase tracking-wider text-slate-400 block">
                           Amount in Words:
@@ -685,13 +512,9 @@ export default function PrintReceiptModal({
                         <span className="text-[8.5px] font-bold uppercase tracking-wider text-slate-400">
                           Voucher Status:
                         </span>
-                        {isPremiumReceipt ? (
-                          <span className="text-amber-900 font-extrabold text-[8.5px] flex items-center gap-1 bg-amber-50 border border-amber-300 px-2 py-0.5 rounded-md">
-                            <Award className="w-3 h-3 text-amber-600 shrink-0" /> Full Session Cleared (Up to March)
-                          </span>
-                        ) : activeReceipt.arrears === 0 ? (
+                        {settlement === "cleared" ? (
                           <span className="text-emerald-700 font-extrabold text-[8.5px] flex items-center gap-1 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" /> All Session Dues Settled (Nil)
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" /> No Outstanding at Issue
                           </span>
                         ) : isVoucherFullyPaid ? (
                           <span className="text-emerald-700 font-extrabold text-[8.5px] flex items-center gap-1 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
@@ -706,48 +529,12 @@ export default function PrintReceiptModal({
                     </div>
 
                     {/* Middle: Dynamic Fixed-Amount UPI QR Code */}
-                    {isUpiPayment && (
-                      <div className="col-span-3 flex flex-col items-center justify-center text-center self-center py-0.5 space-y-0.5">
-                        <span className="font-black uppercase text-slate-500 tracking-wider leading-none block text-[7px]">
-                          Scan to Pay via UPI
-                        </span>
-                        {upiQrUrl ? (
-                          <img
-                            src={upiQrUrl}
-                            alt="Fixed Amount UPI QR"
-                            className={`object-contain ${
-                              receiptPageSize === "A5" ? "w-[68px] h-[68px]" : "w-[76px] h-[76px]"
-                            }`}
-                          />
-                        ) : (
-                          <div
-                            className={`bg-slate-100 animate-pulse rounded ${
-                              receiptPageSize === "A5" ? "w-[68px] h-[68px]" : "w-[76px] h-[76px]"
-                            }`}
-                          />
-                        )}
-                        <div className="leading-tight text-center">
-                          <span className="font-mono font-black text-emerald-800 text-[10px] block">
-                            {formatP(activeReceipt.amount)}
-                          </span>
-                          {activeReceipt.transactionRef && (
-                            <p className="text-slate-600 font-bold text-[7px] leading-tight truncate max-w-[125px] mt-0.5">
-                              Ref: {activeReceipt.transactionRef.replace(/^UPI\s*/i, "")}
-                            </p>
-                          )}
-                          <p className="text-slate-400 font-semibold text-[6.5px] tracking-tight mt-0.5">
-                            PhonePe • GPay • Paytm
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
                     {/* Right: Totals Card + Cashier Verification Block */}
-                    <div className={`${isUpiPayment ? "col-span-4" : "col-span-5"} space-y-1.5`}>
+                    <div className={`col-span-5 space-y-1.5`}>
                       {/* Totals Arithmetic Card */}
-                      <div className="bg-slate-50/80 border border-slate-200/90 rounded-xl p-2.5 sm:p-3 space-y-1 text-right text-[9.5px]">
+                      <div className="receipt-totals bg-slate-50/80 border border-slate-200/90 rounded-xl p-2.5 sm:p-3 space-y-1 text-right text-[9.5px]">
                         <div className="flex justify-between items-center text-slate-500 font-semibold">
-                          <span>Invoice Total:</span>
+                          <span>Receipt Fee Total:</span>
                           <span className="text-slate-800 font-mono font-bold">
                             {formatP(activeReceipt.subtotal || activeReceipt.amount)}
                           </span>
@@ -766,13 +553,13 @@ export default function PrintReceiptModal({
                         </div>
                         {activeReceipt.arrears > 0 ? (
                           <div className="flex justify-between items-center text-rose-700 font-black border-t border-rose-200/80 pt-0.5 text-[9px]">
-                            <span>Total Remaining Dues:</span>
+                            <span>Family Outstanding:</span>
                             <span className="font-mono">{formatP(activeReceipt.arrears)}</span>
                           </div>
                         ) : (
                           <div className="flex justify-between items-center text-emerald-700 font-bold border-t border-emerald-200/70 pt-0.5 text-[8.5px]">
                             <span>Remaining Balance:</span>
-                            <span className="font-mono font-black">Nil (Cleared)</span>
+                            <span className="font-mono font-black">{settlement === "cleared" ? "Nil (Cleared)" : "Not available"}</span>
                           </div>
                         )}
                       </div>
@@ -781,7 +568,7 @@ export default function PrintReceiptModal({
                       <div className="flex items-center justify-between px-2 py-1 border border-slate-200/80 rounded-lg bg-slate-50/60">
                         <div className="flex items-center gap-1.5 text-emerald-700">
                           <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                          <span className="text-[8px] font-black uppercase tracking-wider">System Verified</span>
+                          <span className="text-[8px] font-black uppercase tracking-wider">Collected by</span>
                         </div>
                         <div className="text-right">
                           <p className="font-black text-slate-900 text-[10px] leading-tight">
@@ -831,6 +618,13 @@ export default function PrintReceiptModal({
 
               {/* 3. Print Voucher */}
               <button
+              onClick={() => handleGeneratePdf(false)}
+              disabled={isGeneratingPdf || !verifyQrUrl}
+              className="flex min-h-12 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 disabled:opacity-50 cursor-pointer"
+            >
+              Download PDF
+            </button>
+            <button
                 type="button"
                 onClick={() => window.print()}
                 className="flex min-h-12 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 shadow-sm transition-colors cursor-pointer hover:bg-slate-50"

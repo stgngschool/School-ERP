@@ -432,7 +432,7 @@ export function enrichReceiptWithStudentDetails(rec: any, students: any[]): any 
     fatherName: resolvedFatherName,
     subtotal: rec.subtotal || rec.amount,
     discount: rec.discount || 0,
-    arrears: rec.arrears || 0,
+    arrears: rec.arrears,
     amountInWords: rec.amountInWords || numberToIndianWords(rec.amount),
   };
 }
