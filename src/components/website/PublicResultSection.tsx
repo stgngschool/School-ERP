@@ -84,9 +84,9 @@ export default function PublicResultSection() {
       .then((data) => {
         if (data) {
           if (data.isEnabled !== undefined) setPortalEnabled(data.isEnabled);
-          if (data.allowedExams && Array.isArray(data.allowedExams) && data.allowedExams.length > 0) {
+          if (Array.isArray(data.allowedExams)) {
             setAllowedExams(data.allowedExams);
-            setSelectedExam(data.allowedExams[0]);
+            setSelectedExam(data.allowedExams[0] || "");
           }
         }
       })
@@ -100,6 +100,7 @@ export default function PublicResultSection() {
       return;
     }
 
+    if (!allowedExams.length) { setError("No examination results have been published yet."); return; }
     setLoading(true);
     setError(null);
 
@@ -298,7 +299,7 @@ export default function PublicResultSection() {
                   {/* Submit Button */}
                   <button
                     type="submit"
-                    disabled={loading}
+                    disabled={loading || allowedExams.length === 0}
                     className="w-full mt-2 sm:mt-3 py-3.5 sm:py-4 rounded-xl sm:rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md shadow-indigo-600/20 active:scale-[0.99] transition disabled:opacity-50 cursor-pointer"
                   >
                     {loading ? (
@@ -469,13 +470,13 @@ export default function PublicResultSection() {
                             <th className="py-2.5 px-2">#</th>
                             <th className="py-2.5 px-3">Subject</th>
                             {result.subjects.some((s) => s.notebook !== null) && (
-                              <th className="py-2.5 px-2 text-center">Notebook (/5)</th>
+                              <th className="py-2.5 px-2 text-center">Notebook</th>
                             )}
                             {result.subjects.some((s) => s.subjectEnrichment !== null) && (
-                              <th className="py-2.5 px-2 text-center">Sub. Enrich (/5)</th>
+                              <th className="py-2.5 px-2 text-center">Sub. Enrich</th>
                             )}
                             {result.subjects.some((s) => s.practical !== null) && (
-                              <th className="py-2.5 px-2 text-center">Practical (/10)</th>
+                              <th className="py-2.5 px-2 text-center">Practical</th>
                             )}
                             <th className="py-2.5 px-3 text-center whitespace-nowrap">Marks Obtained</th>
                             <th className="py-2.5 px-3 text-right">Remarks</th>

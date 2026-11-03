@@ -1,5 +1,7 @@
 "use client";
 
+import { defaultOpenExam } from "@/lib/examDefault";
+import { createMarksLoadGuard, hasMarksDraftValues, readMarksRoster } from "@/lib/marksRosterLoad";
 import { assertMarksSaved } from "@/lib/marksSaveResult";
 import React, { useState, useEffect, useRef, useDeferredValue, useMemo, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
@@ -48,23 +50,13 @@ const DEFAULT_EXAM_CONFIG: Record<string, { isSplit: boolean; maxMarks: number; 
   },
   "Half Yearly": {
     isSplit: true,
-    maxMarks: 100,
-    components: [
-      { name: "Written Exam", max: 80 },
-      { name: "Note Book", max: 5 },
-      { name: "Sub. Enrich.", max: 5 },
-      { name: "Pr. Act.", max: 10 },
-    ],
+    maxMarks: 80,
+    components: [{ name: "Written Exam", max: 80 }],
   },
   "Annual": {
     isSplit: true,
-    maxMarks: 100,
-    components: [
-      { name: "Written Exam", max: 80 },
-      { name: "Note Book", max: 5 },
-      { name: "Sub. Enrich.", max: 5 },
-      { name: "Pr. Act.", max: 10 },
-    ],
+    maxMarks: 80,
+    components: [{ name: "Written Exam", max: 80 }],
   },
   "Pre-Board": {
     isSplit: false,
@@ -1013,7 +1005,12 @@ export default function MarksFeedingConsole() {
   }, [schoolInfo.exams]);
 
   const [selectedClass, setSelectedClass] = useState("");
-  const [selectedExam, setSelectedExam] = useState(availableExams[0] || "Unit-1");
+  const preferredExam = defaultOpenExam(availableExams, schoolInfo.lockedExams, schoolInfo.examOpenedOrder);
+  const [selectedExam, setSelectedExam] = useState(preferredExam);
+  const manuallySelectedExam = useRef(false);
+  useEffect(() => {
+    if (!manuallySelectedExam.current || !availableExams.includes(selectedExam)) setSelectedExam(preferredExam);
+  }, [preferredExam, availableExams, selectedExam]);
 
   // Dynamic Subjects filtered by selected class curriculum
   const availableSubjects = useMemo(() => {
@@ -1076,7 +1073,14 @@ export default function MarksFeedingConsole() {
   const [savedInDbMap, setSavedInDbMap] = useState<Record<string, boolean>>({});
   const [isDraftRestored, setIsDraftRestored] = useState(false);
   const [loadingMarks, setLoadingMarks] = useState(false);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const loadGuardRef = useRef(createMarksLoadGuard());
+  const scopeKey = JSON.stringify([selectedClass, selectedExam, selectedSubject]);
+  const currentScopeRef = useRef(scopeKey);
+  currentScopeRef.current = scopeKey;
+  const [loadedScope, setLoadedScope] = useState<string | null>(null);
+  const [marksLoadError, setMarksLoadError] = useState<string | null>(null);
+  const marksUnavailable = loadingMarks || !!marksLoadError || loadedScope !== scopeKey;
+  const editsDisabled = isExamLocked || marksUnavailable || saving || savingStudentId !== null;
 
   // Floating Toast Notification
   const [toast, setToast] = useState<{
@@ -1228,15 +1232,22 @@ export default function MarksFeedingConsole() {
   const loadMarks = useCallback(async () => {
     if (!selectedClass || !selectedExam || !selectedSubject) return;
 
+    const request = loadGuardRef.current.begin();
+    const requestScope = scopeKey;
+    const isCurrent = () => request.isCurrent() && currentScopeRef.current === requestScope;
+    // Snapshot the inputs before waiting; later selections must never leak into this load.
+    const currentClassStudents = classStudentsRef.current;
+    const currentStudents = studentsRef.current;
+    const currentSplitComponents = splitComponentsRef.current;
+    const currentIsSplit = isSplitExamRef.current;
+    const currentMaxValNum = maxValNumRef.current;
     setLoadingMarks(true);
+    setMarksLoadError(null);
     setIsDraftRestored(false);
 
     try {
       const rawClass = normalizeClassName(selectedClass);
       const section = normalizeSectionName(undefined, selectedClass);
-
-      if (abortControllerRef.current) abortControllerRef.current.abort();
-      abortControllerRef.current = new AbortController();
 
       // Check for phone draft in localStorage
       const draftKey = `draft_marks_${selectedClass}_${selectedExam}_${selectedSubject}`;
@@ -1250,40 +1261,20 @@ export default function MarksFeedingConsole() {
         // ignore
       }
 
-      let serverRecord: Record<string, any> = {};
-      try {
-        const res = await fetch(
-          `/api/marks/roster?class=${encodeURIComponent(rawClass)}&section=${encodeURIComponent(section)}&exam=${encodeURIComponent(selectedExam)}&subject=${encodeURIComponent(selectedSubject)}`,
-          {
-            credentials: "include",
-            cache: "no-store",
-            signal: abortControllerRef.current.signal,
-          }
-        );
-        if (res.ok) {
-          const resData = await res.json();
-          if (typeof resData.isLocked === "boolean") {
-            setServerIsExamLocked(resData.isLocked);
-          }
-          serverRecord = resData.marks || resData;
-        }
-      } catch (fetchErr: any) {
-        if (fetchErr.name !== "AbortError") {
-          console.warn("Could not fetch remote marks, initializing local list:", fetchErr);
-        }
-      }
+      const res = await fetch(
+        `/api/marks/roster?class=${encodeURIComponent(rawClass)}&section=${encodeURIComponent(section)}&exam=${encodeURIComponent(selectedExam)}&subject=${encodeURIComponent(selectedSubject)}`,
+        { credentials: "include", cache: "no-store", signal: request.signal }
+      );
+      const resData = await readMarksRoster(res);
+      if (!isCurrent()) return;
+      if (typeof resData.isLocked === "boolean") setServerIsExamLocked(resData.isLocked);
+      const serverRecord = resData.marks;
 
       const newRoster: Record<string, StudentEntry> = {};
       const newSavedMap: Record<string, boolean> = {};
       const newSavedInDbMap: Record<string, boolean> = {};
       let foundServer = false;
       let hasDraft = false;
-
-      const currentClassStudents = classStudentsRef.current;
-      const currentStudents = studentsRef.current;
-      const currentSplitComponents = splitComponentsRef.current;
-      const currentIsSplit = isSplitExamRef.current;
-      const currentMaxValNum = maxValNumRef.current;
 
       const studentsToUse = currentClassStudents.length > 0
         ? currentClassStudents
@@ -1293,7 +1284,7 @@ export default function MarksFeedingConsole() {
         const existingMark = serverRecord[student.id];
         const draftMark = draftData ? draftData[student.id] : null;
 
-        // Check if draft has genuinely entered values (ignore stale dummy all-zero entries)
+        // Check if draft has genuinely entered values (including legitimate zero marks)
         let draftHasValues = false;
         if (draftMark) {
           if (draftMark.breakdown && typeof draftMark.breakdown === "object") {
@@ -1316,11 +1307,7 @@ export default function MarksFeedingConsole() {
             }
           }
 
-          draftHasValues = (
-            draftMark.isAbsent === true ||
-            (draftMark.marksObtained !== "" && draftMark.marksObtained !== "0") ||
-            (draftMark.breakdown && Object.values(draftMark.breakdown).some((v) => v !== "" && v !== "0"))
-          );
+          draftHasValues = hasMarksDraftValues(draftMark);
         }
 
         if (draftHasValues && draftMark) {
@@ -1364,7 +1351,7 @@ export default function MarksFeedingConsole() {
 
             // Pro-rate across components if mark has total but no component breakdown
             if (!hasColumnFields && existingMark.marksObtained !== null && existingMark.marksObtained !== undefined && !isAbsent) {
-              const total = parseFloat(existingMark.marksObtained) || 0;
+              const total = parseFloat(String(existingMark.marksObtained)) || 0;
               let rem = total;
               currentSplitComponents.forEach((comp: any, idx: number) => {
                 if (idx === currentSplitComponents.length - 1) {
@@ -1422,6 +1409,8 @@ export default function MarksFeedingConsole() {
         }
       });
 
+      if (!isCurrent()) return;
+      setLoadedScope(requestScope);
       setMarksRoster(newRoster);
       setSavedMap(newSavedMap);
       setSavedInDbMap(newSavedInDbMap);
@@ -1429,36 +1418,30 @@ export default function MarksFeedingConsole() {
         setIsDraftRestored(true);
       }
     } catch (err) {
+      if (!isCurrent()) return;
       console.error("loadMarks error:", err);
-      const fallbackRoster: Record<string, StudentEntry> = {};
-      classStudentsRef.current.forEach((student) => {
-        fallbackRoster[student.id] = { marksObtained: "", remarks: "", breakdown: {}, isAbsent: false };
-      });
-      setMarksRoster(fallbackRoster);
-      setSavedMap({});
-      setSavedInDbMap({});
+      setMarksLoadError(err instanceof Error ? err.message : "Could not load saved marks. Please retry.");
     } finally {
-      setLoadingMarks(false);
+      if (isCurrent()) setLoadingMarks(false);
     }
-  }, [selectedClass, selectedExam, selectedSubject]);
+  }, [selectedClass, selectedExam, selectedSubject, scopeKey]);
 
   // ─── AUTO-LOAD MARKS WHEN FILTER CHANGES ─────────────────────────
   useEffect(() => {
     if (selectedClass && selectedExam && selectedSubject) {
       loadMarks();
     }
+    return () => loadGuardRef.current.abort();
   }, [selectedClass, selectedExam, selectedSubject, loadMarks]);
 
   // ─── DRAFT AUTO-SAVE TO LOCALSTORAGE ON EDIT (Debounced by 800ms) ──────────
   useEffect(() => {
-    if (!selectedClass || !selectedExam || !selectedSubject) return;
+    if (!selectedClass || !selectedExam || !selectedSubject || marksUnavailable) return;
     const draftKey = `draft_marks_${selectedClass}_${selectedExam}_${selectedSubject}`;
     
     // Check if there are any entered marks that are NOT yet saved to server
     const hasUnsavedEntered = Object.entries(marksRoster).some(([studentId, m]) => {
-      const hasValue =
-        m.marksObtained !== "" ||
-        (m.breakdown && Object.values(m.breakdown).some((v) => v !== ""));
+      const hasValue = hasMarksDraftValues(m);
       return hasValue && !savedMap[studentId];
     });
 
@@ -1478,10 +1461,17 @@ export default function MarksFeedingConsole() {
       }
     }, 800);
 
-    return () => clearTimeout(timer);
-  }, [marksRoster, savedMap, selectedClass, selectedExam, selectedSubject]);
+    return () => {
+      clearTimeout(timer);
+      // Keep the last keystrokes with their original class/exam/subject on a quick switch.
+      if (currentScopeRef.current !== scopeKey) {
+        try { localStorage.setItem(draftKey, JSON.stringify(marksRoster)); } catch {}
+      }
+    };
+  }, [marksRoster, savedMap, selectedClass, selectedExam, selectedSubject, marksUnavailable, scopeKey]);
 
   const clearDraft = () => {
+    if (editsDisabled) return;
     const draftKey = `draft_marks_${selectedClass}_${selectedExam}_${selectedSubject}`;
     try {
       localStorage.removeItem(draftKey);
@@ -1661,6 +1651,9 @@ export default function MarksFeedingConsole() {
   // ─── CLEAR / RESET SINGLE STUDENT MARKS ─────────────────────────────────────
   const handleClearSingle = useCallback(
     async (studentId: string) => {
+      if (editsDisabled) return;
+      const mutationScope = scopeKey;
+      const isCurrentMutation = () => currentScopeRef.current === mutationScope;
       if (isExamLocked) {
         showToast("error", "Exam Locked 🔒", `Examination '${selectedExam}' is confirmed and locked. Edits are disabled.`);
         return;
@@ -1669,12 +1662,10 @@ export default function MarksFeedingConsole() {
       const studentName = student ? student.name : "Student";
       const wasSaved = !!savedInDbMap[studentId];
 
-      // Immediately clear in-memory state
-      setMarksRoster((prev) => ({
-        ...prev,
-        [studentId]: { marksObtained: "", remarks: "", breakdown: {}, isAbsent: false },
-      }));
-      setSavedMap((prev) => ({ ...prev, [studentId]: false }));
+      const clearEntry = () => {
+        setMarksRoster((prev) => ({ ...prev, [studentId]: { marksObtained: "", remarks: "", breakdown: {}, isAbsent: false } }));
+        setSavedMap((prev) => ({ ...prev, [studentId]: false }));
+      };
 
       if (wasSaved) {
         if (!selectedSubject || !selectedExam) return;
@@ -1692,6 +1683,8 @@ export default function MarksFeedingConsole() {
           });
           const json = await res.json();
           if (!res.ok) throw new Error(json.error || "Failed to clear marks.");
+          if (!isCurrentMutation()) return;
+          clearEntry();
           setSavedInDbMap((prev) => ({ ...prev, [studentId]: false }));
           showToast("success", "Cleared ✓", `${studentName}: Marks removed from cloud.`, 2500);
         } catch (err: any) {
@@ -1701,10 +1694,11 @@ export default function MarksFeedingConsole() {
           setSavingStudentId(null);
         }
       } else {
+        clearEntry();
         showToast("info", "Reset", `${studentName}: Entry cleared.`, 2000);
       }
     },
-    [classStudents, savedInDbMap, selectedSubject, selectedExam, showToast]
+    [classStudents, savedInDbMap, selectedSubject, selectedExam, showToast, isExamLocked, editsDisabled, scopeKey]
   );
 
   // ─── PAYLOAD CONSTRUCTOR HELPER ─────────────────────────────────────────────
@@ -1765,6 +1759,9 @@ export default function MarksFeedingConsole() {
   // ─── INSTANT SAVE FOR A SINGLE STUDENT ──────────────────────────────────────
   const handleSaveSingle = useCallback(
     async (studentId: string) => {
+      if (editsDisabled) return;
+      const mutationScope = scopeKey;
+      const isCurrentMutation = () => currentScopeRef.current === mutationScope;
       if (isExamLocked) {
         showToast("error", "Exam Locked 🔒", `Examination '${selectedExam}' is confirmed and locked. Edits are disabled.`);
         return;
@@ -1809,6 +1806,7 @@ export default function MarksFeedingConsole() {
         }
 
         assertMarksSaved(json, 1);
+        if (!isCurrentMutation()) return;
         setSavedMap((prev) => ({ ...prev, [studentId]: true }));
         setSavedInDbMap((prev) => ({ ...prev, [studentId]: true }));
         const actionLabel = payload.isAbsent ? "Absent status recorded!" : "Marks safely saved!";
@@ -1820,11 +1818,14 @@ export default function MarksFeedingConsole() {
         setSavingStudentId(null);
       }
     },
-    [classStudents, selectedSubject, selectedExam, getStudentPayload, maxValNum, showToast, isExamLocked]
+    [classStudents, selectedSubject, selectedExam, getStudentPayload, maxValNum, showToast, isExamLocked, editsDisabled, scopeKey]
   );
 
   // ─── SAVE ALL MARKS (Safe Chunked 15-Student Execution) ──────────────────────
   const handleSaveAll = async () => {
+    if (editsDisabled) return;
+    const mutationScope = scopeKey;
+    const isCurrentMutation = () => currentScopeRef.current === mutationScope;
     if (isExamLocked) {
       showToast("error", "Exam Locked 🔒", `Examination '${selectedExam}' is locked by Admin. Marks cannot be modified.`);
       return;
@@ -1915,6 +1916,7 @@ export default function MarksFeedingConsole() {
           }
 
           assertMarksSaved(json, chunk.length);
+          if (!isCurrentMutation()) return;
 
           // Mark this chunk as saved only after all rows are confirmed
           setSavedMap((prev) => {
@@ -1947,6 +1949,7 @@ export default function MarksFeedingConsole() {
         }
       }
 
+      if (!isCurrentMutation()) return;
       // Update savedInDbMap: mark saved as in DB, clear deleted
       setSavedInDbMap((prev) => {
         const next = { ...prev };
@@ -2154,7 +2157,7 @@ export default function MarksFeedingConsole() {
             <button
               type="button"
               onClick={loadMarks}
-              disabled={loadingMarks}
+              disabled={loadingMarks || saving || savingStudentId !== null}
               title="Reload from server"
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-[10px] font-extrabold text-slate-600 hover:bg-slate-100 transition-all cursor-pointer shadow-2xs shrink-0"
             >
@@ -2185,6 +2188,7 @@ export default function MarksFeedingConsole() {
               </div>
             ) : (
               <select
+                disabled={saving || savingStudentId !== null}
                 value={selectedClass}
                 onChange={(e) => setSelectedClass(e.target.value)}
                 className="w-full text-[11px] font-extrabold py-2 px-2.5 sm:py-2.5 sm:px-3 border border-slate-200/80 rounded-xl sm:rounded-2xl outline-none bg-slate-50 hover:bg-slate-100/60 focus:bg-white focus:border-indigo-600 text-slate-700 transition-all cursor-pointer shadow-2xs truncate"
@@ -2210,8 +2214,9 @@ export default function MarksFeedingConsole() {
               )}
             </div>
             <select
+              disabled={saving || savingStudentId !== null}
               value={selectedExam}
-              onChange={(e) => setSelectedExam(e.target.value)}
+              onChange={(e) => { manuallySelectedExam.current = true; setSelectedExam(e.target.value); }}
               className="w-full text-[11px] font-extrabold py-2 px-2.5 sm:py-2.5 sm:px-3 border border-slate-200/80 rounded-xl sm:rounded-2xl outline-none bg-slate-50 hover:bg-slate-100/60 focus:bg-white focus:border-indigo-600 text-slate-700 transition-all cursor-pointer shadow-2xs truncate"
             >
               {availableExams.map((ex) => {
@@ -2230,6 +2235,7 @@ export default function MarksFeedingConsole() {
               Subject
             </label>
             <select
+              disabled={saving || savingStudentId !== null}
               value={selectedSubject}
               onChange={(e) => setSelectedSubject(e.target.value)}
               className="w-full text-[11px] font-extrabold py-2 px-2.5 sm:py-2.5 sm:px-3 border border-slate-200/80 rounded-xl sm:rounded-2xl outline-none bg-slate-50 hover:bg-slate-100/60 focus:bg-white focus:border-indigo-600 text-slate-700 transition-all cursor-pointer shadow-2xs truncate"
@@ -2291,6 +2297,12 @@ export default function MarksFeedingConsole() {
       )}
 
       {/* ─── Draft Restored Alert Banner ─── */}
+      {marksLoadError && (
+        <div role="alert" className="flex items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+          <span>Saved marks could not be loaded. Your previous entries are preserved. {marksLoadError}</span>
+          <button type="button" onClick={loadMarks} disabled={loadingMarks} className="shrink-0 font-bold underline">Retry loading marks</button>
+        </div>
+      )}
       {isDraftRestored && (
         <div className="flex items-center justify-between bg-amber-50 text-amber-900 border border-amber-200/80 p-3 rounded-2xl text-xs font-bold shadow-2xs">
           <div className="flex items-center gap-2">
@@ -2412,7 +2424,7 @@ export default function MarksFeedingConsole() {
           </div>
           <button
             onClick={handleSaveAll}
-            disabled={saving || classStudents.length === 0 || isExamLocked}
+            disabled={editsDisabled || classStudents.length === 0}
             className={`hidden sm:flex items-center gap-1.5 px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all ${
               isExamLocked
                 ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed shadow-none"
@@ -2443,7 +2455,7 @@ export default function MarksFeedingConsole() {
         </div>
 
         {/* 📱 MOBILE VIEW: Optimized Fast Cards */}
-        <div className="block sm:hidden space-y-3">
+        <div inert={marksUnavailable || saving || savingStudentId !== null} className="block sm:hidden space-y-3">
           {filteredStudents.length > 0 ? (
             filteredStudents.map((student) => (
               <StudentMobileCard
@@ -2474,7 +2486,7 @@ export default function MarksFeedingConsole() {
         </div>
 
         {/* 💻 DESKTOP VIEW: Full Data Table */}
-        <div className="hidden sm:block bg-white border border-slate-200/60 sm:rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] overflow-hidden">
+        <div inert={marksUnavailable || saving || savingStudentId !== null} className="hidden sm:block bg-white border border-slate-200/60 sm:rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.015)] overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
@@ -2592,7 +2604,7 @@ export default function MarksFeedingConsole() {
         <div className="hidden sm:flex p-5 bg-slate-50/50 border-t border-slate-200/60 justify-end rounded-b-3xl">
           <button
             onClick={handleSaveAll}
-            disabled={saving || classStudents.length === 0 || isExamLocked}
+            disabled={editsDisabled || classStudents.length === 0}
             className={`flex items-center gap-2 py-3 px-7 rounded-2xl text-xs font-black uppercase tracking-wider transition-all ${
               isExamLocked
                 ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed shadow-none"
@@ -2640,7 +2652,7 @@ export default function MarksFeedingConsole() {
         <button
           type="button"
           onClick={handleSaveAll}
-          disabled={saving || classStudents.length === 0 || isExamLocked}
+          disabled={editsDisabled || classStudents.length === 0}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
             isExamLocked
               ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed shadow-none"

@@ -14,6 +14,7 @@ function matches(row: Data, where: Data = {}): boolean {
       if ('lte' in f) return new Date(row[key] as string) <= new Date(f.lte as string);
       if ('gte' in f) return new Date(row[key] as string) >= new Date(f.gte as string);
       if ('some' in f) return (row[key] as Data[]).some(r => matches(r, f.some as Data));
+      if ('none' in f) return !(row[key] as Data[]).some(r => matches(r, f.none as Data));
       return matches((row[key] || {}) as Data, f);
     }
     return row[key] === value;
@@ -33,4 +34,22 @@ test('dues include prior charges and only matching payments, excluding future se
   assert.equal(totals.totalCollectedPaisa, 9000);
   assert.equal(totals.totalDiscountsPaisa, 3000);
   assert.equal(totals.netDuesPaisa, 18000);
+});
+
+test('cancelled receipt fines do not remain as phantom dues in summary totals', async () => {
+  const startDate = new Date('2026-04-01');
+  const scope = { session: { startDate }, sessionId: 's1', studentId: 'a' };
+  const entries = [
+    { ...scope, entryType: 'CHARGE', amount: 10000 },
+    { ...scope, entryType: 'FINE', amount: 500, receiptItems: [{ receipt: { status: 'REVERSED' } }] },
+    { ...scope, entryType: 'FINE', amount: 200, receiptItems: [{ receipt: { status: 'ACTIVE' } }] },
+  ];
+  const db = {
+    ledgerEntry: { aggregate: async ({ where }: { where: Data }) => ({ _sum: { amount: entries.filter(row => matches(row, where)).reduce((sum, row) => sum + row.amount, 0) } }) },
+    receiptItem: { aggregate: async () => ({ _sum: { amount: 0 } }) },
+    receipt: { count: async () => 0 },
+  } as unknown as PrismaClient;
+  const result = await billingTotals(db, startDate, ['a']);
+  assert.equal(result.totalChargesPaisa, 10200);
+  assert.equal(result.netDuesPaisa, 10200);
 });

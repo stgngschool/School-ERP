@@ -1,5 +1,14 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 
+// Preserve raw reversal history in the ledger sheet, but exclude cancelled
+// allocations from student balances and the fee register.
+export const activeFinancialEntries = {
+  AND: [
+    { OR: [{ referenceId: null }, { receipt: { status: 'ACTIVE' } }] },
+    { OR: [{ entryType: { not: 'FINE' } }, { receiptItems: { none: { receipt: { status: 'REVERSED' } } } }] },
+  ],
+} satisfies Prisma.LedgerEntryWhereInput;
+
 // Shared directory/register profile: no passwords, photo bytes, or unused relations.
 export const syncStudentProfileSelect = {
   id: true,
@@ -51,6 +60,7 @@ export async function fetchDirectoryStudents(db: Pick<PrismaClient, "student" | 
   const grouped = await Promise.all([true, false].map((negative) => db.ledgerEntry.groupBy({
     by: ["studentId", "entryType"],
     where: {
+      ...activeFinancialEntries,
       entryType: { in: ["CHARGE", "FINE", "PAYMENT", "DISCOUNT"] },
       amount: negative ? { lt: 0 } : { gte: 0 },
     },

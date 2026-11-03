@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { getAuthUser } from "@/lib/auth";
 import db from "@/lib/db";
 import { getCachedSchoolConfig } from "@/lib/cache/schoolConfigCache";
+import { isAbsentRemark } from "@/lib/marksAbsence";
 
 export const dynamic = "force-dynamic";
 
@@ -150,7 +152,7 @@ export async function POST(request: Request) {
 
       if (isAbsent) {
         obtained = 0;
-        if (!remarks.toUpperCase().includes("ABSENT")) {
+        if (!isAbsentRemark(remarks)) {
           remarks = remarks ? `${remarks} (ABSENT)` : "ABSENT";
         }
       }
@@ -233,7 +235,7 @@ export async function POST(request: Request) {
           notebook: entry.notebook,
           subjectEnrichment: entry.subjectEnrichment,
           practical: entry.practical,
-          breakdown: entry.breakdown || undefined,
+          breakdown: entry.breakdown ?? Prisma.DbNull,
           remarks: entry.remarks,
         },
         create: {

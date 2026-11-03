@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
 import {
   getCleanClassKey,
@@ -10,7 +10,7 @@ import {
   normalizeClassName,
   normalizeSectionName
 } from "@/lib/classUtils";
-import { isAbsentRemark } from "@/lib/marksAbsence";
+import { buildMarksheetSummary } from "@/lib/marksheetSummary";
 import {
   Printer,
   Layers,
@@ -141,10 +141,15 @@ export default function PrintMarksheets() {
 
   const [isDataLoaded, setIsDataLoaded] = useState(false);
 
-  // When class or session changes, reset the data loaded state so they have to fetch again
+  const marksRequest = useRef<AbortController | null>(null);
+
+  // Cancel requests when their class/session scope is no longer current.
   useEffect(() => {
+    marksRequest.current?.abort();
+    setLoadingMarks(false);
     setIsDataLoaded(false);
     setClassMarks([]);
+    return () => marksRequest.current?.abort();
   }, [selectedClass, selectedSession]);
 
   const formatDisplayDate = (isoStr: string) => {
@@ -156,27 +161,40 @@ export default function PrintMarksheets() {
     return isoStr;
   };
 
-  const loadClassData = () => {
-    if (!selectedClass) return;
-    const cName = normalizeClassName(selectedClass);
-    const cSec = normalizeSectionName(undefined, selectedClass);
+  const loadClassData = async () => {
     const targetSessionObj = sessions.find((s) => s.name === selectedSession);
-    const sessionQuery = targetSessionObj ? `&sessionId=${encodeURIComponent(targetSessionObj.id)}` : "";
+    if (!selectedClass || !targetSessionObj) {
+      showToast("error", "Academic Data Unavailable", "Select an available academic session first.");
+      return;
+    }
+    marksRequest.current?.abort();
+    const controller = new AbortController();
+    marksRequest.current = controller;
     setLoadingMarks(true);
-    fetch(`/api/marks/class?class=${encodeURIComponent(cName)}&section=${encodeURIComponent(cSec)}${sessionQuery}`, {
-      credentials: "include",
-      cache: "no-store",
-    })
-      .then(res => res.json())
-      .then(data => {
-        setClassMarks(Array.isArray(data) ? data : []);
-        setIsDataLoaded(true);
-        setLoadingMarks(false);
-      })
-      .catch(err => {
-        console.error("Failed to fetch marks", err);
-        setLoadingMarks(false);
+    setIsDataLoaded(false);
+    const query = new URLSearchParams({
+      class: normalizeClassName(selectedClass),
+      section: normalizeSectionName(undefined, selectedClass),
+      sessionId: targetSessionObj.id,
+    });
+    try {
+      const res = await fetch(`/api/marks/class?${query}`, {
+        credentials: "include", cache: "no-store", signal: controller.signal,
       });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Unable to load academic data.");
+      if (!Array.isArray(data)) throw new Error("Academic data returned an invalid response.");
+      if (controller.signal.aborted || marksRequest.current !== controller) return;
+      setClassMarks(data);
+      setIsDataLoaded(true);
+    } catch (error) {
+      if (!controller.signal.aborted && marksRequest.current === controller) {
+        setClassMarks([]);
+        showToast("error", "Academic Data Unavailable", (error as Error).message);
+      }
+    } finally {
+      if (!controller.signal.aborted && marksRequest.current === controller) setLoadingMarks(false);
+    }
   };
 
   const handleClaimToggle = async (student: any) => {
@@ -489,15 +507,15 @@ export default function PrintMarksheets() {
 
       {!showDistributionLog && (
         <div className="mt-8 flex justify-center print:mt-0 print:block print-area">
-          {!isDataLoaded ? (
-            <div className="flex flex-col items-center justify-center py-20 text-slate-400 no-print">
-              <BookOpen className="h-12 w-12 mb-4 opacity-30" />
-              <p className="font-bold text-sm">Please click "Load Academic Data" to view marksheets.</p>
-            </div>
-          ) : loadingMarks ? (
+          {loadingMarks ? (
             <div className="flex flex-col items-center justify-center py-20 text-indigo-600 no-print">
               <Loader2 className="h-10 w-10 animate-spin mb-4" />
               <p className="font-bold">Loading Academic Data...</p>
+            </div>
+          ) : !isDataLoaded ? (
+            <div className="flex flex-col items-center justify-center py-20 text-slate-400 no-print">
+              <BookOpen className="h-12 w-12 mb-4 opacity-30" />
+              <p className="font-bold text-sm">Please click "Load Academic Data" to view marksheets.</p>
             </div>
           ) : isBulkPrintMode ? (
           <div className="space-y-8 w-full max-w-[210mm]">
@@ -505,7 +523,6 @@ export default function PrintMarksheets() {
               <SingleMarksheetCard
                 key={std.id}
                 student={std}
-                availableExams={availableExams}
                 selectedReportCardExam={selectedReportCardExam}
                 getCbseGrade={getCbseGrade}
                 classMarks={classMarks}
@@ -539,8 +556,7 @@ export default function PrintMarksheets() {
                 </div>
                 <SingleMarksheetCard
                   student={student}
-                  availableExams={availableExams}
-                  selectedReportCardExam={selectedReportCardExam}
+                    selectedReportCardExam={selectedReportCardExam}
                   getCbseGrade={getCbseGrade}
                   classMarks={classMarks}
                   sessionYear={selectedSession}
@@ -568,7 +584,6 @@ function numberToWords(num: number): string {
 
 function SingleMarksheetCard({
   student,
-  availableExams,
   selectedReportCardExam,
   getCbseGrade,
   classMarks,
@@ -576,7 +591,6 @@ function SingleMarksheetCard({
   issueDate,
 }: {
   student: any;
-  availableExams: string[];
   selectedReportCardExam: string;
   getCbseGrade: (pct: number) => string;
   classMarks: any[];
@@ -627,124 +641,14 @@ function SingleMarksheetCard({
     }
   }
 
-  const recordedSubjects = Array.from(new Set(sMarks.map((m) => m.subject.toUpperCase())));
-  let displaySubjects: string[] = [];
-  if (recordedSubjects.length > 0) {
-    const matchedCurriculum = defaultSubjects.filter((dSub) =>
-      recordedSubjects.some((rSub) => {
-        if (rSub === dSub) return true;
-        if ((rSub === "SCIENCE/EVS" || rSub === "SCIENCE" || rSub === "EVS") && (dSub === "SCIENCE/EVS" || dSub === "SCIENCE" || dSub === "EVS")) return true;
-        if ((rSub === "G.K." || rSub === "GK" || rSub === "GENERAL KNOWLEDGE") && (dSub === "G.K." || dSub === "GK" || dSub === "GENERAL KNOWLEDGE")) return true;
-        if ((rSub === "DRAWING" || rSub === "ART") && (dSub === "DRAWING" || dSub === "ART")) return true;
-        if ((rSub === "SOCIAL SCIENCE" || rSub === "SOCIAL STUDIES" || rSub === "SST") && (dSub === "SOCIAL SCIENCE" || dSub === "SOCIAL STUDIES" || dSub === "SST")) return true;
-        if ((rSub === "COMPUTER" || rSub === "COMPUTER SCIENCE") && (dSub === "COMPUTER" || dSub === "COMPUTER SCIENCE")) return true;
-        return false;
-      })
-    );
-    const extraSubjects = recordedSubjects.filter(
-      (rSub) => !matchedCurriculum.some((mSub) => mSub === rSub)
-    );
-    displaySubjects = matchedCurriculum.length > 0 ? [...matchedCurriculum, ...extraSubjects] : recordedSubjects;
-  } else {
-    displaySubjects = defaultSubjects;
-  }
-
-  let term1TotalObtained = 0;
-  let term2TotalObtained = 0;
-  let grandMaxTotal = 0;
-  let grandObtTotal = 0;
-
-  const subjectRows = displaySubjects.map((subName, idx) => {
-    const subMarks = sMarks.filter((m) => {
-      const ms = (m.subject || "").toUpperCase().trim();
-      const sn = subName.toUpperCase().trim();
-      if (ms === sn) return true;
-      if ((ms === "SCIENCE/EVS" || ms === "SCIENCE" || ms === "EVS") && (sn === "SCIENCE/EVS" || sn === "SCIENCE" || sn === "EVS")) return true;
-      if ((ms === "G.K." || ms === "GK" || ms === "GENERAL KNOWLEDGE") && (sn === "G.K." || sn === "GK" || sn === "GENERAL KNOWLEDGE")) return true;
-      if ((ms === "DRAWING" || ms === "ART") && (sn === "DRAWING" || sn === "ART")) return true;
-      if ((ms === "SOCIAL SCIENCE" || ms === "SOCIAL STUDIES" || ms === "SST") && (sn === "SOCIAL SCIENCE" || sn === "SOCIAL STUDIES" || sn === "SST")) return true;
-      if ((ms === "COMPUTER" || ms === "COMPUTER SCIENCE") && (sn === "COMPUTER" || sn === "COMPUTER SCIENCE")) return true;
-      return false;
-    });
-    const t1Match = subMarks.find((m) => {
-      const e = m.examName.toLowerCase();
-      return e.includes("half") || e.includes("term 1") || e.includes("term-1");
-    }) || subMarks.find((m) => {
-      const e = m.examName.toLowerCase();
-      return e.includes("unit 1") || e.includes("unit-1");
-    });
-    let prAct1 = 0, noteBook1 = 0, subEnri1 = 0, halfYearly1 = 0, obt1 = 0;
-    if (t1Match) {
-      const b1 = t1Match.breakdown || {};
-      prAct1 = Number(b1["Practical / Activity"] ?? b1["Pr. Act."] ?? b1["Practical"] ?? t1Match.practical ?? 0);
-      noteBook1 = Number(b1["Notebook"] ?? b1["Note Book"] ?? t1Match.notebook ?? 0);
-      subEnri1 = Number(b1["Subject Enrichment"] ?? b1["Sub. Enrich."] ?? t1Match.subjectEnrichment ?? 0);
-      halfYearly1 = Number(b1["Written Exam"] ?? b1["Written"] ?? (t1Match.writtenExam ?? Math.max(0, t1Match.marksObtained - prAct1 - noteBook1 - subEnri1)));
-      obt1 = prAct1 + noteBook1 + subEnri1 + halfYearly1;
-    } else if (subMarks.length > 0) {
-       // fallback if they just entered some exam
-       const m = subMarks[0];
-       obt1 = m.marksObtained;
-       halfYearly1 = m.marksObtained;
-    }
-
-    const t2Match = subMarks.find((m) => {
-      const e = m.examName.toLowerCase();
-      if (e.includes("half")) return false; // Never match Half Yearly as Term 2
-      return e.includes("annual") || e.includes("final") || e.includes("term 2") || e.includes("term-2") || e.includes("yearly");
-    }) || subMarks.find((m) => {
-      const e = m.examName.toLowerCase();
-      return e.includes("unit 2") || e.includes("unit-2");
-    });
-    let prAct2 = 0, noteBook2 = 0, subEnri2 = 0, yearly2 = 0, obt2 = 0;
-    if (t2Match) {
-      const b2 = t2Match.breakdown || {};
-      prAct2 = Number(b2["Practical / Activity"] ?? b2["Pr. Act."] ?? b2["Practical"] ?? t2Match.practical ?? 0);
-      noteBook2 = Number(b2["Notebook"] ?? b2["Note Book"] ?? t2Match.notebook ?? 0);
-      subEnri2 = Number(b2["Subject Enrichment"] ?? b2["Sub. Enrich."] ?? t2Match.subjectEnrichment ?? 0);
-      yearly2 = Number(b2["Written Exam"] ?? b2["Written"] ?? (t2Match.writtenExam ?? Math.max(0, t2Match.marksObtained - prAct2 - noteBook2 - subEnri2)));
-      obt2 = prAct2 + noteBook2 + subEnri2 + yearly2;
-    } else if (
-      subMarks.length > 1 &&
-      subMarks[1] !== t1Match &&
-      !subMarks[1].examName.toLowerCase().includes("unit 1") &&
-      !subMarks[1].examName.toLowerCase().includes("unit-1") &&
-      !subMarks[1].examName.toLowerCase().includes("half") &&
-      subMarks[1].examName.toLowerCase() !== t1Match?.examName?.toLowerCase()
-    ) {
-       // fallback to second exam if t2 not found and not a term-1/duplicate exam
-       const m = subMarks[1];
-       obt2 = m.marksObtained;
-       yearly2 = m.marksObtained;
-    }
-
-    // Calculate dynamic max marks based on active terms (100 per conducted term or recorded maxMarks)
-    const hasTerm1 = t1Match || (subMarks.length > 0 && !t2Match);
-    const hasTerm2 = !!t2Match || (yearly2 > 0 || obt2 > 0);
-    const term1Max = t1Match?.maxMarks ? Number(t1Match.maxMarks) : (hasTerm1 ? 100 : 0);
-    const term2Max = t2Match?.maxMarks ? Number(t2Match.maxMarks) : (hasTerm2 ? 100 : 0);
-    const maxM = (term1Max + term2Max) > 0 ? (term1Max + term2Max) : 100;
-    const totalTermObt = obt1 + obt2;
-
-    term1TotalObtained += obt1;
-    term2TotalObtained += obt2;
-    grandMaxTotal += maxM;
-    grandObtTotal += totalTermObt;
-
-    const isAbsent1 = isAbsentRemark(t1Match?.remarks) || isAbsentRemark(subMarks[0]?.remarks);
-    const isAbsent2 = isAbsentRemark(t2Match?.remarks) || isAbsentRemark(subMarks[1]?.remarks);
-
-    return {
-      subName,
-      prAct1, noteBook1, subEnri1, halfYearly1, obt1,
-      prAct2, noteBook2, subEnri2, yearly2, obt2,
-      maxM, totalTermObt,
-      isAbsent1, isAbsent2,
-    };
-  });
-
+  const summary = buildMarksheetSummary(sMarks, defaultSubjects, selectedReportCardExam);
+  const { rows: subjectRows, term1TotalObtained, term2TotalObtained, grandMaxTotal, grandObtTotal, hasData } = summary;
   const overallPercentage = grandMaxTotal > 0 ? (grandObtTotal / grandMaxTotal) * 100 : 0;
-  const finalGrade = getCbseGrade(overallPercentage);
+  const isIncomplete = selectedReportCardExam === "All" && hasData && !summary.isComplete;
+  const canEvaluate = hasData && !isIncomplete;
+  const finalGrade = canEvaluate ? getCbseGrade(overallPercentage) : "—";
+  const percentageText = hasData ? `${overallPercentage.toFixed(2)}%` : "—";
+  const division = !canEvaluate ? "—" : overallPercentage >= 60 ? "First Division" : overallPercentage >= 45 ? "Second Division" : "Third Division";
 
   return (
     <div
@@ -762,7 +666,7 @@ function SingleMarksheetCard({
             <div className="grid grid-cols-3 items-center px-1">
               <div className="text-left text-[9px] font-sans font-extrabold text-slate-800 space-y-1.5 pt-1">
                 <p>SCHOOL CODE: <span className="font-black text-slate-950">09670707502</span></p>
-                <p>REPORT CARD NO: <span className="font-bold text-slate-700">GNG/{sessionStartYear}/{student.id.slice(0, 5).toUpperCase()}</span></p>
+                <p>REPORT CARD NO: <span className="font-bold text-slate-700">GNG/{sessionStartYear}/{(student.admissionNo || student.id).toString().toUpperCase()}</span></p>
               </div>
 
               <div className="flex justify-center items-center">
@@ -818,7 +722,7 @@ function SingleMarksheetCard({
               </div>
               <div className="px-3">
                 <span className="text-[8.5px] font-bold text-slate-500 uppercase tracking-wider block">Assessment Scope</span>
-                <span className="font-extrabold text-slate-900 text-xs">Full Academic Year</span>
+                <span className="font-extrabold text-slate-900 text-xs">{selectedReportCardExam === "All" ? "Full Academic Year" : selectedReportCardExam}</span>
               </div>
               <div className="pl-3">
                 <span className="text-[8.5px] font-bold text-slate-500 uppercase tracking-wider block">Academic Session</span>
@@ -855,38 +759,38 @@ function SingleMarksheetCard({
                 {subjectRows.map((row, idx) => (
                   <tr key={idx} className={`border-b border-slate-900 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/80"}`}>
                     <td className="py-1.5 px-2 border-r-2 border-slate-900 text-left font-black uppercase text-slate-950">{row.subName}</td>
-                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-bold text-slate-700">{row.isAbsent1 ? "AB" : row.prAct1}</td>
-                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-bold text-slate-700">{row.isAbsent1 ? "AB" : row.noteBook1}</td>
-                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-bold text-slate-700">{row.isAbsent1 ? "AB" : row.subEnri1}</td>
-                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-black text-slate-900">{row.isAbsent1 ? <span className="text-rose-700 font-black">AB</span> : row.halfYearly1}</td>
-                    <td className="py-1.5 px-0.5 border-r-2 border-slate-900 font-black bg-indigo-50/60 text-indigo-950">{row.isAbsent1 ? <span className="text-rose-700 font-black">AB</span> : row.obt1}</td>
-                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-bold text-slate-700">{row.isAbsent2 ? "AB" : row.prAct2}</td>
-                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-bold text-slate-700">{row.isAbsent2 ? "AB" : row.noteBook2}</td>
-                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-bold text-slate-700">{row.isAbsent2 ? "AB" : row.subEnri2}</td>
-                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-black text-slate-900">{row.isAbsent2 ? <span className="text-rose-700 font-black">AB</span> : row.yearly2}</td>
-                    <td className="py-1.5 px-0.5 border-r-2 border-slate-900 font-black bg-emerald-50/60 text-emerald-950">{row.isAbsent2 ? <span className="text-rose-700 font-black">AB</span> : row.obt2}</td>
-                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-extrabold text-slate-700">{row.maxM}</td>
+                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-bold text-slate-700">{row.internalAbsent1 ? "AB" : (row.prAct1 ?? "—")}</td>
+                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-bold text-slate-700">{row.internalAbsent1 ? "AB" : (row.noteBook1 ?? "—")}</td>
+                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-bold text-slate-700">{row.internalAbsent1 ? "AB" : (row.subEnri1 ?? "—")}</td>
+                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-black text-slate-900">{row.writtenAbsent1 ? <span className="text-rose-700 font-black">AB</span> : (row.halfYearly1 ?? "—")}</td>
+                    <td className="py-1.5 px-0.5 border-r-2 border-slate-900 font-black bg-indigo-50/60 text-indigo-950">{row.isAbsent1 ? <span className="text-rose-700 font-black">AB</span> : (row.obt1 ?? "—")}</td>
+                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-bold text-slate-700">{row.internalAbsent2 ? "AB" : (row.prAct2 ?? "—")}</td>
+                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-bold text-slate-700">{row.internalAbsent2 ? "AB" : (row.noteBook2 ?? "—")}</td>
+                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-bold text-slate-700">{row.internalAbsent2 ? "AB" : (row.subEnri2 ?? "—")}</td>
+                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-black text-slate-900">{row.writtenAbsent2 ? <span className="text-rose-700 font-black">AB</span> : (row.yearly2 ?? "—")}</td>
+                    <td className="py-1.5 px-0.5 border-r-2 border-slate-900 font-black bg-emerald-50/60 text-emerald-950">{row.isAbsent2 ? <span className="text-rose-700 font-black">AB</span> : (row.obt2 ?? "—")}</td>
+                    <td className="py-1.5 px-0.5 border-r border-slate-300 font-extrabold text-slate-700">{row.maxM || "—"}</td>
                     <td className="py-1.5 px-0.5 font-black text-indigo-950 text-xs bg-amber-50">
-                      {row.isAbsent1 && row.isAbsent2 ? <span className="text-rose-700 font-black">AB</span> : row.totalTermObt}
+                      {(row.hasTerm1 || row.hasTerm2) && (!row.hasTerm1 || row.isAbsent1) && (!row.hasTerm2 || row.isAbsent2) ? <span className="text-rose-700 font-black">AB</span> : row.hasTerm1 || row.hasTerm2 ? row.totalTermObt : "—"}
                     </td>
                   </tr>
                 ))}
                 <tr className="border-t-2 border-slate-900 font-black bg-slate-900 text-white">
                   <td className="py-1.5 px-2 text-left border-r-2 border-slate-700 uppercase tracking-wider text-[9.5px]">GRAND TOTAL</td>
                   <td colSpan={4} className="border-r border-slate-700"></td>
-                  <td className="py-1.5 px-0.5 border-r-2 border-slate-700 text-center font-black text-amber-300 text-xs bg-indigo-950">{term1TotalObtained}</td>
+                  <td className="py-1.5 px-0.5 border-r-2 border-slate-700 text-center font-black text-amber-300 text-xs bg-indigo-950">{summary.hasTerm1 ? term1TotalObtained : "—"}</td>
                   <td colSpan={4} className="border-r border-slate-700"></td>
-                  <td className="py-1.5 px-0.5 border-r-2 border-slate-700 text-center font-black text-amber-300 text-xs bg-emerald-950">{term2TotalObtained}</td>
-                  <td className="py-1.5 px-0.5 border-r border-slate-700 text-center font-black text-slate-200">{grandMaxTotal}</td>
-                  <td className="py-1.5 px-0.5 text-center font-black text-amber-300 text-xs bg-amber-950">{grandObtTotal}</td>
+                  <td className="py-1.5 px-0.5 border-r-2 border-slate-700 text-center font-black text-amber-300 text-xs bg-emerald-950">{summary.hasTerm2 ? term2TotalObtained : "—"}</td>
+                  <td className="py-1.5 px-0.5 border-r border-slate-700 text-center font-black text-slate-200">{hasData ? grandMaxTotal : "—"}</td>
+                  <td className="py-1.5 px-0.5 text-center font-black text-amber-300 text-xs bg-amber-950">{hasData ? grandObtTotal : "—"}</td>
                 </tr>
               </tbody>
             </table>
             <div className="mt-1.5 flex items-center justify-between font-sans text-xs font-black text-slate-950 px-2 py-1 bg-slate-100 border border-slate-300 rounded">
-              <span className="text-[10px] uppercase tracking-wider text-slate-700">Evaluation: <strong className="text-slate-950 font-black">Annual Aggregate Performance</strong></span>
+              <span className="text-[10px] uppercase tracking-wider text-slate-700">Evaluation: <strong className="text-slate-950 font-black">{isIncomplete ? "Incomplete — recorded marks only" : selectedReportCardExam === "All" ? "Annual Aggregate Performance" : selectedReportCardExam}</strong></span>
               <div className="flex items-center gap-4">
-                <span>Percentage (%): <span className="text-indigo-950 text-sm font-black">{overallPercentage.toFixed(2)} %</span></span>
-                <span>Division: <span className="text-slate-900 font-extrabold">{overallPercentage >= 60 ? "First Division" : overallPercentage >= 45 ? "Second Division" : "Third Division"}</span></span>
+                <span>Percentage (%): <span className="text-indigo-950 text-sm font-black">{percentageText}</span></span>
+                <span>Division: <span className="text-slate-900 font-extrabold">{division}</span></span>
                 <span>Grade: <span className="text-indigo-700 font-black text-xs">{finalGrade}</span></span>
               </div>
             </div>
@@ -894,14 +798,14 @@ function SingleMarksheetCard({
 
           <div className="my-2 font-sans border-2 border-slate-900 bg-amber-50/40 p-3 flex items-center justify-between gap-4">
             <div className="space-y-1 text-xs font-bold text-slate-900 text-left">
-              <p>GRAND TOTAL OBTAINED: <span className="font-black text-sm text-slate-950">{grandObtTotal} / {grandMaxTotal}</span> ({numberToWords(grandObtTotal)} MARKS)</p>
-              <p>AGGREGATE PERCENTAGE: <span className="font-black text-indigo-950 text-sm">{overallPercentage.toFixed(2)}%</span> | OVERALL GRADE: <span className="font-black text-indigo-700">{finalGrade}</span></p>
-              <p className="text-[9.5px] text-slate-600 italic">Class Teacher's Remarks: "{overallPercentage >= 75 ? "Excellent academic performance! Outstanding dedication." : overallPercentage >= 50 ? "Good overall progress. Keep up the hard work." : "Needs consistent practice in core subjects."}"</p>
+              <p>GRAND TOTAL OBTAINED: <span className="font-black text-sm text-slate-950">{hasData ? grandObtTotal : "—"} / {hasData ? grandMaxTotal : "—"}</span> {hasData ? `(${numberToWords(grandObtTotal)} MARKS)` : ""}</p>
+              <p>AGGREGATE PERCENTAGE: <span className="font-black text-indigo-950 text-sm">{percentageText}</span> | OVERALL GRADE: <span className="font-black text-indigo-700">{finalGrade}</span></p>
+              <p className="text-[9.5px] text-slate-600 italic">Class Teacher's Remarks: "{!hasData ? "No marks recorded for this scope." : isIncomplete ? "Assessment records are incomplete." : overallPercentage >= 75 ? "Excellent academic performance! Outstanding dedication." : overallPercentage >= 50 ? "Good overall progress. Keep up the hard work." : "Needs consistent practice in core subjects."}"</p>
             </div>
             <div className="shrink-0 border-4 border-emerald-800 bg-emerald-100/90 px-4 py-2 text-center rotate-[-2deg] shadow-md rounded-md">
-              <p className="text-[7.5px] font-black uppercase text-emerald-900 tracking-widest">RESULT STATUS</p>
+              <p className="text-[7.5px] font-black uppercase text-emerald-900 tracking-widest">{selectedReportCardExam === "All" ? "RESULT STATUS" : "ASSESSMENT RESULT"}</p>
               <h3 className="text-sm font-black text-emerald-950 tracking-tight uppercase">
-                {overallPercentage >= 33 ? "PASSED & PROMOTED" : "NEEDS IMPROVEMENT"}
+                {!hasData ? "NO MARKS RECORDED" : selectedReportCardExam !== "All" ? "PROVISIONAL" : isIncomplete ? "INCOMPLETE" : overallPercentage >= 33 ? "PASSED & PROMOTED" : "NEEDS IMPROVEMENT"}
               </h3>
               <p className="text-[7.5px] font-extrabold text-emerald-800 uppercase mt-0.5">ACADEMIC SESSION {shortSession}</p>
             </div>

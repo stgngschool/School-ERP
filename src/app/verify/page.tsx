@@ -61,6 +61,7 @@ function VerifyContent() {
 
   const receipt = data?.receipt;
   const school = data?.school;
+  const isCancelled = data?.status === "REVERSED";
   const groupedItems = receipt?.items ? getGroupedReceiptItems(receipt.items) : [];
   const students = receipt?.students || [];
   const isMultiChild = students.length > 1;
@@ -206,7 +207,7 @@ function VerifyContent() {
         )}
 
         {/* Mobile / Screen Authenticated Hero Card (Hidden when printed) */}
-        {!loading && data?.verified && receipt && (
+        {!loading && data?.verified && receipt && !isCancelled && (
           <div className="no-print bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-800 text-white rounded-2xl p-3 sm:p-4 shadow-lg shadow-emerald-700/15 flex items-center justify-between gap-2.5">
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/20 backdrop-blur-xs flex items-center justify-center shrink-0 border border-white/30 shadow-inner">
@@ -235,8 +236,17 @@ function VerifyContent() {
           </div>
         )}
 
+        {!loading && data?.verified && receipt && isCancelled && (
+          <section id="printable-verified-voucher" className="rounded-2xl border-2 border-rose-700 bg-white p-6 text-rose-950">
+            <ShieldAlert className="mb-3 h-8 w-8 text-rose-700" />
+            <h1 className="text-2xl font-bold text-rose-800">CANCELLED</h1>
+            <p className="mt-3 font-semibold">Receipt {receipt.receiptNo} has been cancelled.</p>
+            <p className="mt-2 text-sm">This receipt is no longer valid as proof of payment. Contact the school finance desk for the current payment status.</p>
+          </section>
+        )}
+
         {/* Verified Receipt Record (Printed / Audited Document) */}
-        {!loading && data?.verified && receipt && (
+        {!loading && data?.verified && receipt && !isCancelled && (
           <div
             id="printable-verified-voucher"
             className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200/90 shadow-xl overflow-hidden space-y-3 sm:space-y-4 p-3.5 sm:p-7 relative"

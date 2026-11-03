@@ -2,9 +2,13 @@ import { getTrustedClientIp, checkRateLimit } from "@/lib/rateLimit";
 import { getCachedSchoolConfig } from "@/lib/cache/schoolConfigCache";
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
+import { BoundedCache } from "@/lib/cache/BoundedCache";
+import { getCachedActiveSession } from "@/lib/cache/sessionCache";
+import { publicResultFailureKey, publicResultCacheKey } from "@/lib/publicResultPolicy";
 import { formatCanonicalDOBIso } from "@/lib/dateUtils";
 
 export const dynamic = "force-dynamic";
+const resultCache = new BoundedCache<any>(500, 30_000);
 
 // Helper: Read dynamic portal configuration from DB (SchoolConfig singleton) or env fallback
 async function getPortalConfig(): Promise<{ isEnabled: boolean; allowedExams: string[] }> {
@@ -19,7 +23,7 @@ async function getPortalConfig(): Promise<{ isEnabled: boolean; allowedExams: st
              process.env.NEXT_PUBLIC_ENABLE_PUBLIC_UNIT1_RESULT === "true");
 
       let allowedExams: string[] = [];
-      if (Array.isArray(data.allowedPublicExams) && data.allowedPublicExams.length > 0) {
+      if (Array.isArray(data.allowedPublicExams)) {
         allowedExams = data.allowedPublicExams;
       } else {
         const raw = process.env.NEXT_PUBLIC_ALLOWED_PUBLIC_EXAMS || "Unit-1";
@@ -65,8 +69,8 @@ export async function POST(request: Request) {
 
   // Rate Limiting: check if IP is currently locked due to repeated failures
   const clientIp = getTrustedClientIp(request);
-  if (!(await checkRateLimit(`public-results:ip:${clientIp}`, 15, 600)).allowed) {
-    return NextResponse.json({ error: "Too many attempts. Please wait 10 minutes." }, { status: 429 });
+  if (!(await checkRateLimit(`public-results:ip:${clientIp}`, 300, 60)).allowed) {
+    return NextResponse.json({ error: "Too many requests from this network. Please wait a minute." }, { status: 429 });
   }
 
   try {
@@ -88,7 +92,8 @@ export async function POST(request: Request) {
     }
 
     // Examination Lock Verification
-    const requestedExam = (examName || allowedExams[0] || "Unit-1").trim();
+    if (examName !== undefined && typeof examName !== "string") return NextResponse.json({ error: "Invalid examination." }, { status: 400 });
+    const requestedExam = allowedExams.find(e => e.toLowerCase() === (examName || allowedExams[0] || "").trim().toLowerCase()) || "";
 
     // Verify if this exam is currently unlocked by the school administration
     const isExamAllowed = allowedExams.some(
@@ -104,12 +109,14 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!(await checkRateLimit(`public-results:student:${admissionNumber.trim().toLowerCase()}`, 15, 600)).allowed) {
-      return NextResponse.json({ error: "Too many attempts. Please wait 10 minutes." }, { status: 429 });
-    }
     const trimmedAdm = admissionNumber.trim();
     const cleanDobInput = formatCanonicalDOBIso(dob);
 
+    if (!cleanDobInput || !trimmedAdm || trimmedAdm.length > 100) return NextResponse.json({ error: "Enter a valid admission number and date of birth." }, { status: 400 });
+    const invalidDetails = async () => {
+      const attempt = await checkRateLimit(publicResultFailureKey(trimmedAdm, clientIp), 10, 600);
+      return NextResponse.json({ error: attempt.allowed ? "Admission number or date of birth does not match school records." : "Too many incorrect details for this student from this network. Please wait 10 minutes." }, { status: attempt.allowed ? 401 : 429 });
+    };
     // Find student matching admission number (case-insensitive)
     const student = await db.student.findFirst({
       where: {
@@ -118,7 +125,8 @@ export async function POST(request: Request) {
           mode: "insensitive",
         },
       },
-      include: {
+      select: {
+        id: true, name: true, admissionNumber: true, dob: true, rollNumber: true, fatherName: true, motherName: true,
         class: {
           select: {
             name: true,
@@ -128,34 +136,15 @@ export async function POST(request: Request) {
       },
     });
 
-    if (!student) {
-      return NextResponse.json(
-        { error: "No student found with this Admission Number. Please verify from fee receipt or ID card." },
-        { status: 404 }
-      );
-    }
-
-    // Verify Date of Birth
-    if (!student.dob) {
-      return NextResponse.json(
-        { error: "Date of Birth record is missing in school database. Please contact school office (+91 9452824318)." },
-        { status: 400 }
-      );
-    }
-
-    const studentDobIso = formatCanonicalDOBIso(student.dob);
-    if (!cleanDobInput || !studentDobIso || studentDobIso !== cleanDobInput) {
-      return NextResponse.json(
-        { error: "Date of Birth does not match school records. Please check and try again." },
-        { status: 401 }
-      );
-    }
+    if (!student?.dob || formatCanonicalDOBIso(student.dob) !== cleanDobInput) return invalidDetails();
 
     // Get Active Academic Session
-    const currentSession = await db.academicSession.findFirst({
-      where: { isCurrent: true },
-    });
+    const currentSession = await getCachedActiveSession();
 
+    if (!currentSession?.id) return NextResponse.json({ error: "Results are temporarily unavailable. Please contact the school office." }, { status: 503 });
+    const cacheKey = publicResultCacheKey(student.id, cleanDobInput, currentSession.id, requestedExam);
+    const cached = resultCache.get(cacheKey);
+    if (cached) return NextResponse.json(cached, { headers: { "Cache-Control": "private, no-store" } });
     // Flexible exam name match (e.g. Unit-1, Unit 1)
     const examVariants = [
       requestedExam,
@@ -179,6 +168,7 @@ export async function POST(request: Request) {
     const marksRecords = await db.mark.findMany({
       where: whereMarks,
       orderBy: { updatedAt: "desc" },
+      select: { id: true, subject: true, examName: true, marksObtained: true, maxMarks: true, notebook: true, subjectEnrichment: true, practical: true, breakdown: true, remarks: true },
     });
 
     // Deduplicate subjects in case of case mismatches (e.g. English vs ENGLISH)
@@ -221,12 +211,10 @@ export async function POST(request: Request) {
     const percentage = totalMax > 0 ? ((totalObtained / totalMax) * 100).toFixed(1) : "0.0";
 
     // Fetch school contact info from SchoolConfig
-    const schoolConfigRow = await db.schoolConfig.findUnique({
-      where: { id: "singleton" },
-    });
+    const schoolConfigRow = await getCachedSchoolConfig();
     const schoolData = (schoolConfigRow?.data as any) || {};
 
-    return NextResponse.json({
+    const payload = {
       success: true,
       student: {
         name: student.name,
@@ -251,7 +239,9 @@ export async function POST(request: Request) {
         address: schoolData.address || "Main Campus",
         phone: schoolData.phone || "+91 9452824318",
       },
-    });
+    };
+    resultCache.set(cacheKey, payload);
+    return NextResponse.json(payload, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error: any) {
     console.error("[PUBLIC_MARKS_API_ERROR]", error);
     return NextResponse.json(

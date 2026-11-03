@@ -3,6 +3,7 @@
 import { receiptSettlement } from "@/lib/receiptSettlement";
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { useAuth } from "@/context/AuthContext";
 import QRCode from "qrcode";
 import { Printer, X, CheckCircle2, AlertCircle, ShieldCheck, Share2, Loader2 } from "lucide-react";
 import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
@@ -26,6 +27,51 @@ export default function PrintReceiptModal({
   user,
   onSendWhatsApp,
 }: PrintReceiptModalProps) {
+  const { refreshBilling } = useAuth();
+  const [confirmCancellation, setConfirmCancellation] = useState(false);
+  const [reason, setReason] = useState("");
+  const [confirmationNumber, setConfirmationNumber] = useState("");
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelledHere, setCancelledHere] = useState(false);
+  const [cancellationError, setCancellationError] = useState("");
+  const [cancellationNotice, setCancellationNotice] = useState("");
+  const isCancelled = cancelledHere || activeReceipt?.status === "REVERSED";
+  const canCancel = ["ADMIN", "ACCOUNTANT"].includes(user?.role);
+
+  useEffect(() => {
+    setConfirmCancellation(false);
+    setReason("");
+    setConfirmationNumber("");
+    setCancelledHere(false);
+    setCancellationError("");
+    setCancellationNotice("");
+  }, [activeReceipt?.id]);
+
+  const cancelReceipt = async () => {
+    if (!reason.trim() || confirmationNumber !== activeReceipt.receiptNo || cancelling || isGeneratingPdf) return;
+    setCancelling(true);
+    setCancellationError("");
+    try {
+      const response = await fetch("/api/billing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "REVERSE_RECEIPT", receiptId: activeReceipt.id, reason: reason.trim() }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Unable to cancel receipt. Please try again.");
+      setCancelledHere(true);
+      setConfirmCancellation(false);
+      setCancellationNotice("Receipt cancelled. Its number is retained in Cancelled history.");
+      window.dispatchEvent(new Event("receipt-cancelled"));
+      try {
+        await refreshBilling(true, true);
+      }
+      catch { setCancellationNotice("Receipt cancelled. Refresh the ledger to load the updated balances."); }
+    } catch (error) {
+      setCancellationError(error instanceof Error ? error.message : "Unable to cancel receipt. Please try again.");
+    } finally { setCancelling(false); }
+  };
+
   const [mounted, setMounted] = useState(false);
   const [receiptPageSize, setReceiptPageSize] = useState<"A4" | "A5">("A5");
   const [verifyQrUrl, setVerifyQrUrl] = useState<string>("");
@@ -75,7 +121,7 @@ export default function PrintReceiptModal({
   // falls back to a direct download named "Receipt-<no>-<student>.pdf".
   const handleGeneratePdf = async (shareOnMobile: boolean = false) => {
     const receiptElement = document.getElementById("receipt-print-area");
-    if (!receiptElement) return;
+    if (!receiptElement || isCancelled) return;
 
     if (!verifyQrUrl) return;
     await document.fonts.ready;
@@ -161,6 +207,31 @@ export default function PrintReceiptModal({
     <div id="gng-receipt-print-portal">
       <div className="receipt-modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/80 modal-backdrop-optimized animate-in fade-in duration-200">
         <div className="receipt-modal-dialog flex max-h-[94vh] w-full max-w-4xl flex-col gap-3 overflow-y-auto rounded-2xl border border-slate-200/90 bg-white p-3 shadow-[0_24px_70px_rgba(15,23,42,0.28)] sm:p-4">
+          {cancellationNotice && <p role="status" className="no-print rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">{cancellationNotice}</p>}
+          {canCancel && !isCancelled && (
+            <div className="no-print border-b border-slate-200 pb-3">
+              {!confirmCancellation ? (
+                <button type="button" disabled={isGeneratingPdf} onClick={() => { setConfirmationNumber(""); setConfirmCancellation(true); }} className="min-h-10 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-extrabold text-slate-600 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 disabled:opacity-50">Cancel Receipt</button>
+              ) : (
+                <form onSubmit={(event) => { event.preventDefault(); void cancelReceipt(); }} className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 sm:p-5">
+                  <h3 className="text-sm font-extrabold text-slate-900">Cancel receipt <span className="font-mono text-indigo-600">{activeReceipt.receiptNo}</span>?</h3>
+                  <p className="text-xs leading-relaxed text-slate-600">This reverses every payment and discount on this receipt{isMultiChild ? ` for all ${students.length} siblings: ${students.map((student: any) => student.name).join(", ")}` : ""}, and restores the affected dues. The receipt number stays in the audit history. This does not refund money.</p>
+                  <label htmlFor="receipt-cancellation-reason" className="block text-xs font-bold text-slate-700">Reason for cancellation (required)</label>
+                  <textarea id="receipt-cancellation-reason" required maxLength={500} value={reason} onChange={(event) => setReason(event.target.value)} disabled={cancelling} rows={2} placeholder="Explain why this receipt needs to be cancelled…" className="w-full rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-900 outline-none transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" />
+                  <div className="space-y-2">
+                    <label htmlFor="receipt-cancellation-confirmation" className="block text-xs font-bold text-slate-700">Type {activeReceipt.receiptNo} to verify cancellation</label>
+                    <input id="receipt-cancellation-confirmation" value={confirmationNumber} onChange={(event) => setConfirmationNumber(event.target.value)} disabled={cancelling} autoComplete="off" spellCheck={false} placeholder="Enter the full receipt number" className="min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" />
+                    <p className="text-[11px] leading-relaxed text-slate-500">All payments and discounts on this receipt will be reversed. Check the student and amount before confirming.</p>
+                  </div>
+                  {cancellationError && <p role="alert" className="text-sm font-semibold text-rose-800">{cancellationError}</p>}
+                  <div className="flex flex-wrap gap-2">
+                    <button type="submit" disabled={cancelling || isGeneratingPdf || !reason.trim() || confirmationNumber !== activeReceipt.receiptNo} className="min-h-11 rounded-xl bg-rose-600 px-5 py-2.5 text-xs font-extrabold text-white transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500">{cancelling ? "Cancelling…" : "Confirm cancellation"}</button>
+                    <button type="button" disabled={cancelling} onClick={() => setConfirmCancellation(false)} className="min-h-11 rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-xs font-extrabold text-slate-700 transition-colors hover:bg-slate-100 disabled:opacity-50">Keep receipt</button>
+                  </div>
+                </form>
+              )}
+            </div>
+          )}
           {/* Modal Header & Page Size Switcher */}
           <div className="receipt-modal-header no-print flex flex-col justify-between gap-3 border-b border-slate-200 pb-3 sm:flex-row sm:items-center">
             <div className="flex items-center gap-2">
@@ -265,6 +336,7 @@ export default function PrintReceiptModal({
                   : "p-4 sm:p-5 gap-3.5 text-xs"
               }`}
             >
+              {isCancelled && <div data-receipt-block className="border-2 border-rose-700 p-4 text-center text-rose-800"><strong className="text-2xl">CANCELLED</strong><p>This receipt is no longer valid as proof of payment.</p></div>}
               {/* 1. Header: School Info, Verification QR & Official Badges (Thin Elegant Divider) */}
               <div data-receipt-block className="flex justify-between items-start border-b border-slate-200 pb-2.5">
                 <div className="flex items-center gap-3">
@@ -592,6 +664,7 @@ export default function PrintReceiptModal({
               {/* 1. WhatsApp Share — direct text message redirect to parent's phone */}
               <button
                 type="button"
+                disabled={isCancelled || cancelling}
                 onClick={() => onSendWhatsApp(activeReceipt)}
                 className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white shadow-sm shadow-emerald-600/20 transition-colors cursor-pointer hover:bg-emerald-700 sm:flex-1"
               >
@@ -603,7 +676,7 @@ export default function PrintReceiptModal({
                 native share sheet (WhatsApp / anywhere); downloads it on desktop */}
               <button
                 type="button"
-                disabled={isGeneratingPdf}
+                disabled={isGeneratingPdf || isCancelled || cancelling}
                 onClick={() => handleGeneratePdf(true)}
                 className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white shadow-sm shadow-indigo-600/20 transition-colors cursor-pointer hover:bg-indigo-700 disabled:opacity-50 sm:flex-1"
                 title="Share the receipt PDF via WhatsApp or any app (downloads on desktop)"
@@ -619,14 +692,15 @@ export default function PrintReceiptModal({
               {/* 3. Print Voucher */}
               <button
               onClick={() => handleGeneratePdf(false)}
-              disabled={isGeneratingPdf || !verifyQrUrl}
+              disabled={isGeneratingPdf || !verifyQrUrl || isCancelled || cancelling}
               className="flex min-h-12 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 disabled:opacity-50 cursor-pointer"
             >
               Download PDF
             </button>
             <button
                 type="button"
-                onClick={() => window.print()}
+                disabled={isCancelled || cancelling}
+                onClick={() => { if (!isCancelled) window.print(); }}
                 className="flex min-h-12 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 shadow-sm transition-colors cursor-pointer hover:bg-slate-50"
               >
                 <Printer className="h-4 w-4 shrink-0" />
@@ -637,6 +711,7 @@ export default function PrintReceiptModal({
             {/* 4. Close Button */}
             <button
               type="button"
+              disabled={cancelling}
               onClick={onClose}
               className="min-h-12 rounded-xl border border-slate-200 bg-slate-100 px-5 py-2.5 text-xs font-bold text-slate-700 transition-colors cursor-pointer hover:bg-slate-200"
             >

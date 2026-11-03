@@ -1,5 +1,6 @@
 "use client";
 
+import CancelledReceiptsHistory from "@/components/CancelledReceiptsHistory";
 import React, { useState } from "react";
 import {
   Printer,
@@ -39,7 +40,7 @@ export default function LedgerReceiptsTab({
   onOpenReceipt,
   privacyMode = true,
 }: LedgerReceiptsTabProps) {
-  const [ledgerSubTab, setLedgerSubTab] = useState<"receipts" | "raw">("receipts");
+  const [ledgerSubTab, setLedgerSubTab] = useState<"receipts" | "raw" | "cancelled">("receipts");
   const [isSyncingLedger, setIsSyncingLedger] = useState(false);
   const [ledgerSearch, setLedgerSearch] = useState("");
   const [ledgerDate, setLedgerDate] = useState("");
@@ -139,7 +140,7 @@ export default function LedgerReceiptsTab({
           </button>
 
           {/* Sub-tab toggle buttons */}
-          <div className="flex bg-slate-100 p-0.5 rounded-xl self-start md:self-auto select-none shrink-0 border border-slate-200/40">
+          <div className="flex flex-wrap bg-slate-100 p-0.5 rounded-xl self-start md:self-auto select-none shrink-0 border border-slate-200/40">
             <button
               onClick={() => setLedgerSubTab("receipts")}
               className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all cursor-pointer ${
@@ -160,12 +161,15 @@ export default function LedgerReceiptsTab({
             >
               Double-Entry Ledger
             </button>
+            <button type="button" onClick={() => setLedgerSubTab("cancelled")} aria-pressed={ledgerSubTab === "cancelled"} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-colors ${ledgerSubTab === "cancelled" ? "bg-white text-rose-700 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}>Cancelled history</button>
           </div>
         </div>
       </div>
 
+      {ledgerSubTab === "cancelled" && <CancelledReceiptsHistory />}
+
       {/* Filters Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+      {ledgerSubTab !== "cancelled" && <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
         {/* Search Bar */}
         <div className="relative">
           <input
@@ -218,7 +222,7 @@ export default function LedgerReceiptsTab({
         ) : (
           <div className="hidden sm:block" />
         )}
-      </div>
+      </div>}
 
       {/* Receipts Book Sub-Tab */}
       {ledgerSubTab === "receipts" && (

@@ -8,7 +8,10 @@ export async function billingTotals(db: Pick<PrismaClient, 'ledgerEntry' | 'rece
   const items = { ledgerEntry: { ...scope, entryType: { in: ['CHARGE' as const, 'FINE' as const] } }, receipt };
   const today = new Date(`${getTodayIST()}T00:00:00+05:30`);
   const [charge, discount, paid, todayPaid, count] = await Promise.all([
-    db.ledgerEntry.aggregate({ where: { ...scope, entryType: { in: ['CHARGE', 'FINE'] } }, _sum: { amount: true } }),
+    db.ledgerEntry.aggregate({ where: { ...scope, entryType: { in: ['CHARGE', 'FINE'] }, AND: [{ OR: [
+      { entryType: 'CHARGE' },
+      { entryType: 'FINE', receiptItems: { none: { receipt: { status: 'REVERSED' } } } },
+    ] }] }, _sum: { amount: true } }),
     db.ledgerEntry.aggregate({ where: { ...scope, entryType: 'DISCOUNT', AND: [{ OR: [{ referenceId: null }, { receipt }] }] }, _sum: { amount: true } }),
     db.receiptItem.aggregate({ where: items, _sum: { amount: true } }),
     db.receiptItem.aggregate({ where: { ...items, receipt: { ...receipt, createdAt: { gte: today } } }, _sum: { amount: true } }),

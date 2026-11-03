@@ -1,3 +1,4 @@
+import { updatedExamOpenOrder } from "@/lib/examDefault";
 import { NextResponse } from "next/server";
 import { clearServerBillingCache } from "@/lib/cache/billingCache";
 import db from "@/lib/db";
@@ -117,7 +118,17 @@ export async function POST(request: Request) {
     // with PostgreSQL row locking (INSERT ... ON CONFLICT DO UPDATE SET "data" = "SchoolConfig"."data" || EXCLUDED."data").
     // This guarantees that concurrent partial updates from multiple admins (e.g. updating late fee rules
     // while another updates school phone) preserve both changes without lost updates.
-    const rows: any[] = await db.$queryRawUnsafe(
+    const rows: any[] = await db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('school-exam-default'))`;
+      delete body.examOpenedOrder;
+      if (Array.isArray(body.lockedExams)) {
+        if (!body.lockedExams.every((exam: unknown) => typeof exam === "string")) throw new Error("Invalid locked exams");
+        const existing = await tx.schoolConfig.findUnique({ where: { id: SINGLETON_ID } });
+        const previous = (existing?.data || {}) as Record<string, any>;
+        const exams = Array.isArray(body.exams) ? body.exams : previous.exams || ["Unit-1", "Half Yearly", "Unit-2", "Annual"];
+        body.examOpenedOrder = updatedExamOpenOrder(exams, previous.lockedExams || [], body.lockedExams, previous.examOpenedOrder || []);
+      }
+      return tx.$queryRawUnsafe(
       `INSERT INTO "SchoolConfig" ("id", "data", "updatedAt")
        VALUES ($1, $2::jsonb, NOW())
        ON CONFLICT ("id")
@@ -128,6 +139,7 @@ export async function POST(request: Request) {
       SINGLETON_ID,
       JSON.stringify(body)
     );
+    });
 
     const mergedData = rows?.[0]?.data || body;
 

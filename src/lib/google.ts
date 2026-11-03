@@ -4,7 +4,7 @@ import { db as prisma } from "./db";
 import { formatCanonicalDOB, getISTDateString } from "./dateUtils";
 import { isAbsentRemark } from "./marksAbsence";
 import { runGoogleSheetSync } from "./googleSyncCoordinator";
-import { fetchDirectoryStudents, syncStudentOrder, syncStudentProfileSelect } from "./googleSyncData";
+import { activeFinancialEntries, fetchDirectoryStudents, syncStudentOrder, syncStudentProfileSelect } from "./googleSyncData";
 
 // Bulletproof Google Service Account private key sanitizer
 function formatPrivateKey(rawKey: string): string {
@@ -240,11 +240,13 @@ async function fetchStudentsForSync() {
     select: {
       ...syncStudentProfileSelect,
       ledgerEntries: {
+        where: activeFinancialEntries,
         select: {
           entryType: true,
           amount: true,
           description: true,
           receiptItems: {
+            where: { receipt: { status: 'ACTIVE' } },
             select: {
               amount: true,
             },

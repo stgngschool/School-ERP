@@ -1,5 +1,6 @@
 import { generateReceiptSecurityToken } from "@/lib/server/receiptSecurity";
 import { receiptArrears } from "@/lib/receiptArrears";
+import { requireCancellationReason, validatePaymentBalance } from "@/lib/billingPaymentPolicy";
 import { allocationScope } from "@/lib/readPolicy";
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
@@ -406,6 +407,7 @@ export async function GET(request: Request) {
         select: {
           id: true,
           studentId: true,
+          sessionId: true,
           description: true,
           amount: true,
         },
@@ -679,7 +681,7 @@ export async function GET(request: Request) {
     const discountMap = new Map<string, number>();
     for (const d of discounts) {
       const dName = d.description.replace("Discount for: ", "").replace(/.*: /, "").trim().toLowerCase();
-      const key = `${d.studentId}||${dName}`;
+      const key = `${d.studentId}||${d.sessionId || ""}||${dName}`;
       discountMap.set(key, (discountMap.get(key) || 0) + Math.abs(d.amount));
     }
 
@@ -705,7 +707,7 @@ export async function GET(request: Request) {
     const formattedDues = charges.map((c) => {
       const chargeName = c.description.replace("Assigned: ", "").trim();
       const totalPaid = paidMap.get(c.id) || 0;
-      const dKey = `${c.studentId}||${chargeName.toLowerCase()}`;
+      const dKey = `${c.studentId}||${c.sessionId || ""}||${chargeName.toLowerCase()}`;
       const totalDiscount = discountMap.get(dKey) || 0;
 
       const outstanding = c.amount - totalDiscount - totalPaid;
@@ -869,11 +871,14 @@ export async function POST(request: Request) {
       }
 
       const { receiptId, receiptNo, reason } = body;
+      const cancellationReason = requireCancellationReason(reason);
       if (!receiptId && !receiptNo) {
         return NextResponse.json({ error: "Receipt ID or receipt number is required for reversal." }, { status: 400 });
       }
 
-      const targetReceipt = await db.receipt.findFirst({
+      const reversedReceipt = await db.$transaction(async (tx) => {
+      await lockSessionWorkflow(tx);
+      const targetReceipt = await tx.receipt.findFirst({
         where: {
           ...(receiptId ? { id: receiptId } : { receiptNumber: receiptNo }),
         },
@@ -886,15 +891,13 @@ export async function POST(request: Request) {
       });
 
       if (!targetReceipt) {
-        return NextResponse.json({ error: "Receipt not found." }, { status: 404 });
+        throw Object.assign(new Error("Receipt not found."), { code: "RECEIPT_NOT_FOUND" });
       }
 
       if (targetReceipt.status === "REVERSED") {
-        return NextResponse.json({ error: "Receipt is already reversed." }, { status: 400 });
+        throw Object.assign(new Error("Receipt is already cancelled."), { code: "INVALID_PAYMENT" });
       }
 
-      const reversedReceipt = await db.$transaction(async (tx) => {
-      await lockSessionWorkflow(tx);
         // 1. Mark receipt as REVERSED
         // ── M-11 fix: Gracefully handle legacy non-JSON plain text remarks
         let remarksObj: Record<string, any> = {};
@@ -907,7 +910,7 @@ export async function POST(request: Request) {
         }
         remarksObj.reversedAt = new Date().toISOString();
         remarksObj.reversedBy = authUser.userId;
-        remarksObj.reversalReason = reason || "Administrative Reversal";
+        remarksObj.reversalReason = cancellationReason;
 
         const updated = await tx.receipt.update({
           where: { id: targetReceipt.id },
@@ -919,7 +922,7 @@ export async function POST(request: Request) {
 
         // 2. Create offsetting REVERSAL ledger entries for all payments/discounts linked to this receipt
         const linkedLedgerEntries = await tx.ledgerEntry.findMany({
-          where: { referenceId: targetReceipt.id },
+          where: { referenceId: targetReceipt.id, entryType: { in: [EntryType.PAYMENT, EntryType.DISCOUNT] } },
         });
 
         if (linkedLedgerEntries.length > 0) {
@@ -938,6 +941,21 @@ export async function POST(request: Request) {
           });
         }
 
+        // Receipt-created late fees disappear with their cancelled payment.
+        const fineItems = targetReceipt.items.filter(item => item.ledgerEntry.entryType === EntryType.FINE);
+        if (fineItems.length) {
+          await tx.ledgerEntry.createMany({
+            data: fineItems.map(item => ({
+              id: randomUUID(), studentId: item.ledgerEntry.studentId,
+              feeHeadId: item.ledgerEntry.feeHeadId, sessionId: item.ledgerEntry.sessionId,
+              entryType: EntryType.REVERSAL, amount: -item.amount,
+              referenceId: targetReceipt.id,
+              description: `Cancelled late fee for Receipt ${targetReceipt.receiptNumber}`,
+              createdById: creatorUserId,
+            })),
+          });
+        }
+
         // 3. Log Audit entry
         await tx.auditLog.create({
           data: {
@@ -946,12 +964,12 @@ export async function POST(request: Request) {
             entityType: "Receipt",
             entityId: targetReceipt.id,
             oldValues: JSON.stringify({ status: "ACTIVE", receiptNumber: targetReceipt.receiptNumber, amountPaid: targetReceipt.amountPaid }),
-            newValues: JSON.stringify({ status: "REVERSED", reason: reason || "Administrative Reversal" }),
+            newValues: JSON.stringify({ status: "REVERSED", reason: cancellationReason }),
           },
         });
 
         return updated;
-      }, { maxWait: 10000, timeout: 30000 });
+      }, { isolationLevel: "ReadCommitted", maxWait: 10000, timeout: 30000 });
 
       // Invalidate server cache post-commit
       clearServerBillingCache();
@@ -1172,10 +1190,10 @@ export async function POST(request: Request) {
       // Batch 2: Pre-fetch all committed ReceiptItem payment totals for all target charges
       const paidRows: any[] = targetLedgerIds.length > 0
         ? await tx.$queryRawUnsafe(
-            `SELECT "ledgerEntryId", COALESCE(SUM("amount"), 0)::int AS total
-             FROM "ReceiptItem"
-             WHERE "ledgerEntryId" = ANY($1::text[])
-             GROUP BY "ledgerEntryId"`,
+            `SELECT ri."ledgerEntryId", COALESCE(SUM(ri."amount"), 0)::int AS total
+             FROM "ReceiptItem" ri JOIN "Receipt" r ON r.id = ri."receiptId" AND r.status = 'ACTIVE'
+             WHERE ri."ledgerEntryId" = ANY($1::text[])
+             GROUP BY ri."ledgerEntryId"`,
             targetLedgerIds
           )
         : [];
@@ -1188,18 +1206,19 @@ export async function POST(request: Request) {
       const studentIdArray = Array.from(lockedStudentIds);
       const discountRows: any[] = studentIdArray.length > 0
         ? await tx.$queryRawUnsafe(
-            `SELECT "studentId", "description", ABS("amount") AS amt
-             FROM "LedgerEntry"
-             WHERE "studentId" = ANY($1::text[])
-               AND "entryType" = 'DISCOUNT'`,
+            `SELECT d."studentId", d."sessionId", d."description", ABS(d."amount") AS amt
+             FROM "LedgerEntry" d
+             WHERE d."studentId" = ANY($1::text[])
+               AND d."entryType" = 'DISCOUNT'
+               AND (d."referenceId" IS NULL OR EXISTS (SELECT 1 FROM "Receipt" r WHERE r.id = d."referenceId" AND r.status = 'ACTIVE'))`,
             studentIdArray
           )
         : [];
-      const studentDiscountsMap = new Map<string, Array<{ desc: string; amt: number }>>();
+      const studentDiscountsMap = new Map<string, Array<{ desc: string; amt: number; sessionId: string | null }>>();
       for (const dr of discountRows) {
         const sid = dr.studentId as string;
         if (!studentDiscountsMap.has(sid)) studentDiscountsMap.set(sid, []);
-        studentDiscountsMap.get(sid)!.push({ desc: (dr.description || "") as string, amt: Number(dr.amt) });
+        studentDiscountsMap.get(sid)!.push({ desc: (dr.description || "") as string, amt: Number(dr.amt), sessionId: dr.sessionId });
       }
 
       for (const item of items) {
@@ -1209,7 +1228,9 @@ export async function POST(request: Request) {
         const fineAmountPaisa = Math.max(0, Math.round(Number(fineAmount || 0)));
 
         const charge = lockedChargesMap.get(ledgerEntryId);
-        if (!charge) continue; // charge not found — skip
+        if (!charge || charge.entryType !== "CHARGE") {
+          throw Object.assign(new Error("A selected charge is missing or invalid. Refresh the dues and try again."), { code: "INVALID_PAYMENT" });
+        }
 
         const chargeName = (charge.description as string).replace("Assigned: ", "").trim();
         const itemStudentId = charge.studentId as string;
@@ -1219,6 +1240,7 @@ export async function POST(request: Request) {
 
         const studentDiscs = studentDiscountsMap.get(itemStudentId) || [];
         const associatedDiscounts = studentDiscs.reduce((sum, d) => {
+          if (d.sessionId !== charge.sessionId) return sum;
           if (
             d.desc.endsWith(`: ${chargeName}`) ||
             d.desc === `Discount for: ${chargeName}`
@@ -1247,9 +1269,8 @@ export async function POST(request: Request) {
 
         const discountAmountPaisa = requestedDiscountPaisa; // validated: ≤ outstanding
 
-        // Cap payment to what actually remains after discount (safety net)
-        const maxPayablePaisa = Math.max(0, outstandingPaisa - discountAmountPaisa);
-        const payAmountPaisa = Math.min(requestedPayPaisa, maxPayablePaisa);
+        validatePaymentBalance(outstandingPaisa, requestedPayPaisa, discountAmountPaisa);
+        const payAmountPaisa = requestedPayPaisa;
 
         actualTotalPayPaisa += payAmountPaisa + fineAmountPaisa;
         totalFeePaidPaisa += payAmountPaisa;
@@ -1300,12 +1321,14 @@ export async function POST(request: Request) {
           `SELECT
              le.id                                                              AS charge_id,
              le.amount::int                                                     AS charge_amount,
-             COALESCE(SUM(ri.amount) FILTER (WHERE ri.id IS NOT NULL), 0)::int AS paid,
+             COALESCE(SUM(ri.amount) FILTER (WHERE r.status = 'ACTIVE'), 0)::int AS paid,
              COALESCE(
                (SELECT SUM(ABS(d.amount))
                 FROM "LedgerEntry" d
                 WHERE d."studentId" = le."studentId"
                   AND d."entryType" = 'DISCOUNT'
+                  AND d."sessionId" IS NOT DISTINCT FROM le."sessionId"
+                  AND (d."referenceId" IS NULL OR EXISTS (SELECT 1 FROM "Receipt" dr WHERE dr.id = d."referenceId" AND dr.status = 'ACTIVE'))
                   AND (d.description LIKE '%: ' || REGEXP_REPLACE(le.description, '^Assigned: ', '') || ''
                        OR d.description = 'Discount for: ' || REGEXP_REPLACE(le.description, '^Assigned: ', ''))
                ), 0
@@ -1313,6 +1336,7 @@ export async function POST(request: Request) {
            FROM "LedgerEntry" le
            JOIN "Student" s ON s.id = le."studentId"
            LEFT JOIN "ReceiptItem" ri ON ri."ledgerEntryId" = le.id
+           LEFT JOIN "Receipt" r ON r.id = ri."receiptId"
            WHERE s."parentProfileId" = $1
              AND le."entryType" = 'CHARGE'
            GROUP BY le.id, le.amount, le."studentId", le.description`,
@@ -1336,18 +1360,21 @@ export async function POST(request: Request) {
             `SELECT
                le.id,
                le.amount::int                                                     AS charge_amount,
-               COALESCE(SUM(ri.amount) FILTER (WHERE ri.id IS NOT NULL), 0)::int AS paid,
+               COALESCE(SUM(ri.amount) FILTER (WHERE r.status = 'ACTIVE'), 0)::int AS paid,
                COALESCE(
                  (SELECT SUM(ABS(d.amount))
                   FROM "LedgerEntry" d
                   WHERE d."studentId" = le."studentId"
                     AND d."entryType" = 'DISCOUNT'
+                    AND d."sessionId" IS NOT DISTINCT FROM le."sessionId"
+                    AND (d."referenceId" IS NULL OR EXISTS (SELECT 1 FROM "Receipt" dr WHERE dr.id = d."referenceId" AND dr.status = 'ACTIVE'))
                     AND (d.description LIKE '%: ' || REGEXP_REPLACE(le.description, '^Assigned: ', '')
                          OR d.description = 'Discount for: ' || REGEXP_REPLACE(le.description, '^Assigned: ', ''))
                  ), 0
                )::int                                                             AS discounted
              FROM "LedgerEntry" le
              LEFT JOIN "ReceiptItem" ri ON ri."ledgerEntryId" = le.id
+             LEFT JOIN "Receipt" r ON r.id = ri."receiptId"
              WHERE le."studentId" = $1
                AND le."entryType" = 'CHARGE'
              GROUP BY le.id, le.amount, le."studentId", le.description`,
@@ -1549,7 +1576,7 @@ export async function POST(request: Request) {
       }
 
       return { receipt, snapshot, validatedItems, relatedStudents: lockedStudents };
-    }, { maxWait: 10000, timeout: 30000 });
+    }, { isolationLevel: "ReadCommitted", maxWait: 10000, timeout: 30000 });
 
     // Return receipt formatted with details (reuse relatedStudents from tx to save network roundtrip)
 
@@ -1641,11 +1668,13 @@ export async function POST(request: Request) {
     console.error("Payment checkout error:", error);
     // Validation errors thrown by B-02 / BL-02 guards are client mistakes (400)
     if (
+      error?.code === "INVALID_PAYMENT" ||
       error?.code === "DUPLICATE_LEDGER_ENTRY" ||
       error?.code === "DISCOUNT_EXCEEDS_BALANCE"
     ) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
+    if (error?.code === "RECEIPT_NOT_FOUND") return NextResponse.json({ error: error.message }, { status: 404 });
     const safeError = getSafeErrorMessage(error, "Checkout transaction failed.");
     return NextResponse.json({ error: safeError }, { status: 500 });
   }

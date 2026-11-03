@@ -61,7 +61,6 @@ export default function FeeCollectTab({
   onViewStudentProfile,
   onOpenReceipt,
   recordItemizedPayment,
-  refreshBilling,
 }: FeeCollectTabProps) {
   const { showToast, refreshStudentBilling } = useAuth();
   const [selectedDueIds, setSelectedDueIds] = useState<string[]>([]);
@@ -212,31 +211,37 @@ export default function FeeCollectTab({
   }, [siblingStudentIds, dueItems]);
 
   const [loadingStudentDues, setLoadingStudentDues] = useState(false);
-  const lastFetchedStudentKeyRef = useRef<string | null>(null);
+  const [studentDuesError, setStudentDuesError] = useState(false);
+  const [billingRetry, setBillingRetry] = useState(0);
+  const billingRefreshRef = useRef(refreshStudentBilling);
+  billingRefreshRef.current = refreshStudentBilling;
+  const billingToastRef = useRef(showToast);
+  billingToastRef.current = showToast;
+  const selectedBillingKey = selectedStudentId
+    ? JSON.stringify((siblingStudentIds.length ? siblingStudentIds : [selectedStudentId]).slice().sort())
+    : "";
 
   // ── TARGETED EGRESS-SAFE BILLING SYNC ──
   // Automatically loads fresh, verified dues for the selected student & siblings (~2-3 KB per student)
   // Ensures 100% accuracy without heavy school-wide database scans or exceeding Supabase egress.
   useEffect(() => {
-    if (!selectedStudentId) {
-      lastFetchedStudentKeyRef.current = null;
+    if (!selectedBillingKey) {
       setLoadingStudentDues(false);
       return;
     }
 
-    const targetIds = siblingStudentIds.length > 0 ? siblingStudentIds : [selectedStudentId];
-    const targetKey = targetIds.slice().sort().join(",");
-
-    if (lastFetchedStudentKeyRef.current === targetKey) return;
-    lastFetchedStudentKeyRef.current = targetKey;
+    const targetIds: string[] = JSON.parse(selectedBillingKey);
 
     let isMounted = true;
     setLoadingStudentDues(true);
+    setStudentDuesError(false);
 
-    if (refreshStudentBilling) {
-      refreshStudentBilling(targetIds)
+    if (billingRefreshRef.current) {
+      billingRefreshRef.current(targetIds)
         .catch((err) => {
           console.error("Failed to fetch targeted student billing:", err);
+          if (isMounted) setStudentDuesError(true);
+          if (isMounted) billingToastRef.current("warning", "Refresh Needed", "Fresh fee details could not be loaded. Reselect the student to retry before collecting payment.");
         })
         .finally(() => {
           if (isMounted) setLoadingStudentDues(false);
@@ -248,7 +253,7 @@ export default function FeeCollectTab({
     return () => {
       isMounted = false;
     };
-  }, [selectedStudentId, siblingStudentIds, refreshStudentBilling]);
+  }, [selectedBillingKey, billingRetry]);
 
   useEffect(() => {
     if (selectedStudentId) {
@@ -437,7 +442,7 @@ export default function FeeCollectTab({
 
   const handleOfflinePayment = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (isSubmittingPayment) return;
+    if (isSubmittingPayment || loadingStudentDues || studentDuesError) return;
     const student = students.find((s) => s.id === selectedStudentId);
     if (!student || selectedDueIds.length === 0) return;
 
@@ -510,9 +515,9 @@ export default function FeeCollectTab({
 
       if (payRes.receipt?.isDuplicateRetry) {
         idempotencyKeyRef.current = null;
+        setSelectedDueIds([]);
         showToast("warning", "Payment Already Recorded", `This transaction was already recorded earlier (Receipt #${payRes.receipt.receiptNo}).`);
         setIsSubmittingPayment(false);
-        await (refreshStudentBilling ? refreshStudentBilling(siblingStudentIds) : refreshBilling());
         return;
       }
 
@@ -529,9 +534,10 @@ export default function FeeCollectTab({
       const isSingleSibling = siblingStudents.length === 1;
 
       if (!payRes.receipt?.receiptNo) {
+        idempotencyKeyRef.current = null;
+        setSelectedDueIds([]);
         showToast("error", "Transaction Warning", "Payment was recorded but server did not return a valid receipt number.");
         setIsSubmittingPayment(false);
-        await (refreshStudentBilling ? refreshStudentBilling(siblingStudentIds) : refreshBilling());
         return;
       }
 
@@ -1087,6 +1093,13 @@ export default function FeeCollectTab({
                   const child = siblingStudents.find((s) => s.id === childId);
                   if (!child) return null;
                   const childDues = selectedStudentDues.filter((d) => d.studentId === child.id);
+
+                  if (studentDuesError) {
+                    return <div role="alert" className="p-6 text-center text-sm text-amber-800">
+                      <p>Fresh fee details could not be loaded.</p>
+                      <button type="button" className="mt-3 underline font-bold" onClick={() => setBillingRetry(value => value + 1)}>Retry loading fee details</button>
+                    </div>;
+                  }
 
                   if (loadingStudentDues) {
                     return (
@@ -1807,7 +1820,7 @@ export default function FeeCollectTab({
 
                   <button
                     type="submit"
-                    disabled={selectedDueIds.length === 0 || isSubmittingPayment || (payMethod === "UPI" && !hasUpiConfigured)}
+                    disabled={selectedDueIds.length === 0 || isSubmittingPayment || loadingStudentDues || studentDuesError || (payMethod === "UPI" && !hasUpiConfigured)}
                     className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] text-white rounded-2xl text-sm font-extrabold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-indigo-600/15 cursor-pointer flex items-center justify-center gap-2"
                   >
                     {isSubmittingPayment ? (

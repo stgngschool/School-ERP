@@ -86,6 +86,7 @@ export async function GET(request: Request) {
         examName: true,
         marksObtained: true,
         maxMarks: true,
+        remarks: true,
         writtenExam: true,
         notebook: true,
         subjectEnrichment: true,

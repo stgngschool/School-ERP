@@ -1,5 +1,6 @@
 "use client";
 
+import CancelledReceiptsHistory from "@/components/CancelledReceiptsHistory";
 import React, { useState, useDeferredValue, useMemo } from "react";
 import {
   Printer,
@@ -48,7 +49,7 @@ export default function LedgerReceiptsTab({
   const [isSyncing, setIsSyncing] = useState(false);
   
   // Navigation: "shift" (Today's Shift Register) vs "lookup" (Parent Receipt Lookup)
-  const [activeSubTab, setActiveSubTab] = useState<"shift" | "lookup">("shift");
+  const [activeSubTab, setActiveSubTab] = useState<"shift" | "lookup" | "cancelled">("shift");
 
   // Tab 1 (Shift): Quick filter within today's shift
   const [shiftFilter, setShiftFilter] = useState("");
@@ -266,7 +267,7 @@ export default function LedgerReceiptsTab({
 
         <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
           {/* Sub-Tab Navigation Toggle */}
-          <div className="flex bg-slate-100 p-0.5 rounded-xl select-none shrink-0 border border-slate-200/60">
+          <div className="flex flex-wrap bg-slate-100 p-0.5 rounded-xl select-none shrink-0 border border-slate-200/60">
             <button
               type="button"
               onClick={() => setActiveSubTab("shift")}
@@ -291,6 +292,7 @@ export default function LedgerReceiptsTab({
               <UserSearch className="w-3 h-3" />
               <span>Parent Receipt Lookup</span>
             </button>
+            <button type="button" onClick={() => setActiveSubTab("cancelled")} aria-pressed={activeSubTab === "cancelled"} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-colors ${activeSubTab === "cancelled" ? "bg-white text-rose-700 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}>Cancelled history</button>
           </div>
 
           {/* Privacy Toggle Button */}
@@ -330,6 +332,8 @@ export default function LedgerReceiptsTab({
       {/* ═══════════════════════════════════════════════════════════════════ */}
       {/* ─── SUB-TAB 1: TODAY'S SHIFT REGISTER (Daily Cashier Closing) ─── */}
       {/* ═══════════════════════════════════════════════════════════════════ */}
+      {activeSubTab === "cancelled" && <CancelledReceiptsHistory />}
+
       {activeSubTab === "shift" && (
         <div className="space-y-4">
           {/* Shift Reconciliation Cards */}
