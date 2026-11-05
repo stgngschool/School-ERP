@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import { formatP } from "@/lib/currency";
 import { enrichReceiptWithStudentDetails } from "@/lib/receipts";
-import { ledgerIncreasesBalance } from "@/lib/ledgerDisplay";
 import ModernDatePicker from "@/components/ModernDatePicker";
 import { getTodayIST } from "@/lib/dateUtils";
 import { exportMasterFeeRegisterXLS } from "@/lib/exportFeeXLS";
@@ -590,7 +589,7 @@ export default function LedgerReceiptsTab({
               return (
                 <>
                   {visibleLedger.map((log) => {
-                    const isCharge = ledgerIncreasesBalance(log);
+                    const isCharge = log.type === "CHARGE" || log.type === "FINE";
                     const student = students.find((s) => s.id === log.studentId);
                     return (
                       <div

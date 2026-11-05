@@ -24,7 +24,6 @@ import {
 } from "lucide-react";
 import { formatP } from "@/lib/currency";
 import { enrichReceiptWithStudentDetails } from "@/lib/receipts";
-import { receiptBelongsToStudent } from "@/lib/ledgerDisplay";
 import { getTodayIST } from "@/lib/dateUtils";
 import { MockReceipt, MockLedgerEntry, MockStudent, MockUser, useAuth } from "@/context/AuthContext";
 
@@ -203,7 +202,12 @@ export default function LedgerReceiptsTab({
   const selectedStudentReceipts = useMemo(() => {
     if (!selectedStudent) return [];
     return receipts
-      .filter((r) => receiptBelongsToStudent(r, selectedStudent))
+      .filter((r) => {
+        return (
+          r.studentId === selectedStudent.id ||
+          (r.studentName && r.studentName.toLowerCase() === selectedStudent.name.toLowerCase())
+        );
+      })
       .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
   }, [receipts, selectedStudent]);
 
@@ -808,7 +812,7 @@ export default function LedgerReceiptsTab({
                       <div
                         key={r.id}
                         onClick={() => {
-                          const std = students.find((s) => receiptBelongsToStudent(r, s));
+                          const std = students.find((s) => s.id === r.studentId || s.name === r.studentName);
                           if (std) handleSelectStudent(std);
                           else onOpenReceipt(enrichReceiptWithStudentDetails(r, students));
                         }}

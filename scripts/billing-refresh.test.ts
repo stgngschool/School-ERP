@@ -1,17 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createBillingReadQueue, mergeBillingReceipts, appendBillingHistory, changedBillingStudentIds } from '../src/lib/billingRefresh';
-
-test('cross-device reconciliation targets changed family members and skips unchanged receipts', () => {
-  const previous = [{ id: 'same', amount: 100, status: 'ACTIVE', studentId: 'a' }];
-  assert.deepEqual(changedBillingStudentIds(previous, [...previous, { id: 'family', amount: 200, studentIds: ['b', 'c'] }]), ['b', 'c']);
-  assert.deepEqual(changedBillingStudentIds(previous, [{ ...previous[0], status: 'REVERSED' }]), ['a']);
-});
-
-test('older pages append after recent rows and update duplicate IDs without moving them', () => {
-  assert.deepEqual(appendBillingHistory([{ id: 'new', amount: 1 }], [{ id: 'new', amount: 2 }, { id: 'old', amount: 3 }]),
-    [{ id: 'new', amount: 2 }, { id: 'old', amount: 3 }]);
-});
+import { createBillingReadQueue, mergeBillingReceipts } from '../src/lib/billingRefresh';
 
 test('a post-payment read waits for the old full read and then fetches fresh data', async () => {
   const queue = createBillingReadQueue();

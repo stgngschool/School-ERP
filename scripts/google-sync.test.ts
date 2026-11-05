@@ -3,14 +3,6 @@ import { test } from "node:test";
 import { createSyncCoordinator } from "../src/lib/googleSyncCoordinator";
 import type { PrismaClient } from "@prisma/client";
 import { fetchDirectoryStudents } from "../src/lib/googleSyncData";
-import { liveReceiptSelect } from "../src/lib/googleSyncData";
-
-test('live receipt append selects only export fields without full student or ledger records', () => {
-  assert.equal(liveReceiptSelect.student.select.name, true);
-  assert.equal(liveReceiptSelect.items.select.ledgerEntry.select.description, true);
-  assert.equal('include' in liveReceiptSelect.student, false);
-  assert.equal('photoUrl' in liveReceiptSelect.student.select, false);
-});
 
 test("concurrent calls for the same spreadsheet/action share one operation", async () => {
   const run = createSyncCoordinator();

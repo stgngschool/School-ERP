@@ -45,11 +45,6 @@ export async function GET(request: Request) {
     const limitParam = parseInt(searchParams.get("limit") || searchParams.get("pageSize") || "50", 10);
     const limit = isNaN(limitParam) || limitParam < 1 ? 50 : Math.min(500, limitParam);
     const skip = (page - 1) * limit;
-    // Keep history light; older bounded chunks are loaded only on explicit request.
-    const fullPage = allParam && !studentIdParam;
-    const ledgerLimit = studentIdParam ? 500 : (allParam ? 2500 : limit);
-    const receiptLimit = studentIdParam ? 500 : (allParam ? 2000 : limit);
-    const chargeLimit = studentIdParam ? 500 : (allParam ? 15000 : limit);
 
     // Cache key construction:
     // Staff (ADMIN & ACCOUNTANT) see identical school-wide records when not scoped to a specific student/receipt.
@@ -74,6 +69,7 @@ export async function GET(request: Request) {
     let ledgerWhere: any = {};
     let receiptWhere: any = { status: { not: "REVERSED" } };
     let chargesWhere: any = { entryType: EntryType.CHARGE };
+    let discountsWhere: any = { entryType: EntryType.DISCOUNT };
     let scopedStudentIds: string[] | undefined = undefined;
 
     if (authUser.role === "TEACHER") {
@@ -124,6 +120,7 @@ export async function GET(request: Request) {
       scopedStudentIds = studentIdParam ? [studentIdParam] : teacherStudentIds;
       ledgerWhere = { studentId: { in: scopedStudentIds } };
       chargesWhere = { entryType: EntryType.CHARGE, studentId: { in: scopedStudentIds } };
+      discountsWhere = { entryType: EntryType.DISCOUNT, studentId: { in: scopedStudentIds } };
 
       const teacherConditions: any[] = [
         { status: { not: "REVERSED" } },
@@ -212,6 +209,10 @@ export async function GET(request: Request) {
         entryType: EntryType.CHARGE,
         studentId: { in: scopedStudentIds }
       };
+      discountsWhere = { 
+        entryType: EntryType.DISCOUNT,
+        studentId: { in: scopedStudentIds }
+      };
 
       const parentConditions: any[] = [
         { status: { not: "REVERSED" } },
@@ -245,6 +246,7 @@ export async function GET(request: Request) {
         scopedStudentIds = [studentIdParam];
         ledgerWhere.studentId = studentIdParam;
         chargesWhere.studentId = studentIdParam;
+        discountsWhere.studentId = studentIdParam;
       }
 
       const adminConditions: any[] = [
@@ -282,15 +284,18 @@ export async function GET(request: Request) {
     const sessionStartDate = new Date(`${startYear}-03-01T00:00:00.000Z`);
     if (activeSession) {
       Object.assign(chargesWhere, payableSessions(new Date(activeSession.startDate)));
+      Object.assign(discountsWhere, payableSessions(new Date(activeSession.startDate)));
     }
+    discountsWhere.AND = [{ OR: [{ referenceId: null }, { receipt: { status: "ACTIVE" } }] }];
 
     // Execute optimized queries concurrently with minimal join overhead
     // SCH-01: school config is now fetched from DB in the same parallel batch
     const [
-      ledgerRows,
-      receiptRows,
+      ledger,
+      receipts,
       totalReceiptsCount,
-      chargeRows,
+      charges,
+      discounts,
       schoolConfigRow,
       receiptsAggregate,
       receiptsByMethod,
@@ -298,10 +303,10 @@ export async function GET(request: Request) {
     ] = await Promise.all([
       db.ledgerEntry.findMany({
         where: ledgerWhere,
-        skip: studentIdParam ? 0 : fullPage ? (page - 1) * ledgerLimit : skip,
-        // The overview does not need to download the full raw audit history.
-        take: ledgerLimit + (fullPage ? 1 : 0),
-        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        skip: (studentIdParam || allParam) ? 0 : skip,
+        // ── EGRESS P1: clamp the full-ledger (raw audit view) ceiling 5000 -> 2500
+        take: studentIdParam ? 500 : (allParam ? 2500 : limit),
+        orderBy: { createdAt: "desc" },
         select: {
           id: true,
           studentId: true,
@@ -315,9 +320,9 @@ export async function GET(request: Request) {
       // ── B-11: Paginated receipt query
       db.receipt.findMany({
         where: receiptWhere,
-        skip: studentIdParam ? 0 : fullPage ? (page - 1) * receiptLimit : skip,
-        // Older receipts remain reachable through explicit continuation pages.
-        take: receiptLimit + (fullPage ? 1 : 0),
+        skip: (studentIdParam || allParam) ? 0 : skip,
+        // ── EGRESS P1: clamp receipts ceiling 5000 -> 2000 (safe; <2k receipts today)
+        take: studentIdParam ? 500 : (allParam ? 2000 : limit),
         select: {
           id: true,
           studentId: true,
@@ -370,7 +375,7 @@ export async function GET(request: Request) {
             },
           },
         },
-        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        orderBy: { createdAt: "desc" },
       }),
       db.receipt.count({ where: receiptWhere }),
       // ── Bounded charges query: covers full school academic year without truncation
@@ -379,9 +384,9 @@ export async function GET(request: Request) {
         // ── EGRESS P1: safety clamp 25000 -> 15000. Dues/defaulters need every current
         // charge; 15000 covers the full current session without truncation while
         // bounding worst-case growth.
-        take: chargeLimit + (fullPage ? 1 : 0),
-        skip: studentIdParam ? 0 : fullPage ? (page - 1) * chargeLimit : skip,
-        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: studentIdParam ? 500 : (allParam ? 15000 : limit),
+        skip: (studentIdParam || allParam) ? 0 : skip,
+        orderBy: { createdAt: "desc" },
         select: {
           id: true,
           studentId: true,
@@ -390,6 +395,21 @@ export async function GET(request: Request) {
           createdAt: true,
           sessionId: true,
           session: { select: { name: true } },
+        },
+      }),
+      // ── Bounded discounts query: covers full school academic year without truncation
+      db.ledgerEntry.findMany({
+        where: discountsWhere,
+        // ── EGRESS P1: safety clamp 10000 -> 6000 (well above current discount volume)
+        take: studentIdParam ? 200 : (allParam ? 6000 : limit),
+        skip: (studentIdParam || allParam) ? 0 : skip,
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          studentId: true,
+          sessionId: true,
+          description: true,
+          amount: true,
         },
       }),
       // SCH-01: Read school config from in-memory cache instead of querying DB every time
@@ -412,33 +432,6 @@ export async function GET(request: Request) {
         _count: { id: true },
       }),
     ]);
-
-    const hasMoreLedger = fullPage && ledgerRows.length > ledgerLimit;
-    const hasMoreReceipts = fullPage && receiptRows.length > receiptLimit;
-    const hasMoreCharges = fullPage && chargeRows.length > chargeLimit;
-    const ledger = ledgerRows.slice(0, ledgerLimit);
-    const receipts = receiptRows.slice(0, receiptLimit);
-    const charges = chargeRows.slice(0, chargeLimit);
-
-    // Discounts belong to returned charges, not to an independently paged list.
-    // Bound charge IDs are already role/session scoped above. Include every active
-    // matching waiver so later pages and students with many waivers stay accurate.
-    const discounts: Array<{ id: string; studentId: string; sessionId: string | null; description: string; amount: number }> = charges.length
-      ? await db.$queryRawUnsafe(
-          `SELECT DISTINCT d.id, d."studentId", d."sessionId", d.description, d.amount
-           FROM "LedgerEntry" d
-           JOIN "LedgerEntry" c ON c.id = ANY($1::text[])
-             AND d."studentId" = c."studentId"
-             AND d."sessionId" IS NOT DISTINCT FROM c."sessionId"
-             AND LOWER(TRIM(REGEXP_REPLACE(d.description, '^.*: ', ''))) =
-                 LOWER(TRIM(REGEXP_REPLACE(c.description, '^Assigned: ', '')))
-           WHERE d."entryType" = 'DISCOUNT'
-             AND (d."referenceId" IS NULL OR EXISTS (
-               SELECT 1 FROM "Receipt" r WHERE r.id = d."referenceId" AND r.status = 'ACTIVE'
-             ))`,
-          charges.map(c => c.id),
-        )
-      : [];
 
     // Only returned charges consume allocation totals. Include every active receipt
     // paying those charges (including family receipts), not just the receipt page.
@@ -756,16 +749,10 @@ export async function GET(request: Request) {
       summary,
       pagination: {
         page,
-        limit: fullPage ? receiptLimit : limit,
+        limit,
         totalReceipts: totalReceiptsCount,
-        totalPages: Math.ceil(totalReceiptsCount / (fullPage ? receiptLimit : limit)),
-        hasMore: fullPage ? (hasMoreLedger || hasMoreReceipts || hasMoreCharges) : skip + receipts.length < totalReceiptsCount,
-        ...(fullPage ? {
-          hasMoreLedger,
-          hasMoreReceipts,
-          hasMoreCharges,
-          nextPage: hasMoreLedger || hasMoreReceipts || hasMoreCharges ? page + 1 : null,
-        } : {}),
+        totalPages: Math.ceil(totalReceiptsCount / limit),
+        hasMore: skip + receipts.length < totalReceiptsCount,
       },
     };
 

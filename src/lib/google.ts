@@ -4,7 +4,7 @@ import { db as prisma } from "./db";
 import { formatCanonicalDOB, getISTDateString } from "./dateUtils";
 import { isAbsentRemark } from "./marksAbsence";
 import { runGoogleSheetSync } from "./googleSyncCoordinator";
-import { liveReceiptSelect, activeFinancialEntries, fetchDirectoryStudents, syncStudentOrder, syncStudentProfileSelect } from "./googleSyncData";
+import { activeFinancialEntries, fetchDirectoryStudents, syncStudentOrder, syncStudentProfileSelect } from "./googleSyncData";
 
 // Bulletproof Google Service Account private key sanitizer
 function formatPrivateKey(rawKey: string): string {
@@ -1103,7 +1103,15 @@ export async function appendReceiptToSheet(receiptId: string) {
 
     const r = await prisma.receipt.findUnique({
       where: { id: receiptId },
-      select: liveReceiptSelect,
+      include: {
+        student: { include: { class: true } },
+        createdBy: { select: { name: true, role: true } },
+        items: {
+          include: {
+            ledgerEntry: { include: { feeHead: true } },
+          },
+        },
+      },
     });
     if (!r) return;
 
