@@ -1,5 +1,18 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 
+/** Single-receipt append never needs a full student profile or charge row. */
+export const liveReceiptSelect = {
+  receiptNumber: true, manualReceiptNo: true, createdAt: true,
+  amountPaid: true, paymentMethod: true, transactionReference: true,
+  status: true, remarks: true,
+  student: { select: { name: true, admissionNumber: true, fatherName: true,
+    class: { select: { name: true, section: true } } } },
+  createdBy: { select: { name: true, role: true } },
+  items: { select: { amount: true, ledgerEntry: { select: {
+    description: true, feeHead: { select: { name: true } },
+  } } } },
+} satisfies Prisma.ReceiptSelect;
+
 // Preserve raw reversal history in the ledger sheet, but exclude cancelled
 // allocations from student balances and the fee register.
 export const activeFinancialEntries = {

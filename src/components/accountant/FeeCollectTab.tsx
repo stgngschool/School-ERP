@@ -22,6 +22,7 @@ import { isDueUpToCurrentMonth } from "@/lib/whatsapp";
 import { enrichReceiptWithStudentDetails } from "@/lib/receipts";
 import { MockStudent, MockDueItem, MockReceipt, MockSchoolInfo, SchoolUpiAccount, useAuth } from "@/context/AuthContext";
 import QRCode from "qrcode";
+import FeeStudentHeader from "./FeeStudentHeader";
 
 interface FeeCollectTabProps {
   students: MockStudent[];
@@ -44,7 +45,7 @@ interface FeeCollectTabProps {
     manualReceiptNo?: string,
     idempotencyKey?: string,
     upiDetails?: { upiAccountId?: string; upiId?: string; upiMerchantName?: string }
-  ) => Promise<{ success: boolean; receipt?: any; error?: string }>;
+  ) => Promise<{ success: boolean; receipt?: any; error?: string; refresh?: Promise<void> }>;
   refreshBilling: () => Promise<void>;
 }
 
@@ -55,7 +56,6 @@ export default function FeeCollectTab({
   concessions = [],
   schoolInfo,
   studentsLoaded,
-  billingLoaded,
   selectedStudentId,
   setSelectedStudentId,
   onViewStudentProfile,
@@ -514,6 +514,7 @@ export default function FeeCollectTab({
       }
 
       if (payRes.receipt?.isDuplicateRetry) {
+        await payRes.refresh;
         idempotencyKeyRef.current = null;
         setSelectedDueIds([]);
         showToast("warning", "Payment Already Recorded", `This transaction was already recorded earlier (Receipt #${payRes.receipt.receiptNo}).`);
@@ -534,6 +535,7 @@ export default function FeeCollectTab({
       const isSingleSibling = siblingStudents.length === 1;
 
       if (!payRes.receipt?.receiptNo) {
+        await payRes.refresh;
         idempotencyKeyRef.current = null;
         setSelectedDueIds([]);
         showToast("error", "Transaction Warning", "Payment was recorded but server did not return a valid receipt number.");
@@ -647,6 +649,8 @@ export default function FeeCollectTab({
       setManualReceiptNo("");
       setSelectedStudentId("");
       setSearchQuery("");
+      // Receipt is already open; keep checkout locked until balance refresh settles.
+      await payRes.refresh;
     } catch (error) {
       console.error("Payment submission error:", error);
       showToast("error", "Payment Error", "An unexpected error occurred while recording the payment.");
@@ -654,7 +658,9 @@ export default function FeeCollectTab({
       setIsSubmittingPayment(false);
     }
   };
-  if (!studentsLoaded || !billingLoaded) {
+  // Student-specific verified balances load after selection; the counter must
+  // not wait for a school-wide report snapshot.
+  if (!studentsLoaded) {
     return (
       <div className="max-w-2xl mx-auto py-12 px-4 text-center space-y-6 animate-pulse">
         <div className="inline-flex p-3.5 bg-slate-100 rounded-2xl h-14 w-14" />
@@ -805,100 +811,19 @@ export default function FeeCollectTab({
       ) : (
         /* SELECTED STUDENT FLOW (Fees detail and Collect Fee) */
         <div className="space-y-4 sm:space-y-6 pb-28 sm:pb-8">
-          {/* Header Student Panel Card */}
-          <div className="bg-gradient-to-br from-slate-900 via-slate-850 to-indigo-950 sm:rounded-2xl rounded-2xl p-4 sm:p-5 text-white shadow-md relative overflow-hidden flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-0 sm:border border-slate-800">
-            <div className="absolute right-0 top-0 h-40 w-40 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-
-            <div className="space-y-3 flex-1">
-              {/* Top Navigation & Profile Action Row */}
-              <div className="flex items-center justify-between gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedStudentId("");
-                    setSearchQuery("");
-                    setSelectedDueIds([]);
-                    setDiscountsState({});
-                    setPayingState({});
-                  }}
-                  className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-200 hover:text-white transition-colors cursor-pointer bg-white/10 hover:bg-white/15 active:scale-95 px-3 py-1.5 rounded-xl border border-white/10"
-                >
-                  <ArrowLeft className="h-3.5 w-3.5" /> Back to Search
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => selectedStudentId && onViewStudentProfile(selectedStudentId)}
-                  className="inline-flex items-center gap-1.5 text-[11px] font-bold text-indigo-200 hover:text-white transition-colors cursor-pointer bg-indigo-500/20 hover:bg-indigo-500/30 active:scale-95 px-3 py-1.5 rounded-xl border border-indigo-400/30"
-                >
-                  <User className="h-3.5 w-3.5" /> View Full Profile
-                </button>
-              </div>
-
-              {/* Student Name & Core Badges */}
-              <div className="space-y-1.5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-xl sm:text-2xl font-black tracking-tight text-white">{selectedStudentObj?.name}</h3>
-                  <span className="text-[10px] font-black uppercase bg-indigo-500/30 text-indigo-200 px-2.5 py-0.5 rounded-full border border-indigo-400/30">
-                    Class {selectedStudentObj?.class}-{selectedStudentObj?.section}
-                  </span>
-                  {selectedStudentObj?.isRte && (
-                    <span className="text-[10px] font-black uppercase bg-purple-500/30 text-purple-200 px-2.5 py-0.5 rounded-full border border-purple-400/40 flex items-center gap-1">
-                      <GraduationCap className="h-3 w-3" /> RTE Free Quota
-                    </span>
-                  )}
-                  {selectedStudentObj?.familyCode && (
-                    <span className="text-[10px] font-bold uppercase bg-amber-400/15 text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-400/30 flex items-center gap-1">
-                      <Users className="h-3 w-3" /> Family Code: {selectedStudentObj?.familyCode}
-                    </span>
-                  )}
-                </div>
-
-                {/* Symmetrical 2/4-Col Info Strip */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-1.5 text-slate-300 text-[11px] font-medium pt-0.5">
-                  <p>
-                    Adm No: <span className="font-bold text-white">{selectedStudentObj?.admissionNo}</span>
-                  </p>
-                  <p className="truncate">
-                    Parent: <span className="font-bold text-white">{selectedStudentObj?.parentName || selectedStudentObj?.fatherName || "N/A"}</span>
-                  </p>
-                  <p>
-                    Phone: <span className="font-bold text-white">{selectedStudentObj?.parentPhone || "N/A"}</span>
-                  </p>
-                  {siblingStudents.length > 1 && (
-                    <p className="text-amber-300 font-semibold">
-                      Siblings: <span className="font-bold text-amber-200">{siblingStudents.length} Children Linked</span>
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Total Outstanding Dues Card */}
-            <div className="shrink-0 bg-white/5 border border-white/10 p-3.5 sm:p-4 rounded-2xl flex items-center justify-between lg:flex-col lg:items-end lg:text-right gap-2">
-              <div>
-                <span className="text-[9px] font-black uppercase text-slate-400 block tracking-wider">
-                  Total Outstanding Dues
-                </span>
-                <p className={`text-[10px] font-bold ${selectedStudentObj?.isRte ? "text-purple-300" : "text-slate-300"}`}>
-                  {loadingStudentDues
-                    ? "Checking verified ledger..."
-                    : selectedStudentObj?.isRte
-                    ? "100% Free Education (Govt RTE)"
-                    : `${selectedStudentDues.length} Unpaid Invoices`}
-                </p>
-              </div>
-              <h3 className={`text-2xl sm:text-xl font-black tracking-tight ${selectedStudentObj?.isRte ? "text-purple-300" : "text-rose-400"}`}>
-                {loadingStudentDues ? (
-                  <span className="text-slate-300 text-sm flex items-center gap-1.5 font-bold">
-                    <Loader2 className="h-4 w-4 animate-spin inline text-indigo-400" /> Verifying...
-                  </span>
-                ) : (
-                  formatP(selectedStudentDues.reduce((sum, item) => sum + item.amount, 0))
-                )}
-              </h3>
-            </div>
-          </div>
+          <FeeStudentHeader
+            student={selectedStudentObj}
+            siblingCount={siblingStudents.length}
+            invoiceCount={selectedStudentDues.length}
+            totalDue={selectedStudentDues.reduce((sum, item) => sum + item.amount, 0)}
+            loading={loadingStudentDues}
+            error={studentDuesError}
+            onBack={() => {
+              setSelectedStudentId(""); setSearchQuery(""); setSelectedDueIds([]);
+              setDiscountsState({}); setPayingState({});
+            }}
+            onProfile={() => selectedStudentId && onViewStudentProfile(selectedStudentId)}
+          />
 
           {/* Main Ledger & Checkout Panel Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 sm:gap-6 min-w-0 max-w-full overflow-hidden">

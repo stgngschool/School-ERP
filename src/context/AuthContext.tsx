@@ -3,7 +3,8 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
 import { cacheableRead, shouldRetryRead, successfulStudentIds, createReadDeduplicator } from "@/lib/readPolicy";
 import { mergeAttendanceScope } from "@/lib/attendanceMerge";
-import { createBillingReadQueue, mergeBillingReceipts } from "@/lib/billingRefresh";
+import { createBillingReadQueue, mergeBillingReceipts, appendBillingHistory, changedBillingStudentIds } from "@/lib/billingRefresh";
+import { savedPaymentResult } from "@/lib/paymentResult";
 import { useAuthLogic } from "../hooks/useAuthLogic";
 import { CheckCircle2, AlertCircle, AlertTriangle, Info, X } from "lucide-react";
 
@@ -344,6 +345,11 @@ interface AuthContextType {
   studentsLoaded: boolean;
   billingLoaded: boolean;
   billingDetailsLoaded: boolean;
+  dashboardBilling: any | null;
+  dashboardBillingError: boolean;
+  refreshDashboardBilling: () => Promise<void>;
+  billingHasOlder: boolean;
+  loadOlderBilling: () => Promise<void>;
   attendanceLoaded: boolean;
   switchRole: (role: Role) => Promise<void>;
   toggleUserStatus: (userId: string) => Promise<void>;
@@ -401,7 +407,7 @@ interface AuthContextType {
     manualReceiptNo?: string,
     idempotencyKey?: string,
     upiDetails?: { upiAccountId?: string; upiId?: string; upiMerchantName?: string }
-  ) => Promise<{ success: boolean; receipt?: any; error?: string }>;
+  ) => Promise<{ success: boolean; receipt?: any; error?: string; refresh?: Promise<void> }>;
   addStudent: (
     studentData: {
       name: string;
@@ -686,6 +692,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   });
   const [billingDetailsLoaded, setBillingDetailsLoaded] = useState(false);
+  const [dashboardBilling, setDashboardBilling] = useState<any | null>(null);
+  const [dashboardBillingError, setDashboardBillingError] = useState(false);
+  const dashboardRequestSeq = useRef(0);
+  const receiptsRef = useRef(receipts);
+  receiptsRef.current = receipts;
+  const [billingHasOlder, setBillingHasOlder] = useState(false);
+  const billingNextPage = useRef<number | null>(null);
+  const billingSummaryRevision = useRef(0);
+  const billingViewRef = useRef({ detailsLoaded: billingDetailsLoaded, tab: activeTab });
+  billingViewRef.current = { detailsLoaded: billingDetailsLoaded, tab: activeTab };
+  const lastScopedBillingIds = useRef<string[]>([]);
   const [billingLoaded, setBillingLoaded] = useState(() => {
     if (typeof window === "undefined") return false;
     try {
@@ -853,6 +870,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setStudentsLoaded(false);
       setBillingLoaded(false);
       setBillingDetailsLoaded(false);
+      setDashboardBilling(null);
+      dashboardRequestSeq.current++;
+      setBillingHasOlder(false);
+      billingNextPage.current = null;
+      lastScopedBillingIds.current = [];
       lastFullBillingLoadRef.current = 0;
       setAttendanceLoaded(false);
       return;
@@ -974,11 +996,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // so refreshData is defined once and never recreated when user state changes.
   }, []);
 
+  const refreshDashboardBilling = async () => {
+    const identity = userRef.current;
+    if (!identity || !['ADMIN', 'ACCOUNTANT'].includes(identity.role)) return;
+    const seq = ++dashboardRequestSeq.current;
+    setDashboardBillingError(false);
+    const data = await apiFetch('/api/billing/dashboard', {}, 15000, false);
+    if (seq !== dashboardRequestSeq.current || userRef.current?.id !== identity.id) return;
+    if (!data?.report) { setDashboardBillingError(true); return; }
+    setDashboardBilling(data.report);
+  };
+  const dashboardRefreshRef = useRef(refreshDashboardBilling);
+  dashboardRefreshRef.current = refreshDashboardBilling;
+  useEffect(() => {
+    if (authLoading || activeTab !== 'dashboard') return;
+    void dashboardRefreshRef.current();
+  }, [authLoading, activeTab, user?.id, user?.role]);
+
   refreshDataDelegateRef.current = refreshData;
 
   useEffect(() => {
     if (!user || !["ADMIN", "ACCOUNTANT"].includes(user.role)) return;
-    const detailedDashboard = activeTab === "dashboard" && billingDetailsLoaded;
+    const detailedDashboard = activeTab === "dashboard";
     let cancelled = false;
     if (activeTab === "students") {
       void apiFetch("/api/admissions", {}, 10000, true).then(data => {
@@ -1041,6 +1080,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Pass force=true (e.g. right after a mutation) to bypass the freshness window.
   const FULL_BILLING_FRESH_MS = 10 * 60 * 1000;
   const loadFullBilling = (force = false) => billingReadQueue.current.run(async (isCurrent) => {
+    billingSummaryRevision.current++;
     if (!force && Date.now() - lastFullBillingLoadRef.current < FULL_BILLING_FRESH_MS) return;
       if (force) {
         clearApiCache("/api/billing");
@@ -1050,6 +1090,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!data || !Array.isArray(data.dueItems) || !Array.isArray(data.receipts) || !Array.isArray(data.ledgerEntries)) throw new Error("Unable to load fee details. Please try again.");
       if (data) {
         setBillingDetailsLoaded(true);
+        billingNextPage.current = data.pagination?.nextPage ?? null;
+        setBillingHasOlder(billingNextPage.current !== null);
         setLedgerEntries(data.ledgerEntries || []);
         setReceipts(mergeBillingReceipts([], data.receipts));
         setDueItems(data.dueItems || []);
@@ -1065,6 +1107,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLocalCache("gng_cached_ledgerEntries", data.ledgerEntries || []);
         lastFullBillingLoadRef.current = Date.now();
       }
+  });
+
+  // History is fetched only on an explicit click, never in an automatic loop.
+  const loadOlderBilling = () => billingReadQueue.current.run(async (isCurrent) => {
+    const page = billingNextPage.current;
+    if (!page) return;
+    const data = await apiFetch(`/api/billing?all=true&page=${page}`, {}, 15000, true);
+    if (!isCurrent()) return;
+    if (!data || !Array.isArray(data.receipts) || !Array.isArray(data.ledgerEntries) || !Array.isArray(data.dueItems)) {
+      throw new Error("Older records could not be loaded. Please retry.");
+    }
+    setReceipts(prev => appendBillingHistory(prev, data.receipts));
+    setLedgerEntries(prev => appendBillingHistory(prev, data.ledgerEntries));
+    setDueItems(prev => appendBillingHistory(prev, data.dueItems));
+    billingNextPage.current = data.pagination?.nextPage ?? null;
+    setBillingHasOlder(billingNextPage.current !== null);
   });
 
   // Public refresh — defaults to a FORCED full refresh. Used after mutations that
@@ -1087,9 +1145,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Instead of re-downloading 6,000+ charges across the entire school (~1.8 MB),
   // this fetches ~2-3 KB per student and patches dueItems, receipts, and ledgerEntries in-place.
   const refreshStudentBilling = (targetStudentIds: string | string[]) => billingReadQueue.current.run(async (isCurrent) => {
+    const summaryRevision = ++billingSummaryRevision.current;
     const rawIds = Array.isArray(targetStudentIds) ? targetStudentIds : [targetStudentIds];
     const ids = Array.from(new Set(rawIds.filter(Boolean)));
     if (ids.length === 0) return;
+    lastScopedBillingIds.current = ids;
 
     const uniqueToRefresh = ids;
     // A scoped mutation also invalidates cached full snapshots and summaries.
@@ -1146,14 +1206,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       // 4. Update top dashboard revenue counters via ultra-lightweight aggregate endpoint (<500B)
-      await apiFetch("/api/billing/summary", {}, 8000, false).then((sumRes) => {
-        if (!isCurrent()) throw new Error("Billing session changed. Please reload fee details.");
-        if (!sumRes?.summary) throw new Error("Payment totals could not be refreshed. Please reload them.");
+      void apiFetch("/api/billing/summary", {}, 4000, false, 0).then((sumRes) => {
+        if (!isCurrent() || summaryRevision !== billingSummaryRevision.current || !sumRes?.summary) return;
         if (sumRes?.summary) {
           setBillingSummary(sumRes.summary);
           setLocalCache("gng_cached_billingSummary", sumRes.summary);
-          lastReceiptCountRef.current = sumRes.summary.totalReceiptsCount ?? 0;
-          lastCollectedPaisaRef.current = sumRes.summary.totalCollectedPaisa ?? 0;
+          // Sync markers belong to reconciled receipt snapshots, not this later summary.
         }
       });
   });
@@ -1165,57 +1223,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!user || (user.role !== "ADMIN" && user.role !== "ACCOUNTANT")) return;
 
     const checkAndSyncBilling = () => billingReadQueue.current.run(async (isCurrent) => {
-      try {
-        const res = await apiFetch("/api/billing/summary", {}, 8000, false);
-        if (!isCurrent()) return;
-        if (res?.success && res.summary) {
-          const { totalReceiptsCount, totalCollectedPaisa } = res.summary;
-          if (lastReceiptCountRef.current === null || lastCollectedPaisaRef.current === null) {
-            lastReceiptCountRef.current = totalReceiptsCount;
-            lastCollectedPaisaRef.current = totalCollectedPaisa;
-            return;
-          }
-          if (
-            totalReceiptsCount !== lastReceiptCountRef.current ||
-            totalCollectedPaisa !== lastCollectedPaisaRef.current
-          ) {
-            // Reversals remove active receipts and reopen dues. A recent-active
-            // receipt page cannot reconcile either removal, so request a full read.
-            if (totalReceiptsCount < lastReceiptCountRef.current || totalCollectedPaisa < lastCollectedPaisaRef.current) {
-              return true;
-            }
-            // Update refs immediately so parallel or subsequent checks do not re-trigger
-            lastReceiptCountRef.current = totalReceiptsCount;
-            lastCollectedPaisaRef.current = totalCollectedPaisa;
-
-            // ── EGRESS P1: A payment happened on another device. The old code pulled
-            // the ENTIRE school ledger (~4 MB) here on every open device every 3 min.
-            // Instead we (a) merge the authoritative lightweight totals into the summary
-            // cards, and (b) pull only the FIRST PAGE of recent receipts and merge new
-            // vouchers in-place. The full dataset already in memory is left intact and is
-            // reconciled by the next guarded full load / explicit refresh.
-            setBillingSummary((prev: any) => {
-              const merged = { ...(prev || {}), ...res.summary };
-              setLocalCache("gng_cached_billingSummary", merged);
-              return merged;
-            });
-
-            const page = await apiFetch("/api/billing?page=1&limit=50", {}, 10000, false);
-            if (!isCurrent()) return;
-            if (page && Array.isArray(page.receipts) && page.receipts.length > 0) {
-              setReceipts((prev) => {
-                const safePrev = Array.isArray(prev) ? prev : [];
-                const next = mergeBillingReceipts<MockReceipt>(safePrev, page.receipts);
-                setLocalCache("gng_cached_receipts", next);
-                return next;
-              });
-            }
-          }
+      const res = await apiFetch("/api/billing/summary", {}, 8000, false);
+      if (!isCurrent() || !res?.success || !res.summary) return;
+      const { totalReceiptsCount, totalCollectedPaisa } = res.summary;
+      const view = billingViewRef.current;
+      if (view.tab === 'dashboard' && (totalReceiptsCount !== lastReceiptCountRef.current || totalCollectedPaisa !== lastCollectedPaisaRef.current)) {
+        void dashboardRefreshRef.current();
+      }
+      if (!view.detailsLoaded) {
+        // Summary-only screens must never trigger an implicit school-wide read.
+        billingSummaryRevision.current++;
+        setBillingSummary(res.summary);
+        if (view.tab === 'collect' && lastScopedBillingIds.current.length &&
+          (totalReceiptsCount !== lastReceiptCountRef.current || totalCollectedPaisa !== lastCollectedPaisaRef.current)) {
+          return { full: false, ids: [...lastScopedBillingIds.current], summary: res.summary };
         }
-      } catch (e) {}
-    }).then(async (needsFullRefresh) => {
-      // Queue the full read only after this probe has released the queue.
-      if (needsFullRefresh) await loadFullBilling(true);
+        lastReceiptCountRef.current = totalReceiptsCount;
+        lastCollectedPaisaRef.current = totalCollectedPaisa;
+        return;
+      }
+      if (lastReceiptCountRef.current === null || lastCollectedPaisaRef.current === null) {
+        lastReceiptCountRef.current = totalReceiptsCount;
+        lastCollectedPaisaRef.current = totalCollectedPaisa;
+        return;
+      }
+      if (totalReceiptsCount === lastReceiptCountRef.current && totalCollectedPaisa === lastCollectedPaisaRef.current) return;
+      // Cancellation cannot be reconstructed from the active receipt page.
+      if (totalReceiptsCount < lastReceiptCountRef.current || totalCollectedPaisa < lastCollectedPaisaRef.current || totalReceiptsCount - lastReceiptCountRef.current > 50) {
+        return { full: true, ids: [] as string[], summary: res.summary };
+      }
+      const page = await apiFetch("/api/billing?page=1&limit=50", {}, 10000, false);
+      if (!isCurrent() || !Array.isArray(page?.receipts)) return;
+      // Only new/changed receipts need a targeted balance read.
+      const changedIds = changedBillingStudentIds(receiptsRef.current, page.receipts);
+      if (!changedIds.length) return { full: true, ids: [] as string[], summary: res.summary };
+      return { full: false, ids: changedIds, summary: res.summary };
+    }).then(async (change) => {
+      // Schedule after releasing the snapshot queue; never nest queue jobs.
+      if (!change) return;
+      if (change.full) await loadFullBilling(true);
+      else {
+        await refreshStudentBilling(change.ids);
+        lastReceiptCountRef.current = change.summary.totalReceiptsCount;
+        lastCollectedPaisaRef.current = change.summary.totalCollectedPaisa;
+      }
     });
 
     const intervalId = setInterval(() => {
@@ -1889,7 +1940,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     manualReceiptNo?: string,
     idempotencyKey?: string,
     upiDetails?: { upiAccountId?: string; upiId?: string; upiMerchantName?: string }
-  ): Promise<{ success: boolean; receipt?: any; error?: string }> => {
+  ): Promise<{ success: boolean; receipt?: any; error?: string; refresh?: Promise<void> }> => {
     try {
       const clientKey = idempotencyKey || (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : undefined);
       const res = await fetch("/api/billing", {
@@ -1925,14 +1976,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           ].filter(Boolean))
         ) as string[];
 
-        try {
+        return savedPaymentResult(data.receipt, async () => {
           if (affectedStudentIds.length) await refreshStudentBilling(affectedStudentIds);
           else await refreshBilling(true, true);
-        } catch (err) {
+        }, (err) => {
           console.error("Payment saved; billing refresh failed:", err);
           showToast("warning", "Payment Saved — Refresh Needed", "The payment was recorded. Fee details could not be refreshed. Reload them before collecting another payment; do not repeat this payment.", 10000);
-        }
-        return { success: true, receipt: data.receipt };
+        });
       }
       return { success: false, error: data.error || "Payment checkout failed." };
     } catch (err: any) {
@@ -2428,6 +2478,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         studentsLoaded,
         billingLoaded,
         billingDetailsLoaded,
+        dashboardBilling,
+        dashboardBillingError,
+        refreshDashboardBilling,
+        billingHasOlder,
+        loadOlderBilling,
         attendanceLoaded,
         showToast,
       }}

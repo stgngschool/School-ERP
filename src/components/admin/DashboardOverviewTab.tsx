@@ -14,6 +14,7 @@ import {
   isDueUpToCurrentMonth 
 } from "@/lib/whatsapp";
 import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
+import { useAuth } from "@/context/AuthContext";
 
 interface DashboardOverviewTabProps {
   user: any;
@@ -48,7 +49,7 @@ export default function DashboardOverviewTab({
   usersList,
   billingSummary,
   studentsLoaded,
-  billingLoaded,
+  billingLoaded: billingDetailsLoaded,
   attendanceLoaded,
   attendances,
   updateSchoolInfo,
@@ -58,6 +59,8 @@ export default function DashboardOverviewTab({
   addEvent,
   setSelectedStudentId
 }: DashboardOverviewTabProps) {
+  const { dashboardBilling } = useAuth();
+  const billingLoaded = Boolean(dashboardBilling) || billingDetailsLoaded;
 
   // Redesigned Dashboard State
   const [notes, setNotes] = useState<string[]>([]);
@@ -109,6 +112,7 @@ export default function DashboardOverviewTab({
   };
 
   const isCardMasked = (cardKey: string) => {
+    if (!billingLoaded) return true;
     if (!privacyMode) return false;
     return !revealedCards[cardKey];
   };
@@ -262,14 +266,14 @@ export default function DashboardOverviewTab({
           const oldStudentsCount = totalStudents - newAdmissionsCount;
 
           const activeReceipts = receipts.filter(r => r.status !== "REVERSED");
-          const totalEarnings = activeReceipts.reduce((sum, r) => sum + r.amount, 0);
+          const totalEarnings = dashboardBilling?.totalEarnings ?? billingSummary?.totalCollectedPaisa ?? activeReceipts.reduce((sum, r) => sum + r.amount, 0);
 
           // Dues Segregation: Current Overdue (due up to current month) vs Future Academic Year Target
           const currentDueItems = dueItems.filter(d => d.status === "UNPAID" && isDueUpToCurrentMonth(d));
-          const currentOverdueAmount = currentDueItems.reduce((sum, d) => sum + d.amount, 0);
+          const currentOverdueAmount = dashboardBilling?.currentOverdueAmount ?? currentDueItems.reduce((sum, d) => sum + d.amount, 0);
           const futureUnbilledItems = dueItems.filter(d => d.status === "UNPAID" && !isDueUpToCurrentMonth(d));
-          const futureUnbilledAmount = futureUnbilledItems.reduce((sum, d) => sum + d.amount, 0);
-          const totalDues = dueItems.reduce((sum, d) => sum + d.amount, 0);
+          const futureUnbilledAmount = dashboardBilling?.futureUnbilledAmount ?? futureUnbilledItems.reduce((sum, d) => sum + d.amount, 0);
+          const totalDues = dashboardBilling?.totalDues ?? dueItems.reduce((sum, d) => sum + d.amount, 0);
 
           // Collection Efficiency:
           // 1. Current Recovery Rate (Collected vs total due demand up to current month)
@@ -281,20 +285,20 @@ export default function DashboardOverviewTab({
           const fullYearCollectionEfficiency = totalSales > 0 ? Math.round((totalEarnings / totalSales) * 100) : 0;
           const collectionEfficiency = currentCollectionEfficiency;
 
-          const cashTally = activeReceipts.filter(r => r.method === "CASH").reduce((sum, r) => sum + r.amount, 0);
-          const upiTally = activeReceipts.filter(r => r.method === "UPI").reduce((sum, r) => sum + r.amount, 0);
-          const bankTally = activeReceipts.filter(r => r.method === "BANK_TRANSFER" || r.method === "CHEQUE" || r.method === "ONLINE").reduce((sum, r) => sum + r.amount, 0);
+          const cashTally = dashboardBilling?.cashTally ?? activeReceipts.filter(r => r.method === "CASH").reduce((sum, r) => sum + r.amount, 0);
+          const upiTally = dashboardBilling?.upiTally ?? activeReceipts.filter(r => r.method === "UPI").reduce((sum, r) => sum + r.amount, 0);
+          const bankTally = dashboardBilling?.bankTally ?? activeReceipts.filter(r => r.method === "BANK_TRANSFER" || r.method === "CHEQUE" || r.method === "ONLINE").reduce((sum, r) => sum + r.amount, 0);
 
           const todayStr = getTodayIST();
           const todayReceipts = activeReceipts.filter(r => r.createdAt === todayStr);
-          const todayCash = todayReceipts.filter(r => r.method === "CASH").reduce((sum, r) => sum + r.amount, 0);
-          const todayUpi = todayReceipts.filter(r => r.method === "UPI").reduce((sum, r) => sum + r.amount, 0);
-          const todayBank = todayReceipts.filter(r => r.method === "BANK_TRANSFER" || r.method === "CHEQUE" || r.method === "ONLINE").reduce((sum, r) => sum + r.amount, 0);
-          const todayTotal = todayReceipts.reduce((sum, r) => sum + r.amount, 0);
+          const todayCash = dashboardBilling?.todayCash ?? todayReceipts.filter(r => r.method === "CASH").reduce((sum, r) => sum + r.amount, 0);
+          const todayUpi = dashboardBilling?.todayUpi ?? todayReceipts.filter(r => r.method === "UPI").reduce((sum, r) => sum + r.amount, 0);
+          const todayBank = dashboardBilling?.todayBank ?? todayReceipts.filter(r => r.method === "BANK_TRANSFER" || r.method === "CHEQUE" || r.method === "ONLINE").reduce((sum, r) => sum + r.amount, 0);
+          const todayTotal = dashboardBilling?.todayTotal ?? todayReceipts.reduce((sum, r) => sum + r.amount, 0);
 
           const currentMonthStr = todayStr.slice(0, 7);
           const monthlyReceipts = activeReceipts.filter(r => r.createdAt.startsWith(currentMonthStr));
-          const monthlyTotal = monthlyReceipts.reduce((sum, r) => sum + r.amount, 0);
+          const monthlyTotal = dashboardBilling?.monthlyTotal ?? monthlyReceipts.reduce((sum, r) => sum + r.amount, 0);
 
           const staffUsers = usersList.filter(u => u.role === "ADMIN" || u.role === "ACCOUNTANT" || u.role === "TEACHER");
           const staffUsersCount = staffUsers.length || 1;
@@ -309,7 +313,7 @@ export default function DashboardOverviewTab({
             collectorStats[collectorName].count += 1;
             collectorStats[collectorName].total += r.amount;
           });
-          const collectorsList = Object.values(collectorStats).sort((a, b) => b.total - a.total);
+          const collectorsList: { name: string; role: string; count: number; total: number }[] = dashboardBilling?.collectorsList ?? Object.values(collectorStats).sort((a, b) => b.total - a.total);
 
           // Compute high-priority defaulters (due up to current month)
           interface TopDefaulterRecord {
@@ -346,7 +350,10 @@ export default function DashboardOverviewTab({
               studentDueMap[d.studentId].dues.push(d);
             }
           });
-          const topDefaulters: TopDefaulterRecord[] = Object.values(studentDueMap)
+          const topDefaulters: TopDefaulterRecord[] = dashboardBilling ? dashboardBilling.topDefaulters.map((row: { id: string; amount: number; count: number; dues?: any[] }) => {
+            const std = studentByIdMap.get(row.id);
+            return { ...row, student: std, name: std?.name || "Student", classSection: std ? `${std.class}${std.section ? `-${std.section}` : ""}` : "N/A", phone: std?.fatherMobile || std?.motherMobile || std?.parentPhone || "", admNo: std?.admissionNo || "", dues: row.dues || [] };
+          }) : Object.values(studentDueMap)
             .sort((a, b) => b.amount - a.amount)
             .slice(0, 5);
 
@@ -442,6 +449,7 @@ export default function DashboardOverviewTab({
             "10": "Oct", "11": "Nov", "12": "Dec", "01": "Jan", "02": "Feb", "03": "Mar"
           };
           activeReceipts.forEach(r => {
+            if (dashboardBilling) return;
             const parts = r.createdAt.split("-");
             const yearKey = parseInt(parts[0], 10);
             const monthKey = parts[1];
@@ -451,6 +459,7 @@ export default function DashboardOverviewTab({
               monthlyRevenue[monthName] += r.amount;
             }
           });
+          if (dashboardBilling) Object.assign(monthlyRevenue, dashboardBilling.monthlyRevenue);
           const monthsOrder = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
           const currentMonthShort = new Date().toLocaleString("en-US", { month: "short" });
           
@@ -460,7 +469,7 @@ export default function DashboardOverviewTab({
           const doughnutOffset = doughnutCirc - (collectionEfficiency / 100) * doughnutCirc;
 
           // Recent Transactions
-          const recentReceipts = [...receipts]
+          const recentReceipts = [...(dashboardBilling?.recentReceipts ?? receipts)]
             .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))
             .slice(0, 5);
 
@@ -515,7 +524,7 @@ export default function DashboardOverviewTab({
               }
             });
           }
-          const classCollectionsList = Object.entries(classCollections)
+          const classCollectionRows: { className: string; collected: number; dues: number; count: number; efficiency: number }[] = dashboardBilling?.classCollectionsList ?? (billingDetailsLoaded ? Object.entries(classCollections)
             .map(([className, stats]) => {
               const total = stats.collected + stats.dues;
               return {
@@ -528,7 +537,8 @@ export default function DashboardOverviewTab({
               };
             })
             .sort((a, b) => b.collected - a.collected)
-            .slice(0, 5);
+            .slice(0, 5) : []);
+          const classCollectionsList = [...classCollectionRows].sort((a, b) => b.collected - a.collected).slice(0, 5);
 
           // Doughnut sizes helper
           const rSize = 140;
@@ -659,7 +669,7 @@ export default function DashboardOverviewTab({
                       <>
                         <div className="flex items-center justify-between text-[10px] sm:text-xs mb-1 sm:mb-1.5">
                           <span className="text-slate-400 font-semibold truncate">Collected</span>
-                          <span className="text-indigo-600 font-black">{collectionEfficiency}%</span>
+                          <span className="text-indigo-600 font-black">{billingLoaded ? `${collectionEfficiency}%` : '…'}</span>
                         </div>
                         <div className="w-full h-1 sm:h-1.5 bg-slate-100 rounded-full overflow-hidden">
                           <div className="h-full bg-indigo-600 rounded-full" style={{ width: `${collectionEfficiency}%` }}></div>
@@ -754,13 +764,13 @@ export default function DashboardOverviewTab({
                       <>
                         <div className="flex items-center justify-between text-[10px] sm:text-xs mb-1 sm:mb-1.5">
                           <span className="text-slate-400 font-semibold truncate">Overdue</span>
-                          <span className="text-rose-600 font-black">{100 - collectionEfficiency}%</span>
+                          <span className="text-rose-600 font-black">{billingLoaded ? `${100 - collectionEfficiency}%` : '…'}</span>
                         </div>
                         <div className="w-full h-1 sm:h-1.5 bg-slate-100 rounded-full overflow-hidden">
                           <div className="h-full bg-rose-500 rounded-full" style={{ width: `${100 - collectionEfficiency}%` }} />
                         </div>
                         <div className="flex items-center justify-between mt-1.5 sm:mt-2.5 text-[9px] sm:text-[10px] text-slate-400 font-medium">
-                          <span className="truncate">{currentDueItems.length} overdue</span>
+                          <span className="truncate">{billingLoaded ? `${dashboardBilling?.overdueCount ?? currentDueItems.length} overdue` : 'Loading overdue accounts…'}</span>
                           <button onClick={() => setActiveTab("defaulters")} className="text-indigo-600 hover:underline font-bold cursor-pointer shrink-0">List</button>
                         </div>
                       </>
@@ -888,7 +898,7 @@ export default function DashboardOverviewTab({
                     </svg>
                     {/* Percent Center Label */}
                     <div className="absolute text-center">
-                      <p className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight">{collectionEfficiency}%</p>
+                      <p className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight">{billingLoaded ? `${collectionEfficiency}%` : '…'}</p>
                       <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Recovered</p>
                     </div>
                   </div>
@@ -910,7 +920,7 @@ export default function DashboardOverviewTab({
                     </div>
                     <div className="flex justify-between items-center pt-1 border-t border-slate-100/60 text-[11px]">
                       <span className="text-slate-400 truncate">Full Year Target</span>
-                      <span className="text-slate-600 font-bold shrink-0">{isCardMasked("efficiency") ? "₹••••••" : formatP(totalSales)} ({fullYearCollectionEfficiency}%)</span>
+                      <span className="text-slate-600 font-bold shrink-0">{isCardMasked("efficiency") ? "₹••••••" : formatP(totalSales)} ({billingLoaded ? `${fullYearCollectionEfficiency}%` : '…'})</span>
                     </div>
                   </div>
                 </div>
@@ -957,7 +967,7 @@ export default function DashboardOverviewTab({
                     ))}
                     {recentReceipts.length === 0 && (
                       <div className="py-6 text-center text-[10px] text-slate-400 font-semibold italic">
-                        No collection receipts found.
+                        {billingLoaded ? 'No collection receipts found.' : 'Loading recent receipts…'}
                       </div>
                     )}
                   </div>
@@ -1000,7 +1010,7 @@ export default function DashboardOverviewTab({
                         {recentReceipts.length === 0 && (
                           <tr>
                             <td colSpan={5} className="py-8 text-center text-[10px] text-slate-400 font-semibold italic">
-                              No collection receipts found.
+                              {billingLoaded ? 'No collection receipts found.' : 'Loading recent receipts…'}
                             </td>
                           </tr>
                         )}
@@ -1077,7 +1087,7 @@ export default function DashboardOverviewTab({
                       </div>
                     ))}
                     {classCollectionsList.length === 0 && (
-                      <p className="text-center text-xs text-slate-400 py-6 italic">No classes available.</p>
+                      <p className="text-center text-xs text-slate-400 py-6 italic">{billingLoaded ? 'No classes available.' : 'Loading class collections…'}</p>
                     )}
                   </div>
 
@@ -1115,7 +1125,7 @@ export default function DashboardOverviewTab({
                       </div>
                     ))}
                     {collectorsList.length === 0 && (
-                      <div className="py-8 text-center text-xs text-slate-400 italic">No collectors recorded today.</div>
+                      <div className="py-8 text-center text-xs text-slate-400 italic">{billingLoaded ? 'No collectors recorded today.' : 'Loading collector totals…'}</div>
                     )}
                   </div>
 
@@ -1286,7 +1296,7 @@ export default function DashboardOverviewTab({
                   ))}
                   {topDefaulters.length === 0 && (
                     <div className="py-6 text-center text-xs text-slate-400 font-semibold italic">
-                      🎉 Excellent! No fee defaulters recorded in the system.
+                      {billingLoaded ? '🎉 Excellent! No fee defaulters recorded in the system.' : 'Loading overdue accounts…'}
                     </div>
                   )}
                 </div>
@@ -1389,7 +1399,7 @@ export default function DashboardOverviewTab({
                       {topDefaulters.length === 0 && (
                         <tr>
                           <td colSpan={6} className="py-8 text-center text-xs text-slate-400 font-semibold italic">
-                            🎉 Excellent! No fee defaulters recorded in the system.
+                            {billingLoaded ? '🎉 Excellent! No fee defaulters recorded in the system.' : 'Loading overdue accounts…'}
                           </td>
                         </tr>
                       )}
