@@ -119,7 +119,8 @@ export async function POST(request: Request) {
     // This guarantees that concurrent partial updates from multiple admins (e.g. updating late fee rules
     // while another updates school phone) preserve both changes without lost updates.
     const rows: any[] = await db.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('school-exam-default'))`;
+      // Prisma cannot deserialize PostgreSQL void; keep the transaction lock and return text.
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('school-exam-default'))::text`;
       delete body.examOpenedOrder;
       if (Array.isArray(body.lockedExams)) {
         if (!body.lockedExams.every((exam: unknown) => typeof exam === "string")) throw new Error("Invalid locked exams");
