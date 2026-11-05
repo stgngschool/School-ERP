@@ -1,10 +1,11 @@
 // Opt-in database regression check. All writes are rolled back.
-require('@next/env').loadEnvConfig(process.cwd());
-const { test } = require('node:test');
-const assert = require('node:assert/strict');
-const { readFileSync } = require('node:fs');
-const { PrismaClient } = require('@prisma/client');
-const { PrismaPg } = require('@prisma/adapter-pg');
+import nextEnv from '@next/env';
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
+nextEnv.loadEnvConfig(process.cwd());
 
 test('school settings lock and JSON merge work with the Prisma database adapter', { skip: process.env.RUN_DB_TESTS !== '1' }, async () => {
   const source = readFileSync('src/app/api/school/route.ts', 'utf8');

@@ -6,10 +6,10 @@ import ts from 'typescript';
 import { BoundedCache } from '../src/lib/cache/BoundedCache';
 import * as policy from '../src/lib/publicResultPolicy';
 function harness(now = '2026-11-05T00:00:00Z') {
-  const state = { exams: ['Unit-1'], session: { id: 's1', name: '2026-2027' } as any, marksReads: 0, calls: [] as any[], failureCount: 0, charges: [] as any[], payments: [] as any[], discounts: [] as any[], ledgerReads: [] as any[] };
+  const state = { enabled: true, exams: ['Unit-1'], session: { id: 's1', name: '2026-2027' } as any, marksReads: 0, marksQueries: [] as any[], marks: [{ id: 'm', subject: 'English', examName: 'Unit-1', marksObtained: 20, maxMarks: 25 }] as any[], calls: [] as any[], failureCount: 0, charges: [] as any[], payments: [] as any[], discounts: [] as any[], ledgerReads: [] as any[] };
   const dependencies: Record<string, any> = {
     '@/lib/rateLimit': { getTrustedClientIp: () => 'network', checkRateLimit: async (key: string, limit: number, window: number) => { state.calls.push({ key, limit, window }); if(key.includes('failure:')) state.failureCount++; return { allowed: key.includes('failure:') ? state.failureCount <= 10 : true }; } },
-    '@/lib/cache/schoolConfigCache': { getCachedSchoolConfig: async () => ({ data: { enablePublicResults: true, allowedPublicExams: state.exams } }) },
+    '@/lib/cache/schoolConfigCache': { getCachedSchoolConfig: async () => ({ data: { enablePublicResults: state.enabled, allowedPublicExams: state.exams } }) },
     '@/lib/cache/sessionCache': { getCachedActiveSession: async () => state.session },
     '@/lib/cache/BoundedCache': { BoundedCache }, '@/lib/publicResultPolicy': policy,
     '@/lib/dateUtils': { formatCanonicalDOBIso: (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : '' },
@@ -20,7 +20,7 @@ function harness(now = '2026-11-05T00:00:00Z') {
         student: { findFirst: async () => ({ id: 'a', name: 'Child', admissionNumber: '1', dob: '2015-01-01', class: { name: '1', section: 'A' } }) },
         ledgerEntry: { findMany: async ({ where }: any) => { state.ledgerReads.push(where.entryType); return where.entryType === 'CHARGE' ? state.charges : (where.entryType === 'DISCOUNT' ? state.discounts : []); } },
         receiptItem: { findMany: async () => state.payments },
-        mark: { findMany: async () => { state.marksReads++; return [{ id: 'm', subject: 'English', examName: 'Unit-1', marksObtained: 20, maxMarks: 25 }]; } },
+        mark: { findMany: async (query: any) => { state.marksQueries.push(query); state.marksReads++; return state.marks; } },
       },
     },
   };
@@ -28,9 +28,49 @@ function harness(now = '2026-11-05T00:00:00Z') {
   const module = { exports: {} as any };
   const FixedDate = class extends Date { static now() { return new Date(now).getTime(); } };
   vm.runInNewContext(source, { exports: module.exports, module, require: (name: string) => { if (!(name in dependencies)) throw Error(name); return dependencies[name]; }, process: { env: {} }, console, Date: FixedDate });
-  const request = (dob = '2015-01-01') => module.exports.POST(new Request('http://localhost/api/public/results/unit-1', { method: 'POST', body: JSON.stringify({ admissionNumber: '1', dob, examName: 'Unit-1' }) }));
+  const request = (dob = '2015-01-01', examName = 'Unit-1') => module.exports.POST(new Request('http://localhost/api/public/results/unit-1', { method: 'POST', body: JSON.stringify({ admissionNumber: '1', dob, examName }) }));
   return { state, request };
 }
+
+test('Half Yearly lookup scopes marks to the verified child and active session and totals each subject once', async () => {
+  const { state, request } = harness();
+  state.exams = ['Unit-1', 'Half Yearly'];
+  state.marks = [
+    { id: 'new', subject: 'English', examName: 'Half Yearly', marksObtained: 60, maxMarks: 80 },
+    { id: 'old', subject: 'ENGLISH', examName: 'Half Yearly', marksObtained: 50, maxMarks: 80 },
+    { id: 'math', subject: 'Maths', examName: 'Half Yearly', marksObtained: 70, maxMarks: 80 },
+  ];
+  const response = await request('2015-01-01', 'half yearly');
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.examName, 'Half Yearly');
+  assert.equal(data.academicSession, '2026-2027');
+  assert.equal(data.marksCount, 2);
+  assert.deepEqual(data.summary, { totalObtained: 130, totalMax: 160, percentage: '81.3' });
+  assert.equal(state.marksQueries[0].where.studentId, 'a');
+  assert.equal(state.marksQueries[0].where.sessionId, 's1');
+  assert.ok(state.marksQueries[0].where.examName.in.includes('Half Yearly'));
+  assert.ok(!state.marksQueries[0].where.examName.in.includes('Unit-1'));
+});
+
+test('unpublished Half Yearly and a closed portal reject lookups before reading marks', async () => {
+  const { state, request } = harness();
+  assert.equal((await request('2015-01-01', 'Half Yearly')).status, 403);
+  state.enabled = false;
+  assert.equal((await request()).status, 403);
+  assert.equal(state.marksReads, 0);
+});
+
+test('missing marks return an empty result and zero totals without inventing scores', async () => {
+  const { state, request } = harness();
+  state.marks = [];
+  const response = await request();
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.deepEqual(data.subjects, []);
+  assert.equal(data.marksCount, 0);
+  assert.deepEqual(data.summary, { totalObtained: 0, totalMax: 0, percentage: '0.0' });
+});
 test('more than 15 valid result requests succeed and reuse marks cache', async () => {
   const { state, request } = harness();
   for (let i=0; i<20; i++) assert.equal((await request()).status, 200);
