@@ -103,6 +103,7 @@ export default function PublicResultSection() {
     if (!allowedExams.length) { setError("No examination results have been published yet."); return; }
     setLoading(true);
     setError(null);
+    setResult(null);
 
     try {
       const res = await fetch("/api/public/results/unit-1", {

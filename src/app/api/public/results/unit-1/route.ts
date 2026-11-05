@@ -142,6 +142,48 @@ export async function POST(request: Request) {
     const currentSession = await getCachedActiveSession();
 
     if (!currentSession?.id) return NextResponse.json({ error: "Results are temporarily unavailable. Please contact the school office." }, { status: 503 });
+
+    // Gate results on overdue monthly charges before consulting the result cache.
+    const todayIST = new Date(Date.now() + 330 * 60_000);
+    const cutoffMonth = todayIST.getUTCFullYear() * 12 + todayIST.getUTCMonth() - 2;
+    const [charges, paymentAllocations, discounts] = await Promise.all([
+      db.ledgerEntry.findMany({
+        where: { studentId: student.id, entryType: "CHARGE" },
+        select: { id: true, amount: true, description: true, sessionId: true, feeHead: { select: { frequency: true } } },
+      }),
+      db.receiptItem.findMany({
+        where: { ledgerEntry: { studentId: student.id, entryType: "CHARGE" }, receipt: { status: "ACTIVE" } },
+        select: { ledgerEntryId: true, amount: true },
+      }),
+      db.ledgerEntry.findMany({
+        where: { studentId: student.id, entryType: "DISCOUNT", OR: [{ referenceId: null }, { receipt: { status: "ACTIVE" } }] },
+        select: { description: true, amount: true, sessionId: true },
+      }),
+    ]);
+    const paidByCharge = new Map<string, number>();
+    for (const allocation of paymentAllocations) paidByCharge.set(allocation.ledgerEntryId, (paidByCharge.get(allocation.ledgerEntryId) || 0) + allocation.amount);
+    const discountByChargeName = new Map<string, number>();
+    for (const discount of discounts) {
+      const chargeName = discount.description.replace("Discount for: ", "").replace(/.*: /, "").trim().toLowerCase();
+      const key = `${discount.sessionId || ""}||${chargeName}`;
+      discountByChargeName.set(key, (discountByChargeName.get(key) || 0) + Math.abs(discount.amount));
+    }
+    const monthIndex = (month: string) => ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"].indexOf(month.toLowerCase());
+    const hasOverdueMonthlyDues = charges.some((charge) => {
+      if (charge.feeHead?.frequency !== "monthly") return false;
+      const match = charge.description.trim().match(/-\s*(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})-(\d{4})$/i);
+      if (!match) return false;
+      const month = monthIndex(match[1]);
+      const year = Number(month < 3 ? match[3] : match[2]);
+      if (year * 12 + month > cutoffMonth) return false;
+      const chargeName = charge.description.replace(/^Assigned:\s*/, "").trim().toLowerCase();
+      const discount = discountByChargeName.get(`${charge.sessionId || ""}||${chargeName}`) || 0;
+      return charge.amount - discount - (paidByCharge.get(charge.id) || 0) > 0;
+    });
+    if (hasOverdueMonthlyDues) {
+      return NextResponse.json({ code: "RESULT_FEES_PENDING", error: "Fees are pending. Please clear fees for months up to two months before the current month to view the result. If already paid, please contact the school office. / परिणाम देखने के लिए कृपया दो महीने पहले तक की बकाया फीस जमा करें। भुगतान कर चुके हैं तो विद्यालय कार्यालय से संपर्क करें।" }, { status: 402, headers: { "Cache-Control": "private, no-store" } });
+    }
+
     const cacheKey = publicResultCacheKey(student.id, cleanDobInput, currentSession.id, requestedExam);
     const cached = resultCache.get(cacheKey);
     if (cached) return NextResponse.json(cached, { headers: { "Cache-Control": "private, no-store" } });
