@@ -1,19 +1,18 @@
 "use client";
 
 import MonthlyCollectionChart from "@/components/admin/MonthlyCollectionChart";
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { useAuth } from "@/context/AuthContext";
+import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
 import { 
   Sparkles, EyeOff, Eye, TrendingUp, Users, AlertTriangle, 
   UserCheck, CreditCard, PlusCircle, Megaphone, Printer, 
   ArrowRight, Phone, Gift, X 
 } from "lucide-react";
 import { formatP } from "@/lib/currency";
+import { generateFeeReminderWhatsAppUrl, isDueUpToCurrentMonth } from "@/lib/whatsapp";
+import type { DashboardBilling } from "@/lib/dashboardBilling";
 import { getISTDateString, getTodayIST, formatCanonicalDOBIso, MONTHS_CANONICAL } from "@/lib/dateUtils";
-import { 
-  generateFeeReminderWhatsAppUrl, 
-  isDueUpToCurrentMonth 
-} from "@/lib/whatsapp";
-import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
 
 interface DashboardOverviewTabProps {
   user: any;
@@ -40,15 +39,11 @@ interface DashboardOverviewTabProps {
 export default function DashboardOverviewTab({
   user,
   students,
-  dueItems,
-  receipts,
   ledgerEntries,
   schoolInfo,
   classes,
   usersList,
-  billingSummary,
   studentsLoaded,
-  billingLoaded,
   attendanceLoaded,
   attendances,
   updateSchoolInfo,
@@ -58,6 +53,49 @@ export default function DashboardOverviewTab({
   addEvent,
   setSelectedStudentId
 }: DashboardOverviewTabProps) {
+
+  const { dashboardBilling, dashboardBillingLoaded, refreshDashboardBilling } = useAuth();
+  const billingLoaded = dashboardBillingLoaded && dashboardBilling !== null;
+
+  const reminderRequests = useRef(new Set<string>());
+  const [loadingReminders, setLoadingReminders] = useState<Record<string, boolean>>({});
+
+  const openFeeReminder = async (def: DashboardBilling["topDefaulters"][number]) => {
+    if (reminderRequests.current.has(def.id)) return;
+    reminderRequests.current.add(def.id);
+    setLoadingReminders(prev => ({ ...prev, [def.id]: true }));
+    // Open during the click so the browser can keep the fresh reminder in a separate tab.
+    const popup = window.open("about:blank", "_blank");
+    if (popup) popup.opener = null;
+    try {
+      if (!popup) throw new Error("Allow pop-ups to open the WhatsApp reminder.");
+      const response = await fetch(`/api/billing?studentId=${encodeURIComponent(def.id)}`, { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok || !Array.isArray(data.dueItems)) throw new Error(data.error || "Unable to load current fee dues.");
+      const unpaidDues = data.dueItems.filter((due: any) =>
+        due.studentId === def.id && due.status === "UNPAID" && due.amount > 0 && isDueUpToCurrentMonth(due)
+      );
+      if (unpaidDues.length === 0) throw new Error("This student no longer has overdue fees. Refresh the dashboard.");
+      const student = students.find(item => item.id === def.id);
+      const url = generateFeeReminderWhatsAppUrl({
+        student: {
+          id: def.id, name: def.name, class: student?.class || def.classSection.split("-")[0] || "",
+          section: student?.section || def.classSection.split("-")[1] || "",
+          admissionNo: def.admNo, rollNo: student?.rollNo,
+          fatherName: student?.fatherName || student?.parentName,
+          fatherMobile: def.phone,
+        },
+        unpaidDues, schoolInfo, senderRole: "ADMIN",
+      });
+      popup.location.href = url;
+    } catch (error) {
+      popup?.close();
+      showToast?.("error", "Reminder unavailable", error instanceof Error ? error.message : "Unable to prepare the fee reminder.");
+    } finally {
+      reminderRequests.current.delete(def.id);
+      setLoadingReminders(prev => ({ ...prev, [def.id]: false }));
+    }
+  };
 
   // Redesigned Dashboard State
   const [notes, setNotes] = useState<string[]>([]);
@@ -77,7 +115,7 @@ export default function DashboardOverviewTab({
   const toggleCardPrivacy = (cardKey: string) => {
     setRevealedCards((prev) => ({
       ...prev,
-      [cardKey]: !prev[cardKey],
+      [cardKey]: !(prev[cardKey] ?? !privacyMode),
     }));
   };
 
@@ -87,30 +125,13 @@ export default function DashboardOverviewTab({
       if (typeof window !== "undefined") {
         localStorage.setItem("admin_privacy_mode", String(next));
       }
-      if (next) {
-        setRevealedCards({});
-      } else {
-        setRevealedCards({
-          revenue: true,
-          dues: true,
-          chart: true,
-          efficiency: true,
-          today: true,
-          recent: true,
-          classes: true,
-          collectors: true,
-          defaulters: true,
-          ledger: true,
-          audit: true,
-        });
-      }
+      setRevealedCards({});
       return next;
     });
   };
 
   const isCardMasked = (cardKey: string) => {
-    if (!privacyMode) return false;
-    return !revealedCards[cardKey];
+    return !(revealedCards[cardKey] ?? !privacyMode);
   };
 
   const PrivacyEyeButton = ({
@@ -135,6 +156,7 @@ export default function DashboardOverviewTab({
           masked ? "text-slate-400 hover:text-slate-700" : "text-indigo-600 hover:text-indigo-800 bg-indigo-50/70"
         } ${className}`}
         aria-label={masked ? `Reveal ${title}` : `Hide ${title}`}
+        aria-pressed={!masked}
       >
         {masked ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
       </button>
@@ -187,11 +209,19 @@ export default function DashboardOverviewTab({
   const [newEventTitle, setNewEventTitle] = useState("");
   const [newEventDate, setNewEventDate] = useState("9");
 
-  const studentByIdMap = useMemo(() => {
-    const map = new Map<string, any>();
-    students.forEach((s) => map.set(s.id, s));
-    return map;
-  }, [students]);
+  if (!dashboardBilling || !dashboardBillingLoaded) {
+    return (
+      <div role="status" aria-busy={!dashboardBillingLoaded} className="space-y-4 sm:space-y-6">
+        <p className="text-sm font-semibold text-slate-500">
+          {dashboardBillingLoaded ? "Dashboard figures could not be loaded." : "Loading dashboard figures…"}
+        </p>
+        <div aria-hidden="true" className="grid grid-cols-2 lg:grid-cols-4 gap-4 motion-safe:animate-pulse">
+          {[0, 1, 2, 3].map((key) => <div key={key} className="h-40 rounded-2xl bg-slate-100" />)}
+        </div>
+        {dashboardBillingLoaded && <button type="button" onClick={() => void refreshDashboardBilling()} className="rounded-xl px-4 py-2 text-sm font-bold text-indigo-700 bg-indigo-50">Retry dashboard</button>}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 sm:space-y-6 font-sans mobile-edge-grid w-full max-w-full overflow-x-hidden text-left">
@@ -261,94 +291,19 @@ export default function DashboardOverviewTab({
           }).length;
           const oldStudentsCount = totalStudents - newAdmissionsCount;
 
-          const activeReceipts = receipts.filter(r => r.status !== "REVERSED");
-          const totalEarnings = activeReceipts.reduce((sum, r) => sum + r.amount, 0);
-
-          // Dues Segregation: Current Overdue (due up to current month) vs Future Academic Year Target
-          const currentDueItems = dueItems.filter(d => d.status === "UNPAID" && isDueUpToCurrentMonth(d));
-          const currentOverdueAmount = currentDueItems.reduce((sum, d) => sum + d.amount, 0);
-          const futureUnbilledItems = dueItems.filter(d => d.status === "UNPAID" && !isDueUpToCurrentMonth(d));
-          const futureUnbilledAmount = futureUnbilledItems.reduce((sum, d) => sum + d.amount, 0);
-          const totalDues = dueItems.reduce((sum, d) => sum + d.amount, 0);
-
-          // Collection Efficiency:
-          // 1. Current Recovery Rate (Collected vs total due demand up to current month)
+          // All dashboard finances come from the complete, session-scoped aggregate.
+          const {
+            totalEarnings, currentOverdueAmount, futureUnbilledAmount, totalDues,
+            cashTally, upiTally, bankTally, todayCash, todayUpi, todayBank,
+            todayTotal, monthlyTotal, collectorsList, topDefaulters, overdueCount,
+          } = dashboardBilling;
           const currentTotalDemand = totalEarnings + currentOverdueAmount;
           const currentCollectionEfficiency = currentTotalDemand > 0 ? Math.round((totalEarnings / currentTotalDemand) * 100) : 0;
-
-          // 2. Full Session Annual Realization (Collected vs full 12-month budget target)
           const totalSales = totalEarnings + totalDues;
           const fullYearCollectionEfficiency = totalSales > 0 ? Math.round((totalEarnings / totalSales) * 100) : 0;
           const collectionEfficiency = currentCollectionEfficiency;
-
-          const cashTally = activeReceipts.filter(r => r.method === "CASH").reduce((sum, r) => sum + r.amount, 0);
-          const upiTally = activeReceipts.filter(r => r.method === "UPI").reduce((sum, r) => sum + r.amount, 0);
-          const bankTally = activeReceipts.filter(r => r.method === "BANK_TRANSFER" || r.method === "CHEQUE" || r.method === "ONLINE").reduce((sum, r) => sum + r.amount, 0);
-
-          const todayStr = getTodayIST();
-          const todayReceipts = activeReceipts.filter(r => r.createdAt === todayStr);
-          const todayCash = todayReceipts.filter(r => r.method === "CASH").reduce((sum, r) => sum + r.amount, 0);
-          const todayUpi = todayReceipts.filter(r => r.method === "UPI").reduce((sum, r) => sum + r.amount, 0);
-          const todayBank = todayReceipts.filter(r => r.method === "BANK_TRANSFER" || r.method === "CHEQUE" || r.method === "ONLINE").reduce((sum, r) => sum + r.amount, 0);
-          const todayTotal = todayReceipts.reduce((sum, r) => sum + r.amount, 0);
-
-          const currentMonthStr = todayStr.slice(0, 7);
-          const monthlyReceipts = activeReceipts.filter(r => r.createdAt.startsWith(currentMonthStr));
-          const monthlyTotal = monthlyReceipts.reduce((sum, r) => sum + r.amount, 0);
-
           const staffUsers = usersList.filter(u => u.role === "ADMIN" || u.role === "ACCOUNTANT" || u.role === "TEACHER");
           const staffUsersCount = staffUsers.length || 1;
-
-          const collectorStats: { [key: string]: { name: string; role: string; count: number; total: number } } = {};
-          receipts.forEach(r => {
-            const collectorName = r.collectedBy || "System User";
-            const collectorRole = r.collectedByRole || "ADMIN";
-            if (!collectorStats[collectorName]) {
-              collectorStats[collectorName] = { name: collectorName, role: collectorRole, count: 0, total: 0 };
-            }
-            collectorStats[collectorName].count += 1;
-            collectorStats[collectorName].total += r.amount;
-          });
-          const collectorsList = Object.values(collectorStats).sort((a, b) => b.total - a.total);
-
-          // Compute high-priority defaulters (due up to current month)
-          interface TopDefaulterRecord {
-            id: string;
-            student?: any;
-            name: string;
-            classSection: string;
-            amount: number;
-            count: number;
-            phone: string;
-            admNo: string;
-            dues: any[];
-          }
-          const studentDueMap: { [stdId: string]: TopDefaulterRecord } = {};
-          dueItems.forEach(d => {
-            if (d.status === "UNPAID" && isDueUpToCurrentMonth(d)) {
-              if (!studentDueMap[d.studentId]) {
-                const std = studentByIdMap.get(d.studentId);
-                const phoneNum = std?.fatherMobile || std?.motherMobile || std?.parentPhone || "";
-                studentDueMap[d.studentId] = {
-                  id: d.studentId,
-                  student: std,
-                  name: std?.name || "Student",
-                  classSection: std ? (std.section ? `${std.class}-${std.section}` : std.class) : "N/A",
-                  amount: 0,
-                  count: 0,
-                  phone: phoneNum,
-                  admNo: std?.admissionNo || "",
-                  dues: []
-                };
-              }
-              studentDueMap[d.studentId].amount += d.amount;
-              studentDueMap[d.studentId].count += 1;
-              studentDueMap[d.studentId].dues.push(d);
-            }
-          });
-          const topDefaulters: TopDefaulterRecord[] = Object.values(studentDueMap)
-            .sort((a, b) => b.amount - a.amount)
-            .slice(0, 5);
 
           // Date-wise rolling birthday window: excludes past days, celebrates today, and looks ahead 30 days
           const todayISTStrForBday = getTodayIST(); // "YYYY-MM-DD"
@@ -433,24 +388,7 @@ export default function DashboardOverviewTab({
           const attendanceRate = totalAttendance > 0 ? Math.round((presentCount / totalAttendance) * 100) : 0;
           const latestRecordedDate = !hasTodayAttendance && attendances.length > 0 ? getISTDateString(attendances[0].date) : null;
 
-          const monthlyRevenue: { [key: string]: number } = {
-            "Apr": 0, "May": 0, "Jun": 0, "Jul": 0, "Aug": 0, "Sep": 0,
-            "Oct": 0, "Nov": 0, "Dec": 0, "Jan": 0, "Feb": 0, "Mar": 0
-          };
-          const monthMapping: { [key: string]: string } = {
-            "04": "Apr", "05": "May", "06": "Jun", "07": "Jul", "08": "Aug", "09": "Sep",
-            "10": "Oct", "11": "Nov", "12": "Dec", "01": "Jan", "02": "Feb", "03": "Mar"
-          };
-          activeReceipts.forEach(r => {
-            const parts = r.createdAt.split("-");
-            const yearKey = parseInt(parts[0], 10);
-            const monthKey = parts[1];
-            const monthName = monthMapping[monthKey];
-            const expectedYear = parseInt(monthKey, 10) >= 4 ? sessionStartYear : sessionStartYear + 1;
-            if (monthName && (!yearKey || yearKey === expectedYear)) {
-              monthlyRevenue[monthName] += r.amount;
-            }
-          });
+          const monthlyRevenue = dashboardBilling.monthlyRevenue;
           const monthsOrder = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
           const currentMonthShort = new Date().toLocaleString("en-US", { month: "short" });
           
@@ -459,76 +397,8 @@ export default function DashboardOverviewTab({
           const doughnutCirc = 2 * Math.PI * doughnutRadius;
           const doughnutOffset = doughnutCirc - (collectionEfficiency / 100) * doughnutCirc;
 
-          // Recent Transactions
-          const recentReceipts = [...receipts]
-            .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))
-            .slice(0, 5);
-
-          // Class-wise collections
-          const classCollections: { [key: string]: { collected: number; dues: number; count: number } } = {};
-          if (classes && Array.isArray(classes)) {
-            classes.forEach(c => {
-              classCollections[c.name] = { collected: 0, dues: 0, count: 0 };
-            });
-          }
-          if (students && Array.isArray(students)) {
-            students.forEach(s => {
-              if (s.class) {
-                if (!classCollections[s.class]) {
-                  classCollections[s.class] = { collected: 0, dues: 0, count: 0 };
-                }
-                classCollections[s.class].count += 1;
-              }
-            });
-          }
-          if (receipts && Array.isArray(receipts)) {
-            receipts.forEach(r => {
-              let cls = "";
-              if (r.studentId && students && Array.isArray(students)) {
-                const s = students.find(std => std.id === r.studentId);
-                if (s) cls = s.class;
-              }
-              if (!cls && r.classSection) {
-                const match = r.classSection.match(/(?:Class\s+)?([^\s-]+)/i);
-                if (match) cls = match[1];
-              }
-              if (cls) {
-                if (!classCollections[cls]) {
-                  classCollections[cls] = { collected: 0, dues: 0, count: 0 };
-                }
-                classCollections[cls].collected += r.amount || 0;
-              }
-            });
-          }
-          if (dueItems && Array.isArray(dueItems)) {
-            dueItems.forEach(d => {
-              let cls = "";
-              if (d.studentId && students && Array.isArray(students)) {
-                const s = students.find(std => std.id === d.studentId);
-                if (s) cls = s.class;
-              }
-              if (cls) {
-                if (!classCollections[cls]) {
-                  classCollections[cls] = { collected: 0, dues: 0, count: 0 };
-                }
-                classCollections[cls].dues += d.amount || 0;
-              }
-            });
-          }
-          const classCollectionsList = Object.entries(classCollections)
-            .map(([className, stats]) => {
-              const total = stats.collected + stats.dues;
-              return {
-                className,
-                collected: stats.collected,
-                dues: stats.dues,
-                count: stats.count,
-                total,
-                efficiency: total > 0 ? Math.round((stats.collected / total) * 100) : 0
-              };
-            })
-            .sort((a, b) => b.collected - a.collected)
-            .slice(0, 5);
+          const recentReceipts = dashboardBilling.recentReceipts;
+          const classCollectionsList = dashboardBilling.classCollectionsList.slice(0, 5);
 
           // Doughnut sizes helper
           const rSize = 140;
@@ -760,7 +630,7 @@ export default function DashboardOverviewTab({
                           <div className="h-full bg-rose-500 rounded-full" style={{ width: `${100 - collectionEfficiency}%` }} />
                         </div>
                         <div className="flex items-center justify-between mt-1.5 sm:mt-2.5 text-[9px] sm:text-[10px] text-slate-400 font-medium">
-                          <span className="truncate">{currentDueItems.length} overdue</span>
+                          <span className="truncate">{overdueCount} overdue</span>
                           <button onClick={() => setActiveTab("defaulters")} className="text-indigo-600 hover:underline font-bold cursor-pointer shrink-0">List</button>
                         </div>
                       </>
@@ -1236,40 +1106,16 @@ export default function DashboardOverviewTab({
 
                         <div className="flex items-center gap-1.5">
                           {def.phone && (
-                            <a
-                              href={generateFeeReminderWhatsAppUrl({
-                                student: def.student ? {
-                                  id: def.student.id,
-                                  name: def.student.name,
-                                  class: def.student.class,
-                                  section: def.student.section,
-                                  rollNo: def.student.rollNo,
-                                  admissionNo: def.student.admissionNo,
-                                  fatherName: def.student.fatherName || def.student.parentName,
-                                  fatherMobile: def.student.fatherMobile,
-                                  motherMobile: def.student.motherMobile,
-                                  parentPhone: def.student.parentPhone,
-                                } : {
-                                  id: def.id,
-                                  name: def.name,
-                                  class: def.classSection.split("-")[0] || "",
-                                  section: def.classSection.split("-")[1] || "",
-                                  admissionNo: def.admNo,
-                                  fatherMobile: def.phone,
-                                  parentPhone: def.phone,
-                                },
-                                unpaidDues: def.dues.length > 0 ? def.dues : [{ id: "due", name: "Outstanding School Fee", amount: def.amount, dueDate: new Date().toISOString() }],
-                                schoolInfo,
-                                senderRole: "ADMIN",
-                              })}
-                              target="_blank"
-                              rel="noopener noreferrer"
+                            <button
+                              type="button"
+                              onClick={() => void openFeeReminder(def)}
+                              disabled={loadingReminders[def.id]}
                               title="Send WhatsApp Reminder"
-                              className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black transition-all shadow-xs flex items-center gap-1 active:scale-95"
+                              className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black transition-all shadow-xs flex items-center gap-1 active:scale-95 disabled:opacity-50 disabled:cursor-wait"
                             >
                               <WhatsAppIcon className="w-3.5 h-3.5 text-white shrink-0" />
-                              <span>WhatsApp</span>
-                            </a>
+                              <span>{loadingReminders[def.id] ? "Preparing…" : "WhatsApp"}</span>
+                            </button>
                           )}
                           <button
                             onClick={() => {
@@ -1338,42 +1184,18 @@ export default function DashboardOverviewTab({
                           <td className="py-3 px-4 text-right">
                             <div className="flex items-center justify-end gap-1.5">
                               {def.phone && (
-                                <a
-                                  href={generateFeeReminderWhatsAppUrl({
-                                    student: def.student ? {
-                                      id: def.student.id,
-                                      name: def.student.name,
-                                      class: def.student.class,
-                                      section: def.student.section,
-                                      rollNo: def.student.rollNo,
-                                      admissionNo: def.student.admissionNo,
-                                      fatherName: def.student.fatherName || def.student.parentName,
-                                      fatherMobile: def.student.fatherMobile,
-                                      motherMobile: def.student.motherMobile,
-                                      parentPhone: def.student.parentPhone,
-                                    } : {
-                                      id: def.id,
-                                      name: def.name,
-                                      class: def.classSection.split("-")[0] || "",
-                                      section: def.classSection.split("-")[1] || "",
-                                      admissionNo: def.admNo,
-                                      fatherMobile: def.phone,
-                                      parentPhone: def.phone,
-                                    },
-                                    unpaidDues: def.dues.length > 0 ? def.dues : [{ id: "due", name: "Outstanding School Fee", amount: def.amount, dueDate: new Date().toISOString() }],
-                                    schoolInfo,
-                                    senderRole: "ADMIN",
-                                  })}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  title="Send WhatsApp Reminder"
-                                  className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black transition-all shadow-xs flex items-center gap-1 active:scale-95"
-                                >
-                                  <WhatsAppIcon className="w-3.5 h-3.5 text-white shrink-0" />
-                                  <span>WhatsApp</span>
-                                </a>
-                              )}
-                              <button
+                            <button
+                              type="button"
+                              onClick={() => void openFeeReminder(def)}
+                              disabled={loadingReminders[def.id]}
+                              title="Send WhatsApp Reminder"
+                              className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black transition-all shadow-xs flex items-center gap-1 active:scale-95 disabled:opacity-50 disabled:cursor-wait"
+                            >
+                              <WhatsAppIcon className="w-3.5 h-3.5 text-white shrink-0" />
+                              <span>{loadingReminders[def.id] ? "Preparing…" : "WhatsApp"}</span>
+                            </button>
+                          )}
+                          <button
                                 onClick={() => {
                                   setSelectedStudentId(def.id);
                                   setActiveTab("collect");

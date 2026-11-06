@@ -21,6 +21,7 @@ import { getISTDateString, getTodayIST } from "@/lib/dateUtils";
 import { isDueUpToCurrentMonth } from "@/lib/whatsapp";
 import { enrichReceiptWithStudentDetails } from "@/lib/receipts";
 import { MockStudent, MockDueItem, MockReceipt, MockSchoolInfo, SchoolUpiAccount, useAuth } from "@/context/AuthContext";
+import { retrySupersededBillingRead } from '@/lib/billingRefresh';
 import QRCode from "qrcode";
 
 interface FeeCollectTabProps {
@@ -237,7 +238,7 @@ export default function FeeCollectTab({
     setStudentDuesError(false);
 
     if (billingRefreshRef.current) {
-      billingRefreshRef.current(targetIds)
+      retrySupersededBillingRead(() => billingRefreshRef.current(targetIds), () => isMounted)
         .catch((err) => {
           console.error("Failed to fetch targeted student billing:", err);
           if (isMounted) setStudentDuesError(true);
@@ -654,7 +655,7 @@ export default function FeeCollectTab({
       setIsSubmittingPayment(false);
     }
   };
-  if (!studentsLoaded || !billingLoaded) {
+  if (!studentsLoaded) {
     return (
       <div className="max-w-2xl mx-auto py-12 px-4 text-center space-y-6 animate-pulse">
         <div className="inline-flex p-3.5 bg-slate-100 rounded-2xl h-14 w-14" />
@@ -786,7 +787,7 @@ export default function FeeCollectTab({
                                   : "bg-emerald-50 text-emerald-600 border border-emerald-200"
                               }`}
                             >
-                              {formatP(studentDueSum)}
+                              {billingLoaded ? formatP(studentDueSum) : "View fees"}
                             </span>
                           )}
                         </div>
@@ -806,10 +807,9 @@ export default function FeeCollectTab({
         /* SELECTED STUDENT FLOW (Fees detail and Collect Fee) */
         <div className="space-y-4 sm:space-y-6 pb-28 sm:pb-8">
           {/* Header Student Panel Card */}
-          <div className="bg-gradient-to-br from-slate-900 via-slate-850 to-indigo-950 sm:rounded-2xl rounded-2xl p-4 sm:p-5 text-white shadow-md relative overflow-hidden flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-0 sm:border border-slate-800">
-            <div className="absolute right-0 top-0 h-40 w-40 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="rounded-2xl border border-indigo-400/15 bg-linear-to-br from-slate-900 via-indigo-950 to-indigo-950 p-4 text-white shadow-md sm:p-6 grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_230px] lg:gap-6">
 
-            <div className="space-y-3 flex-1">
+            <div className="min-w-0 space-y-5">
               {/* Top Navigation & Profile Action Row */}
               <div className="flex items-center justify-between gap-2">
                 <button
@@ -821,7 +821,7 @@ export default function FeeCollectTab({
                     setDiscountsState({});
                     setPayingState({});
                   }}
-                  className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-200 hover:text-white transition-colors cursor-pointer bg-white/10 hover:bg-white/15 active:scale-95 px-3 py-1.5 rounded-xl border border-white/10"
+                  className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-3 text-xs font-semibold text-indigo-100 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-300 cursor-pointer"
                 >
                   <ArrowLeft className="h-3.5 w-3.5" /> Back to Search
                 </button>
@@ -829,16 +829,16 @@ export default function FeeCollectTab({
                 <button
                   type="button"
                   onClick={() => selectedStudentId && onViewStudentProfile(selectedStudentId)}
-                  className="inline-flex items-center gap-1.5 text-[11px] font-bold text-indigo-200 hover:text-white transition-colors cursor-pointer bg-indigo-500/20 hover:bg-indigo-500/30 active:scale-95 px-3 py-1.5 rounded-xl border border-indigo-400/30"
+                  className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-indigo-400/30 bg-indigo-500/15 px-3 text-xs font-semibold text-indigo-100 transition-colors hover:bg-indigo-500/25 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-300 cursor-pointer"
                 >
                   <User className="h-3.5 w-3.5" /> View Full Profile
                 </button>
               </div>
 
               {/* Student Name & Core Badges */}
-              <div className="space-y-1.5">
+              <div className="space-y-4">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-xl sm:text-2xl font-black tracking-tight text-white">{selectedStudentObj?.name}</h3>
+                  <h3 className="min-w-0 break-words text-xl sm:text-2xl font-bold leading-tight tracking-tight text-white">{selectedStudentObj?.name}</h3>
                   <span className="text-[10px] font-black uppercase bg-indigo-500/30 text-indigo-200 px-2.5 py-0.5 rounded-full border border-indigo-400/30">
                     Class {selectedStudentObj?.class}-{selectedStudentObj?.section}
                   </span>
@@ -855,11 +855,11 @@ export default function FeeCollectTab({
                 </div>
 
                 {/* Symmetrical 2/4-Col Info Strip */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-1.5 text-slate-300 text-[11px] font-medium pt-0.5">
+                <div className="grid grid-cols-2 gap-x-6 gap-y-3 border-t border-white/10 pt-4 text-xs leading-relaxed text-indigo-200/90 xl:grid-cols-4">
                   <p>
                     Adm No: <span className="font-bold text-white">{selectedStudentObj?.admissionNo}</span>
                   </p>
-                  <p className="truncate">
+                  <p className="min-w-0 break-words">
                     Parent: <span className="font-bold text-white">{selectedStudentObj?.parentName || selectedStudentObj?.fatherName || "N/A"}</span>
                   </p>
                   <p>
@@ -875,12 +875,12 @@ export default function FeeCollectTab({
             </div>
 
             {/* Total Outstanding Dues Card */}
-            <div className="shrink-0 bg-white/5 border border-white/10 p-3.5 sm:p-4 rounded-2xl flex items-center justify-between lg:flex-col lg:items-end lg:text-right gap-2">
+            <div className="flex min-w-0 items-center justify-between gap-4 border-t border-white/15 pt-4 lg:flex-col lg:items-start lg:justify-center lg:border-t-0 lg:border-l lg:pl-6 lg:pt-0">
               <div>
-                <span className="text-[9px] font-black uppercase text-slate-400 block tracking-wider">
+                <span className="block text-xs font-semibold text-indigo-100">
                   Total Outstanding Dues
                 </span>
-                <p className={`text-[10px] font-bold ${selectedStudentObj?.isRte ? "text-purple-300" : "text-slate-300"}`}>
+                <p className={`mt-1 text-xs font-medium ${selectedStudentObj?.isRte ? "text-purple-200" : "text-indigo-200"}`}>
                   {loadingStudentDues
                     ? "Checking verified ledger..."
                     : selectedStudentObj?.isRte
@@ -888,7 +888,7 @@ export default function FeeCollectTab({
                     : `${selectedStudentDues.length} Unpaid Invoices`}
                 </p>
               </div>
-              <h3 className={`text-2xl sm:text-xl font-black tracking-tight ${selectedStudentObj?.isRte ? "text-purple-300" : "text-rose-400"}`}>
+              <h3 className={`text-3xl font-bold tracking-tight tabular-nums ${selectedStudentObj?.isRte ? "text-purple-200" : "text-rose-300"}`}>
                 {loadingStudentDues ? (
                   <span className="text-slate-300 text-sm flex items-center gap-1.5 font-bold">
                     <Loader2 className="h-4 w-4 animate-spin inline text-indigo-400" /> Verifying...
@@ -918,13 +918,14 @@ export default function FeeCollectTab({
                         key={child.id}
                         type="button"
                         onClick={() => setActiveSiblingTabId(child.id)}
-                        className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-colors shrink-0 cursor-pointer shadow-2xs border ${
+                        aria-pressed={isActive}
+                        className={`flex min-h-10 items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-colors shrink-0 cursor-pointer border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 ${
                           isActive
-                            ? "bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-600/15"
+                            ? "bg-indigo-700 border-indigo-700 text-white"
                             : "bg-white text-slate-700 hover:bg-slate-50 border-slate-200/90"
                         }`}
                       >
-                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? "bg-white animate-pulse" : "bg-indigo-500"}`} />
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? "bg-white" : "bg-indigo-500"}`} />
                         <span>{child.name}</span>
                         <span className={`text-[10px] px-1.5 py-0.5 rounded font-black ${
                           isActive ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"
@@ -938,7 +939,7 @@ export default function FeeCollectTab({
                             {childSelectedCount} sel
                           </span>
                         ) : childDueSum > 0 ? (
-                          <span className={`text-[10px] font-extrabold ${isActive ? "text-rose-300" : "text-rose-600"}`}>
+                          <span className={`text-[10px] font-extrabold ${isActive ? "text-white" : "text-rose-600"}`}>
                             {formatP(childDueSum)}
                           </span>
                         ) : null}

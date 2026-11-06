@@ -26,3 +26,14 @@ export function mergeBillingReceipts<T extends { id: string }>(previous: T[], fr
     ...Array.from(previousById.values()).map(receipt => freshById.get(receipt.id) ?? receipt),
   ];
 }
+
+/** Retry only superseded reads; genuine failures still reach the recovery UI. */
+export async function retrySupersededBillingRead<T>(read: () => Promise<T>, active: () => boolean = () => true): Promise<T | undefined> {
+  for (let attempt = 0; attempt < 3 && active(); attempt++) {
+    try { return await read(); }
+    catch (error) {
+      if (!active()) return;
+      if (!(error instanceof Error) || error.message !== 'Billing session changed. Please reload fee details.' || attempt === 2) throw error;
+    }
+  }
+}

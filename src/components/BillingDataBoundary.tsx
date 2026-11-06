@@ -1,36 +1,53 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { retrySupersededBillingRead } from '@/lib/billingRefresh';
 import { useAuth } from '@/context/AuthContext';
 
-const detailTabs = new Set(['dashboard', 'collect', 'students', 'ledger', 'defaulters']);
+const staffRole = (role?: string) => role === "ADMIN" || role === "ACCOUNTANT";
+
+const detailTabs = new Set(['students', 'ledger', 'defaulters']);
 
 /** Ledger empty states are meaningful only after the full billing read succeeds. */
 export default function BillingDataBoundary({ children }: { children: ReactNode }) {
-  const { user, activeTab, billingDetailsLoaded, refreshBilling } = useAuth();
+  const { user, activeTab, billingDetailsLoaded, refreshBilling, dashboardBillingLoaded, refreshDashboardBilling } = useAuth();
   const [error, setError] = useState(false);
+  const dashboard = staffRole(user?.role) && activeTab === "dashboard";
+  const ready = dashboard ? dashboardBillingLoaded : billingDetailsLoaded;
   const refreshRef = useRef(refreshBilling);
+  const dashboardRefreshRef = useRef(refreshDashboardBilling);
+  dashboardRefreshRef.current = refreshDashboardBilling;
   useEffect(() => { refreshRef.current = refreshBilling; }, [refreshBilling]);
   const staff = user?.role === 'ADMIN' || user?.role === 'ACCOUNTANT';
   const needsDetails = staff && detailTabs.has(activeTab);
 
   useEffect(() => {
-    if (!needsDetails || billingDetailsLoaded) return;
+    if ((!needsDetails && !dashboard) || ready) return;
     let cancelled = false;
     setError(false);
-    void refreshRef.current(false, true).catch(() => {
+    void retrySupersededBillingRead(() => dashboard ? dashboardRefreshRef.current() : refreshRef.current(false, true), () => !cancelled).catch(() => {
       if (!cancelled) setError(true);
     });
     return () => { cancelled = true; };
-  }, [needsDetails, billingDetailsLoaded]);
+  }, [needsDetails, dashboard, ready, user?.id]);
+
+  useEffect(() => {
+    if (!dashboard) return;
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void dashboardRefreshRef.current().then(() => setError(false)).catch(() => setError(true));
+      }
+    }, 60_000);
+    return () => clearInterval(timer);
+  }, [dashboard, user?.id]);
 
   const ledgerPending = staff && activeTab === 'ledger' && !billingDetailsLoaded;
 
   return <>
-    {error && needsDetails && !billingDetailsLoaded && <p role="alert" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+    {error && (needsDetails || dashboard) && <p role="alert" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
       Fee details could not be refreshed. <button type="button" className="font-bold underline" onClick={() => {
         setError(false);
-        void refreshRef.current(true, true).catch(() => setError(true));
+        void (dashboard ? dashboardRefreshRef.current() : refreshRef.current(true, true)).catch(() => setError(true));
       }}>Retry</button>
     </p>}
     {ledgerPending ? (error ? (

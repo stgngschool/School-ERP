@@ -1,3 +1,4 @@
+import type { DashboardBilling } from "@/lib/dashboardBilling";
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
@@ -344,6 +345,9 @@ interface AuthContextType {
   studentsLoaded: boolean;
   billingLoaded: boolean;
   billingDetailsLoaded: boolean;
+  dashboardBilling: DashboardBilling | null;
+  dashboardBillingLoaded: boolean;
+  refreshDashboardBilling: () => Promise<void>;
   attendanceLoaded: boolean;
   switchRole: (role: Role) => Promise<void>;
   toggleUserStatus: (userId: string) => Promise<void>;
@@ -686,6 +690,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   });
   const [billingDetailsLoaded, setBillingDetailsLoaded] = useState(false);
+  const [dashboardBilling, setDashboardBilling] = useState<DashboardBilling | null>(null);
+  const [dashboardBillingLoaded, setDashboardBillingLoaded] = useState(false);
+  const dashboardRequestRef = useRef(0);
   const [billingLoaded, setBillingLoaded] = useState(() => {
     if (typeof window === "undefined") return false;
     try {
@@ -814,9 +821,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     userRef.current = user;
   }, [user]);
 
+  // Dashboard snapshots are never merged with scoped family or ledger datasets.
+  const refreshDashboardBilling = async () => {
+    const ticket = ++dashboardRequestRef.current;
+    const identity = user;
+    if (!identity || !["ADMIN", "ACCOUNTANT"].includes(identity.role)) return;
+    const result = await apiFetch("/api/billing/dashboard", {}, 15000, false);
+    if (ticket !== dashboardRequestRef.current || userRef.current?.id !== identity.id) throw new Error("Billing session changed. Please reload fee details.");
+    if (!result?.success || !result.dashboard) throw new Error("Dashboard totals could not be refreshed.");
+    setDashboardBilling(result.dashboard);
+    setDashboardBillingLoaded(true);
+  };
+
   // Fetch live database records scoped by user role & needs in controlled stages
   const refreshData = useCallback(async (targetUser?: MockUser | null) => {
     billingReadQueue.current.invalidate();
+    dashboardRequestRef.current++;
+    setDashboardBilling(null);
+    setDashboardBillingLoaded(false);
     // Use explicit targetUser if provided; otherwise fall back to the ref (avoids stale closure)
     const userToFetch = targetUser !== undefined ? targetUser : userRef.current;
     if (!userToFetch) {
@@ -978,7 +1000,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!user || !["ADMIN", "ACCOUNTANT"].includes(user.role)) return;
-    const detailedDashboard = activeTab === "dashboard" && billingDetailsLoaded;
+    const detailedDashboard = activeTab === "dashboard";
     let cancelled = false;
     if (activeTab === "students") {
       void apiFetch("/api/admissions", {}, 10000, true).then(data => {
@@ -1049,6 +1071,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!isCurrent()) throw new Error("Billing session changed. Please reload fee details.");
       if (!data || !Array.isArray(data.dueItems) || !Array.isArray(data.receipts) || !Array.isArray(data.ledgerEntries)) throw new Error("Unable to load fee details. Please try again.");
       if (data) {
+        setDashboardBillingLoaded(false);
         setBillingDetailsLoaded(true);
         setLedgerEntries(data.ledgerEntries || []);
         setReceipts(mergeBillingReceipts([], data.receipts));
@@ -1073,6 +1096,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // reflect the change immediately. Routine reads should rely on the guarded
   // loadFullBilling() freshness window instead.
   const refreshBilling = async (force = true, requireSuccess = false) => {
+    dashboardRequestRef.current++;
+    setDashboardBillingLoaded(false);
     try {
       await loadFullBilling(force);
     } catch (error) {
@@ -1092,6 +1117,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (ids.length === 0) return;
 
     const uniqueToRefresh = ids;
+    dashboardRequestRef.current++;
+    setDashboardBillingLoaded(false);
+    // Independent aggregate and family reads can run together after payment commits.
+    const summaryRead = apiFetch("/api/billing/summary", {}, 8000, false);
     // A scoped mutation also invalidates cached full snapshots and summaries.
     clearApiCache("/api/billing");
     lastFullBillingLoadRef.current = 0;
@@ -1146,7 +1175,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       // 4. Update top dashboard revenue counters via ultra-lightweight aggregate endpoint (<500B)
-      await apiFetch("/api/billing/summary", {}, 8000, false).then((sumRes) => {
+      await summaryRead.then((sumRes) => {
         if (!isCurrent()) throw new Error("Billing session changed. Please reload fee details.");
         if (!sumRes?.summary) throw new Error("Payment totals could not be refreshed. Please reload them.");
         if (sumRes?.summary) {
@@ -1164,59 +1193,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!user || (user.role !== "ADMIN" && user.role !== "ACCOUNTANT")) return;
 
-    const checkAndSyncBilling = () => billingReadQueue.current.run(async (isCurrent) => {
-      try {
-        const res = await apiFetch("/api/billing/summary", {}, 8000, false);
-        if (!isCurrent()) return;
-        if (res?.success && res.summary) {
-          const { totalReceiptsCount, totalCollectedPaisa } = res.summary;
-          if (lastReceiptCountRef.current === null || lastCollectedPaisaRef.current === null) {
-            lastReceiptCountRef.current = totalReceiptsCount;
-            lastCollectedPaisaRef.current = totalCollectedPaisa;
-            return;
-          }
-          if (
-            totalReceiptsCount !== lastReceiptCountRef.current ||
-            totalCollectedPaisa !== lastCollectedPaisaRef.current
-          ) {
-            // Reversals remove active receipts and reopen dues. A recent-active
-            // receipt page cannot reconcile either removal, so request a full read.
-            if (totalReceiptsCount < lastReceiptCountRef.current || totalCollectedPaisa < lastCollectedPaisaRef.current) {
-              return true;
-            }
-            // Update refs immediately so parallel or subsequent checks do not re-trigger
-            lastReceiptCountRef.current = totalReceiptsCount;
-            lastCollectedPaisaRef.current = totalCollectedPaisa;
-
-            // ── EGRESS P1: A payment happened on another device. The old code pulled
-            // the ENTIRE school ledger (~4 MB) here on every open device every 3 min.
-            // Instead we (a) merge the authoritative lightweight totals into the summary
-            // cards, and (b) pull only the FIRST PAGE of recent receipts and merge new
-            // vouchers in-place. The full dataset already in memory is left intact and is
-            // reconciled by the next guarded full load / explicit refresh.
-            setBillingSummary((prev: any) => {
-              const merged = { ...(prev || {}), ...res.summary };
-              setLocalCache("gng_cached_billingSummary", merged);
-              return merged;
-            });
-
-            const page = await apiFetch("/api/billing?page=1&limit=50", {}, 10000, false);
-            if (!isCurrent()) return;
-            if (page && Array.isArray(page.receipts) && page.receipts.length > 0) {
-              setReceipts((prev) => {
-                const safePrev = Array.isArray(prev) ? prev : [];
-                const next = mergeBillingReceipts<MockReceipt>(safePrev, page.receipts);
-                setLocalCache("gng_cached_receipts", next);
-                return next;
-              });
-            }
-          }
-        }
-      } catch (e) {}
-    }).then(async (needsFullRefresh) => {
-      // Queue the full read only after this probe has released the queue.
-      if (needsFullRefresh) await loadFullBilling(true);
-    });
+    const checkAndSyncBilling = async () => {
+      const identity = userRef.current;
+      const res = await apiFetch("/api/billing/summary", {}, 8000, false);
+      if (identity?.id !== userRef.current?.id || !res?.summary) return;
+      const changed = res.summary.totalReceiptsCount !== lastReceiptCountRef.current || res.summary.totalCollectedPaisa !== lastCollectedPaisaRef.current;
+      lastReceiptCountRef.current = res.summary.totalReceiptsCount;
+      lastCollectedPaisaRef.current = res.summary.totalCollectedPaisa;
+      if (changed) {
+        lastFullBillingLoadRef.current = 0;
+        setBillingDetailsLoaded(false);
+        setBillingSummary(res.summary);
+        setDashboardBillingLoaded(false);
+        // The dashboard boundary refreshes only its small aggregate snapshot.
+      }
+    };
 
     const intervalId = setInterval(() => {
       if (typeof document !== "undefined" && !document.hidden && document.visibilityState === "visible") {
@@ -2428,6 +2419,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         studentsLoaded,
         billingLoaded,
         billingDetailsLoaded,
+        dashboardBilling,
+        dashboardBillingLoaded,
+        refreshDashboardBilling,
         attendanceLoaded,
         showToast,
       }}

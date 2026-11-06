@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { formatP } from "@/lib/currency";
 import { getTodayIST } from "@/lib/dateUtils";
@@ -84,7 +84,24 @@ export default function AccountantDashboard() {
     setShowProfileModal(true);
   };
 
-  const handleOpenReceiptModal = (receipt: any) => {
+  const receiptLoadingRef = useRef(false);
+  const { showToast } = useAuth();
+  const handleOpenReceiptModal = async (receipt: any) => {
+    if (receiptLoadingRef.current) return;
+    if (!Array.isArray(receipt.items)) {
+      receiptLoadingRef.current = true;
+      try {
+        const response = await fetch(`/api/billing?receiptId=${encodeURIComponent(receipt.id)}`, { cache: "no-store", credentials: "include" });
+        const data = await response.json();
+        const fullReceipt = data.receipts?.find((item: any) => item.id === receipt.id);
+        if (!response.ok || !fullReceipt) throw new Error("Receipt details could not be loaded.");
+        setActiveReceipt(fullReceipt);
+        setShowReceiptModal(true);
+      } catch {
+        showToast("error", "Receipt unavailable", "Please retry opening this receipt.");
+      } finally { receiptLoadingRef.current = false; }
+      return;
+    }
     setActiveReceipt(receipt);
     setShowReceiptModal(true);
   };

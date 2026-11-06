@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createBillingReadQueue, mergeBillingReceipts } from '../src/lib/billingRefresh';
+import { createBillingReadQueue, mergeBillingReceipts, retrySupersededBillingRead } from '../src/lib/billingRefresh';
 
 test('a post-payment read waits for the old full read and then fetches fresh data', async () => {
   const queue = createBillingReadQueue();
@@ -42,4 +42,18 @@ test('shared sibling receipts and previously duplicated receipts appear once wit
     [{ id: 'old', status: 'ACTIVE' }, { id: 'old', status: 'ACTIVE' }],
     [{ id: 'new', status: 'ACTIVE' }, { id: 'new', status: 'ACTIVE' }, { id: 'old', status: 'CANCELLED' }],
   ), [{ id: 'new', status: 'ACTIVE' }, { id: 'old', status: 'CANCELLED' }]);
+});
+
+test('initial refresh invalidation automatically reloads without committing the cancelled read', async () => {
+ const q = createBillingReadQueue(); let calls = 0;
+ const result = retrySupersededBillingRead(() => { calls++; return q.run(async () => 'fresh'); });
+ q.invalidate();
+ assert.equal(await result, 'fresh'); assert.equal(calls, 2);
+});
+test('real failures are not retried and unmounted readers do not restart', async () => {
+ let calls = 0;
+ await assert.rejects(retrySupersededBillingRead(async () => { calls++; throw Error('offline'); }), /offline/);
+ assert.equal(calls, 1);
+ assert.equal(await retrySupersededBillingRead(async () => { calls++; }, () => false), undefined);
+ assert.equal(calls, 1);
 });

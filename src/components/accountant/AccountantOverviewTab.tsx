@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
 import {
   Sparkles,
   TrendingUp,
@@ -24,9 +24,7 @@ import {
   EyeOff,
 } from "lucide-react";
 import { formatP } from "@/lib/currency";
-import { getTodayIST } from "@/lib/dateUtils";
-import { isDueUpToCurrentMonth } from "@/lib/whatsapp";
-import { MockStudent, MockDueItem, MockReceipt, MockSchoolInfo } from "@/context/AuthContext";
+import { useAuth, MockStudent, MockDueItem, MockReceipt, MockSchoolInfo } from "@/context/AuthContext";
 
 interface AccountantOverviewTabProps {
   user: any;
@@ -48,16 +46,14 @@ export default function AccountantOverviewTab({
   user,
   schoolInfo,
   students,
-  dueItems,
-  receipts,
   classes,
-  billingLoaded,
   studentsLoaded,
   setActiveTab,
   onSelectStudentForPayment,
   onOpenReceipt,
 }: AccountantOverviewTabProps) {
-  const todayStr = getTodayIST();
+  const { dashboardBilling, dashboardBillingLoaded, refreshDashboardBilling } = useAuth();
+  const billingLoaded = dashboardBillingLoaded && dashboardBilling !== null;
 
   // Privacy / Masking Mode for Sensitive Financial Figures (Default to PROTECTED / HIDDEN)
   const [privacyMode, setPrivacyMode] = useState<boolean>(() => {
@@ -73,7 +69,7 @@ export default function AccountantOverviewTab({
   const toggleCardPrivacy = (cardKey: string) => {
     setRevealedCards((prev) => ({
       ...prev,
-      [cardKey]: !prev[cardKey],
+      [cardKey]: !(prev[cardKey] ?? !privacyMode),
     }));
   };
 
@@ -83,22 +79,13 @@ export default function AccountantOverviewTab({
       if (typeof window !== "undefined") {
         localStorage.setItem("accountant_privacy_mode", String(next));
       }
-      if (next) {
-        setRevealedCards({});
-      } else {
-        setRevealedCards({
-          counter: true,
-          drawer: true,
-          reconciliation: true,
-        });
-      }
+      setRevealedCards({});
       return next;
     });
   };
 
   const isCardMasked = (cardKey: string) => {
-    if (!privacyMode) return false;
-    return !revealedCards[cardKey];
+    return !(revealedCards[cardKey] ?? !privacyMode);
   };
 
   const PrivacyEyeButton = ({
@@ -123,101 +110,31 @@ export default function AccountantOverviewTab({
           masked ? "text-slate-400 hover:text-slate-700" : "text-indigo-600 hover:text-indigo-800 bg-indigo-50/70"
         } ${className}`}
         aria-label={masked ? `Reveal ${title}` : `Hide ${title}`}
+        aria-pressed={!masked}
       >
         {masked ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
       </button>
     );
   };
 
-  // Accountant view is strictly locked to their OWN counter to protect macro school financials
-  const myReceipts = useMemo(() => {
-    return receipts.filter(
-      (r) =>
-        r.createdById === user?.id ||
-        (user?.id && (r as any).collectedById === user.id) ||
-        (user?.name && r.collectedBy === user.name) ||
-        (user?.email && r.collectedBy === user.email)
+  if (!dashboardBilling || !dashboardBillingLoaded) {
+    return (
+      <div role="status" aria-busy={!dashboardBillingLoaded} className="space-y-4 sm:space-y-6">
+        <p className="text-sm font-semibold text-slate-500">
+          {dashboardBillingLoaded ? "Dashboard figures could not be loaded." : "Loading dashboard figures…"}
+        </p>
+        <div aria-hidden="true" className="grid grid-cols-2 lg:grid-cols-4 gap-4 motion-safe:animate-pulse">
+          {[0, 1, 2, 3].map((key) => <div key={key} className="h-40 rounded-2xl bg-slate-100" />)}
+        </div>
+        {dashboardBillingLoaded && <button type="button" onClick={() => void refreshDashboardBilling()} className="rounded-xl px-4 py-2 text-sm font-bold text-indigo-700 bg-indigo-50">Retry dashboard</button>}
+      </div>
     );
-  }, [receipts, user]);
+  }
 
-  const activeTodayReceipts = useMemo(() => {
-    return myReceipts.filter(
-      (r) => r.createdAt && r.createdAt.startsWith(todayStr)
-    );
-  }, [myReceipts, todayStr]);
-
-  const activeTodayCollections = useMemo(() => {
-    return activeTodayReceipts.reduce((sum, r) => sum + r.amount, 0);
-  }, [activeTodayReceipts]);
-
-  const todayCash = useMemo(() => {
-    return activeTodayReceipts
-      .filter((r) => r.method === "CASH")
-      .reduce((sum, r) => sum + r.amount, 0);
-  }, [activeTodayReceipts]);
-
-  const todayUpi = useMemo(() => {
-    return activeTodayReceipts
-      .filter((r) => r.method === "UPI")
-      .reduce((sum, r) => sum + r.amount, 0);
-  }, [activeTodayReceipts]);
-
-  const todayBank = useMemo(() => {
-    return activeTodayReceipts
-      .filter((r) => r.method === "BANK_TRANSFER" || r.method === "CHEQUE" || r.method === "ONLINE")
-      .reduce((sum, r) => sum + r.amount, 0);
-  }, [activeTodayReceipts]);
-
-  // Defaulters Count for follow-up (Student count ONLY - NO multi-lakh grand amounts exposed!)
-  const { defaultersCount, topDefaulters } = useMemo(() => {
-    const studentByIdMap = new Map<string, MockStudent>();
-    students.forEach((s) => studentByIdMap.set(s.id, s));
-
-    const defaulterMap = new Map<
-      string,
-      { student?: MockStudent; name: string; classSection: string; amount: number; count: number; admNo: string }
-    >();
-
-    dueItems.forEach((d) => {
-      if (d.status === "UNPAID" && isDueUpToCurrentMonth(d)) {
-        const std = studentByIdMap.get(d.studentId);
-        const existing = defaulterMap.get(d.studentId);
-        if (!existing) {
-          defaulterMap.set(d.studentId, {
-            student: std,
-            name: std?.name || "Student",
-            classSection: std ? `${std.class}-${std.section}` : "N/A",
-            amount: d.amount,
-            count: 1,
-            admNo: std?.admissionNo || "",
-          });
-        } else {
-          existing.amount += d.amount;
-          existing.count += 1;
-        }
-      }
-    });
-
-    const list = Array.from(defaulterMap.entries()).map(([id, info]) => ({
-      id,
-      ...info,
-    }));
-
-    const sorted = [...list].sort((a, b) => b.amount - a.amount).slice(0, 5);
-
-    return {
-      defaultersCount: list.length,
-      topDefaulters: sorted,
-    };
-  }, [dueItems, students]);
-
-  // Recent Receipts Stream (latest vouchers generated by this cashier/counter)
-  const recentReceipts = useMemo(() => {
-    const sourceList = myReceipts.length > 0 ? myReceipts : receipts;
-    return [...sourceList]
-      .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || "") || (b.id || "").localeCompare(a.id || ""))
-      .slice(0, 6);
-  }, [myReceipts, receipts]);
+  // Receipt values are scoped to the authenticated cashier by the dashboard endpoint.
+  const { todayCash, todayUpi, todayBank, defaultersCount, topDefaulters, recentReceipts } = dashboardBilling;
+  const activeTodayCollections = dashboardBilling.todayTotal;
+  const todayReceiptCount = dashboardBilling.todayReceiptCount;
 
   const baseRatio = activeTodayCollections > 0 ? activeTodayCollections : 1;
 
@@ -389,7 +306,7 @@ export default function AccountantOverviewTab({
               </div>
             ) : (
               <h3 className="text-base sm:text-2xl font-black text-slate-800 tracking-tight mt-2 sm:mt-4 truncate">
-                {activeTodayReceipts.length} <span className="text-xs sm:text-sm text-slate-500 font-bold">Vouchers</span>
+                {todayReceiptCount} <span className="text-xs sm:text-sm text-slate-500 font-bold">Vouchers</span>
               </h3>
             )}
           </div>
@@ -602,9 +519,7 @@ export default function AccountantOverviewTab({
                             <td className="py-3 pl-2 font-mono font-bold text-slate-700">
                               {rec.receiptNo}
                               {rec.manualReceiptNo && (
-                                <span className="block text-[9px] text-slate-400 font-sans">
-                                  Book: {rec.manualReceiptNo}
-                                </span>
+                                <span className="block text-[9px] text-slate-400 font-sans">Book: {rec.manualReceiptNo}</span>
                               )}
                             </td>
                             <td className="py-3">
