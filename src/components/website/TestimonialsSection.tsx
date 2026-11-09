@@ -23,7 +23,7 @@ const row1Reviews: Testimonial[] = [
     rating: 5,
     initials: "SS",
     review:
-      "टीचर्स बहुत मेहनत करते हैं बच्चों के साथ। पहले राजवीर को पहाड़ा और टेबल याद नहीं होता था, अब खुद बैठकर होमवर्क करता है। हमारे लिए यही सबसे बड़ी तसल्ली है।",
+      "राजवीर को पहाड़े याद कराने में पहले बड़ी मेहनत लगती थी। अब होमवर्क के लिए पीछे नहीं पड़ना पड़ता, खुद बैठ जाता है।",
   },
   {
     name: "राधेश्याम मौर्य",
@@ -33,7 +33,7 @@ const row1Reviews: Testimonial[] = [
     rating: 5,
     initials: "RM",
     review:
-      "हमारा बच्चा पहले स्कूल जाने के नाम से रोने लगता था, अब सुबह खुद तैयार होकर बैठ जाता है। टीचर्स बहुत प्यार से रखते हैं, कभी डांट-फटकार नहीं करते।",
+      "Pehle school jaane ke time rona shuru. Ab subah khud ready ho ke baith jata hai. Ma'am pyaar se baat karti hain usse.",
   },
   {
     name: "रवि कुमार सेठ",
@@ -43,7 +43,7 @@ const row1Reviews: Testimonial[] = [
     rating: 5,
     initials: "RS",
     review:
-      "रसूलगढ़ से हमारा घर पास में है। टीचर्स बच्चों का बहुत ख्याल रखते हैं। अंजलि जब भी स्कूल से आती है, बहुत खुश रहती है। पढ़ाई का माहौल बहुत सुरक्षित और साफ़-सुथरा है।",
+      "रसूलगढ़ में ही घर है, पास पड़ता है। अंजलि स्कूल से खुश आती है। सफाई भी ठीक रहती है वहाँ।",
   },
   {
     name: "पप्पू प्रजापति",
@@ -53,7 +53,7 @@ const row1Reviews: Testimonial[] = [
     rating: 5,
     initials: "PP",
     review:
-      "हमारे दोनों बच्चे यहीं पढ़ रहे हैं। बड़े स्कूलों की तरह यहाँ फालतू का दिखावा और अनाप-शनाप खर्चा नहीं है। जितनी वाजिब फीस है, उससे कहीं अच्छी पढ़ाई है।",
+      "दोनों बच्चे यहीं पढ़ते हैं। फीस अपने बजट में है और पढ़ाई से हम खुश हैं, बस हमारे लिए यही जरूरी है।",
   },
   {
     name: "दीपक सेठ",
@@ -63,7 +63,7 @@ const row1Reviews: Testimonial[] = [
     rating: 5,
     initials: "DS",
     review:
-      "महीने के अंत में पेरेंट्स मीटिंग में प्रिंसिपल सर और मैडम खुलकर बताते हैं कि बच्चा किस विषय में कमजोर है और कैसे सुधारना है। ऐसा ध्यान हर जगह नहीं मिलता।",
+      "PTM me ma'am ne bataya Shaurya ko kis subject me dikkat aa rahi hai. Ghar pe kya practice karayein wo bhi bataya. Ye helpful tha.",
   },
   {
     name: "विकास जायसवाल",
@@ -73,7 +73,7 @@ const row1Reviews: Testimonial[] = [
     rating: 5,
     initials: "VJ",
     review:
-      "पढ़ाई के साथ-साथ यहाँ बच्चों में आदर-सम्मान और नमस्ते-प्रणाम करने की आदत बहुत अच्छी डाली जाती है। घर में भी सबका कहना मानती है।",
+      "किंजल अब घर में भी बड़ों को नमस्ते करती है। ये देखकर अच्छा लगता है।",
   },
   {
     name: "राजन कुमार मौर्य",
@@ -83,7 +83,7 @@ const row1Reviews: Testimonial[] = [
     rating: 5,
     initials: "RM",
     review:
-      "दीनापुर से हमारा आना-जाना रहता है। स्कूल में छोटे बच्चों की देखभाल बहुत अच्छे से होती है। टीचर्स हर बच्चे पर प्यार से ध्यान देते हैं और समय पर रिपोर्ट देते हैं।",
+      "हम दीनापुर से आते हैं। छोटे बच्चों का ध्यान रखते हैं। पढ़ाई का हाल भी समय से बता देते हैं।",
   },
 ];
 
@@ -96,7 +96,7 @@ const row2Reviews: Testimonial[] = [
     rating: 5,
     initials: "DA",
     review:
-      "दिवांश की राइटिंग बहुत खराब थी, मैडम ने खुद हाथ पकड़कर सुधरवाई। अब कॉपी में साफ़-सुथरा काम करता है और टेस्ट में भी अच्छे नंबर ला रहा है।",
+      "Divyansh ki writing pehle padhne me dikkat hoti thi. Ma'am ne dhyan diya us par. Ab copy bhi saaf rehti hai aur test me marks bhi badhe hain.",
   },
   {
     name: "नवीन कुमार रस्तोगी",
@@ -106,7 +106,7 @@ const row2Reviews: Testimonial[] = [
     rating: 5,
     initials: "NR",
     review:
-      "खालिसपुर से पास में यही सबसे भरोसेमंद स्कूल लगा। पार्थ को एबीसीडी और गिनती खेल-खेल में बहुत जल्दी सिखा दिया इन्होंने।",
+      "खालिसपुर से पास है स्कूल। पार्थ ने खेलते-खेलते गिनती और एबीसीडी सीख ली।",
   },
   {
     name: "संतोष कुमार गुप्ता",
@@ -116,7 +116,7 @@ const row2Reviews: Testimonial[] = [
     rating: 5,
     initials: "SG",
     review:
-      "स्कूल का माहौल बहुत पारिवारिक है। कोई भी बात हो तो प्रिंसिपल सर सीधे सुनते हैं और तुरंत हल करते हैं। कभी कोई शिकायत का मौका नहीं मिला।",
+      "Koi baat ho toh seedhe principal sir se bol dete hain. Sun lete hain aur baat sulajh jaati hai.",
   },
   {
     name: "अभिषेक विश्वकर्मा",
@@ -126,7 +126,7 @@ const row2Reviews: Testimonial[] = [
     rating: 5,
     initials: "AV",
     review:
-      "कम्प्यूटर की क्लास दक्ष को बहुत पसंद है। स्कूल में 15 अगस्त और 26 जनवरी पर बच्चों से जो भाषण और डांस करवाते हैं, उससे बच्चों का झिझक खुलता है।",
+      "दक्ष को कंप्यूटर वाली क्लास बहुत पसंद है। घर आकर उसी की बातें करता है। स्कूल के कार्यक्रमों में बोलने और डांस करने से उसकी झिझक थोड़ी कम हुई है।",
   },
   {
     name: "अमर कुमार गुप्ता",
@@ -136,7 +136,7 @@ const row2Reviews: Testimonial[] = [
     rating: 5,
     initials: "AG",
     review:
-      "दीनापुर में बाकी स्कूलों में एडमिशन के नाम पर बहुत लूट मची है। सेंट जी.एन.जी. में एक-एक पैसे का हिसाब सही रहता है, कोई छुपा हुआ चार्ज नहीं है।",
+      "Fees ka hisaab clear rehta hai. Hume koi aisa extra charge nahi laga jo pehle bataya na ho.",
   },
   {
     name: "कमलेश कुमार शुक्ला",
@@ -146,7 +146,7 @@ const row2Reviews: Testimonial[] = [
     rating: 5,
     initials: "KS",
     review:
-      "कादम्बरी को स्कूल से इतना लगाव हो गया है कि छुट्टी के दिन भी कहती है स्कूल जाना है। यही देखकर समझ आता है कि स्कूल में टीचर्स कितने प्यार से पढ़ाते हैं।",
+      "छुट्टी वाले दिन भी कभी पूछती है, आज स्कूल नहीं जाना? कादम्बरी को वहाँ जाना अच्छा लगता है।",
   },
   {
     name: "दिलीप गुप्ता",
@@ -156,7 +156,7 @@ const row2Reviews: Testimonial[] = [
     rating: 5,
     initials: "DG",
     review:
-      "आनंद 6 साल से इसी स्कूल में है। हमें आज तक कभी बाहर ट्यूशन लगाने की ज़रूरत नहीं पड़ी। जो भी है, स्कूल के टीचर्स की मेहनत से ही है।",
+      "Anand ko yahan 6 saal ho gaye. Abhi tak bahar se tuition lagane ki zarurat nahi padi.",
   },
 ];
 
@@ -238,7 +238,7 @@ export default function TestimonialsSection() {
         <div className="text-center max-w-3xl mx-auto mb-10 sm:mb-12">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-100/90 border border-amber-200 text-amber-900 text-xs font-black uppercase tracking-wider mb-3 shadow-2xs">
             <Heart className="w-3.5 h-3.5 text-amber-600 fill-amber-600" />
-            <span>अभिभावकों की जुबानी • Real Parent Voices</span>
+            <span>अभिभावकों की जुबानी</span>
           </div>
 
           <h2 className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight leading-tight">
@@ -249,11 +249,11 @@ export default function TestimonialsSection() {
           </h2>
 
           <p className="text-xs sm:text-sm text-slate-600 font-normal mt-3 leading-relaxed">
-            देखिये हमारे स्कूल के बारे में क्या अनुभव साझा करते हैं{" "}
+            हमारे स्कूल के बारे में{" "}
             <strong className="text-slate-900 font-extrabold">
               सलारपुर, रसूलगढ़, दीनापुर, रघुनाथपुर एवं खालिसपुर
             </strong>{" "}
-            के स्थानीय अभिभावक — कोई बनावटी बातें नहीं, हमारे छात्र-छात्राओं के परिजनों का सच्चा अनुभव।
+            के स्थानीय अभिभावक ने अपने अनुभव साझा किए हैं।
           </p>
 
           {/* Quick Summary Pill Bar */}

@@ -1,3 +1,4 @@
+import * as crypto from 'node:crypto';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
@@ -13,6 +14,7 @@ type Route = { POST: (request: Request) => Promise<Response>; GET: (request: Req
 function loadRoute(path: string, db: object) {
   const dbNull = Symbol('DbNull');
   const dependencies: Record<string, unknown> = {
+    'node:crypto': crypto,
     'next/server': { NextResponse: { json: Response.json } },
     '@prisma/client': { Prisma: { DbNull: dbNull } },
     '@/lib/db': { default: db },
@@ -26,7 +28,7 @@ function loadRoute(path: string, db: object) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
   const exports = {} as Route;
-  vm.runInNewContext(code, { exports, URL, console, require: (id: string) => {
+  vm.runInNewContext(code, { exports, URL, Response, console, require: (id: string) => {
     if (!(id in dependencies)) throw new Error(`Blocked dependency: ${id}`);
     return dependencies[id];
   } });
@@ -74,4 +76,61 @@ test('class marks return the absence remark alongside a zero score', async () =>
   const response = await exports.GET(new Request('http://localhost/api/marks/class?class=1&section=A&sessionId=session'));
   assert.equal(response.status, 200);
   assert.equal((await response.json())[0].remarks, 'ABSENT');
+});
+
+test('single marksheet queries only the selected student in the requested session', async () => {
+  let filter: { studentId?: string; sessionId?: string } | undefined;
+  const { exports } = loadRoute('src/app/api/marks/class/route.ts', {
+    academicSession: { findUnique: async () => ({ id: 'session', isCurrent: true }) },
+    mark: { findMany: async ({ where }: { where: typeof filter }) => { filter = where; return []; } },
+  });
+  const response = await exports.GET(new Request('http://localhost/api/marks/class?class=UKG&section=A&sessionId=session&studentId=selected'));
+  assert.equal(response.status, 200);
+  assert.equal(filter?.studentId, 'selected');
+  assert.equal(filter?.sessionId, 'session');
+});
+
+test('marksheet revalidation skips the full read until a mark changes or is removed', async () => {
+  let rows = [{ id: 'mark', studentId: 'student', updatedAt: new Date('2026-11-09'), marksObtained: 70 }];
+  let fullReads = 0;
+  const { exports } = loadRoute('src/app/api/marks/class/route.ts', {
+    academicSession: { findUnique: async () => ({ id: 'session', isCurrent: true }) },
+    mark: { findMany: async ({ select }: { select: Record<string, boolean> }) => {
+      if (select.marksObtained) fullReads++;
+      return rows.map(row => Object.fromEntries(Object.entries(row).filter(([key]) => select[key])));
+    } },
+  });
+  const url = 'http://localhost/api/marks/class?class=UKG&section=A&sessionId=session&studentId=student&versioned=1';
+  const first = await exports.GET(new Request(url));
+  const { version } = await first.json();
+  const check = (token: string) => exports.GET(new Request(url, { headers: { 'If-None-Match': token } }));
+  assert.equal((await check(version)).status, 304);
+  assert.equal(fullReads, 1);
+  rows = [{ ...rows[0], marksObtained: 85, updatedAt: new Date('2026-11-10') }];
+  const updated = await (await check(version)).json();
+  assert.equal(updated.marks[0].marksObtained, 85);
+  rows = [];
+  const deleted = await (await check(updated.version)).json();
+  assert.deepEqual(deleted.marks, []);
+  assert.equal(fullReads, 3);
+});
+
+test('class snapshots supply reusable tokens for individual and empty marksheets', async () => {
+  const rows = [
+    { id: 'm1', studentId: 's1', updatedAt: new Date('2026-11-09'), marksObtained: 70 },
+    { id: 'm2', studentId: 's2', updatedAt: new Date('2026-11-09'), marksObtained: 80 },
+  ];
+  const { exports } = loadRoute('src/app/api/marks/class/route.ts', {
+    academicSession: { findUnique: async () => ({ id: 'session', isCurrent: true }) },
+    mark: { findMany: async ({ where }: { where: { studentId?: string } }) =>
+      rows.filter(row => !where.studentId || row.studentId === where.studentId) },
+  });
+  const url = 'http://localhost/api/marks/class?class=UKG&section=A&sessionId=session&versioned=1';
+  const batch = await (await exports.GET(new Request(url))).json();
+  const check = (studentId: string, token: string) => exports.GET(new Request(url + studentId, {
+    headers: { 'If-None-Match': token },
+  }));
+  assert.equal((await check('', batch.version)).status, 304);
+  assert.equal((await check('&studentId=s1', batch.studentVersions.s1)).status, 304);
+  assert.equal((await check('&studentId=missing', batch.emptyVersion)).status, 304);
 });

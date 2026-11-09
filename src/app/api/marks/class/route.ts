@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
@@ -6,6 +7,11 @@ import { getCachedActiveSession } from "@/lib/cache/sessionCache";
 import { sessionClassFilter } from "@/lib/sessionClassFilter";
 
 export const dynamic = "force-dynamic";
+
+function marksVersion(rows: { id: string; updatedAt: Date }[]) {
+  const revisions = rows.map(row => [row.id, row.updatedAt.toISOString()]).sort();
+  return `"${createHash("sha256").update(JSON.stringify(revisions)).digest("hex")}"`;
+}
 
 export async function GET(request: Request) {
   try {
@@ -22,6 +28,7 @@ export async function GET(request: Request) {
     const className = searchParams.get("class");
     const section = searchParams.get("section");
     const sessionId = searchParams.get("sessionId");
+    const studentId = searchParams.get("studentId");
 
     if (!className || !section) {
       return NextResponse.json({ error: "Missing required parameters" }, { status: 400 });
@@ -76,11 +83,27 @@ export async function GET(request: Request) {
     const selectedClassWhere = whereClause.student.class;
     whereClause.student = sessionClassFilter(targetSessionId, selectedClassWhere, selectedSession.isCurrent);
     whereClause.sessionId = targetSessionId;
+    if (studentId) whereClause.studentId = studentId;
 
+
+    const versioned = searchParams.get("versioned") === "1";
+    const previousVersion = versioned ? request.headers.get("If-None-Match") : null;
+    const headers = { "Cache-Control": "private, no-store" };
+    if (previousVersion) {
+      const revisions = await db.mark.findMany({
+        where: whereClause,
+        select: { id: true, updatedAt: true },
+      });
+      if (marksVersion(revisions) === previousVersion) {
+        return new Response(null, { status: 304, headers });
+      }
+    }
 
     const marks = await db.mark.findMany({
       where: whereClause,
       select: {
+        id: true,
+        updatedAt: true,
         studentId: true,
         subject: true,
         examName: true,
@@ -95,7 +118,23 @@ export async function GET(request: Request) {
       }
     });
 
-    return NextResponse.json(marks);
+    const data = marks.map(({ id, updatedAt, ...mark }) => mark);
+    if (!versioned) return NextResponse.json(data, { headers });
+
+    const byStudent = new Map<string, typeof marks>();
+    if (!studentId) {
+      for (const mark of marks) {
+        const studentMarks = byStudent.get(mark.studentId) ?? [];
+        studentMarks.push(mark);
+        byStudent.set(mark.studentId, studentMarks);
+      }
+    }
+    return NextResponse.json({
+      marks: data,
+      version: marksVersion(marks),
+      studentVersions: Object.fromEntries([...byStudent].map(([id, rows]) => [id, marksVersion(rows)])),
+      emptyVersion: marksVersion([]),
+    }, { headers });
   } catch (error: any) {
     console.error("[API_ERROR] /api/marks/class:", error.message);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });

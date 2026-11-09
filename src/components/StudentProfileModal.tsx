@@ -1,5 +1,6 @@
 "use client";
 
+import { invalidateMarksheetMarks } from "@/lib/cache/marksheetCache";
 import React, { useState, useEffect } from "react";
 import { formatP, toPaisa } from "@/lib/currency";
 import { formatCanonicalDOB } from "@/lib/dateUtils";
@@ -188,6 +189,7 @@ export default function StudentProfileModal({ studentId, isOpen, onClose, isInli
         }),
       });
 
+      if (res.ok) invalidateMarksheetMarks();
       if (!res.ok) {
         const errJson = await res.json();
         throw new Error(errJson.error || "Failed to save mark entry.");

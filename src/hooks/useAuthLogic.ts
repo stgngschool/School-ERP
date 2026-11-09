@@ -1,3 +1,4 @@
+import { clearMarksheetCache } from "@/lib/cache/marksheetCache";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { MockUser, Role, AuthStage } from "../context/AuthContext";
 
@@ -202,6 +203,7 @@ export function useAuthLogic(refreshData: (user?: MockUser | null) => Promise<vo
   }, []);
 
   const logout = useCallback(async () => {
+    clearMarksheetCache();
     sessionVersionRef.current++;
     try {
       await fetch("/api/auth/logout", { method: "POST", credentials: "include", cache: "no-store" });
@@ -237,6 +239,7 @@ export function useAuthLogic(refreshData: (user?: MockUser | null) => Promise<vo
         const data = await res.json();
         setUser(data.user);
         setActiveRole(role);
+        clearMarksheetCache();
         window.location.reload();
       }
     } catch (err) {

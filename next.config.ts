@@ -8,6 +8,7 @@ const withSerwist = withSerwistInit({
 });
 
 const nextConfig: NextConfig = {
+  allowedDevOrigins: ["127.0.0.1"],
   // ─── HTTP Security & Cache Headers ──────────────────────────────────────────
   // ANDROID PWA FIX: Auth API responses must never be cached by Android Chrome.
   // Without "no-store" on /api/auth/* routes, Chrome may cache a 401 response

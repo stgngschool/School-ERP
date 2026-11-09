@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback, useSyncExternalStore } from "react";
+import { flushSync } from "react-dom";
 import { useAuth } from "@/context/AuthContext";
 import {
   getCleanClassKey,
@@ -10,6 +11,10 @@ import {
   normalizeClassName,
   normalizeSectionName
 } from "@/lib/classUtils";
+import {
+  classMarksheets, studentMarksheets, marksheetRosters, getMarksheetCacheRevision, subscribeToMarksheetChanges,
+  type ClassMarksheetSnapshot, type MarksheetSnapshot,
+} from "@/lib/cache/marksheetCache";
 import { buildMarksheetSummary } from "@/lib/marksheetSummary";
 import {
   Printer,
@@ -18,11 +23,11 @@ import {
   Search,
   CheckCircle2,
   Loader2,
-  Calendar
+  RefreshCw
 } from "lucide-react";
 
 export default function PrintMarksheets() {
-  const { students: currentStudents, classes, schoolInfo, updateStudentClaimMarksheet, showToast } = useAuth();
+  const { user, activeRole, students: currentStudents, classes, schoolInfo, updateStudentClaimMarksheet, showToast } = useAuth();
   const [sessionRoster, setSessionRoster] = useState<{ session: string; classKey: string; students: typeof currentStudents } | null>(null);
 
   const availableClasses = useMemo(() => {
@@ -51,26 +56,43 @@ export default function PrintMarksheets() {
     return `${year}-${month}-${day}`;
   });
 
+  const [selectedClass, setSelectedClass] = useState("");
+  const hasSelectedClass = Boolean(selectedClass);
   useEffect(() => {
-    fetch("/api/sessions", { credentials: "include", cache: "no-store" })
+    if (!hasSelectedClass) return;
+    const controller = new AbortController();
+    fetch("/api/sessions", { credentials: "include", cache: "no-store", signal: controller.signal })
       .then((res) => res.json())
       .then((data) => {
-        if (Array.isArray(data) && data.length > 0) {
+        if (!controller.signal.aborted && Array.isArray(data) && data.length > 0) {
           setSessions(data);
           const current = data.find((s) => s.isCurrent);
           if (current) setSelectedSession(current.name);
         }
       })
-      .catch((err) => console.error("Failed to fetch sessions", err));
-  }, []);
+      .catch((err) => {
+        if (!controller.signal.aborted) showToast("error", "Sessions unavailable", err.message);
+      });
+    return () => controller.abort();
+  }, [hasSelectedClass, showToast]);
 
-  const [selectedClass, setSelectedClass] = useState(availableClasses[0] || "");
+
+  const classScope = JSON.stringify([user?.id, activeRole, selectedSession, selectedClass]);
   const students = sessionRoster?.session === selectedSession && sessionRoster?.classKey === selectedClass ? sessionRoster.students : [];
-  useEffect(() => {
+  const rosterRequest = useRef<AbortController | null>(null);
+  const [loadingRoster, setLoadingRoster] = useState(false);
+  const loadRoster = useCallback(async (force = false) => {
     const session = sessions.find(s => s.name === selectedSession);
-    if (!session || !selectedClass) return;
+    if (!session || !selectedClass || !user?.id) return;
+    const cached = !force && marksheetRosters.get(classScope);
+    if (cached) {
+      setSessionRoster({ session: selectedSession, classKey: selectedClass, students: cached });
+      return;
+    }
+    rosterRequest.current?.abort();
     const controller = new AbortController();
-    void (async () => {
+    rosterRequest.current = controller;
+    setLoadingRoster(true);
       try {
         const name = normalizeClassName(selectedClass);
         const section = normalizeSectionName(undefined, selectedClass);
@@ -83,26 +105,26 @@ export default function PrintMarksheets() {
           if (!res.ok) throw new Error(data.error || "Unable to load session roster.");
           all.push(...data.students); cursor = data.nextCursor || undefined;
         } while (cursor);
-        if (!controller.signal.aborted) setSessionRoster({ session: selectedSession, classKey: selectedClass, students: all });
+        if (!controller.signal.aborted) {
+          marksheetRosters.set(classScope, all);
+          setSessionRoster({ session: selectedSession, classKey: selectedClass, students: all });
+        }
       } catch (error) { if (!controller.signal.aborted) showToast("error", "Session roster unavailable", (error as Error).message); }
-    })();
-    return () => controller.abort();
-  }, [selectedClass, selectedSession, sessions]);
+      finally { if (!controller.signal.aborted) setLoadingRoster(false); }
+  }, [selectedClass, selectedSession, sessions, showToast, classScope, user?.id]);
+  useEffect(() => {
+    setLoadingRoster(false);
+    void loadRoster();
+    return () => rosterRequest.current?.abort();
+  }, [loadRoster]);
 
   const [selectedReportCardStudentId, setSelectedReportCardStudentId] = useState("");
   const [selectedReportCardExam, setSelectedReportCardExam] = useState("All");
   const [isBulkPrintMode, setIsBulkPrintMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [classMarks, setClassMarks] = useState<any[]>([]);
   const [loadingMarks, setLoadingMarks] = useState(false);
   const [claiming, setClaiming] = useState(false);
   const [showDistributionLog, setShowDistributionLog] = useState(false);
-
-  useEffect(() => {
-    if (availableClasses.length > 0 && !selectedClass) {
-      setSelectedClass(availableClasses[0]);
-    }
-  }, [availableClasses, selectedClass]);
 
   const classStudents = useMemo(() => {
     if (!selectedClass) return [];
@@ -115,7 +137,7 @@ export default function PrintMarksheets() {
     if (q) {
       list = classStudents.filter(s => 
         s.name.toLowerCase().includes(q) || 
-        (s.rollNo && s.rollNo.toString().includes(q)) ||
+        (s.rollNo && s.rollNo.toString().toLowerCase().includes(q)) ||
         (s.admissionNo && s.admissionNo.toLowerCase().includes(q))
       );
     }
@@ -133,24 +155,20 @@ export default function PrintMarksheets() {
     });
   }, [classStudents, searchQuery]);
 
-  useEffect(() => {
-    if (filteredStudents.length > 0 && !selectedReportCardStudentId) {
-      setSelectedReportCardStudentId(filteredStudents[0].id);
-    }
-  }, [filteredStudents, selectedReportCardStudentId]);
+  const selectedStudent = filteredStudents.find(student => student.id === selectedReportCardStudentId);
+  const studentIndex = filteredStudents.findIndex(student => student.id === selectedStudent?.id);
 
-  const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const scope = JSON.stringify([classScope, selectedStudent?.id]);
+  const revision = useSyncExternalStore(subscribeToMarksheetChanges, getMarksheetCacheRevision, getMarksheetCacheRevision);
+  const cachedClass = classMarksheets.get(classScope);
+  const cachedStudent = selectedStudent && (studentMarksheets.get(scope) ?? (cachedClass && {
+    marks: cachedClass.marks.filter(mark => mark.studentId === selectedStudent.id),
+    version: cachedClass.studentVersions[selectedStudent.id] ?? cachedClass.emptyVersion,
+  }));
+  const [bulkMarks, setBulkMarks] = useState<MarksheetSnapshot["marks"]>([]);
+  const isDataLoaded = Boolean(cachedStudent);
 
   const marksRequest = useRef<AbortController | null>(null);
-
-  // Cancel requests when their class/session scope is no longer current.
-  useEffect(() => {
-    marksRequest.current?.abort();
-    setLoadingMarks(false);
-    setIsDataLoaded(false);
-    setClassMarks([]);
-    return () => marksRequest.current?.abort();
-  }, [selectedClass, selectedSession]);
 
   const formatDisplayDate = (isoStr: string) => {
     if (!isoStr) return "";
@@ -161,41 +179,83 @@ export default function PrintMarksheets() {
     return isoStr;
   };
 
-  const loadClassData = async () => {
-    const targetSessionObj = sessions.find((s) => s.name === selectedSession);
-    if (!selectedClass || !targetSessionObj) {
-      showToast("error", "Academic Data Unavailable", "Select an available academic session first.");
-      return;
-    }
+  const loadMarks = async (action: "refresh" | "print-student" | "print-class") => {
+    const targetSession = sessions.find(session => session.name === selectedSession);
+    const bulk = action === "print-class";
+    if (!user?.id || !selectedClass || !targetSession || (!bulk && !selectedStudent)) return;
+
     marksRequest.current?.abort();
     const controller = new AbortController();
     marksRequest.current = controller;
+    const requestRevision = getMarksheetCacheRevision();
+    const cached = bulk ? cachedClass : cachedStudent;
     setLoadingMarks(true);
-    setIsDataLoaded(false);
     const query = new URLSearchParams({
       class: normalizeClassName(selectedClass),
       section: normalizeSectionName(undefined, selectedClass),
-      sessionId: targetSessionObj.id,
+      sessionId: targetSession.id,
+      versioned: "1",
+      ...(!bulk && selectedStudent ? { studentId: selectedStudent.id } : {}),
     });
     try {
       const res = await fetch(`/api/marks/class?${query}`, {
         credentials: "include", cache: "no-store", signal: controller.signal,
+        headers: cached && action !== "refresh" ? { "If-None-Match": cached.version } : undefined,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Unable to load academic data.");
-      if (!Array.isArray(data)) throw new Error("Academic data returned an invalid response.");
+      const unchanged = res.status === 304;
+      const data: ClassMarksheetSnapshot = unchanged ? cached as ClassMarksheetSnapshot : await res.json();
+      if (!unchanged && !res.ok) throw new Error((data as unknown as { error?: string }).error || "Unable to load marks.");
+      if (!data || !Array.isArray(data.marks) || typeof data.version !== "string") {
+        throw new Error("Academic data returned an invalid response.");
+      }
       if (controller.signal.aborted || marksRequest.current !== controller) return;
-      setClassMarks(data);
-      setIsDataLoaded(true);
+      if (requestRevision !== getMarksheetCacheRevision()) {
+        throw new Error("Marks changed while loading. Please try again.");
+      }
+
+      if (bulk) {
+        if (!unchanged) {
+          for (const student of classStudents) {
+            studentMarksheets.delete(JSON.stringify([classScope, student.id]));
+          }
+          classMarksheets.set(classScope, data);
+        }
+      } else {
+        studentMarksheets.set(scope, data);
+      }
+
+      if (action !== "refresh") {
+        flushSync(() => {
+          setBulkMarks(bulk ? data.marks : []);
+          setIsBulkPrintMode(bulk);
+          setLoadingMarks(false);
+        });
+        window.print();
+      }
     } catch (error) {
       if (!controller.signal.aborted && marksRequest.current === controller) {
-        setClassMarks([]);
-        showToast("error", "Academic Data Unavailable", (error as Error).message);
+        showToast("error", "Unable to verify latest marks", (error as Error).message);
       }
     } finally {
       if (!controller.signal.aborted && marksRequest.current === controller) setLoadingMarks(false);
     }
   };
+
+  useEffect(() => {
+    setLoadingMarks(false);
+    return () => marksRequest.current?.abort();
+  }, [scope, selectedReportCardExam, showDistributionLog, revision]);
+
+  useEffect(() => {
+    const resetPrintMode = () => {
+      setIsBulkPrintMode(false);
+      setBulkMarks([]);
+    };
+    window.addEventListener("afterprint", resetPrintMode);
+    return () => window.removeEventListener("afterprint", resetPrintMode);
+  }, []);
+
+  const canPrint = isDataLoaded && !loadingMarks && !showDistributionLog;
 
   const handleClaimToggle = async (student: any) => {
     try {
@@ -209,6 +269,18 @@ export default function PrintMarksheets() {
       });
       if (res.ok) {
         updateStudentClaimMarksheet(student.id, newClaimed);
+        const cachedRoster = marksheetRosters.get(classScope);
+        if (cachedRoster) {
+          marksheetRosters.set(classScope, cachedRoster.map(entry => entry.id === student.id
+            ? { ...entry, isMarksheetClaimed: newClaimed }
+            : entry));
+        }
+        setSessionRoster(roster => roster && ({
+          ...roster,
+          students: roster.students.map(entry => entry.id === student.id
+            ? { ...entry, isMarksheetClaimed: newClaimed }
+            : entry),
+        }));
         showToast("success", "Distribution Updated", `Marksheet for ${student.name} marked as ${newClaimed ? "Collected" : "Pending"}.`);
       } else {
         showToast("error", "Update Failed", "Could not update distribution status.");
@@ -244,13 +316,13 @@ export default function PrintMarksheets() {
                 Print Official Marksheets
               </h3>
               <p className="text-xs text-slate-400 font-medium mt-0.5">
-                Generate and print student report cards at the end of the session.
+                Preview student marksheets and print or save them as PDFs.
               </p>
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mt-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
           <div>
             <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider block mb-1">
               Select Class
@@ -259,43 +331,48 @@ export default function PrintMarksheets() {
               value={selectedClass}
               onChange={(e) => {
                 setSelectedClass(e.target.value);
+                setSearchQuery("");
                 setIsBulkPrintMode(false);
                 setSelectedReportCardStudentId("");
               }}
               className="w-full text-xs font-bold py-2.5 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 text-slate-700 shadow-2xs"
             >
+              <option value="" disabled>Choose a class</option>
               {availableClasses.map((cls) => (
                 <option key={cls} value={cls}>{normalizeDisplayClassName(cls)}</option>
               ))}
             </select>
           </div>
 
-          <div className="sm:col-span-2 lg:col-span-1">
+          <div className="sm:col-span-2 lg:col-span-1 lg:order-last">
             <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider block mb-1">
               Search & Select Student
             </label>
-            <div className="flex gap-2">
-              <div className="relative w-1/2">
+            <div className="flex flex-col gap-2">
+              <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Search..."
+                  aria-label="Find a student"
+                  placeholder="Name, roll or admission no."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-9 pr-2 py-2.5 text-xs font-bold border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 text-slate-700 shadow-2xs"
                 />
               </div>
               <select
-                value={selectedReportCardStudentId}
+                aria-label="Select student"
+                value={selectedStudent?.id ?? ""}
                 onChange={(e) => {
                   setSelectedReportCardStudentId(e.target.value);
                   setIsBulkPrintMode(false);
                 }}
-                className="w-1/2 text-xs font-bold py-2.5 px-2 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 text-slate-700 shadow-2xs truncate"
+                className="w-full text-xs font-bold py-2.5 px-2 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 text-slate-700 shadow-2xs truncate"
               >
+                <option value="" disabled>{!selectedClass ? "Choose a class first" : loadingRoster ? "Loading students..." : filteredStudents.length ? "Choose a student" : "No students available"}</option>
                 {filteredStudents.map((std) => (
                   <option key={std.id} value={std.id}>
-                    {std.name} ({std.rollNo || "--"})
+                    {std.rollNo ? std.rollNo + " · " : ""}{std.name}
                   </option>
                 ))}
               </select>
@@ -308,6 +385,7 @@ export default function PrintMarksheets() {
             </label>
             <select
               value={selectedReportCardExam}
+              disabled={!selectedClass}
               onChange={(e) => setSelectedReportCardExam(e.target.value)}
               className="w-full text-xs font-bold py-2.5 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 text-slate-700 shadow-2xs"
             >
@@ -326,79 +404,76 @@ export default function PrintMarksheets() {
               value={selectedSession}
               onChange={(e) => {
                 setSelectedSession(e.target.value);
+                setSearchQuery("");
+                setSelectedReportCardStudentId("");
                 setIsBulkPrintMode(false);
               }}
               className="w-full text-xs font-bold py-2.5 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 text-slate-700 shadow-2xs"
             >
-              {sessions.length > 0 ? (
-                sessions.map((s) => (
-                  <option key={s.id} value={s.name}>
-                    {s.name} {s.isCurrent ? "★" : ""}
-                  </option>
-                ))
-              ) : (
-                <>
-                  <option value="2026-2027">2026-2027</option>
-                  <option value="2025-2026">2025-2026</option>
-                </>
-              )}
+              <option value="" disabled>{hasSelectedClass ? "Choose a session" : "Choose a class first"}</option>
+              {sessions.map((session) => (
+                <option key={session.id} value={session.name}>
+                  {session.name}{session.isCurrent ? " (Current)" : ""}
+                </option>
+              ))}
             </select>
           </div>
 
-          <div>
-            <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider block mb-1">
-              Date of Issue
-            </label>
-            <input
-              type="date"
-              value={issueDateIso}
-              onChange={(e) => setIssueDateIso(e.target.value)}
-              className="w-full text-xs font-bold py-2 px-3 border border-slate-200 rounded-xl outline-none bg-slate-50 focus:bg-white focus:border-indigo-600 text-slate-700 shadow-2xs"
-            />
-          </div>
         </div>
 
-        <div className="flex flex-col gap-3 mt-5">
-          <button
-            type="button"
-            disabled={loadingMarks || isDataLoaded}
-            onClick={loadClassData}
-            className={`w-full py-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 transition-all ${isDataLoaded ? 'bg-emerald-50 text-emerald-600 border border-emerald-200 cursor-default' : 'bg-slate-800 hover:bg-slate-900 text-white shadow-md shadow-slate-800/20 cursor-pointer'}`}
-          >
-            {loadingMarks ? <Loader2 className="h-4 w-4 animate-spin" /> : isDataLoaded ? <CheckCircle2 className="h-4 w-4" /> : <Layers className="h-4 w-4" />} 
-            {isDataLoaded ? "Academic Data Loaded" : "Load Academic Data"}
-          </button>
-
+        <div className="mt-5 space-y-3 border-t border-slate-100 pt-4">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+            <p role="status" className="font-medium text-slate-600">
+              {loadingMarks ? "Loading marks…" : loadingRoster ? "Loading students…" : isDataLoaded
+                ? "Student marksheet loaded"
+                : selectedStudent ? "Click Show Marksheet to preview the selected student." : "Choose a class and student."}
+            </p>
+            <button type="button" onClick={() => void loadRoster(true)} disabled={loadingRoster || loadingMarks || !selectedSession || !selectedClass}
+              className="font-bold text-indigo-700 disabled:opacity-50">
+              Reload student list
+            </button>
+            <details className="text-slate-600">
+              <summary className="cursor-pointer font-bold">Print settings</summary>
+              <label className="mt-2 flex items-center gap-2">
+                Issue date
+                <input type="date" value={issueDateIso} onChange={e => setIssueDateIso(e.target.value)}
+                  className="rounded-lg border border-slate-200 px-2 py-1" />
+              </label>
+            </details>
+          </div>
           <div className="flex gap-3 flex-col md:flex-row">
             <button
               type="button"
-              disabled={loadingMarks || !isDataLoaded}
-              onClick={() => {
-                setIsBulkPrintMode(false);
-                setTimeout(() => window.print(), 100);
-              }}
-              className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-extrabold shadow-md shadow-indigo-500/20 flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={loadingMarks || !selectedStudent || showDistributionLog}
+              onClick={() => void loadMarks("refresh")}
+              className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-xs font-extrabold text-white shadow-sm hover:bg-indigo-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <Printer className="h-4 w-4" /> Print Selected
+              {loadingMarks ? <Loader2 className="h-4 w-4 animate-spin" /> : isDataLoaded ? <RefreshCw className="h-4 w-4" /> : <BookOpen className="h-4 w-4" />}
+              {loadingMarks ? "Loading marks..." : isDataLoaded ? "Refresh Marksheet" : "Show Marksheet"}
+            </button>
+            <button
+              type="button"
+              disabled={!canPrint || !selectedStudent}
+              onClick={() => void loadMarks("print-student")}
+              className="flex-1 py-3 bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Printer className="h-4 w-4" /> Print / Save Student PDF
             </button>
             
             <button
               type="button"
-              disabled={loadingMarks || !isDataLoaded}
-              onClick={() => {
-                setIsBulkPrintMode(true);
-                setTimeout(() => window.print(), 1000); // extra delay for 500+
-              }}
+              disabled={loadingMarks || showDistributionLog || classStudents.length === 0}
+              onClick={() => void loadMarks("print-class")}
               className="flex-1 py-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Layers className="h-4 w-4" /> 
-              Bulk Print ({classStudents.length})
+              Print / Save Class PDF ({classStudents.length})
             </button>
 
             <button
               type="button"
               onClick={() => setShowDistributionLog(!showDistributionLog)}
-              className={`flex-1 py-3 border rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 cursor-pointer transition-all ${showDistributionLog ? 'bg-slate-800 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}
+              className={`px-4 py-3 border rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 cursor-pointer transition-all ${showDistributionLog ? 'bg-slate-800 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}
             >
               <BookOpen className="h-4 w-4" /> 
               {showDistributionLog ? "Hide Distribution Log" : "Distribution Log"}
@@ -505,6 +580,18 @@ export default function PrintMarksheets() {
         }
       `}</style>
 
+      {!showDistributionLog && selectedStudent && (
+                <nav aria-label="Browse marksheets" className="mb-3 flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 no-print">
+                  <button type="button" disabled={studentIndex <= 0}
+                    onClick={() => setSelectedReportCardStudentId(filteredStudents[studentIndex - 1].id)}
+                    className="rounded-lg px-2 py-1 text-indigo-700 hover:bg-indigo-50 disabled:opacity-40">Previous</button>
+                  <span>{studentIndex + 1} of {filteredStudents.length}</span>
+                  <button type="button" disabled={studentIndex >= filteredStudents.length - 1}
+                    onClick={() => setSelectedReportCardStudentId(filteredStudents[studentIndex + 1].id)}
+                    className="rounded-lg px-2 py-1 text-indigo-700 hover:bg-indigo-50 disabled:opacity-40">Next</button>
+                </nav>
+      )}
+
       {!showDistributionLog && (
         <div className="mt-8 flex justify-center print:mt-0 print:block print-area">
           {loadingMarks ? (
@@ -512,20 +599,20 @@ export default function PrintMarksheets() {
               <Loader2 className="h-10 w-10 animate-spin mb-4" />
               <p className="font-bold">Loading Academic Data...</p>
             </div>
-          ) : !isDataLoaded ? (
+          ) : !isDataLoaded && !isBulkPrintMode ? (
             <div className="flex flex-col items-center justify-center py-20 text-slate-400 no-print">
               <BookOpen className="h-12 w-12 mb-4 opacity-30" />
-              <p className="font-bold text-sm">Please click "Load Academic Data" to view marksheets.</p>
+              <p className="font-bold text-sm">Select a student and click Show Marksheet.</p>
             </div>
           ) : isBulkPrintMode ? (
           <div className="space-y-8 w-full max-w-[210mm]">
-            {classStudents.map((std) => (
+            {[...classStudents].sort((a, b) => String(a.rollNo || "").localeCompare(String(b.rollNo || ""), undefined, { numeric: true })).map((std) => (
               <SingleMarksheetCard
                 key={std.id}
                 student={std}
                 selectedReportCardExam={selectedReportCardExam}
                 getCbseGrade={getCbseGrade}
-                classMarks={classMarks}
+                classMarks={bulkMarks}
                 sessionYear={selectedSession}
                 issueDate={formatDisplayDate(issueDateIso)}
               />
@@ -533,10 +620,11 @@ export default function PrintMarksheets() {
           </div>
         ) : (
           (() => {
-            const student = classStudents.find((s) => s.id === selectedReportCardStudentId) || classStudents[0];
-            if (!student) return <p className="text-slate-400 font-bold no-print">No student found.</p>;
+            const student = selectedStudent;
+            if (!student) return <p className="text-slate-400 font-bold no-print">No matching student in this class.</p>;
             return (
               <div className="flex flex-col items-center">
+
                 <div className="flex items-center gap-4 mb-4 no-print w-full justify-end max-w-[210mm]">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Status:</span>
@@ -558,7 +646,7 @@ export default function PrintMarksheets() {
                   student={student}
                     selectedReportCardExam={selectedReportCardExam}
                   getCbseGrade={getCbseGrade}
-                  classMarks={classMarks}
+                  classMarks={cachedStudent?.marks ?? []}
                   sessionYear={selectedSession}
                   issueDate={formatDisplayDate(issueDateIso)}
                 />

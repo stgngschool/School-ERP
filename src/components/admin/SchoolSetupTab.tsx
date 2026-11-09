@@ -1106,7 +1106,7 @@ export default function SchoolSetupTab({
               </div>
               <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-[10px] font-bold text-slate-600 shrink-0">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span>Auto-Sync: 00:00 Midnight (Daily)</span>
+                <span>Daily auto-sync scheduled for 5:30 AM IST</span>
               </div>
             </div>
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { invalidateMarksheetMarks } from "@/lib/cache/marksheetCache";
 import { defaultOpenExam } from "@/lib/examDefault";
 import { createMarksLoadGuard, hasMarksDraftValues, readMarksRoster } from "@/lib/marksRosterLoad";
 import { assertMarksSaved } from "@/lib/marksSaveResult";
@@ -1681,6 +1682,7 @@ export default function MarksFeedingConsole() {
               studentId,
             }),
           });
+          if (res.ok) invalidateMarksheetMarks();
           const json = await res.json();
           if (!res.ok) throw new Error(json.error || "Failed to clear marks.");
           if (!isCurrentMutation()) return;
@@ -1800,6 +1802,7 @@ export default function MarksFeedingConsole() {
           }),
         });
 
+        if (res.ok) invalidateMarksheetMarks();
         const json = await res.json();
         if (!res.ok) {
           throw new Error(json.error || "Failed to save student marks.");
@@ -1906,6 +1909,7 @@ export default function MarksFeedingConsole() {
             }),
           });
 
+          if (res.ok) invalidateMarksheetMarks();
           const json = await res.json();
 
           if (!res.ok) {
@@ -1943,6 +1947,7 @@ export default function MarksFeedingConsole() {
             deletedStudentIds,
           }),
         });
+        if (res.ok) invalidateMarksheetMarks();
         const json = await res.json();
         if (!res.ok) {
           throw new Error(json.error || "Failed to clear student marks.");

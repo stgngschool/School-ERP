@@ -46,6 +46,10 @@ export default function Footer() {
   const livePhone = (mounted && schoolInfo?.phone) || schoolData.phone || "9452824318";
   const liveAltPhone = (mounted && schoolInfo?.alternatePhone) || schoolData.alternatePhone || "9415812975";
   const liveWhatsapp = (mounted && schoolInfo?.whatsappNumber) || schoolData.whatsappNumber || livePhone;
+  const whatsappNumbers = [...new Set([livePhone, liveWhatsapp]
+    .map(number => number.replace(/\D/g, ""))
+    .map(number => number.length === 10 ? `91${number}` : number)
+    .filter(Boolean))];
   const liveEmail = (mounted && schoolInfo?.email) || schoolData.email || "stgng2005@gmail.com";
   const liveTimings = (mounted && schoolInfo?.schoolTimings) || schoolData.schoolTimings || "8:00 AM - 1:30 PM (Mon - Sat)";
 
@@ -219,18 +223,20 @@ export default function Footer() {
                 )}
               </div>
 
-              <div className="flex items-center gap-2">
-                <WhatsAppIcon className="w-4 h-4 text-emerald-600 shrink-0" />
-                <a
-                  href={`https://wa.me/91${liveWhatsapp}?text=${encodeURIComponent("Namaste St. GNG School, I have an inquiry.")}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:text-emerald-700 font-bold text-slate-900 flex items-center gap-1.5"
-                >
-                  <span>+91 {liveWhatsapp}</span>
-                  <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">WhatsApp</span>
-                </a>
-              </div>
+              {whatsappNumbers.map(number => (
+                <div key={number} className="flex items-center gap-2">
+                  <WhatsAppIcon className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <a
+                    href={`https://wa.me/${number}?text=${encodeURIComponent("Namaste St. GNG School, I have an inquiry.")}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-emerald-700 font-bold text-slate-900 flex items-center gap-1.5"
+                  >
+                    <span>+{number.slice(0, 2)} {number.slice(2)}</span>
+                    <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">WhatsApp</span>
+                  </a>
+                </div>
+              ))}
 
               <div className="flex items-center gap-2">
                 <Mail className="w-4 h-4 text-indigo-600 shrink-0" />
